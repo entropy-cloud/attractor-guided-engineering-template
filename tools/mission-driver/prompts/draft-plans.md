@@ -1,6 +1,6 @@
 Read `{{planGuide}}` — it defines the plan format, status lifecycle, and how plans relate to audit findings.
 
-Read all audit result files in `{{auditsDir}}/` that have `Audit Status: open`. Draft 1-3 remediation plans covering ALL findings across all open audit results. Bundle related findings; split only when closure surfaces differ.
+Read all audit result files in `{{auditsDir}}/` that have `Audit Status: open`. Draft 1-3 remediation plans TOTAL covering ALL findings across all open audit results. Do NOT draft 1-3 plans per audit — ALL open audits combined produce 1-3 plans. Bundle related findings; split only when closure surfaces differ.
 
 ## Rules
 

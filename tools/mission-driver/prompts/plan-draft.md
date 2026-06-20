@@ -1,10 +1,10 @@
-Draft 1-3 plans covering all remaining roadmap items or audit findings.
+Draft 1-3 plans TOTAL covering all remaining roadmap items or audit findings. Do NOT draft 1-3 plans per item — ALL items across the entire roadmap (or ALL audit findings) together produce 1-3 plans.
 
 Read `{{planGuide}}` — it defines the plan format, status lifecycle, and review rules. Follow it precisely.
 
 ## Workflow
 
-1. **Read & bundle**: Read `{{roadmapPath}}` (or use attached audit findings). Bundle ALL remaining items (or ALL findings) into 1-3 plans. Each plan must have sufficient workload; bundle small items, split large ones across plans.
+1. **Read & bundle**: Read `{{roadmapPath}}` (or use attached audit findings). Bundle ALL remaining items (or ALL findings) into 1-3 plans TOTAL. Each plan must have sufficient workload; bundle small items together, split a single large item only when it alone justifies multiple plans.
 
 2. **Create drafts**: For each plan, save at `{{plansDir}}/{YYYY-MM-DD-HHmm}-{slug}.md` with:
    ```
