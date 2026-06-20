@@ -24,7 +24,7 @@
       "when": "openAudits().length > 0",
       "otherwise": { "goto": "MULTI_AUDIT" },
       "type": "agent",
-      "promptPath": "prompts/draft-plans.md",
+      "promptPath": "prompts/draft-from-audit.md",
       "onUnknownMaxRetries": 2,
       "transitions": {
         "created": { "done": "completed" },
@@ -63,7 +63,7 @@
       "when": "openAudits().length > 0",
       "otherwise": { "done": "completed" },
       "type": "agent",
-      "promptPath": "prompts/draft-plans.md",
+      "promptPath": "prompts/draft-from-audit.md",
       "onUnknownMaxRetries": 2,
       "transitions": {
         "created": { "done": "completed" },

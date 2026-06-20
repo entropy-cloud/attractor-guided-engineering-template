@@ -80,7 +80,7 @@ flowchart TD
 - No internal loop -- main flow re-scans after returning from `DRAFT_PLANS` or `AUDIT`.
 - See Section 4.
 
-**DRAFT_PLANS** (`prompts/plan-draft.md`)
+**DRAFT_PLANS** (`prompts/draft-from-roadmap.md`)
 - Merges drafting and self-audit (v5): agent writes the plan, then switches to coordinator mode, spawns independent sub-agent for adversarial review (max 2 rounds), outputs `created` after passing (zero Blocker/Major).
 - Review loop completes within a single step, no engine-level PLAN_AUDIT step.
 - On failure to pass: degraded mode, still outputs `created`, plan proceeds to execution, downstream closure/deep audit provides fallback.

@@ -57,7 +57,7 @@
 
     "DRAFT_PLANS": {
       "type": "agent",
-      "promptPath": "prompts/plan-draft.md",
+      "promptPath": "prompts/draft-from-roadmap.md",
       "onUnknownMaxRetries": 2,
       "transitions": {
         "created": { "goto": "REVIEW_PLANS" },

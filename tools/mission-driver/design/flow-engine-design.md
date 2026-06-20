@@ -396,12 +396,13 @@ tools/mission-driver/
 │   ├── flow-loader.js             # Load flow JSON + prompts + script registry
 │   └── prompts.js                 # Test-only: mock step configs
 ├── prompts/                       # Prompt files (loaded at runtime by flow-loader)
-│   ├── plan-draft.md
+│   ├── draft-from-roadmap.md
 │   ├── execute.md
 │   ├── closure-audit.md
 │   ├── build-verify.md
 │   ├── multi-audit.md
-│   └── open-audit.md
+│   ├── draft-from-audit.md
+│   ├── open-audit.md
 ├── flows/
 │   └── mission-driver.json           # Main flow definition (DSL)
 ├── test/
