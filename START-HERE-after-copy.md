@@ -39,6 +39,7 @@ These are on-demand. Do not fill them just to be complete; adopt the ones the pr
 - [ ] `docs/design/flow-overview.md` — when the project has cross-domain flows that need one global view.
 - [ ] `docs/architecture/api-response-conventions.md` — when the project exposes HTTP/REST or RPC APIs.
 - [ ] `docs/architecture/integration-and-transaction-patterns.md` — when the project integrates with external systems or runs background/polling work.
+- [ ] **Mission driver integration** — when the project needs an AI-guided development loop. See `tools/README.md` "Mission Driver" section. Create `tools/mission-driver.sh` pointing at this template's `tools/mission-driver/`. Set `MISSION_DRIVER_HOME` if the template path differs.
 
 ## Minimum Before Coding
 

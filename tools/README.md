@@ -50,6 +50,37 @@ pnpm check:duplicates
 pnpm audit:suspects
 ```
 
+## Mission Driver
+
+`tools/mission-driver/` is a **mission-driven development loop engine** — a generic opencode-based workflow that cycles through health-check → execute plans → draft plans → review plans → deep audit.
+
+It is the template's **single source of truth** for this tool. Projects reference it via a thin shell script rather than maintaining their own copy.
+
+### Integration
+
+Create `tools/mission-driver.sh` in your project:
+
+```bash
+#!/bin/bash
+MISSION_DRIVER_HOME="${MISSION_DRIVER_HOME:-$HOME/app/attractor-guided-engineering-template/tools/mission-driver}"
+DIR="$(cd "$(dirname "$0")" && pwd)"
+exec node "$MISSION_DRIVER_HOME/src/main.js" --dir "$DIR/.." --missions-dir "missions" "$@"
+```
+
+Set `MISSION_DRIVER_HOME` env var if the template lives elsewhere.
+
+### Per-Project Setup
+
+1. `tools/mission-driver.sh` — the thin script above
+2. `missions/<name>.json` — mission config with project paths and commands
+
+Run `--draft-mission <description>` to have the AI generate a mission.json:
+```bash
+./tools/mission-driver.sh --draft-mission "Build the component library"
+```
+
+See `mission.json.example` and `design/mission-design.md` for the full schema.
+
 ## Configuration
 
 - `check-active-doc-code-anchors.mjs`

@@ -6,4 +6,5 @@ coverage/
 .vite/
 *.tsbuildinfo
 tmp/
+_tmp/
 report/
