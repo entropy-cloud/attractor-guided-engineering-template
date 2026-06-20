@@ -1,6 +1,6 @@
-Review the drafted plan at `{{forEachItem}}`.
+Review the drafted plan at `{{forEachItem}}` — read it **completely**.
 
-Read `{{planGuide}}` — it defines the plan format, required sections, checklist, and closure evidence rules.
+Read `{{planGuide}}` **completely**. It defines the plan format, required sections, checklist, and closure evidence rules.
 
 ## Review Checklist
 

@@ -8,7 +8,7 @@ The automated checklist script has been run. Results:
 - SCRIPT_CHECK_RESULT: `{{SCRIPT_CHECK_RESULT}}` (PASS or FAIL)
 - SCRIPT_CHECK_DETAILS: `{{SCRIPT_CHECK_DETAILS}}` (failure details if any)
 
-Read the plan guide first: `{{planGuide}}`
+Read the plan guide first: `{{planGuide}}` **completely**.
 
 ## SCRIPT_CHECK_RESULT is FAIL — Fix Strictly Per Plan Guide
 
@@ -22,7 +22,7 @@ Fix ALL issues reported in SCRIPT_CHECK_DETAILS by editing the plan file directl
 
 ### Fix Procedure
 
-1. Read the plan file with the Read tool
+1. Read the plan file with the Read tool **completely**.
 2. Identify every issue from SCRIPT_CHECK_DETAILS
 3. Fix each issue by editing the file with the Edit tool
 4. If a `## Closure` section is missing, add it with at least one concrete evidence item
@@ -45,7 +45,7 @@ The plan structure is valid. Now verify the SEMANTICS:
 
 0. **Phase status / items consistency** (do this FIRST): For every Phase, if `Status:` says `completed` but the Phase body still contains any `- [ ]` item, that is an inconsistency. Do NOT blindly tick the items — first use grep/glob/read to verify whether the work actually landed in the codebase. If it landed, tick the items `[x]` and re-run `node tools/mission-driver/src/plan-check.mjs {{PLAN_FILE}} --strict`. If it did NOT land, the Phase is genuinely unfinished — output `issues` with a `<REMAINING>` entry naming the Phase so the flow returns to EXECUTE.
 
-1. **Exit Criteria vs live repo**: Read each Exit Criterion. Use grep/glob/read to confirm it matches the LIVE codebase (`{{moduleDir}}/`). Do NOT trust `[x]` marks blindly.
+1. **Exit Criteria vs live repo**: Read each Exit Criterion and the corresponding live code **completely**. Use grep/glob/read to confirm it matches the LIVE codebase (`{{moduleDir}}/`). Do NOT trust `[x]` marks blindly.
 
 2. **Anti-Hollow check**: New code must be called at runtime / wired into the system. Look for empty function bodies `{}`, `return null` placeholders, swallowed exceptions, components registered but never reachable.
 

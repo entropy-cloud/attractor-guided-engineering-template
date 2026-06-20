@@ -1,17 +1,20 @@
-Read `{{planGuide}}` — it defines the plan format, status lifecycle, and how plans relate to audit findings.
+Read `{{planGuide}}` **completely**. It defines the plan format, status lifecycle, and how plans relate to audit findings.
 
-Read all audit result files in `{{auditsDir}}/` that have `Audit Status: open`. Draft 1-3 remediation plans TOTAL covering ALL findings across all open audit results. Do NOT draft 1-3 plans per audit — ALL open audits combined produce 1-3 plans. Bundle related findings; split only when closure surfaces differ.
+Read all audit result files in `{{auditsDir}}/` that have `Audit Status: open` **completely**. Draft 1-3 remediation plans TOTAL covering ALL findings across all open audit results. Do NOT draft 1-3 plans per audit — ALL open audits combined produce 1-3 plans. Bundle related findings; split only when closure surfaces differ.
 
 ## Rules
 
-1. **Status**: Use `> Plan Status: drafted`.
-2. **Mark audit as planned**: After drafting, update every source audit result file: change `> Audit Status: open` to `> Audit Status: planned`. This prevents re-processing the same findings.
+1. **Order**: When drafting multiple plans, assign them an explicit execution order with `{NN}` (2-digit sequence number: 01, 02, 03...). Plans that unblock others come first.
+
+2. **Status**: Use `> Plan Status: drafted`.
+
+3. **Mark audit as planned**: After drafting, update every source audit result file: change `> Audit Status: open` to `> Audit Status: planned`. This prevents re-processing the same findings.
 
 When plans are created, return results in the following format:
 ```
 <AI_STEP_RESULT>created</AI_STEP_RESULT>
 <FLOW_VARS>
-  <PLAN_FILE>{{plansDir}}/{YYYY-MM-DD-HHmm}-{slug}.md</PLAN_FILE>
+  <PLAN_FILE>{{plansDir}}/{YYYY-MM-DD-HHmm}-{NN}-{slug}.md</PLAN_FILE>
 </FLOW_VARS>
 ```
 

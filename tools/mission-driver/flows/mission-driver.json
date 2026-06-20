@@ -35,7 +35,7 @@
       "promptPath": "prompts/health-check.md",
       "onUnknownMaxRetries": 2,
       "transitions": {
-        "pass": { "goto": "EXEC_PLANS" },
+        "pass": { "goto": "REVIEW_PLANS" },
         "fail": { "retry": "CHECK", "maxRetries": 3 }
       },
       "onMaxRetries": { "done": "failed" },

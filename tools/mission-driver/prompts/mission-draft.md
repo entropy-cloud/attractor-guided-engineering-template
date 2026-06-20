@@ -1,6 +1,6 @@
 Generate a mission config file for the mission driver, based on the user request below.
 
-Read `AGENTS.md` for project structure, tech stack, build commands, and conventions.
+Read `AGENTS.md` **completely** for project structure, tech stack, build commands, and conventions.
 
 The roadmap MUST already exist. Locate it in the project (referenced from AGENTS.md, docs index, or directory scan). If no roadmap is found, return results in the following format and stop: `<AI_STEP_RESULT>failed</AI_STEP_RESULT>` with the reason.
 

@@ -7,8 +7,23 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const TOOL_ROOT = resolve(__dirname, "..");
 
 const PLAN_STATUS_RE = /^>\s*\*{0,2}(?:Plan\s+)?Status\*{0,2}:\s*\*{0,2}(.+?)\*{0,2}\s*$/m;
-const ACTIVE_STATUSES = new Set(["active"]);
-const DRAFTED_STATUSES = new Set(["drafted"]);
+// Canonical statuses are "active" and "drafted" (per project plan-authoring guide).
+// The extra entries are tolerated synonyms: legacy vocab still present in older
+// plans, and common AI-generated variants. This keeps a single-word typo from
+// silently breaking the mission loop (draftedPlans()/activePlans() => 0).
+const ACTIVE_STATUSES = new Set([
+  "active",
+  "planned",
+  "in progress",
+  "in-progress",
+  "partially completed",
+  "partially-completed",
+]);
+const DRAFTED_STATUSES = new Set([
+  "drafted",
+  "draft",
+  "proposed",
+]);
 const AUDIT_STATUS_RE = /^>\s*\*{0,2}Audit\s+Status\*{0,2}:\s*\*{0,2}(.+?)\*{0,2}\s*$/m;
 
 // ── Pure scanning helpers (return arrays, no side effects) ──

@@ -1,7 +1,7 @@
 Execute the plan at {{PLAN_FILE}}. Complete **the entire plan**.
 
 Steps:
-1. Read the plan file at {{PLAN_FILE}}
+1. Read the plan file at {{PLAN_FILE}} **completely**.
 2. Determine which Phases still need work. A Phase is unfinished if it contains ANY `- [ ]` item. Do NOT rely on the `Status:` line alone — a Phase marked `Status: completed` that still has `[ ]` items is INCONSISTENT (a prior run set the status but did not finish the work, or forgot to tick the items). Treat it as unfinished and execute it. Execute every unfinished Phase, in order.
 3. After completing each Phase:
    a. Run `{{testCmd}}` to confirm tests pass. If the change is cross-module, also run `{{typecheckCmd}}` (whole workspace) to catch downstream breakage.
@@ -14,7 +14,7 @@ If execution is interrupted or fails, that is fine — the plan records its own 
 Do not skip steps — execute every unfinished Phase completely.
 
 Notes:
-- Honor `AGENTS.md`: follow the project's component contract, code conventions, and build artifact rules.
+- Honor `AGENTS.md`: read it **completely** and follow the project's component contract, code conventions, and build artifact rules.
 - After code changes, run `{{typecheckCmd}} && {{buildCmd}} && {{lintCmd}}` before declaring a Phase done.
 
 Return results in the following format: `<AI_STEP_RESULT>success</AI_STEP_RESULT>` or `<AI_STEP_RESULT>failed</AI_STEP_RESULT>`.

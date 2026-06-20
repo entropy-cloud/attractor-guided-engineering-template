@@ -1,4 +1,4 @@
-If the mission config specifies a multi-dimensional audit prompt (`{{multiAuditPrompt}}` is non-empty), read that file and follow it precisely. It defines project-specific audit dimensions, priority targets, and checklists.
+Read `{{multiAuditPrompt}}` **completely** and follow it precisely.
 
 Perform a multi-dimensional audit on mission `{{missionName}}`. Focus on `{{moduleDir}}/` — code, config, tests, and public contracts (exports, API surface). Cross-reference against architecture docs for documented contract drift.
 
