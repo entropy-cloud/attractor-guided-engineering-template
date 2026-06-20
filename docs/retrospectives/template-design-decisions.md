@@ -10,6 +10,33 @@ This file is the template evolution record for stable reusable changes.
 
 ---
 
+## 2026-06-20: Add Mission-Driver Tool and Converge Goal-Driver Into It
+
+### Context
+
+The `goal-driver` prototype in `nop-chaos-flux` was a bash script with hard-coded CLI parsing and no expression engine, making it rigid for different project structures. Running it across multiple Nop entropy projects revealed three recurring needs: dynamic when-condition evaluation, universal forEach iteration across step types, and project-level flow/prompt overrides without editing the tool source.
+
+### Decision
+
+- Replaced `goal-driver` with `tools/mission-driver/`, a Node.js flow engine in 8 source modules with 4 design docs, 3 JSON flow definitions, 7 prompt stubs, and 4 test suites (76 tests).
+- Added `src/expression.mjs` as a small expression engine for when-conditions, forEach sources, and string interpolation in flow definitions.
+- Added universal forEach support so any step type (agent, tool, script, group, subflow) can iterate.
+- Added project-level override mechanism: `missions/flows/` and `missions/prompts/` override tool defaults per project.
+- Added `flowName` config field to select a custom main flow per mission.
+- Simplified the plan lifecycle from 4 states to 3: `drafted → active → completed` (removed the `reviewed` intermediate state since closure audit already gates completion).
+- Restructured the deep-audit-loop to a linear flow with independent `MULTI_AUDIT` and `OPEN_AUDIT` steps instead of nested parallelism.
+- Documented the full design in English under `tools/mission-driver/design/`.
+
+### Rationale
+
+Bash goal-driver could not scale to real project needs without growing into an unmaintainable script. A small Node.js engine with explicit flow definitions separates mechanism from policy: the engine stays generic, and per-project behavior is configured through overrides. Removing the `reviewed` plan state eliminated a no-op transition since closure audit was already the gate. Linear audit flows reduce cognitive overhead compared to nested parallelism.
+
+### Consequences
+
+Copied projects get a ready-to-use flow engine under `tools/mission-driver/` with design docs, test coverage, and an override mechanism that keeps the tool generic. The previous `goal-driver.sh` is removed. Projects that do not need the tool can delete the `tools/mission-driver/` directory.
+
+---
+
 ## 2026-06-20: Minimize Dynamic Context Fields And Clarify Roadmap As The AI Work Queue
 
 ### Context
