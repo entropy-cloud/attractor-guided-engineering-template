@@ -8,7 +8,7 @@ Read `{{planGuide}}` **completely**. It defines the plan format, status lifecycl
 
 2. **Order plans**: When drafting multiple plans, assign them an explicit execution order. Plans that unblock others come first.
 
-3. **Create drafts**: For each plan, save at `{{plansDir}}/{YYYY-MM-DD-HHmm}-{NN}-{slug}.md` where `{NN}` is a 2-digit sequence number (01, 02, 03...) reflecting the intended execution order. Same-timestamp plans sorted alphabetically by filename determine execution order — the `{NN}` prefix ensures this.
+3. **Create drafts**: For each plan, save at `{{plansDir}}/{YYYY-MM-DD-HHmm}-{N}-{slug}.md` where `{N}` is a single-digit sequence number (1, 2, 3...) reflecting the intended execution order. Same-timestamp plans sorted alphabetically by filename determine execution order — the `{N}` prefix ensures this.
    ```
    > Plan Status: drafted
    > Package: {{missionName}}
@@ -24,8 +24,8 @@ When plans are created, return results in the following format:
 ```
 <AI_STEP_RESULT>created</AI_STEP_RESULT>
 <FLOW_VARS>
-  <PLAN_FILE>{{plansDir}}/{YYYY-MM-DD-HHmm}-{NN}-{slug}.md</PLAN_FILE>
+  <PLAN_FILE>{{plansDir}}/{YYYY-MM-DD-HHmm}-{N}-{slug}.md</PLAN_FILE>
 </FLOW_VARS>
 ```
 
-In PLAN_FILE, provide only the first (lowest NN) plan path. The engine discovers the rest via scan. All plan files must exist on disk — placeholder paths are rejected.
+In PLAN_FILE, provide only the first (lowest N) plan path. The engine discovers the rest via scan. All plan files must exist on disk — placeholder paths are rejected.

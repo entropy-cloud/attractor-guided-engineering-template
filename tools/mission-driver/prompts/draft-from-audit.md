@@ -4,7 +4,7 @@ Read all audit result files in `{{auditsDir}}/` that have `Audit Status: open` *
 
 ## Rules
 
-1. **Order**: When drafting multiple plans, assign them an explicit execution order with `{NN}` (2-digit sequence number: 01, 02, 03...). Plans that unblock others come first.
+1. **Order**: When drafting multiple plans, assign them an explicit execution order with `{N}` (single-digit sequence number: 1, 2, 3...). Plans that unblock others come first.
 
 2. **Status**: Use `> Plan Status: drafted`.
 
@@ -14,7 +14,7 @@ When plans are created, return results in the following format:
 ```
 <AI_STEP_RESULT>created</AI_STEP_RESULT>
 <FLOW_VARS>
-  <PLAN_FILE>{{plansDir}}/{YYYY-MM-DD-HHmm}-{NN}-{slug}.md</PLAN_FILE>
+  <PLAN_FILE>{{plansDir}}/{YYYY-MM-DD-HHmm}-{N}-{slug}.md</PLAN_FILE>
 </FLOW_VARS>
 ```
 

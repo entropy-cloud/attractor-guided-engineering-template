@@ -17,7 +17,7 @@ Steps:
    a. Run `git status` to inspect all uncommitted changes
    b. If the working tree is clean (no changes since the last commit), skip to step 4
    c. Derive commit metadata from the run context:
-       - `YYYY-MM-DD-HHmm` = date+minute parsed from `{{PLAN_FILE}}` basename (the first 15 characters: `YYYY-MM-DD-HHmm`, before the `-NN-` sequence segment)
+       - `YYYY-MM-DD-HHmm` = date+minute parsed from `{{PLAN_FILE}}` basename (the first 15 characters: `YYYY-MM-DD-HHmm`, before the `-N-` sequence segment)
        - `scope` = mission name (e.g. `{{missionName}}`)
    d. Split changes into logical commits following the project's `AGENTS.md` commit style (read the **Commit Message Style** section **completely**; imperative mood: "Add feature" not "Added feature"; reference doc paths when relevant):
       - **Code commit** (implementation + tests, never separated):
