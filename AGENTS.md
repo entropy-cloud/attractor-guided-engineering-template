@@ -13,8 +13,7 @@ Before writing non-trivial code, agents must first understand:
 - `docs/context/project-context.md`
 - `docs/context/ai-autonomy-policy.md`
 - `docs/context/codebase-map.md`
-- the active requirement listed in project context
-- the active owner doc listed in project context
+- the requirement or owner doc (under `docs/requirements/` or `docs/design/`) that describes the work's intended behavior — current work-in-progress is read from unfinished plans in `docs/plans/`, not from a field in `project-context.md`
 - the relevant raw inputs under `docs/input/` when requirement meaning depends on source material
 
 Read `docs/context/source-of-truth-and-precedence.md` when facts conflict or you are unsure which artifact owns the answer.

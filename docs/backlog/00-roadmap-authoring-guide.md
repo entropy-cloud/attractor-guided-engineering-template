@@ -12,6 +12,33 @@ A roadmap is a coarse-grained phase index and global status surface. Its core us
 2. It records each phase's dependencies, owner doc, and reusable framework/platform capabilities.
 3. It is the entry point for choosing the next work item.
 
+## Roadmap Role: Human–AI Alignment + AI Work Queue
+
+A roadmap serves two audiences with different access patterns:
+
+- **Humans** use it as the steering and observation surface: they decide which work items exist, their priority order, and the milestone shape. Humans read Phase Status to see where AI-driven development has reached. Humans do **not** review individual execution plans.
+- **AI** uses it as the work queue: it reads Phase Status, takes the first `todo` work item in the planned order, drafts and executes the plan automatically, then writes back by moving the work item to `done`. AI does **not** re-arbitrate priority, skip ahead, or invent new work items — if the roadmap needs structural changes (new/removed/re-ordered items), AI flags them for human review.
+
+Plans are AI-authored and AI-executed; humans do not review individual plans. Plan quality is enforced by closure audit, not human plan review. The roadmap is how humans steer and observe progress without reading every plan.
+
+## Phase Granularity
+
+The markable unit (a phase / work item) must be sized so that **one execution plan can complete it**. "Coarse-grained" means "no implementation steps inside the roadmap" — it does NOT mean "as large as possible."
+
+A phase larger than one plan's delivery scope is a defect: when the plan finishes, the roadmap has nothing to update and the loop stalls. If a natural grouping (e.g. a "wave", "family", or "epic") is larger than one plan, split it into multiple work items. The grouping may remain as an organizational label, but **only work items carry `todo`/`planned`/`done` and appear in Phase Status**. A grouping/section header never has its own status.
+
+## Closed Loop
+
+The roadmap and plans form a closed development loop:
+
+1. AI reads Phase Status and takes the first `todo` work item (in planned order).
+2. AI drafts the plan for that work item (humans do not review it).
+3. AI executes the plan.
+4. On closure audit pass, AI writes back: the work item moves to `done`, and any per-component / source-of-truth status is synced.
+5. AI returns to step 1 for the next `todo` work item.
+
+A finished plan that updates nothing in the roadmap signals a granularity bug — the phase was larger than the plan. "Current work in progress" is found by scanning unfinished plans (`docs/plans/`), not by a field in `project-context.md`, so the loop resumes interrupted work before starting a new work item.
+
 ## What a Roadmap Is NOT
 
 - Not an execution plan. No implementation steps, checkboxes, or closure criteria.
@@ -76,3 +103,7 @@ All status changes are driven by the plan lifecycle:
 - Letting status go stale
 - Marking `done` before closure audit passes
 - Not annotating existing framework/platform capabilities, causing redundant rebuilds
+- Phasing coarser than a plan's delivery scope, so a finished plan updates nothing in the roadmap and the loop stalls
+- Maintaining a per-item status column elsewhere in the roadmap (e.g. a coverage table with its own status), creating a second dynamic block that drifts out of sync with Phase Status
+- AI re-arbitrating priority or inventing work items instead of executing the human-planned order
+- Tracking "active plan / current blocker / AI autonomy" as fields in `project-context.md` — these are high-churn and go stale; read work-in-progress from unfinished plans instead

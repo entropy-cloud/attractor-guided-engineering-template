@@ -13,7 +13,8 @@ It contains no implementation detail. Each `planned` phase is owned by its execu
 
 ## Phase Status
 
-> This is the only dynamic status block. Update status here only.
+> **This is the only dynamic status block. Update status here only.**
+> The roadmap is a human–AI alignment artifact: humans set the work items and their order; AI takes the first `todo` item in order, drafts/executes the plan automatically (humans do not review individual plans), and writes the item back to `done` on closure audit. See `docs/backlog/00-roadmap-authoring-guide.md` (Roadmap Role, Phase Granularity, Closed Loop).
 
 - 1. <phase name>: `todo`
 

@@ -2,33 +2,24 @@
 
 ## Purpose
 
-Keep this file as the shortest current snapshot an AI agent needs before doing useful work.
+The shortest static baseline an AI agent needs before doing useful work: identity, documentation freshness, technical stack, and verification commands.
 
 Update it in place. Do not create dated copies.
+
+This file intentionally does **not** track "what is being worked on right now". That is found by scanning unfinished plans in `docs/plans/`. Keeping high-churn active-work state here makes the file hard to maintain and prone to staleness.
 
 ## Project Identity
 
 - Project name:
 - Product type:
 - Primary users:
-- Current milestone:
 - Documentation freshness: `<fresh | partially stale | stale | unknown>`
 
-## Active Work
+**Freshness gating:**
 
-- Active requirement: `docs/requirements/<path-or-none>`
-- Active owner doc: `docs/design/<path>` or `docs/architecture/<path>`
-- Active plan: `docs/plans/<path-or-none>`
-- Active backlog item: `docs/backlog/README.md#<item-or-none>`
-- AI autonomy: `<implement | plan-first | ask-first | research-only | blocked>`
-- Current blocker: `<none | describe>`
-
-Rule:
-
-- If active requirement is `none`, agents may help create or clarify requirements and context, but must not implement product behavior.
-- If AI autonomy is not `implement`, agents must follow `docs/context/ai-autonomy-policy.md` before changing product behavior.
-- If documentation freshness is `stale` or `unknown`, agents may research, audit, and draft alignment docs, but must not implement product behavior until the baseline is re-established or a human confirms the intended behavior.
-- If documentation freshness is `partially stale`, agents may implement only slices whose active requirement, owner doc, codebase-map route, and touched code area have been verified fresh; otherwise treat the slice as `plan-first` or `research-only`.
+- If freshness is `stale` or `unknown`, agents may research, audit, and draft alignment docs, but must not implement product behavior until the baseline is re-established or a human confirms intended behavior.
+- If freshness is `partially stale`, agents may implement only slices whose requirement, owner doc, codebase-map route, and touched code area have been verified fresh; otherwise treat the slice as `plan-first` or `research-only`.
+- AI may not mark stale docs fresh without human confirmation or human-approved owner-doc evidence.
 
 ## Current Technical Baseline
 
@@ -68,6 +59,7 @@ AI MUST stop and wait for human input before proceeding when:
 
 - verification commands are all placeholders and cannot be inferred from the project
 - any change touches payment or data-deletion paths with no existing test coverage and no owner doc describing expected behavior
+- no requirement or owner doc describes the intended behavior of the change — do not implement into a vacuum (this replaces the old "active requirement is none" gate; whether a requirement/owner doc exists is checked against `docs/requirements/` and `docs/design/`, not a field here)
 
 These are project-specific hard stops in addition to `AGENTS.md`, `docs/context/ai-autonomy-policy.md`, source-of-truth conflict rules, and required plan/closure audit rules.
 
@@ -76,6 +68,7 @@ For ambiguity that does not affect user-visible behavior, contracts, protected a
 ## Notes For AI Agents
 
 - If this file is empty or stale, ask for or create a context update before large implementation work.
-- AI may correct factual context from live repo evidence, but must not loosen autonomy, remove blockers, mark stale docs fresh, or downgrade protected areas without human confirmation or human-approved owner-doc evidence.
-- Do not infer current milestone or active plan from chat alone.
+- **Current work in progress**: inspect unfinished plans in `docs/plans/`, not this file.
+- AI autonomy defaults to `implement`; it is gated by freshness (above) and Protected Areas (`ai-autonomy-policy.md`). No per-slice autonomy value is maintained here — autonomy labels live on backlog/roadmap work items, not in this file.
+- AI may correct factual context from live repo evidence, but must not mark stale docs fresh or downgrade protected areas without human confirmation.
 - Do not report verification success while commands still contain `<fill real command>` placeholders.

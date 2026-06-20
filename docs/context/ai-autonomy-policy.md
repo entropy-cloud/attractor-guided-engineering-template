@@ -12,13 +12,15 @@ AI-authored or AI-modified docs, including owner docs, cannot be used as evidenc
 
 ## Autonomy Levels
 
-Use these labels in `docs/backlog/` and active plans:
+Use these labels on backlog/roadmap work items (they are per-item, not a global field in `project-context.md`):
 
 - `implement` - AI may implement after reading the listed requirement, owner doc, and verification commands.
 - `plan-first` - AI may draft or update the plan, but implementation waits for plan audit and any protected-area approval required by the table below.
 - `ask-first` - AI must ask before changing code or user-visible behavior.
 - `research-only` - AI may inspect, summarize, and propose options, but must not modify product behavior.
 - `blocked` - AI must not proceed until the blocker is resolved in files or by human confirmation.
+
+The default level is `implement` for work items with no explicit label. The default is gated by documentation freshness (`project-context.md`) and the Protected Areas below. A human may tighten the project default by editing this file; AI may tighten (never loosen) it based on evidence.
 
 ## Reviewer Availability
 
@@ -36,9 +38,8 @@ Rules:
 
 ## AI May Proceed Without Asking When
 
-- the work item is marked `implement` or the user directly requests a local low-risk change
-- the active requirement has concrete acceptance criteria
-- the active owner doc is listed in `docs/context/project-context.md`
+- the work item is marked `implement` (or has no label and defaults to `implement`) or the user directly requests a local low-risk change
+- a requirement or owner doc describes the work's intended behavior with concrete acceptance criteria
 - for backlog-selected work, the backlog row is `ready`, has no stale links, and does not require a missing plan
 - verification commands in `docs/context/project-context.md` are real commands, not placeholders
 - protected-area placeholders in this file have been replaced with real entries or explicit `none`

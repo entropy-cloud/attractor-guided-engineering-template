@@ -10,6 +10,29 @@ This file is the template evolution record for stable reusable changes.
 
 ---
 
+## 2026-06-20: Minimize Dynamic Context Fields And Clarify Roadmap As The AI Work Queue
+
+### Context
+
+Wiring an automated development loop (the `goal-driver` in `nop-chaos-flux`) onto the roadmap and `project-context` exposed two problems. First, `project-context.md` carried an Active Work block (active plan / owner doc / requirement / backlog / AI autonomy / current blocker) that was high-churn, went stale quickly, and duplicated state already derivable from unfinished plans. Second, the roadmap guide only said "coarse-grained phase index" without stating the roadmap's role as an AI work queue, the granularity rule that makes the loop advance, or the human/AI division of labor.
+
+### Decision
+
+- Removed the Active Work block from `docs/context/project-context.md`. Freshness gating rules moved under Project Identity. AI autonomy is no longer a global field here — it is a per-work-item label living on backlog/roadmap items, with `implement` as the default set in `ai-autonomy-policy.md`. "What is being worked on now" is read from unfinished plans in `docs/plans/`, not maintained as a field here.
+- Updated `START-HERE-after-copy.md`, `docs/context/ai-autonomy-policy.md`, and `AGENTS.md` to drop references to the removed fields; the old "active requirement is none" gate became "no requirement or owner doc describes the intended behavior" (existence-checked against `docs/requirements/` / `docs/design/`, not a field value).
+- Added three sections to `docs/backlog/00-roadmap-authoring-guide.md`: **Roadmap Role** (human–AI alignment + AI work queue; plans are AI-authored/executed and humans do not review individual plans), **Phase Granularity** (the markable unit must equal one plan's delivery scope; a phase larger than a plan stalls the loop), and **Closed Loop** (read Phase Status → take first `todo` → draft/execute plan → write back `done` → next). Added four anti-patterns (phasing coarser than a plan, a second per-item status column, AI re-arbitrating priority, Active Work fields in `project-context.md`).
+- Annotated the `implementation-roadmap.md` skeleton's Phase Status block with the alignment/loop summary.
+
+### Rationale
+
+High-churn state fields in `project-context.md` go stale and add maintenance burden for no gain, since current work-in-progress is already derivable from unfinished plans. Treating the roadmap only as a static planning document lets phases drift coarser than a plan, so a finished plan updates nothing and the automated loop stalls with nowhere to write back. Stating the roadmap's role explicitly (humans steer item set and order; AI consumes in order, drafts/executes plans unseen by humans, writes back `done`) and tying markable-unit granularity to one plan is what makes the closed loop actually advance.
+
+### Consequences
+
+Copied projects get a minimal-dynamic context (only documentation freshness remains as a maintained value) and a roadmap that is machine-consumable as an AI work queue while still serving as the human observation/steering surface. The template no longer promotes the Active Work high-churn anti-pattern. The roadmap and plan roles are now cleanly separated: humans maintain roadmap item set and priority, AI plans and executes autonomously with closure audit as the quality gate, and finished work always has a roadmap item to mark done.
+
+---
+
 ## 2026-06-18: Simplify Planning Into Two Tiers And Add Reviewer-Availability Fallback
 
 ### Context
