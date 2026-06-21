@@ -190,7 +190,7 @@ Status Note: <why the plan can close>
 
 Closure Audit Evidence:
 
-- Reviewer / Agent: <independent reviewer or independent subagent>
+- Auditor / Agent: <independent auditor or independent subagent>
 - Evidence: <task id / log link / walkthrough record>
 
 Follow-up:

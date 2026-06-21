@@ -216,7 +216,7 @@ Status Note: complete only after independent draft review and closure audit both
 
 Closure Audit Evidence:
 
-- Reviewer / Agent: `<independent reviewer or subagent>`
+- Auditor / Agent: `<independent auditor or subagent>`
 - Evidence: `<task id / log link / concise findings note>`
 
 Follow-up:
