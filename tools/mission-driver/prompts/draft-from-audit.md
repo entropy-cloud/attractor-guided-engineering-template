@@ -10,6 +10,8 @@ Read all audit result files in `{{auditsDir}}/` that have `Audit Status: open` *
 
 3. **Mark audit as planned**: After drafting, update every source audit result file: change `> Audit Status: open` to `> Audit Status: planned`. This prevents re-processing the same findings.
 
+4. **Review before active**: For each drafted plan, follow the `Plan Review Rule` in `{{planGuide}}` — use an independent sub-agent (fresh session) to review repeatedly until consensus. **Only change `> Plan Status: draft` to `> Plan Status: active` after consensus is reached**; otherwise leave it `draft`.
+
 When plans are created, return results in the following format:
 ```
 <AI_STEP_RESULT>created</AI_STEP_RESULT>

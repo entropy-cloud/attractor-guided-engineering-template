@@ -15,6 +15,8 @@ Read `{{planGuide}}` **completely**. It defines the plan format, status lifecycl
    > Work Item: <label>
    ```
 
+4. **Review before active**: For each drafted plan, follow the `Plan Review Rule` in `{{planGuide}}` — use an independent sub-agent (fresh session) to review repeatedly until consensus. **Only change `> Plan Status: draft` to `> Plan Status: active` after consensus is reached**; otherwise leave it `draft`.
+
 If nothing to draft (roadmap done, no deferred items), return results in the following format:
 ```
 <AI_STEP_RESULT>nothing</AI_STEP_RESULT>
