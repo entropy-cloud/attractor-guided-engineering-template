@@ -75,7 +75,7 @@ Expressions are evaluated with scoped access to flow vars (from mission.json + r
 | Function | Returns | Description |
 |----------|---------|-------------|
 | `activePlans()` | `string[]` | Plan file paths with status: active |
-| `draftedPlans()` | `string[]` | Plan file paths with status: drafted |
+| `draftedPlans()` | `string[]` | Plan file paths with status matching any drafted/proposed/not-started variant |
 | `openAudits()` | `string[]` | Audit result file paths with `Audit Status: open` |
 
 These eliminate dedicated scan-script steps. For example, `forEach: "activePlans()"` replaces the two-step pattern (script scan -> set items var -> forEach reads items).

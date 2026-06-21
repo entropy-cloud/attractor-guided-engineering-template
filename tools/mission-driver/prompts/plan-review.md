@@ -12,7 +12,7 @@ Read `{{planGuide}}` **completely**. It defines the plan format, required sectio
 ## Action
 
 - Fix any Blocker/Major issues directly in the plan file.
-- After fixing (or if no issues found), change `> Plan Status: drafted` to `> Plan Status: active`.
+- After fixing (or if no issues found), change `> Plan Status: proposed` to `> Plan Status: planned`.
 - Minor issues may remain — downstream closure audit and deep audit will catch them during/after execution.
 
 Return results in the following format:

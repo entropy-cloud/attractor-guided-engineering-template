@@ -6,24 +6,36 @@ import { inspectPlan } from "./plan-check.mjs";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TOOL_ROOT = resolve(__dirname, "..");
 
-const PLAN_STATUS_RE = /^>\s*\*{0,2}(?:Plan\s+)?Status\*{0,2}:\s*\*{0,2}(.+?)\*{0,2}\s*$/m;
-// Canonical statuses are "active" and "drafted" (per project plan-authoring guide).
-// The extra entries are tolerated synonyms: legacy vocab still present in older
-// plans, and common AI-generated variants. This keeps a single-word typo from
-// silently breaking the mission loop (draftedPlans()/activePlans() => 0).
-const ACTIVE_STATUSES = new Set([
+const PLAN_STATUS_RE = /^>\s*\*{0,2}(?:[Pp]lan\s+)?[Ss]tatus\*{0,2}\s*:\s*\*{0,2}(.+?)\*{0,2}\s*$/m;
+// Canonical initial status is "proposed" (per plan-authoring guide).
+// Canonical post-review status is "planned" (per plan-authoring guide).
+// The extra entries in each set are tolerated synonyms: legacy vocab still
+// present in older plans, and common AI-generated variants. This keeps a
+// single-word typo from silently breaking the mission loop.
+function _normalizeStatus(s) {
+  return s.toLowerCase().replace(/\s+/g, " ").trim();
+}
+const ACTIVE_STATUSES = [
   "active",
   "planned",
   "in progress",
   "in-progress",
+  "inprogress",
   "partially completed",
   "partially-completed",
-]);
-const DRAFTED_STATUSES = new Set([
+  "started",
+  "executing",
+  "in flight",
+].map(_normalizeStatus);
+const DRAFTED_STATUSES = [
   "drafted",
   "draft",
   "proposed",
-]);
+  "not started",
+  "backlog",
+  "in draft",
+  "in-draft",
+].map(_normalizeStatus);
 const AUDIT_STATUS_RE = /^>\s*\*{0,2}Audit\s+Status\*{0,2}:\s*\*{0,2}(.+?)\*{0,2}\s*$/m;
 
 // ── Pure scanning helpers (return arrays, no side effects) ──
@@ -37,8 +49,8 @@ function _scanPlansByStatus(plansDir, statuses) {
   for (const f of files) {
     const content = readFileSync(resolve(plansDir, f), "utf8");
     const m = content.match(PLAN_STATUS_RE);
-    const status = m ? m[1].trim().toLowerCase() : "";
-    if (statuses.has(status)) {
+    const status = m ? _normalizeStatus(m[1]) : "";
+    if (status && statuses.includes(status)) {
       results.push(resolve(plansDir, f));
     }
   }
