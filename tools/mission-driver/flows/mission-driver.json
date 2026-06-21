@@ -63,7 +63,8 @@
         "created": { "goto": "REVIEW_PLANS" },
         "nothing": { "goto": "DEEP_AUDIT" }
       },
-      "onError": { "goto": "DEEP_AUDIT" }
+      "onError": { "retry": "DRAFT_PLANS", "maxRetries": 1 },
+      "onMaxRetries": { "goto": "DEEP_AUDIT" }
     },
 
     "REVIEW_PLANS": {

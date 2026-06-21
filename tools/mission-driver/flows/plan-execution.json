@@ -23,7 +23,7 @@
         "fail": { "retry": "EXECUTE", "maxRetries": 3 }
       },
       "onMaxRetries": { "goto": "CLOSURE_SCRIPT_CHECK" },
-      "onError": { "goto": "CLOSURE_SCRIPT_CHECK" }
+      "onError": { "retry": "EXECUTE", "maxRetries": 1 }
     },
 
     "CLOSURE_SCRIPT_CHECK": {
