@@ -11,7 +11,6 @@ Read `{{planGuide}}` **completely**. It defines the plan format, status lifecycl
 3. **Create drafts**: For each plan, save at `{{plansDir}}/{YYYY-MM-DD-HHmm}-{N}-{slug}.md` where `{N}` is a single-digit sequence number (1, 2, 3...) reflecting the intended execution order. Same-timestamp plans sorted alphabetically by filename determine execution order — the `{N}` prefix ensures this.
    ```
    > Plan Status: drafted
-   > Package: {{missionName}}
    > Work Item: <label>
    ```
 
