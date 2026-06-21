@@ -68,7 +68,7 @@
 
     "REVIEW_PLANS": {
       "type": "agent",
-      "forEach": "draftedPlans()",
+      "forEach": "draftPlans()",
       "promptPath": "prompts/plan-review.md",
       "onUnknownMaxRetries": 2,
       "transitions": {

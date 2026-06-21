@@ -16,7 +16,7 @@ describe("inspectPlan — unchecked items", () => {
   it("flags plans with unchecked checklist items", () => {
     const { file, dir } = tmpPlan("001.md", `# 1 test
 
-> Plan Status: planned
+> Plan Status: active
 > Package: @nop-chaos/flux-runtime
 
 ## Execution Plan
@@ -34,7 +34,7 @@ Exit Criteria:
       const r = inspectPlan(file);
       assert.equal(r.passed, false);
       assert.equal(r.totalUnchecked, 2);
-      assert.equal(r.planStatus, "planned");
+      assert.equal(r.planStatus, "active");
       assert.ok(r.details.some(d => d.includes("unchecked items")));
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });

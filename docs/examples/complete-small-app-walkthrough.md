@@ -131,7 +131,7 @@ Target file:
 ```md
 # User Management Plan
 
-> Plan Status: proposed
+> Plan Status: draft
 > Last Reviewed: 2026-05-21
 > Source: `docs/requirements/2026-05-21-0900-user-management.md`
 > Audit: required
@@ -166,7 +166,7 @@ Target file:
 
 ### Phase 1 - Land The Core Slice
 
-Status: planned
+Status: active
 Targets: `apps/...`, `packages/...`, `docs/...`
 Skill: `none`
 
@@ -245,6 +245,6 @@ Target file:
 
 This slice has a plan and therefore needs closure audit before the plan is marked complete.
 
-Draft review should revise the plan directly and leave a short durable `Draft Review Record` in the plan. New plans normally start as `proposed` and move to `planned` only after independent draft review converges. Use a separate audit file only when the review is non-trivial, disputed, or useful for future sessions. Closure should always leave explicit `Closure Audit Evidence` in the plan and may also cite the daily log.
+Draft review should revise the plan directly and leave a short durable `Draft Review Record` in the plan. New plans normally start as `draft` and move to `active` only after independent draft review converges. Use a separate audit file only when the review is non-trivial, disputed, or useful for future sessions. Closure should always leave explicit `Closure Audit Evidence` in the plan and may also cite the daily log.
 
 The implementing agent's own closure note is not sufficient. The closure pass must come from an independent subagent or reviewer.

@@ -70,7 +70,7 @@ interface Step {
   flowArgs?: Record<string, string>;
 
   // === forEach (universal modifier, works on ALL step types) ===
-  forEach?: string;         // expression: "activePlans()", "draftedPlans()", or plain var name
+  forEach?: string;         // expression: "activePlans()", "draftPlans()", or plain var name
   onItemError?: { stopOnError?: boolean };
 
   // === Transitions ===
@@ -257,7 +257,7 @@ Subflow steps spawn a child `FlowEngine` that runs a separate flow definition lo
 forEach is a **universal step modifier** — it works on ALL step types (`agent`, `tool`, `script`, `group`, `subflow`), not just subflows. It is orthogonal to step type: the engine evaluates the expression first, then executes the underlying step once per item.
 
 - Expression is evaluated via the expression engine with access to flow vars and pre-registered functions
-- Examples: `forEach: "activePlans()"`, `forEach: "draftedPlans()"`, `forEach: "openAudits()"`
+- Examples: `forEach: "activePlans()"`, `forEach: "draftPlans()"`, `forEach: "openAudits()"`
 - Backward compat: plain variable names (no expression chars) read from flowVars as before
 - For each item, injects `forEachItem`, `forEachIndex`, `forEachTotal` into template vars
 - For `subflow` type: creates an isolated child engine per item (existing behavior)

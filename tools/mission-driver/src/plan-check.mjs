@@ -6,7 +6,7 @@
  * reports unchecked checklist items, plan status, and closure-evidence gaps.
  *
  * Plan format (see docs/plans/00-plan-authoring-and-execution-guide.md):
- *   > Plan Status: proposed | planned | in progress | partially completed | completed | ...
+ *   > Plan Status: draft | active | completed | ...
  *   > Last Reviewed: YYYY-MM-DD
  *
  *   ### Phase N - Name

@@ -75,7 +75,7 @@ Expressions are evaluated with scoped access to flow vars (from mission.json + r
 | Function | Returns | Description |
 |----------|---------|-------------|
 | `activePlans()` | `string[]` | Plan file paths with status: active |
-| `draftedPlans()` | `string[]` | Plan file paths with status matching any drafted/proposed/not-started variant |
+| `draftPlans()` | `string[]` | Plan file paths with status matching any draft/active variant |
 | `openAudits()` | `string[]` | Audit result file paths with `Audit Status: open` |
 
 These eliminate dedicated scan-script steps. For example, `forEach: "activePlans()"` replaces the two-step pattern (script scan -> set items var -> forEach reads items).
@@ -204,7 +204,7 @@ CHECK_OPEN_AUDITS -> MULTI_AUDIT -> OPEN_AUDIT -> SCAN_NEW_RESULTS -> DRAFT_FROM
 | Fixed Contract (existing or migration deliverable) | Project/Mission-Specific (mission.json fixed values) |
 |---|---|
 | Plan format -- plan guide + `plan-check.mjs` | roadmapPath |
-| Status values drafted/reviewed/active/completed | plansDir |
+| Status values draft/active/completed | plansDir |
 | Work item granularity = one plan's scope | planGuide |
 | | auditsDir |
 | | contextDir |

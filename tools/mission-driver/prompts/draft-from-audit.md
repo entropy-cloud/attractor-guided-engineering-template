@@ -6,7 +6,7 @@ Read all audit result files in `{{auditsDir}}/` that have `Audit Status: open` *
 
 1. **Order**: When drafting multiple plans, assign them an explicit execution order with `{N}` (single-digit sequence number: 1, 2, 3...). Plans that unblock others come first.
 
-2. **Status**: Use `> Plan Status: proposed` (per plan guide). Do NOT use `drafted` — the canonical initial status is `proposed`.
+2. **Status**: Use `> Plan Status: draft`.
 
 3. **Mark audit as planned**: After drafting, update every source audit result file: change `> Audit Status: open` to `> Audit Status: planned`. This prevents re-processing the same findings.
 

@@ -83,7 +83,7 @@ Minimum durable draft-review evidence:
 - verdict
 - concise revision summary or rationale for the final shape
 
-Keep this evidence in a short `Draft Review Record` section inside the plan by default. Escalate to `docs/logs/` or `docs/audits/` only when the review is non-trivial, disputed, reusable, or likely to matter later. The canonical expectations for when a plan is `proposed`, `planned`, and `completed` belong in the plan guide.
+Keep this evidence in a short `Draft Review Record` section inside the plan by default. Escalate to `docs/logs/` or `docs/audits/` only when the review is non-trivial, disputed, reusable, or likely to matter later. The canonical expectations for when a plan is `draft`, `active`, and `completed` belong in the plan guide.
 
 ## Output Rule
 

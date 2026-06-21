@@ -23,7 +23,7 @@ The `goal-driver` prototype in `nop-chaos-flux` was a bash script with hard-code
 - Added universal forEach support so any step type (agent, tool, script, group, subflow) can iterate.
 - Added project-level override mechanism: `missions/flows/` and `missions/prompts/` override tool defaults per project.
 - Added `flowName` config field to select a custom main flow per mission.
-- Simplified the plan lifecycle from 4 states to 3: `drafted → active → completed` (removed the `reviewed` intermediate state since closure audit already gates completion).
+- Simplified the plan lifecycle from 4 states to 3: `draft → active → completed` (removed the `reviewed` intermediate state since closure audit already gates completion).
 - Restructured the deep-audit-loop to a linear flow with independent `MULTI_AUDIT` and `OPEN_AUDIT` steps instead of nested parallelism.
 - Documented the full design in English under `tools/mission-driver/design/`.
 
@@ -115,7 +115,7 @@ The backlog was a flat work-item table. For larger projects this could not expre
 
 - Added `docs/backlog/00-roadmap-authoring-guide.md`
 - Added `docs/backlog/implementation-roadmap.md` as a placeholder skeleton
-- Made the roadmap explicitly optional, with status transitions tied to the plan lifecycle (draft review -> `planned`, closure audit -> `done`)
+- Made the roadmap explicitly optional, with status transitions tied to the plan lifecycle (draft review -> `active`, closure audit -> `done`)
 
 ### Rationale
 
@@ -182,9 +182,9 @@ The template had already introduced independent draft review and closure audit, 
 ### Decision
 
 - Kept `Draft Review Record` in plans, but changed it to a lightweight iteration record instead of a formal `Plan Audit` block
-- Updated the plan guide so created plans normally start as `Plan Status: proposed`, move to `planned` only after independent draft review converges, and close only after independent closure audit
+- Updated the plan guide so created plans normally start as `Plan Status: draft`, move to `active` only after independent draft review converges, and close only after independent closure audit
 - Slimmed `AGENTS.md` so it points plan work to `docs/plans/00-plan-authoring-and-execution-guide.md` instead of repeating most plan-state details
-- Updated examples to show `proposed` plus iteration-style `Draft Review Record`
+- Updated examples to show `draft` plus iteration-style `Draft Review Record`
 
 ### Rationale
 
@@ -192,7 +192,7 @@ This change makes the template closer to `nop-chaos-flux`'s real practice: the p
 
 ### Consequences
 
-Copied projects get a clearer default plan lifecycle: `proposed -> planned -> in progress -> completed`, with visible independent draft-review iterations and independent closure evidence. The template also becomes easier to maintain because plan-specific detail is concentrated in one controlling guide instead of repeated across top-level docs.
+Copied projects get a clearer default plan lifecycle: `draft -> active -> completed`, with visible independent draft-review iterations and independent closure evidence. The template also becomes easier to maintain because plan-specific detail is concentrated in one controlling guide instead of repeated across top-level docs.
 
 ---
 

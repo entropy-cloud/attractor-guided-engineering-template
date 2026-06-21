@@ -5,7 +5,7 @@
 **Status**: active
 **Replaces**: v3 `execute-all-active-plans` subflow + `plan-router` script
 **Changes**:
-- 2026-06-21: Reordered main cycle from `CHECK -> EXEC -> DRAFT -> REVIEW -> EXEC` to `CHECK -> REVIEW -> EXEC -> DRAFT -> REVIEW`. Single transition change: `CHECK.pass` now goes to `REVIEW_PLANS` instead of `EXEC_PLANS`. Rationale: on resume (restart with state on disk), the previous order ran `DRAFT_PLANS` before `REVIEW_PLANS`, which risks re-drafting plans that already exist as `drafted` from a previous run. New order ensures any `drafted` backlog is reviewed and promoted to `active` before `DRAFT_PLANS` is allowed to create new work. Steady-state cycle is unchanged in shape (3-step), just rotated. Empty `draftedPlans()` forEach short-circuits to `all_complete` without an AI call, so the extra REVIEW on fresh start is one cheap file scan. Also brought Section 3 mermaid in line with the actual JSON transitions (REVIEW_PLANS is `type: "agent"` with `forEach: draftedPlans()`, not the doc's old "group + scan-reviewed-plans script" — that broader drift is not fully cleaned up here, only the arrows relevant to this reorder).
+- 2026-06-21: Reordered main cycle from `CHECK -> EXEC -> DRAFT -> REVIEW -> EXEC` to `CHECK -> REVIEW -> EXEC -> DRAFT -> REVIEW`. Single transition change: `CHECK.pass` now goes to `REVIEW_PLANS` instead of `EXEC_PLANS`. Rationale: on resume (restart with state on disk), the previous order ran `DRAFT_PLANS` before `REVIEW_PLANS`, which risks re-drafting plans that already exist as `draft` from a previous run. New order ensures any `draft` backlog is reviewed and promoted to `active` before `DRAFT_PLANS` is allowed to create new work. Steady-state cycle is unchanged in shape (3-step), just rotated. Empty `draftPlans()` forEach short-circuits to `all_complete` without an AI call, so the extra REVIEW on fresh start is one cheap file scan. Also brought Section 3 mermaid in line with the actual JSON transitions (REVIEW_PLANS is `type: "agent"` with `forEach: draftPlans()`, not the doc's old "group + scan-reviewed-plans script" — that broader drift is not fully cleaned up here, only the arrows relevant to this reorder).
 
 ---
 
@@ -44,7 +44,7 @@ v3 switched to stack nesting: `EXEC_PLANS` is a self-contained step that iterate
 
 ```mermaid
 flowchart TD
-    HC["CHECK<br/>AI agent"] -->|pass| RP["REVIEW_PLANS<br/>AI agent<br/>forEach: draftedPlans()"]
+    HC["CHECK<br/>AI agent"] -->|pass| RP["REVIEW_PLANS<br/>AI agent<br/>forEach: draftPlans()"]
     HC -->|fail x3| FAILED
 
     RP -->|all_complete / some_failed / all_failed| EAP["EXEC_PLANS<br/>subflow: plan-execution<br/>forEach: activePlans()"]
@@ -62,7 +62,7 @@ flowchart TD
 
 Steady-state cycle: `REVIEW_PLANS -> EXEC_PLANS -> DRAFT_PLANS -> REVIEW_PLANS -> ...`
 
-Entry point is now `REVIEW_PLANS` (right after `CHECK`), not `EXEC_PLANS`. This ensures that on resume (restart with `drafted` plans left over from a previous run), the backlog is reviewed and promoted to `active` *before* `DRAFT_PLANS` gets a chance to create duplicate plans for the same roadmap items. On a fresh start with empty queues, `REVIEW_PLANS` runs with `draftedPlans() -> []`, the engine short-circuits the empty forEach to `all_complete` without invoking the AI, and the flow falls through to `EXEC_PLANS` -> `DRAFT_PLANS` normally.
+Entry point is now `REVIEW_PLANS` (right after `CHECK`), not `EXEC_PLANS`. This ensures that on resume (restart with `draft` plans left over from a previous run), the backlog is reviewed and promoted to `active` *before* `DRAFT_PLANS` gets a chance to create duplicate plans for the same roadmap items. On a fresh start with empty queues, `REVIEW_PLANS` runs with `draftPlans() -> []`, the engine short-circuits the empty forEach to `all_complete` without invoking the AI, and the flow falls through to `EXEC_PLANS` -> `DRAFT_PLANS` normally.
 
 ### Step Descriptions
 

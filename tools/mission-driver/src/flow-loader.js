@@ -7,11 +7,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const TOOL_ROOT = resolve(__dirname, "..");
 
 const PLAN_STATUS_RE = /^>\s*\*{0,2}(?:[Pp]lan\s+)?[Ss]tatus\*{0,2}\s*:\s*\*{0,2}(.+?)\*{0,2}\s*$/m;
-// Canonical initial status is "proposed" (per plan-authoring guide).
-// Canonical post-review status is "planned" (per plan-authoring guide).
-// The extra entries in each set are tolerated synonyms: legacy vocab still
-// present in older plans, and common AI-generated variants. This keeps a
-// single-word typo from silently breaking the mission loop.
+// Canonical plan statuses: draft (initial) → active (post-review, ready to exec).
+// Legacy synonyms tolerated for backward compatibility with older plans.
 function _normalizeStatus(s) {
   return s.toLowerCase().replace(/\s+/g, " ").trim();
 }
@@ -27,9 +24,9 @@ const ACTIVE_STATUSES = [
   "executing",
   "in flight",
 ].map(_normalizeStatus);
-const DRAFTED_STATUSES = [
-  "drafted",
+const DRAFT_STATUSES = [
   "draft",
+  "drafted",
   "proposed",
   "not started",
   "backlog",
@@ -84,8 +81,8 @@ export function createExpressionFunctions(config) {
     activePlans: () => _scanPlansByStatus(
       resolve(projectRoot, mission.plansDir), ACTIVE_STATUSES
     ),
-    draftedPlans: () => _scanPlansByStatus(
-      resolve(projectRoot, mission.plansDir), DRAFTED_STATUSES
+    draftPlans: () => _scanPlansByStatus(
+      resolve(projectRoot, mission.plansDir), DRAFT_STATUSES
     ),
     openAudits: () => _scanOpenAuditsList(
       resolve(projectRoot, mission.auditsDir || "audits")

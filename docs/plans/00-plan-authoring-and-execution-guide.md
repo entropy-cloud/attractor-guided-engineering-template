@@ -37,7 +37,7 @@ If unsure, use a full plan.
 8. **Record skill usage deliberately.** For each phase or item where a reusable skill matters, record `Skill: <name>` or `Skill: none`. Skills choose the work method, not the business truth. If a skill is named, its required inputs and expected output must already be clear from `docs/skills/README.md` and the referenced owner docs.
 9. **Record Decisions with rationale.** Every `Decision` item must document the choice, the alternatives considered, and the residual risk if any. Write the rationale into the plan or a referenced doc. If a decision requires prototyping or exploration before committing, add a temporary `Explore` item that must conclude before the `Decision` resolves. Framework-forced or obvious choices (e.g., "must match existing framework pattern") can be noted as constrained without full alternatives analysis.
 10. **Checklist integrity before closure.** Before marking a plan complete, no in-scope checklist item may remain unchecked. Either complete it or explicitly move it out of scope with a written reason. Scope narrowing after plan approval is a scope change and must be recorded with rationale; silently removing items from scope is a violation.
-11. **Text consistency before closure.** Before closing, verify that `Plan Status`, every phase `Status`, every phase `Exit Criteria`, `Closure Gates`, and the `docs/logs/` entry all agree. No `completed` at the top while a phase inside still says `planned`.
+11. **Text consistency before closure.** Before closing, verify that `Plan Status`, every phase `Status`, every phase `Exit Criteria`, `Closure Gates`, and the `docs/logs/` entry all agree. No `completed` at the top while a phase inside still says `draft`.
 12. **Independent draft review and closure audit.** Do not implement a created plan until independent draft review has revised it into an acceptable execution contract, and do not mark it complete as a side effect of finishing the last implementation slice. Use a separate review pass. Closure audit must be performed by an independent subagent or reviewer; self-review cannot mark a created plan complete. Protected areas, unresolved product risk, and source-of-truth conflicts require human/subagent review or stay open.
 13. **Non-degradable items** cannot be downgraded to non-blocking follow-ups: confirmed live defects, confirmed contract drift, confirmed owner-doc drift, and CI/lint rules already fixed in the repo.
 
@@ -45,19 +45,17 @@ If unsure, use a full plan.
 
 Use these statuses deliberately:
 
-- `proposed` - the initial draft exists but has not yet passed independent draft review
-- `planned` - independent draft review has converged on an acceptable execution contract and implementation may begin
-- `in progress` - implementation is underway
-- `partially completed` - some in-scope work landed but closure is not yet honest
+- `draft` - the plan exists but has not yet passed independent draft review
+- `active` - independent draft review has converged on an acceptable execution contract and implementation may begin
 - `completed` - independent closure audit accepted closure
 - `superseded | replaced | deferred | cancelled` - use when the plan no longer owns live closure in its original form
 
 Recommended default flow for created plans:
 
-1. create the first honest draft as `proposed`
+1. create the first honest draft as `draft`
 2. run independent draft review until the draft is acceptable
 3. record the iterations in `## Draft Review Record`
-4. change `Plan Status` to `planned`
+4. change `Plan Status` to `active`
 5. execute and update phase/workstream statuses
 6. close only after independent closure audit
 
@@ -72,7 +70,7 @@ A `Follow-up` item must name the trigger condition that would promote it into sc
 ## When Executing
 
 1. Before implementation, revise the plan directly until independent draft review finds no blocking issue, then record the draft-review evidence durably in the plan by default.
-2. Keep new plans at `Plan Status: proposed` during draft review. Change to `planned` only after the draft-review record shows the plan is acceptable for execution.
+2. Keep new plans at `Plan Status: draft` during draft review. Change to `active` only after the draft-review record shows the plan is acceptable for execution.
 3. When you start a slice, update its `Status` to `in progress`.
 4. When you finish a slice, update its `Status` to `completed` and check off all its execution items and exit criteria.
 5. Before executing a phase, confirm the listed `Skill` still matches the task and available inputs. If not, update the plan before proceeding.
@@ -107,7 +105,7 @@ If any of these fail, the plan stays open.
 ```md
 # <plan-id> <title>
 
-> Plan Status: proposed
+> Plan Status: draft
 > Last Reviewed: YYYY-MM-DD
 > Source: <requirement / bug / analysis / request>
 > Related: <related plans, optional>
