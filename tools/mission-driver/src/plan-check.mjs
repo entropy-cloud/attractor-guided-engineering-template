@@ -29,7 +29,12 @@ import { relative } from "node:path";
 const PLAN_STATUS_RE = /^>\s*(?:\*\*)?(?:Plan\s+)?Status(?:\*\*)?:\s*\*{0,2}([A-Za-z][A-Za-z /-]*)\*{0,2}\s*$/im;
 const CHECKLIST_UNCHECKED_RE = /^(\s*)-\s+\[\s?\]\s+(.+)$/gm;
 const CHECKLIST_CHECKED_RE = /^(\s*)-\s+\[x\]\s+(.+)$/gim;
-const CLOSURE_HEADER_RE = /^#{2,4}\s+Closure\b/im;
+// Match the real "## Closure" section, NOT "## Closure Gates". `\b` alone
+// would also match "Closure Gates" (word boundary before the space), and since
+// the plan template always places "## Closure Gates" before "## Closure",
+// content.search() would pick the wrong section. Anchoring to end-of-line
+// after "Closure" ensures only the bare Closure heading is matched.
+const CLOSURE_HEADER_RE = /^#{2,4}\s+Closure\s*$/im;
 
 function toPosix(p) {
   return p.split(/\\/).join("/");

@@ -128,6 +128,45 @@ Closure Audit Evidence:
       assert.equal(r.passed, true);
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
+
+  it("flags a hollow Closure even when ## Closure Gates precedes it", () => {
+    // Regression: CLOSURE_HEADER_RE must match "## Closure", not "## Closure
+    // Gates". The plan template always places Closure Gates before Closure,
+    // so a naive /\b/ anchor sampled the Gates items as evidence and let a
+    // placeholder-only Closure pass.
+    const { file, dir } = tmpPlan("005.md", `# 5 hollow behind gates
+
+> Plan Status: completed
+
+### Phase 1 - x
+
+Status: completed
+
+Exit Criteria:
+
+- [x] done
+
+## Closure Gates
+
+- [x] gate one
+- [x] gate two
+
+## Closure
+
+Status Note: *(pending)*
+
+Closure Audit Evidence:
+
+- *(pending)*
+`);
+    try {
+      const r = inspectPlan(file);
+      assert.equal(r.passed, false);
+      assert.equal(r.planStatus, "completed");
+      assert.ok(r.details.includes("missing closure evidence"),
+        `expected 'missing closure evidence' in ${JSON.stringify(r.details)}`);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
 });
 
 describe("inspectPlan — status parsing", () => {
