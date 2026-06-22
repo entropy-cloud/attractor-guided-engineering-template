@@ -124,6 +124,7 @@ export async function createRunner(config) {
     const result = await execute(config, `oc-${stepName}`, "opencode", args, {
       cwd: config.projectRoot,
       onSpawn(pid) { currentPid = pid; },
+      shell: IS_WIN32,
     });
     currentPid = null;
 
