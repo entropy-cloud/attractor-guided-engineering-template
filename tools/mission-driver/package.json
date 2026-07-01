@@ -7,8 +7,8 @@
   "main": "src/main.js",
   "scripts": {
     "start": "node src/main.js",
-    "dry-run": "node src/main.js --dry-run",
+    "dry-run": "node src/main.js run --dry-run",
     "test": "node --test test/core.test.js test/group-subflow.test.js test/transitions.test.js test/plan-check.test.js",
-    "go": "node src/main.js --max-cycles 1 --model zhipuai-coding-plan/glm-4.7-flash"
+    "go": "node src/main.js run --max-cycles 1 --model zhipuai-coding-plan/glm-4.7-flash"
   }
 }

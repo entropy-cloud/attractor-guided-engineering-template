@@ -25,7 +25,7 @@ Do not keep one-off migration scripts, repo-specific cleanup scripts, or tools t
 
 ## Core Tools
 
-- `check-active-doc-code-anchors.mjs`: validate repo paths referenced in active docs
+- `check-doc-references.mjs`: validate backtick paths and markdown links referenced in active docs
 - `check-oversized-code-files.mjs`: flag tracked code files that exceed line thresholds
 - `check-docs-garbled.mjs`: scan docs for suspicious Unicode and mojibake
 
@@ -74,17 +74,17 @@ Set `MISSION_DRIVER_HOME` env var if the template lives elsewhere.
 1. `tools/mission-driver.sh` — the thin script above
 2. `missions/<name>.json` — mission config with project paths and commands
 
-Run `--draft-mission <description>` to have the AI generate a mission.json:
+Run `draft <description>` to have the AI generate a mission.json:
 ```bash
-./tools/mission-driver.sh --draft-mission "Build the component library"
+./tools/mission-driver.sh draft "Build the component library"
 ```
 
 See `mission.json.example` and `design/mission-design.md` for the full schema.
 
 ## Configuration
 
-- `check-active-doc-code-anchors.mjs`
-  Uses `AGE_REPO_ROOT`, `AGE_ACTIVE_DOC_ROOTS`, and `AGE_ACTIVE_DOC_FILES`.
+- `check-doc-references.mjs`
+  Uses `AGE_REPO_ROOT`, `AGE_ACTIVE_DOC_ROOTS`, `AGE_ACTIVE_DOC_FILES`, and `AGE_DOC_REFS_IGNORE_FILES`.
 - `check-oversized-code-files.mjs`
   Uses `AGE_OVERSIZED_WARN_LINES`, `AGE_OVERSIZED_ERROR_LINES`, and `AGE_CODE_ROOT_PREFIXES`.
 - `check-duplicates.mjs`

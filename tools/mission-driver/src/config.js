@@ -3,19 +3,33 @@ import { resolve } from "node:path";
 import { loadMission } from "./mission-check.mjs";
 
 /**
- * Mission-based config resolver.
+ * Mission-based config resolvers.
  *
  * A "mission" is a fixed project config (missions/<name>.json) that tells the
  * generic engine where the roadmap lives, where plans live, what test/build
  * commands to run, etc. The engine makes zero project-specific assumptions;
  * every project path comes from the mission.
  *
- * CLI: node main.js <mission-name>
- *      node main.js <mission-name> --missions-dir ./missions
- *      node main.js --list-missions
+ * CLI:
+ *   node main.js run <mission-name>
+ *   node main.js run <mission-name> --missions-dir ./missions
+ *   node main.js list missions
+ *   node main.js draft <description>
+ *
+ * These resolvers are pure: they throw on bad input but never call
+ * process.exit() or print to stdout. Command dispatch and output live in
+ * main.js.
  */
 
-function listMissionsString(missionsDir) {
+export function resolveProjectRoot(args = {}) {
+  return args.dir || process.env.PROJECT_ROOT || process.cwd();
+}
+
+export function resolveMissionsDir(projectRoot, args = {}) {
+  return args.missionsDir ? resolve(projectRoot, args.missionsDir) : resolve(projectRoot, "missions");
+}
+
+export function listMissionsString(missionsDir) {
   if (!existsSync(missionsDir)) return `(missions dir not found: ${missionsDir})`;
   const missions = readdirSync(missionsDir)
     .filter((f) => f.endsWith(".json"))
@@ -23,44 +37,24 @@ function listMissionsString(missionsDir) {
   return missions.length ? missions.join("\n") : "(no missions found)";
 }
 
+function resolveCommon(args) {
+  return {
+    agent: args.agent || process.env.OPENCODE_AGENT || "build",
+    model: args.model || process.env.OPENCODE_MODEL || "zhipuai-coding-plan/glm-5.2",
+    maxCycles: args.maxCycles || Number(process.env.MAX_CYCLES) || undefined,
+    maxInnerCycles: args.maxInnerCycles || Number(process.env.MAX_INNER_CYCLES) || undefined,
+    maxTotalSteps: args.maxTotalSteps || Number(process.env.MAX_TOTAL_STEPS) || undefined,
+  };
+}
+
 export function resolveConfig(args = {}) {
-  const projectRoot = args.dir || process.env.PROJECT_ROOT || process.cwd();
-  const missionsDir = args.missionsDir
-    ? resolve(projectRoot, args.missionsDir)
-    : resolve(projectRoot, "missions");
-  const dryRun = args.dryRun === true;
-  const testMode = args.testMode === true;
+  const projectRoot = resolveProjectRoot(args);
+  const missionsDir = resolveMissionsDir(projectRoot, args);
 
-  const agent = args.agent || process.env.OPENCODE_AGENT || "build";
-  const model = args.model || process.env.OPENCODE_MODEL || "zhipuai-coding-plan/glm-5.2";
-  const maxCycles = args.maxCycles || Number(process.env.MAX_CYCLES) || undefined;
-  const maxInnerCycles = args.maxInnerCycles || Number(process.env.MAX_INNER_CYCLES) || undefined;
-  const maxTotalSteps = args.maxTotalSteps || Number(process.env.MAX_TOTAL_STEPS) || undefined;
-
-  if (args.draftMission) {
-    const runDir = resolve(projectRoot, "_tmp", `draft-mission-${Date.now()}`);
-    mkdirSync(runDir, { recursive: true });
-    return {
-      projectRoot, missionsDir, runDir,
-      missionName: null, mission: null,
-      draftMission: args.draftMission,
-      agent: args.agent || "build",
-      model: args.model || "zhipuai-coding-plan/glm-5.2",
-      dryRun, testMode,
-      logFile: resolve(runDir, "mission-draft.log"),
-    };
-  }
-
-  if (args.listMissions) {
-    console.log(`Missions in ${missionsDir}:`);
-    console.log(listMissionsString(missionsDir));
-    process.exit(0);
-  }
-
-  const missionName = args.mission || args.module || "";
+  const missionName = args.mission || "";
   if (!missionName) {
     throw new Error(
-      `mission name is required: mission-driver.sh <mission-name>\n` +
+      `mission name is required: mission-driver run <mission-name>\n` +
       `Available missions:\n${listMissionsString(missionsDir)}`
     );
   }
@@ -92,13 +86,28 @@ export function resolveConfig(args = {}) {
     mission,
     runDir,
     timestamp,
-    agent,
-    model,
-    maxCycles,
-    maxInnerCycles,
-    maxTotalSteps,
-    dryRun,
-    testMode,
+    ...resolveCommon(args),
+    dryRun: args.dryRun === true,
+    testMode: args.testMode === true,
     logFile: resolve(runDir, `${missionName}.log`),
+  };
+}
+
+export function resolveDraftConfig(args = {}) {
+  const projectRoot = resolveProjectRoot(args);
+  const missionsDir = resolveMissionsDir(projectRoot, args);
+  const runDir = resolve(projectRoot, "_tmp", `draft-mission-${Date.now()}`);
+  mkdirSync(runDir, { recursive: true });
+  return {
+    projectRoot,
+    missionsDir,
+    runDir,
+    missionName: null,
+    mission: null,
+    draftDesc: args.draftDesc || "",
+    ...resolveCommon(args),
+    dryRun: false,
+    testMode: false,
+    logFile: resolve(runDir, "mission-draft.log"),
   };
 }

@@ -141,7 +141,7 @@ The `flowName` field in mission.json (optional, defaults to `"mission-driver"`) 
 ### Phase 1: Mission Draft (AI)
 
 ```bash
-./tools/mission-driver.sh --draft-mission "Implement all components"
+./tools/mission-driver.sh draft "Implement all components"
 ```
 
 AI reads project structure + user intent -> generates `missions/<name>.json`. See Section 9.
@@ -149,9 +149,9 @@ AI reads project structure + user intent -> generates `missions/<name>.json`. Se
 ### Phase 2: Mission Execution (Program Loop)
 
 ```bash
-./tools/mission-driver.sh components
-./tools/mission-driver.sh components --dry-run
-./tools/mission-driver.sh --list-missions
+./tools/mission-driver.sh run components
+./tools/mission-driver.sh run components --dry-run
+./tools/mission-driver.sh list missions
 ```
 
 `./tools/mission-driver.sh` is a thin wrapper that calls `node tools/mission-driver/src/main.js`.
@@ -215,7 +215,7 @@ CHECK_OPEN_AUDITS -> MULTI_AUDIT -> OPEN_AUDIT -> SCAN_NEW_RESULTS -> DRAFT_FROM
 
 ## 9. Mission Draft Step (AI)
 
-`--draft-mission` triggers `mission-draft.md` prompt, AI executes:
+`draft <description>` triggers `mission-draft.md` prompt, AI executes:
 
 1. Read user input (objective intent).
 2. Read project structure: `AGENTS.md`, index files, `package.json`/`pom.xml`/`mvnw` (detect tech stack), directory structure.
@@ -239,7 +239,7 @@ From current (hardcoded paths + module parameter) to mission-based. **In depende
 4. **`flow-loader.js`**: scanActivePlans uses `mission.plansDir`.
 5. **Flow refactor**: step naming, exit conditions, deep-audit-loop subflow.
 6. **`runner.js`** already executes commands verbatim (verify no change needed).
-7. **`mission-draft.md` prompt + `--draft-mission`/`--list-missions` mode**.
+7. **`mission-draft.md` prompt + `draft`/`list` commands**.
 8. **Generate first mission** (`missions/components.json`) as example + regression test.
 
 ## 12. Open Questions
