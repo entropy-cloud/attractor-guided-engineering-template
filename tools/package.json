@@ -4,9 +4,9 @@
   "type": "module",
   "packageManager": "pnpm@10.0.0",
   "scripts": {
-    "check": "pnpm check:oversized-code-files && pnpm check:active-doc-code-anchors && pnpm check:docs-garbled",
+    "check": "pnpm check:oversized-code-files && pnpm check:doc-references && pnpm check:docs-garbled",
     "check:oversized-code-files": "node ./check-oversized-code-files.mjs",
-    "check:active-doc-code-anchors": "node ./check-active-doc-code-anchors.mjs",
+    "check:doc-references": "node ./check-doc-references.mjs",
     "check:docs-garbled": "node ./check-docs-garbled.mjs",
     "check:duplicates": "node ./check-duplicates.mjs",
     "audit:suspects": "node ./audit/discover-audit-suspects.mjs",
