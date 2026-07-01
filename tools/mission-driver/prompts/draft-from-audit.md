@@ -6,9 +6,15 @@ Read all audit result files in `{{auditsDir}}/` that have `Audit Status: open` *
 
 1. **Order**: When drafting multiple plans, assign them an explicit execution order with `{N}` (single-digit sequence number: 1, 2, 3...). Plans that unblock others come first.
 
-2. **Status**: Use `> Plan Status: draft`.
+2. **Status & source audits**: Each plan's front matter MUST record the audit files it covers, so execution can close them later:
+   ```
+   > Plan Status: draft
+   > Mission: {{missionName}}
+   > Source Audits: audits/2026-06-24-2213-open-audit-components.md, audits/<other>.md
+   ```
+   List every audit file whose findings this plan addresses (paths relative to `{{auditsDir}}`'s parent, i.e. as they appear under `{{auditsDir}}/`). A plan with no audit source (e.g. a roadmap plan) omits `> Source Audits:` entirely.
 
-3. **Mark audit as planned**: After drafting, update every source audit result file: change `> Audit Status: open` to `> Audit Status: planned`. This prevents re-processing the same findings.
+3. **Mark audit as planned**: After drafting, update every source audit result file: change `> Audit Status: open` to `> Audit Status: planned`. This prevents re-processing the same findings. (Only `open` audits are ever picked up; `planned`/`closed` are excluded.)
 
 4. **Review before active**: For each drafted plan, follow the `Plan Review Rule` in `{{planGuide}}` — use an independent sub-agent (fresh session) to review repeatedly until consensus. **Only change `> Plan Status: draft` to `> Plan Status: active` after consensus is reached**; otherwise leave it `draft`.
 
