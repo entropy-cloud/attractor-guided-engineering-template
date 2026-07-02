@@ -153,7 +153,7 @@ For created plans, independent draft review and closure audit are part of the de
 - `docs/index.md` - docs router and directory ownership baseline
 - `docs/articles/` - outward-facing methodology articles in English
 - `docs/context/` - mandatory AI context, source-of-truth precedence, and project-wide conventions
-- `docs/backlog/` - prioritized candidate work, AI autonomy labels for next actions, and an optional roadmap layer for phase-level progress
+- `docs/backlog/` - prioritized candidate work, AI autonomy labels for next actions, and an optional roadmap layer for milestone-level progress
 - `docs/process/` - lightweight development workflow
 - `docs/input/` - raw PM, prototype, card-set, article, and external source material
 - `docs/discussions/` - multi-round clarification records for ambiguous requirements

@@ -35,6 +35,28 @@ A **mission** = an explicit configuration file for a development objective (`mis
 - **commands** -- verification commands (install/test/typecheck/build/lint)
 - **commitFormat** -- commit message format description (used by BUILD_VERIFY)
 - **prompts** -- optional project-specific skill prompts: `multiAudit`, `openAudit` (paths to project-specific audit prompt files)
+- **models** -- optional per-step model/variant overrides (see §2.1)
+
+### 2.1 Per-Step Model & Variant
+
+`models` maps a **step name** directly to `{ model, variant }` so different steps can run on different models / reasoning-effort levels. Step names are the keys in the flow JSON (`CHECK`, `DRAFT_PLANS`, `EXECUTE`, `CLOSURE_AUDIT`, `MULTI_AUDIT`, `OPEN_AUDIT`, etc.).
+
+```json
+"models": {
+  "DRAFT_PLANS": { "model": "deepseek/deepseek-v4-flash", "variant": "max" },
+  "MULTI_AUDIT": { "model": "zhipuai-coding-plan/glm-5.2", "variant": "high" }
+}
+```
+
+Resolution order (per agent step):
+
+1. `models[STEP].model` / `.variant` — if that step has an entry
+2. global `--model` / `--variant` CLI flag (or `OPENCODE_MODEL` / `OPENCODE_VARIANT` env var)
+3. built-in default `zhipuai-coding-plan/glm-5.2` (no variant)
+
+**Omitting `models` entirely reproduces the original single-global-model behavior** (glm by default). `variant` maps to `opencode run --variant <level>` (provider-specific reasoning effort: `max`, `high`, `minimal`, ...). Only `model` and `variant` that are set are applied; an unset field falls through to the global/default value, so a step may override only the variant while keeping the global model, or only the model without setting a variant.
+
+This is a pure runtime pass-through: the engine resolves the per-step options and the runner adds `--variant` to the `opencode run` argv only when a variant is selected.
 
 **A mission is fixed-value configuration** -- AI drafts it with all values pinned; the mission driver executes with zero runtime variable substitution. A project can have multiple missions.
 

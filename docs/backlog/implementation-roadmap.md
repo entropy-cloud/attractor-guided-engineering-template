@@ -5,25 +5,32 @@
 
 ## Purpose
 
-This file is the global status index from design to implementation. After reading it, an AI or maintainer knows what is not started, planned, or completed without re-walking every doc and the codebase.
+This file is the global status index from design to implementation. After reading it, an AI or maintainer knows what is not started, ready, or completed without re-walking every doc and the codebase.
 
-It contains no implementation detail. Each `planned` phase is owned by its execution plan.
+It contains no implementation detail. Each `ready` work item has been draft-reviewed and is queued for implementation.
 
 > This roadmap is optional. See `docs/backlog/00-roadmap-authoring-guide.md` for authoring and update rules. Small projects can delete this file and rely on the backlog table alone.
 
-## Phase Status
+## Work Item Status
 
 > **This is the only dynamic status block. Update status here only.**
-> The roadmap is a human–AI alignment artifact: humans set the work items and their order; AI takes the first `todo` item in order, drafts/executes the plan automatically (humans do not review individual plans), and writes the item back to `done` on closure audit. See `docs/backlog/00-roadmap-authoring-guide.md` (Roadmap Role, Phase Granularity, Closed Loop).
+> Status lives on **work items**, never on milestones. Work items are grouped under their milestone. AI takes the first `todo` work item in order, implements it automatically (humans do not review individual implementation), and writes it back to `done` on closure audit. See `docs/backlog/00-roadmap-authoring-guide.md` (Containment, Closed Loop).
 
-- 1. <phase name>: `todo`
+### Milestone 1 — <name>
+
+- <work item>: `todo`
+- <work item>: `todo`
+
+### Milestone 2 — <name>
+
+- <work item>: `todo`
 
 ## Status Values
 
 | Status | Meaning |
 | --- | --- |
-| `todo` | Not started, no plan |
-| `planned` | Has an execution plan |
+| `todo` | Not started |
+| `ready` | Draft-reviewed, queued for implementation |
 | `done` | Completed and passed closure audit |
 
 ## Framework / Platform Reuse
@@ -46,19 +53,27 @@ Capabilities already provided by the stack, so the project does not rebuild them
 
 ---
 
-## Phases
+## Milestones
 
-| # | Phase | Owner Doc | Dependencies | Reuse |
+### Milestone 1 — <name>
+
+| Work Item | Status | Owner Doc | Dependencies | Reuse |
 | --- | --- | --- | --- | --- |
-| 1 | <phase> | `docs/design/<path>` | — | — |
+| <work item> | `todo` | `docs/design/<path>` | — | — |
+
+### Milestone 2 — <name>
+
+| Work Item | Status | Owner Doc | Dependencies | Reuse |
+| --- | --- | --- | --- | --- |
+| <work item> | `todo` | `docs/design/<path>` | — | — |
 
 ---
 
-## Phase Details
+## Work Item Details
 
-### 1. <phase name>
+### <work item>
 
-> Status: see Phase Status above
+> Status: see Work Item Status above
 
 **Goal:** <one sentence>
 
@@ -76,7 +91,7 @@ Capabilities already provided by the stack, so the project does not rebuild them
 
 ```mermaid
 graph TD
-    P1["1. <phase>"]
+    M1WI1["M1 / <work item>"]
 ```
 
 ## Cross-Cutting
@@ -86,11 +101,12 @@ graph TD
 | Error handling | <convention> |
 | Permissions | <convention> |
 | Testing | <convention> |
-| Owner-doc sync | update design/architecture when a phase closes |
+| Owner-doc sync | update design/architecture when a work item closes |
 | Dev log | update `docs/logs/` after each implementation |
 
 ## Rule
 
-- This file is a status index and coarse-grained split, not an execution plan.
-- Each `planned` phase is owned by its execution plan.
-- Phase status changes update the Phase Status block at the top of this file only.
+- This file is a status index and coarse-grained split, not an implementation specification.
+- Each `ready` work item has been draft-reviewed and is queued for implementation.
+- Status lives on work items only; a milestone never carries a status.
+- Work-item status changes update the Work Item Status block at the top of this file only.

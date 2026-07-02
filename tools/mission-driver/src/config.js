@@ -41,6 +41,7 @@ function resolveCommon(args) {
   return {
     agent: args.agent || process.env.OPENCODE_AGENT || "build",
     model: args.model || process.env.OPENCODE_MODEL || "zhipuai-coding-plan/glm-5.2",
+    variant: args.variant || process.env.OPENCODE_VARIANT || undefined,
     maxCycles: args.maxCycles || Number(process.env.MAX_CYCLES) || undefined,
     maxInnerCycles: args.maxInnerCycles || Number(process.env.MAX_INNER_CYCLES) || undefined,
     maxTotalSteps: args.maxTotalSteps || Number(process.env.MAX_TOTAL_STEPS) || undefined,
@@ -84,6 +85,7 @@ export function resolveConfig(args = {}) {
     missionsDir,
     missionName,
     mission,
+    stepModels: mission.models || {},
     runDir,
     timestamp,
     ...resolveCommon(args),

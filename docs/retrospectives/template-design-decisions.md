@@ -10,6 +10,30 @@ This file is the template evolution record for stable reusable changes.
 
 ---
 
+## 2026-07-01: Restructure Roadmap Around Milestone + Work Item, Remove Plan Vocabulary
+
+### Context
+
+The roadmap guide called its markable unit a "phase" ("coarse-grained phase index", "Phase Status", "Phase Details"), while the plan guide used "phase" for a plan's internal slices (`### Phase N`). The same word denoted both the roadmap unit and the plan-internal slice. A first fix renamed the roadmap unit to "milestone" and defined a milestone as "sized so one execution plan can complete it" — but that definition was wrong: it (a) coupled the roadmap's primary concept to the plan layer, and (b) did not match real projects, where a milestone (e.g. "Core Business Loop") is a coarse grouping that **contains** multiple smaller deliverables, each delivered by its own plan.
+
+### Decision
+
+- Established a two-level roadmap model: a **milestone** is a coarse-grained capability grouping (organizational container); a **work item** is the atomic markable unit inside a milestone.
+- **Status lives on work items only** (`todo`/`ready`/`done`). A milestone never carries a status field; its progress is read by scanning its work items.
+- Removed all "plan" vocabulary from roadmap docs (guide + skeleton): the roadmap no longer mentions execution plans, the plan layer, or the plan lifecycle — it describes only milestones and work items, and the Closed Loop / Roadmap Role describe the AI implementing work items directly. Renamed the work-item status `planned` → `ready` (the old token contained "plan"; `ready` = draft-reviewed, queued for implementation) and dropped the "Plan link" column from the milestone table.
+- Renamed the legacy roadmap vocabulary accordingly: `Phase Status`/`Phases`/`Phase Details` → `Work Item Status` / `Milestones` / `Work Item Details`; table headers, status block, dependency-graph nodes, and prose follow. Added a Terminology Note pinning roadmap → milestone → work item, with "phase" reserved for plan-internal slices.
+- Aligned the mission-driver prompts (`draft-from-roadmap.md` `> Work Item:` front-matter; `execute.md` roadmap write-back) and navigation wording ("phase-level" → "milestone/work-item-level") in `README.md`, `docs/index.md`, `START-HERE-after-copy.md`.
+
+### Rationale
+
+Coupling the roadmap's unit definition to "plan" both leaked the execution layer into the planning layer and mis-modelled projects whose milestones are groupings rather than single-plan deliverables. Making the milestone a status-less container and the work item the sole status carrier matches how real roadmaps are structured (a milestone groups related work items), keeps the roadmap vocabulary self-contained (milestone/work-item, no "plan" in definitions), and preserves the closed loop (AI takes a `todo` work item → executes → marks `done`) without overloading "phase".
+
+### Consequences
+
+Copied projects get a roadmap model that matches practice: milestones group work items, work items carry status, plans are the execution layer's concern. Vocabulary is now collision-free across layers: roadmap → milestone → work item; plan → phase/workstream. The work-item↔plan granularity rule ("a work item too large for one delivery pass must be split") is stated in roadmap terms, with the mechanics owned by the plan guide. Plans keep `### Phase N` internally. Older retrospective entries retain the prior wording as point-in-time records.
+
+---
+
 ## 2026-06-20: Add Mission-Driver Tool and Converge Goal-Driver Into It
 
 ### Context

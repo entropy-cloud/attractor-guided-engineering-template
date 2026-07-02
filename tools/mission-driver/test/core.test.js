@@ -696,3 +696,100 @@ describe("summarizeArg — keeps prompt out of log header", () => {
     assert.ok(out.length < 200);
   });
 });
+
+describe("FlowEngine — per-step model/variant resolution", () => {
+  it("passes step-level model+variant to runAgent, falls back to empty for unconfigured steps", async () => {
+    const flow = simpleFlow({
+      START: {
+        type: "agent",
+        prompt: "go",
+        resultTag: "STATUS",
+        transitions: { ok: { goto: "B" } },
+      },
+      B: {
+        type: "agent",
+        prompt: "go b",
+        resultTag: "STATUS",
+        transitions: { ok: { done: "completed" } },
+      },
+    });
+
+    const captured = {};
+    const delegates = makeMockDelegates({
+      config: {
+        moduleName: "test-mod", shortName: "test-mod", packageFilter: "@nop-chaos/test-mod", projectRoot: "/tmp/test",
+        stepModels: {
+          START: { model: "deepseek/deepseek-v4-flash", variant: "max" },
+        },
+      },
+      async runAgent(stepName, prompt, system, sessionId, stepOptions = {}) {
+        captured[stepName] = stepOptions;
+        return { text: "<STATUS>ok</STATUS>", ok: true };
+      },
+    });
+
+    const engine = new FlowEngine(flow, delegates);
+    const result = await engine.run();
+
+    assert.equal(result.status, "completed");
+    assert.deepEqual(captured.START, { model: "deepseek/deepseek-v4-flash", variant: "max" });
+    assert.deepEqual(captured.B, {}, "unconfigured step gets empty stepOptions (global fallback)");
+  });
+
+  it("uses empty stepOptions when config has no stepModels", async () => {
+    const flow = simpleFlow({
+      START: {
+        type: "agent",
+        prompt: "go",
+        resultTag: "STATUS",
+        transitions: { ok: { done: "completed" } },
+      },
+    });
+
+    const captured = {};
+    const delegates = makeMockDelegates({
+      async runAgent(stepName, prompt, system, sessionId, stepOptions = {}) {
+        captured[stepName] = stepOptions;
+        return { text: "<STATUS>ok</STATUS>", ok: true };
+      },
+    });
+
+    const engine = new FlowEngine(flow, delegates);
+    await engine.run();
+
+    assert.deepEqual(captured.START, {});
+  });
+
+  it("threads step model into correction retry when marker is unknown", async () => {
+    let correctOpts = null;
+    const flow = simpleFlow({
+      START: {
+        type: "agent",
+        prompt: "go",
+        resultTag: "R",
+        onUnknownMaxRetries: 1,
+        transitions: { yes: { done: "completed" } },
+      },
+    });
+
+    const delegates = makeMockDelegates({
+      config: {
+        moduleName: "test-mod", shortName: "test-mod", packageFilter: "@nop-chaos/test-mod", projectRoot: "/tmp/test",
+        stepModels: { START: { model: "deepseek/deepseek-v4-flash", variant: "max" } },
+      },
+      async runAgent(stepName, prompt, system, sessionId, stepOptions = {}) {
+        if (String(stepName).includes("correct")) {
+          correctOpts = stepOptions;
+          return { text: "<R>yes</R>", ok: true };
+        }
+        return { text: "<R>no</R>", ok: true };
+      },
+    });
+
+    const engine = new FlowEngine(flow, delegates);
+    const result = await engine.run();
+
+    assert.equal(result.status, "completed");
+    assert.deepEqual(correctOpts, { model: "deepseek/deepseek-v4-flash", variant: "max" });
+  });
+});

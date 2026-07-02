@@ -150,7 +150,8 @@ export class FlowEngine {
 
   async _executeAgentStep(stepName, stepDef, sessionId) {
     const prompt = this._buildPrompt(stepName, stepDef);
-    const result = await this.delegates.runAgent(stepName, prompt, stepDef.system || "", sessionId);
+    const stepOpts = this._resolveStepModel(stepName);
+    const result = await this.delegates.runAgent(stepName, prompt, stepDef.system || "", sessionId, stepOpts);
     if (result && result.sessionId) this.lastSessionId = result.sessionId;
 
     if (!result || !result.text) {
@@ -173,7 +174,7 @@ export class FlowEngine {
         result.text,
       ].join("\n");
       const retry = await this.delegates.runParseAgent(
-        `parse-${rTag}`, parsePrompt, stepDef.system || "",
+        `parse-${rTag}`, parsePrompt, stepDef.system || "", stepOpts,
       );
       marker = extractTag(retry.text, rTag);
     }
@@ -187,7 +188,7 @@ export class FlowEngine {
       const transitions = stepDef.transitions || {};
       if (!transitions[marker]) {
         marker = await this._runCorrectionAgent(
-          marker, result.text, rTag, transitions, stepDef, this.lastSessionId,
+          marker, result.text, rTag, transitions, stepDef, this.lastSessionId, stepOpts,
         );
       }
     }
@@ -195,7 +196,17 @@ export class FlowEngine {
     return { marker, vars, ok: result.ok, text: result.text };
   }
 
-  async _runCorrectionAgent(marker, resultText, resultTag, transitions, stepDef, sessionId) {
+  _resolveStepModel(stepName) {
+    const stepModels = this.delegates.config?.stepModels;
+    if (!stepModels || !stepModels[stepName]) return {};
+    const step = stepModels[stepName];
+    const opts = {};
+    if (step.model) opts.model = step.model;
+    if (step.variant) opts.variant = step.variant;
+    return opts;
+  }
+
+  async _runCorrectionAgent(marker, resultText, resultTag, transitions, stepDef, sessionId, stepOpts = {}) {
     const maxRetries = stepDef.onUnknownMaxRetries ?? 2;
     let currentMarker = marker;
 
@@ -211,7 +222,7 @@ export class FlowEngine {
 
       try {
         const corrected = await this.delegates.runAgent(
-          `correct-${i + 1}`, correctionPrompt, stepDef.system || "", sessionId,
+          `correct-${i + 1}`, correctionPrompt, stepDef.system || "", sessionId, stepOpts,
         );
         if (corrected && corrected.text) {
           const newMarker = extractTag(corrected.text, resultTag);

@@ -23,7 +23,7 @@ This file is the top-level docs router.
 | Understand mandatory AI context and current project state            | `docs/context/README.md`                            | `docs/context/project-context.md`, `docs/context/ai-autonomy-policy.md`, `docs/context/codebase-map.md`                                        |
 | Understand the lightweight default development workflow              | `docs/process/application-development-workflow.md`  | `AGENTS.md`                                                                                                                                    |
 | Choose the next AI-ready work item                                   | `docs/backlog/README.md`                            | `docs/context/ai-autonomy-policy.md`, active requirement and owner doc                                                                         |
-| Understand phase-level progress and dependencies (when a roadmap exists) | `docs/backlog/00-roadmap-authoring-guide.md`     | `docs/backlog/implementation-roadmap.md`                                                                                                       |
+| Understand milestone-level progress and dependencies (when a roadmap exists) | `docs/backlog/00-roadmap-authoring-guide.md`     | `docs/backlog/implementation-roadmap.md`                                                                                                       |
 | Read raw PM, prototype, article, or card-set inputs                  | `docs/input/README.md`                              | the active file in `docs/input/`                                                                                                               |
 | Read explanatory methodology articles                                | `docs/articles/README.md`                           | the relevant article under `docs/articles/`                                                                                                    |
 | Clarify ambiguous requirements                                       | `docs/discussions/README.md`                        | `docs/requirements/00-requirement-synthesis-guide.md`                                                                                          |
@@ -94,7 +94,7 @@ When a project has several domains, add a quick-reference table so a change can 
 
 - `docs/process/` - workflow and operating process documents
 - `docs/context/` - mandatory AI context, owner precedence, and project-wide conventions
-- `docs/backlog/` - prioritized candidate work, AI-ready next actions, and an optional roadmap when phase-level progress is needed
+- `docs/backlog/` - prioritized candidate work, AI-ready next actions, and an optional roadmap when milestone-level progress is needed
 - `docs/input/` - raw external inputs and copied source material
 - `docs/discussions/` - optional requirement clarification and unresolved question records
 - `docs/requirements/` - synthesized implementation-ready requirement docs

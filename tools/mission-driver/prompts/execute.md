@@ -8,7 +8,7 @@ Steps:
    b. Tick every `[ ]` item in that Phase to `[x]` AND set its `Status:` to `completed`. Both must happen together — a status-only or items-only update leaves the plan inconsistent and will re-trigger this Phase on the next run (causing the EXECUTE ↔ CLOSURE_VERIFY loop).
 4. After all Phases are complete:
    a. Update the plan's `Plan Status` to `completed`
-   b. Read the work item from the plan and update the relevant roadmap/backlog file (e.g. `{{roadmapPath}}` or the referenced architecture doc): change the item from ❌ to ✅
+   b. Read the work item from the plan (its `> Work Item:` label) and update the relevant roadmap/backlog file (e.g. `{{roadmapPath}}` or the referenced architecture doc): change the work item from ❌ to ✅
    c. **Close source audits**: If the plan front matter has `> Source Audits:`, for each listed audit file change `> Audit Status: planned` to `> Audit Status: closed`. Skip files already `closed` (idempotent) and omit the step entirely if there is no `> Source Audits:` line (roadmap-sourced plan). Do NOT reopen or re-verify here — if a fix turns out insufficient, the next audit round's `OPEN_AUDIT` will re-discover it as a fresh `open` finding.
 
 If execution is interrupted or fails, that is fine — the plan records its own progress ([x]/[ ]), so the next run resumes from the breakpoint.

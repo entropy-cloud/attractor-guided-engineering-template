@@ -104,12 +104,13 @@ function findLatestSessionId(projectRoot) {
 export async function createRunner(config) {
   let currentPid = null;
 
-  const realRun = async (stepName, prompt, system, sessionId) => {
-    const model = `${config.model}`;
+  const realRun = async (stepName, prompt, system, sessionId, stepOptions = {}) => {
+    const model = stepOptions.model || `${config.model}`;
+    const variant = stepOptions.variant || config.variant;
 
     process.stderr.write(`\n╔═══════════════════════════════════════════════\n`);
     process.stderr.write(`║ STEP: ${stepName}\n`);
-    process.stderr.write(`║ Model: ${model}\n`);
+    process.stderr.write(`║ Model: ${model}${variant ? " (variant=" + variant + ")" : ""}\n`);
     if (sessionId) process.stderr.write(`║ Session: ${sessionId.slice(0, 30)}...\n`);
     process.stderr.write(`╠═══════════════════════════════════════════════\n`);
     const preview = prompt.length > 500 ? prompt.slice(0, 500) + "..." : prompt;
@@ -117,7 +118,11 @@ export async function createRunner(config) {
     process.stderr.write(`╚═══════════════════════════════════════════════\n`);
 
     const markedPrompt = `[MISSION_DRIVER] ${prompt}`;
-    const args = ["run", "-m", model, "--agent", config.agent, "--dangerously-skip-permissions", markedPrompt];
+    const args = ["run", "-m", model, "--agent", config.agent, "--dangerously-skip-permissions"];
+    if (variant) {
+      args.push("--variant", variant);
+    }
+    args.push(markedPrompt);
     if (sessionId) {
       args.push("--session", sessionId);
     }

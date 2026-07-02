@@ -33,7 +33,7 @@ Fill these as soon as they are needed. Do not block the first small feature just
 
 These are on-demand. Do not fill them just to be complete; adopt the ones the project actually needs. Delete the ones that do not apply.
 
-- [ ] `docs/backlog/implementation-roadmap.md` — when the project is large enough that a flat backlog table no longer shows phase-level progress. See `docs/backlog/00-roadmap-authoring-guide.md`.
+- [ ] `docs/backlog/implementation-roadmap.md` — when the project is large enough that a flat backlog table no longer shows milestone-level progress. See `docs/backlog/00-roadmap-authoring-guide.md`.
 - [ ] `docs/requirements/product-baseline.md` — when you need an explicit product baseline and first complete loop.
 - [ ] `docs/design/domain-design-guidelines.md` — when the project has several business domains and needs a single domain-to-owner-doc map.
 - [ ] `docs/design/flow-overview.md` — when the project has cross-domain flows that need one global view.

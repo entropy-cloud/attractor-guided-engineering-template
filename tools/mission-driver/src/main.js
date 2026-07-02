@@ -23,6 +23,7 @@ const RUN_OPTIONS = [
   { flag: "--test", desc: "Test mode" },
   { flag: "--agent <name>", desc: "opencode agent (default: build, env: OPENCODE_AGENT)" },
   { flag: "--model <id>", desc: "opencode model (env: OPENCODE_MODEL)" },
+  { flag: "--variant <level>", desc: "model variant / reasoning effort e.g. max, high, minimal (env: OPENCODE_VARIANT)" },
   { flag: "--max-cycles <N>", desc: "Cap outer cycles" },
   { flag: "--max-inner-cycles <N>", desc: "Cap inner cycles" },
   { flag: "--max-total-steps <N>", desc: "Cap total steps" },
@@ -65,6 +66,7 @@ function parseArgs(argv) {
     else if (a === "--missions-dir") args.missionsDir = argv[++i];
     else if (a === "--agent") args.agent = argv[++i];
     else if (a === "--model") args.model = argv[++i];
+    else if (a === "--variant") args.variant = argv[++i];
     else if (a === "--max-cycles") args.maxCycles = Number(argv[++i]);
     else if (a === "--max-inner-cycles") args.maxInnerCycles = Number(argv[++i]);
     else if (a === "--max-total-steps") args.maxTotalSteps = Number(argv[++i]);
@@ -209,7 +211,14 @@ async function cmdRun(args) {
   if (g.moduleDir) console.log(`Module:     ${g.moduleDir}`);
   console.log(`Test cmd:   ${g.commands.test}`);
   console.log(`Agent:      ${config.agent}`);
-  console.log(`Model:      ${config.model}`);
+  console.log(`Model:      ${config.model}${config.variant ? " (variant=" + config.variant + ")" : ""}`);
+  const stepModelEntries = Object.entries(config.stepModels || {});
+  if (stepModelEntries.length > 0) {
+    console.log(`Step models:`);
+    for (const [step, m] of stepModelEntries) {
+      console.log(`  ${step}: ${m.model || "(default)"}${m.variant ? " variant=" + m.variant : ""}`);
+    }
+  }
   console.log(`DryRun:     ${config.dryRun}`);
   console.log(`TestMode:   ${config.testMode}`);
   console.log(`Timeout:    60min (auto-extend on output)`);
