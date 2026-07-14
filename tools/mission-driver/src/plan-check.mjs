@@ -26,7 +26,7 @@
 import { readFileSync } from "node:fs";
 import { relative } from "node:path";
 
-const PLAN_STATUS_RE = /^>\s*(?:\*\*)?(?:Plan\s+)?Status(?:\*\*)?:\s*\*{0,2}([A-Za-z][A-Za-z /-]*)\*{0,2}\s*$/im;
+export const PLAN_STATUS_RE = /^>\s*(?:\*\*)?(?:Plan\s+)?Status(?:\*\*)?:\s*\*{0,2}([A-Za-z][A-Za-z /-]*)\*{0,2}\s*$/im;
 const CHECKLIST_UNCHECKED_RE = /^(\s*)-\s+\[\s?\]\s+(.+)$/gm;
 const CHECKLIST_CHECKED_RE = /^(\s*)-\s+\[x\]\s+(.+)$/gim;
 // Match the real "## Closure" section, NOT "## Closure Gates". `\b` alone

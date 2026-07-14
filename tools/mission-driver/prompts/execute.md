@@ -18,4 +18,8 @@ Notes:
 - Honor `AGENTS.md`: read it **completely** and follow the project's component contract, code conventions, and build artifact rules.
 - After code changes, run `{{typecheckCmd}} && {{buildCmd}} && {{lintCmd}}` before declaring a Phase done.
 
-Return results in the following format: `<AI_STEP_RESULT>success</AI_STEP_RESULT>` or `<AI_STEP_RESULT>failed</AI_STEP_RESULT>`.
+---
+
+## Output marker (both modes)
+
+Your output MUST end with exactly one `<AI_STEP_RESULT>pass</AI_STEP_RESULT>` or `<AI_STEP_RESULT>fail</AI_STEP_RESULT>` marker (`pass` = all phases executed and green; `fail` = execution blocked or tests red). 

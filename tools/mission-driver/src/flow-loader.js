@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync, existsSync, writeFileSync } from "node:fs";
-import { resolve, dirname } from "node:path";
+import { resolve, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { inspectPlan } from "./plan-check.mjs";
 
@@ -37,18 +37,42 @@ const AUDIT_STATUS_RE = /^>\s*\*{0,2}Audit\s+Status\*{0,2}:\s*\*{0,2}(.+?)\*{0,2
 
 // ── Pure scanning helpers (return arrays, no side effects) ──
 
+/**
+ * Recursively collect all .md files under `dir` (depth-first).
+ * Needed because plans/audits are organized into per-author subdirectories
+ * (e.g. docs/plans/huang-jiang/*.md) and the old readdirSync-only scan
+ * silently missed every nested file.
+ */
+function _walkMarkdown(dir) {
+  const out = [];
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const e of entries) {
+    if (e.isDirectory()) {
+      out.push(..._walkMarkdown(resolve(dir, e.name)));
+    } else if (e.isFile() && e.name.endsWith(".md")) {
+      out.push(resolve(dir, e.name));
+    }
+  }
+  return out;
+}
+
 function _scanPlansByStatus(plansDir, statuses) {
   const results = [];
   if (!existsSync(plansDir)) return results;
-  const files = readdirSync(plansDir)
-    .filter(f => f.endsWith(".md") && !f.startsWith("00-"))
+  const files = _walkMarkdown(plansDir)
+    .filter(f => !basename(f).startsWith("00-"))
     .sort();
   for (const f of files) {
-    const content = readFileSync(resolve(plansDir, f), "utf8");
+    const content = readFileSync(f, "utf8");
     const m = content.match(PLAN_STATUS_RE);
     const status = m ? _normalizeStatus(m[1]) : "";
     if (status && statuses.includes(status)) {
-      results.push(resolve(plansDir, f));
+      results.push(f);
     }
   }
   return results;
@@ -57,15 +81,13 @@ function _scanPlansByStatus(plansDir, statuses) {
 function _scanOpenAuditsList(auditsDir) {
   const results = [];
   if (!existsSync(auditsDir)) return results;
-  const files = readdirSync(auditsDir)
-    .filter(f => f.endsWith(".md"))
-    .sort();
+  const files = _walkMarkdown(auditsDir).sort();
   for (const f of files) {
-    const content = readFileSync(resolve(auditsDir, f), "utf8");
+    const content = readFileSync(f, "utf8");
     const m = content.match(AUDIT_STATUS_RE);
     const status = m ? m[1].trim().toLowerCase() : "";
     if (status === "open") {
-      results.push(resolve(auditsDir, f));
+      results.push(f);
     }
   }
   return results;
@@ -87,7 +109,31 @@ export function createExpressionFunctions(config) {
     openAudits: () => _scanOpenAuditsList(
       resolve(projectRoot, mission.auditsDir || "audits")
     ),
+    // testTargets() reads target-specs.json (written by load-targets step)
+    // so a flow can `forEach: "testTargets()"`. Tolerant: missing/unparseable → [].
+    testTargets: () => _readTargetSpecs(config.runDir),
   };
+}
+
+/**
+ * Read `_tmp/<runDir>/target-specs.json` (written by load-targets) into an array
+ * of unified-target spec objects. Returns [] when runDir is unset, the file is
+ * absent, or parsing fails — never throws.
+ * @param {string} runDir absolute engine run directory
+ * @returns {object[]}
+ */
+function _readTargetSpecs(runDir) {
+  if (!runDir) return [];
+  const specsPath = resolve(runDir, "target-specs.json");
+  if (!existsSync(specsPath)) return [];
+  try {
+    const data = JSON.parse(readFileSync(specsPath, "utf8"));
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.targets)) return data.targets;
+    return [];
+  } catch {
+    return [];
+  }
 }
 
 // ── Script-step functions ──
@@ -96,10 +142,7 @@ async function closureScriptCheck(delegates, flowVars) {
   const planFile =
     flowVars?.get?.("PLAN_FILE") || delegates?.vars?.PLAN_FILE;
   if (!planFile) {
-    console.error(
-      "[closureScriptCheck] ERROR: no PLAN_FILE in flowVars — cannot verify specific plan"
-    );
-    return "fail";
+    return { marker: "fail", text: "ERROR: no PLAN_FILE in flowVars — cannot verify specific plan" };
   }
 
   try {
@@ -125,23 +168,17 @@ async function closureScriptCheck(delegates, flowVars) {
         flowVars.set("SCRIPT_CHECK_RESULT", "PASS");
         flowVars.set("SCRIPT_CHECK_DETAILS", "");
       }
-      return "pass";
+      return { marker: "pass", text: `Plan closure check PASSED.\n  file: ${result.file}\n  status: ${result.planStatus}\n  unchecked: ${result.totalUnchecked}` };
     }
 
+    const detailsText = coreIssues.map((i) => `  - ${i}`).join("\n");
     if (flowVars?.set) {
       flowVars.set("SCRIPT_CHECK_RESULT", "FAIL");
       flowVars.set("SCRIPT_CHECK_DETAILS", coreIssues.join("; "));
     }
-
-    console.error(`[closureScriptCheck] FAIL: ${result.file}`);
-    console.error(`  status: ${result.planStatus}`);
-    for (const issue of coreIssues) {
-      console.error(`  - ${issue}`);
-    }
-    return "fail";
+    return { marker: "fail", text: `Plan closure check FAILED.\n  file: ${result.file}\n  status: ${result.planStatus}\n${detailsText}` };
   } catch (err) {
-    console.error(`[closureScriptCheck] ERROR: ${err.message}`);
-    return "fail";
+    return { marker: "fail", text: `ERROR: ${err.message}` };
   }
 }
 

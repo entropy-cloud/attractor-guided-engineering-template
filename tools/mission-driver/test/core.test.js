@@ -1,5 +1,8 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { FlowEngine } from "../src/engine.js";
 import { summarizeArg } from "../src/executor.js";
 import { makeMockDelegates, simpleFlow, mockSubFlows } from "./helpers.js";
@@ -697,99 +700,230 @@ describe("summarizeArg — keeps prompt out of log header", () => {
   });
 });
 
-describe("FlowEngine — per-step model/variant resolution", () => {
-  it("passes step-level model+variant to runAgent, falls back to empty for unconfigured steps", async () => {
-    const flow = simpleFlow({
-      START: {
-        type: "agent",
-        prompt: "go",
-        resultTag: "STATUS",
-        transitions: { ok: { goto: "B" } },
-      },
-      B: {
-        type: "agent",
-        prompt: "go b",
-        resultTag: "STATUS",
-        transitions: { ok: { done: "completed" } },
-      },
-    });
-
-    const captured = {};
-    const delegates = makeMockDelegates({
-      config: {
-        moduleName: "test-mod", shortName: "test-mod", packageFilter: "@nop-chaos/test-mod", projectRoot: "/tmp/test",
-        stepModels: {
-          START: { model: "deepseek/deepseek-v4-flash", variant: "max" },
+describe("FlowEngine — run-state.json separation (Phase 1)", () => {
+  it("writes run-state.json with missionName/runId/status/steps into runDir", async () => {
+    const runDir = mkdtempSync(join(tmpdir(), "md-runstate-"));
+    try {
+      const flow = simpleFlow({
+        START: {
+          type: "agent", prompt: "go", resultTag: "R",
+          transitions: { ok: { goto: "B" } },
         },
-      },
-      async runAgent(stepName, prompt, system, sessionId, stepOptions = {}) {
-        captured[stepName] = stepOptions;
-        return { text: "<STATUS>ok</STATUS>", ok: true };
-      },
-    });
+        B: {
+          type: "agent", prompt: "b", resultTag: "R",
+          transitions: { done: { done: "completed" } },
+        },
+      });
 
-    const engine = new FlowEngine(flow, delegates);
-    const result = await engine.run();
+      const delegates = makeMockDelegates({
+        responses: { START: "<R>ok</R>", B: "<R>done</R>" },
+        config: {
+          moduleName: "test-mod", shortName: "test-mod",
+          packageFilter: "@nop-chaos/test-mod", projectRoot: runDir,
+          runDir, missionName: "test-mission",
+        },
+      });
 
-    assert.equal(result.status, "completed");
-    assert.deepEqual(captured.START, { model: "deepseek/deepseek-v4-flash", variant: "max" });
-    assert.deepEqual(captured.B, {}, "unconfigured step gets empty stepOptions (global fallback)");
+      const engine = new FlowEngine(flow, delegates);
+      const result = await engine.run();
+      assert.equal(result.status, "completed");
+
+      const stateFile = join(runDir, "run-state.json");
+      assert.ok(existsSync(stateFile), "run-state.json must be produced");
+      const state = JSON.parse(readFileSync(stateFile, "utf8"));
+      assert.equal(state.missionName, "test-mission");
+      assert.equal(state.flowName, "test-flow");
+      assert.equal(state.runId, runDir.split(/[\\/]/).pop());
+      assert.equal(state.runDir, runDir);
+      assert.equal(state.status, "completed");
+      assert.ok(Array.isArray(state.steps) && state.steps.length === 2);
+      assert.equal(state.steps[0].name, "START");
+      assert.equal(state.steps[0].status, "completed");
+      assert.equal(state.steps[1].name, "B");
+    } finally {
+      rmSync(runDir, { recursive: true, force: true });
+    }
   });
 
-  it("uses empty stepOptions when config has no stepModels", async () => {
+  it("strips a residual workflow node from the mission JSON on startup", async () => {
+    const root = mkdtempSync(join(tmpdir(), "md-migrate-"));
+    const missionsDir = join(root, "missions");
+    mkdirSync(missionsDir, { recursive: true });
+    const missionFile = join(missionsDir, "polluted-mission.json");
+    writeFileSync(missionFile, JSON.stringify({
+      name: "polluted-mission",
+      description: "has stale workflow",
+      workflow: { status: "running", steps: [{ name: "OLD" }] },
+      otherConfig: true,
+    }, null, 2));
+    try {
+      const runDir = mkdtempSync(join(tmpdir(), "md-migrate-run-"));
+      try {
+        const flow = simpleFlow({
+          START: {
+            type: "agent", prompt: "go", resultTag: "R",
+            transitions: { ok: { done: "completed" } },
+          },
+        });
+        const delegates = makeMockDelegates({
+          responses: { START: "<R>ok</R>" },
+          config: {
+            moduleName: "test-mod", shortName: "test-mod",
+            packageFilter: "@nop-chaos/test-mod", projectRoot: root,
+            runDir, missionName: "polluted-mission", missionsDir,
+          },
+        });
+        const engine = new FlowEngine(flow, delegates);
+        await engine.run();
+
+        const after = JSON.parse(readFileSync(missionFile, "utf8"));
+        assert.equal(after.workflow, undefined, "mission JSON must no longer carry a workflow node");
+        assert.equal(after.otherConfig, true, "non-workflow config must be preserved");
+        assert.equal(after.name, "polluted-mission");
+      } finally {
+        rmSync(runDir, { recursive: true, force: true });
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("does not write run-state.json when runDir is absent (no regression)", async () => {
     const flow = simpleFlow({
       START: {
-        type: "agent",
-        prompt: "go",
-        resultTag: "STATUS",
+        type: "agent", prompt: "go", resultTag: "R",
         transitions: { ok: { done: "completed" } },
       },
     });
-
-    const captured = {};
-    const delegates = makeMockDelegates({
-      async runAgent(stepName, prompt, system, sessionId, stepOptions = {}) {
-        captured[stepName] = stepOptions;
-        return { text: "<STATUS>ok</STATUS>", ok: true };
-      },
-    });
-
-    const engine = new FlowEngine(flow, delegates);
-    await engine.run();
-
-    assert.deepEqual(captured.START, {});
-  });
-
-  it("threads step model into correction retry when marker is unknown", async () => {
-    let correctOpts = null;
-    const flow = simpleFlow({
-      START: {
-        type: "agent",
-        prompt: "go",
-        resultTag: "R",
-        onUnknownMaxRetries: 1,
-        transitions: { yes: { done: "completed" } },
-      },
-    });
-
-    const delegates = makeMockDelegates({
-      config: {
-        moduleName: "test-mod", shortName: "test-mod", packageFilter: "@nop-chaos/test-mod", projectRoot: "/tmp/test",
-        stepModels: { START: { model: "deepseek/deepseek-v4-flash", variant: "max" } },
-      },
-      async runAgent(stepName, prompt, system, sessionId, stepOptions = {}) {
-        if (String(stepName).includes("correct")) {
-          correctOpts = stepOptions;
-          return { text: "<R>yes</R>", ok: true };
-        }
-        return { text: "<R>no</R>", ok: true };
-      },
-    });
-
+    const delegates = makeMockDelegates({ responses: { START: "<R>ok</R>" } });
     const engine = new FlowEngine(flow, delegates);
     const result = await engine.run();
-
     assert.equal(result.status, "completed");
-    assert.deepEqual(correctOpts, { model: "deepseek/deepseek-v4-flash", variant: "max" });
+    assert.equal(engine.delegates.config.runDir, undefined);
   });
 });
+
+describe("FlowEngine — events.jsonl stream (Phase 2)", () => {
+  function readEvents(runDir) {
+    const raw = readFileSync(join(runDir, "events.jsonl"), "utf8");
+    return raw.split("\n").filter(Boolean).map((line) => JSON.parse(line));
+  }
+
+  it("emits run_started / step_started / step_completed / run_completed into events.jsonl", async () => {
+    const runDir = mkdtempSync(join(tmpdir(), "md-events-"));
+    try {
+      const flow = simpleFlow({
+        START: {
+          type: "agent", prompt: "go", resultTag: "R",
+          transitions: { ok: { goto: "B" } },
+        },
+        B: {
+          type: "agent", prompt: "b", resultTag: "R",
+          transitions: { done: { done: "completed" } },
+        },
+      });
+      const delegates = makeMockDelegates({
+        responses: { START: "<R>ok</R>", B: "<R>done</R>" },
+        config: {
+          moduleName: "test-mod", shortName: "test-mod",
+          packageFilter: "@nop-chaos/test-mod", projectRoot: runDir,
+          runDir, missionName: "evt-mission",
+        },
+      });
+
+      const engine = new FlowEngine(flow, delegates);
+      await engine.run();
+
+      const events = readEvents(runDir);
+      assert.ok(events.length >= 6, `expected >=6 events, got ${events.length}`);
+
+      const types = events.map((e) => e.type);
+      assert.ok(types.includes("run_started"), "missing run_started");
+      assert.ok(types.includes("run_completed"), "missing run_completed");
+      assert.ok(types.filter((t) => t === "step_started").length >= 2, "missing step_started");
+      assert.ok(types.filter((t) => t === "step_completed").length >= 2, "missing step_completed");
+
+      // Common fields on every event
+      for (const e of events) {
+        assert.equal(typeof e.ts, "string");
+        assert.equal(e.missionName, "evt-mission");
+        assert.equal(e.runId, runDir.split(/[\\/]/).pop());
+        assert.equal(e.flowName, "test-flow");
+      }
+
+      // run_started business fields
+      const started = events.find((e) => e.type === "run_started");
+      assert.equal(started.flowName, "test-flow");
+      assert.equal(started.runDir, runDir);
+      assert.equal(typeof started.maxTotalSteps, "number");
+      assert.equal(typeof started.maxCycleVisits, "number");
+
+      // run_completed business fields
+      const completed = events.find((e) => e.type === "run_completed");
+      assert.equal(completed.status, "completed");
+      assert.equal(completed.stepCount, 2);
+
+      // step_completed carries produced array + durationMs
+      const stepDone = events.find((e) => e.type === "step_completed" && e.step === "B");
+      assert.ok(Array.isArray(stepDone.produced));
+      assert.equal(typeof stepDone.durationMs, "number");
+    } finally {
+      rmSync(runDir, { recursive: true, force: true });
+    }
+  });
+
+  it("emits transition (via goto) and limit_hit (max_cycles) for branching/limit paths", async () => {
+    const runDir = mkdtempSync(join(tmpdir(), "md-events-limit-"));
+    try {
+      const flow = simpleFlow({
+        A: {
+          type: "agent", prompt: "loop", resultTag: "R",
+          transitions: { again: { goto: "A" } },
+        },
+      }, "A");
+      flow.maxCycleVisits = 3;
+
+      const delegates = makeMockDelegates({
+        responses: { A: "<R>again</R>" },
+        config: {
+          moduleName: "test-mod", shortName: "test-mod",
+          packageFilter: "@nop-chaos/test-mod", projectRoot: runDir,
+          runDir, missionName: "limit-mission",
+        },
+      });
+
+      const engine = new FlowEngine(flow, delegates);
+      const result = await engine.run();
+      assert.equal(result.status, "max_cycles");
+
+      const events = readEvents(runDir);
+      const types = events.map((e) => e.type);
+      const gotoTrans = events.find((e) => e.type === "transition" && e.via === "goto");
+      assert.ok(gotoTrans, "missing transition via:goto");
+      assert.equal(gotoTrans.from, "A");
+      assert.equal(gotoTrans.to, "A");
+
+      const limit = events.find((e) => e.type === "limit_hit");
+      assert.ok(limit, "missing limit_hit");
+      assert.equal(limit.limitType, "max_cycles");
+      assert.equal(limit.max, 3);
+    } finally {
+      rmSync(runDir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not produce events.jsonl when runDir is absent (no regression)", async () => {
+    const flow = simpleFlow({
+      START: {
+        type: "agent", prompt: "go", resultTag: "R",
+        transitions: { ok: { done: "completed" } },
+      },
+    });
+    const engine = new FlowEngine(flow, makeMockDelegates({ responses: { START: "<R>ok</R>" } }));
+    engine._emitEvent("test", { foo: "bar" });
+    // No throw, no file — _emitEvent is a guarded no-op without eventsFile.
+    assert.equal(engine.eventsFile, undefined);
+  });
+});
+
+

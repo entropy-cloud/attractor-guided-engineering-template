@@ -5,7 +5,7 @@ export function makeMockDelegates(overrides = {}) {
   const hasOverrideRunAgent = !!overrides.runAgent;
 
   const base = {
-    config: { moduleName: "test-mod", shortName: "test-mod", packageFilter: "@nop-chaos/test-mod", projectRoot: "/tmp/test" },
+    config: { moduleName: "test-mod", shortName: "test-mod", packageFilter: "@nop-chaos/test-mod", projectRoot: "/tmp/test", retryBackoffBaseMs: 0 },
     vars: { module: "test-mod", shortName: "test-mod", packageFilter: "@nop-chaos/test-mod", projectRoot: "/tmp/test" },
     logFile: null,
     callLog: [],

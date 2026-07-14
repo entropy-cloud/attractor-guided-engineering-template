@@ -1,11 +1,12 @@
 {
   "name": "mission-driver",
   "maxTotalSteps": 500,
-  "maxCycleVisits": 30,
+  "maxCycleVisits": 8,
   "maxValidationRetries": 2,
   "pingPongWindow": 6,
   "maxAuditRounds": 3,
   "auditEntry": "DEEP_AUDIT",
+  "reconcileOnTerminal": true,
   "entry": "CHECK",
 
   "validateFlowVars": {
@@ -36,10 +37,10 @@
       "onUnknownMaxRetries": 2,
       "transitions": {
         "pass": { "goto": "REVIEW_PLANS" },
-        "fail": { "retry": "CHECK", "maxRetries": 3 }
+        "fail": { "done": "failed" }
       },
       "onMaxRetries": { "done": "failed" },
-      "onError": { "retry": "CHECK", "maxRetries": 3 }
+      "onError": { "done": "failed" }
     },
 
     "EXEC_PLANS": {
@@ -61,9 +62,11 @@
       "onUnknownMaxRetries": 2,
       "transitions": {
         "created": { "goto": "REVIEW_PLANS" },
-        "nothing": { "goto": "DEEP_AUDIT" }
+        "nothing": { "goto": "DEEP_AUDIT" },
+        "done": { "done": "completed" }
       },
-      "onError": { "retry": "DRAFT_PLANS", "maxRetries": 1 },
+      "onError": { "retry": "DRAFT_PLANS", "maxRetries": 3 },
+      "onUnknown": { "goto": "DEEP_AUDIT" },
       "onMaxRetries": { "goto": "DEEP_AUDIT" }
     },
 
@@ -84,7 +87,7 @@
       "type": "subflow",
       "flow": "deep-audit-loop",
       "transitions": {
-        "complete": { "goto": "REVIEW_PLANS" },
+        "complete": { "goto": "DRAFT_PLANS" },
         "failed": { "goto": "DRAFT_PLANS" }
       },
       "onError": { "goto": "DRAFT_PLANS" }

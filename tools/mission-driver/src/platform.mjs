@@ -9,7 +9,7 @@
  * Windows-native tools (PowerShell, taskkill) regardless of the terminal.
  */
 
-import { execSync } from "node:child_process";
+import { execSync, execFileSync } from "node:child_process";
 
 export const IS_WIN32 = process.platform === "win32";
 export const IS_MACOS = process.platform === "darwin";
@@ -21,7 +21,7 @@ export const IS_LINUX = process.platform === "linux";
  */
 export function safeExec(cmd, opts = {}) {
   try {
-    return execSync(cmd, { encoding: "utf8", timeout: 8_000, ...opts }).trim();
+    return execSync(cmd, { encoding: "utf8", timeout: 8_000, windowsHide: true, ...opts }).trim();
   } catch {
     return "";
   }
@@ -30,26 +30,50 @@ export function safeExec(cmd, opts = {}) {
 /**
  * Run a PowerShell command on Windows.
  * Uses -NoProfile -NonInteractive for speed and safety.
+ * Passes the script as a single argv element via execFileSync (no shell) so that
+ * cmd.exe never intercepts PowerShell operators like '|' (which would otherwise
+ * surface as "'ForEach-Object' is not recognized").
  * Returns trimmed stdout or "" on failure.
  */
 export function powershell(script, timeout = 15_000) {
-  const escaped = script.replace(/'/g, "''");
-  return safeExec(
-    `powershell -NoProfile -NonInteractive -Command '${escaped}'`,
-    { timeout }
-  );
+  try {
+    return execFileSync(
+      "powershell",
+      ["-NoProfile", "-NonInteractive", "-Command", script],
+      // windowsHide: suppress the console window that powershell.exe otherwise
+      // pops on every call. getAllProcesses() invokes this on every run-list /
+      // orphan-reap / reconcile path, so without it the test suite (and real
+      // mission runs) flash a window per process enumeration.
+      { encoding: "utf8", timeout, windowsHide: true },
+    ).trim();
+  } catch {
+    return "";
+  }
 }
 
 /**
  * Get all running processes as a normalized list.
  *
+ * Results are cached for 5s (module-level TTL) so concurrent callers (engine
+ * startup sysmon + reaper, monitor startup reconciliation, multiple HTTP
+ * requests) share one expensive execSync/PowerShell CIM query instead of each
+ * paying the full cost. Stale data up to 5s is acceptable for all consumers
+ * (orphan reaping, stale-run reconciliation, Resource Chart).
+ *
  * @returns {Array<{pid:number, ppid:number, pgid:number, rss_kb:number, name:string, cmd:string}>}
  *   - `pgid` is 0 on Windows (no Unix process groups).
  *   - `cmd` is the full command line on Windows (via CIM), the `comm` column on Unix.
  */
+let _procCache = null;
+let _procCacheTime = 0;
+const PROC_CACHE_TTL_MS = 5_000;
+
 export function getAllProcesses() {
-  if (IS_WIN32) return _getProcessesWindows();
-  return _getProcessesUnix();
+  const now = Date.now();
+  if (_procCache && now - _procCacheTime < PROC_CACHE_TTL_MS) return _procCache;
+  _procCache = IS_WIN32 ? _getProcessesWindows() : _getProcessesUnix();
+  _procCacheTime = now;
+  return _procCache;
 }
 
 function _getProcessesUnix() {
@@ -73,11 +97,15 @@ function _getProcessesUnix() {
 }
 
 function _getProcessesWindows() {
+  // Use an unambiguous multi-char separator. PowerShell single quotes are
+  // literal (backtick escapes do NOT work inside them), so a real tab via '`t'
+  // would emit the literal backtick-t instead of a tab and break parsing.
+  const SEP = "~#~";
   const raw = powershell(
     "Get-CimInstance Win32_Process | " +
     "ForEach-Object { " +
     "  $cl = if ($_.CommandLine) { $_.CommandLine } else { $_.Name }; " +
-    "  Write-Output ($_.ProcessId.ToString() + '`t' + $_.ParentProcessId.ToString() + '`t' + $_.WorkingSetSize.ToString() + '`t' + ($cl -replace \"`t\",' ')) " +
+    "  Write-Output ($_.ProcessId.ToString() + '" + SEP + "' + $_.ParentProcessId.ToString() + '" + SEP + "' + $_.WorkingSetSize.ToString() + '" + SEP + "' + $cl) " +
     "}"
   );
   if (!raw) return [];
@@ -85,7 +113,7 @@ function _getProcessesWindows() {
   for (const line of raw.split("\n")) {
     const trimmed = line.trim();
     if (!trimmed) continue;
-    const parts = trimmed.split("\t");
+    const parts = trimmed.split(SEP);
     if (parts.length < 4) continue;
     const pid = parseInt(parts[0], 10);
     const ppid = parseInt(parts[1], 10);
@@ -119,6 +147,7 @@ export function killPid(pid, force = false) {
       execSync(`taskkill /PID ${pid} /T /F`, {
         stdio: "ignore",
         timeout: 5_000,
+        windowsHide: true,
       });
     } else {
       process.kill(pid, force ? "SIGKILL" : "SIGTERM");
@@ -154,6 +183,7 @@ export function killProcessTree(rootPid) {
       execSync(`taskkill /PID ${rootPid} /T /F`, {
         stdio: "ignore",
         timeout: 5_000,
+        windowsHide: true,
       });
     } else {
       process.kill(-rootPid, "SIGKILL");

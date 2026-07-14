@@ -407,10 +407,15 @@ describe("FlowEngine — marker correction retry", () => {
       async runAgent(stepName, prompt, system, sessionId) {
         delegates.callLog.push({ type: "agent", stepName, prompt, system, sessionId });
         callCount++;
+        return { text: "<R>no</R>", ok: true, sessionId: "ses_test123" };
+      },
+      // OPT-3: correction retry now routes through runParseAgent (cheap parseModel)
+      async runParseAgent(stepName, prompt, system, sessionId) {
+        delegates.callLog.push({ type: "parse", stepName, prompt, system, sessionId });
         if (stepName.includes("correct")) {
           return { text: "<R>yes</R>", ok: true };
         }
-        return { text: "<R>no</R>", ok: true, sessionId: "ses_test123" };
+        return { text: "<MOCK_TAG>unknown</MOCK_TAG>", ok: true };
       },
     });
 
@@ -418,9 +423,9 @@ describe("FlowEngine — marker correction retry", () => {
     const result = await engine.run();
 
     assert.equal(result.status, "completed");
-    assert.ok(callCount >= 2);
-    const correctionCalls = delegates.callLog.filter(c => c.stepName.includes("correct"));
-    assert.ok(correctionCalls.length >= 1, "should have at least one correction call");
+    assert.ok(callCount >= 1);
+    const correctionCalls = delegates.callLog.filter(c => c.type === "parse" && c.stepName.includes("correct"));
+    assert.ok(correctionCalls.length >= 1, "should have at least one correction call via runParseAgent");
   });
 
   it("passes sessionId to correction retry", async () => {
@@ -439,11 +444,12 @@ describe("FlowEngine — marker correction retry", () => {
       responses: {
         START: () => ({ text: "<R>no</R>", ok: true, sessionId: "ses_test456" }),
       },
-      async runAgent(stepName, prompt, system, sessionId) {
-        delegates.callLog.push({ type: "agent", stepName, prompt, system, sessionId });
+      // OPT-3: correction retry now routes through runParseAgent (cheap parseModel)
+      async runParseAgent(stepName, prompt, system, sessionId) {
+        delegates.callLog.push({ type: "parse", stepName, prompt, system, sessionId });
         if (stepName.includes("correct")) capturedSessionId = sessionId;
         if (stepName.includes("correct")) return { text: "<R>yes</R>", ok: true };
-        return { text: "<R>no</R>", ok: true, sessionId: "ses_test456" };
+        return { text: "<MOCK_TAG>unknown</MOCK_TAG>", ok: true };
       },
     });
 

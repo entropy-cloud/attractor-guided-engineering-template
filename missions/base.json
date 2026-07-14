@@ -1,0 +1,16 @@
+{
+  "model": "zhipuai-coding-plan/glm-5.2",
+  "agent": "build",
+  "maxCycles": 8,
+  "maxInnerCycles": 6,
+  "maxTotalSteps": 500,
+  "fastSkipSteps": [],
+  "contextDir": "docs/context",
+  "commands": {
+    "test": "pnpm --prefix tools/mission-driver test",
+    "build": "pnpm --prefix tools/mission-driver/web run build",
+    "lint": "pnpm --prefix tools/mission-driver run lint:prompts",
+    "typecheck": "pnpm --prefix tools/mission-driver/web run typecheck"
+  },
+  "commitFormat": "<type>(<scope>): <description>"
+}

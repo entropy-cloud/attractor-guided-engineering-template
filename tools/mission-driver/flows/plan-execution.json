@@ -1,7 +1,7 @@
 {
   "name": "plan-execution",
   "maxTotalSteps": 30,
-  "maxCycleVisits": 10,
+  "maxCycleVisits": 6,
   "pingPongWindow": 6,
   "entry": "EXECUTE",
 
@@ -23,7 +23,7 @@
         "fail": { "retry": "EXECUTE", "maxRetries": 3 }
       },
       "onMaxRetries": { "goto": "CLOSURE_SCRIPT_CHECK" },
-      "onError": { "retry": "EXECUTE", "maxRetries": 1 }
+      "onError": { "retry": "EXECUTE", "maxRetries": 3 }
     },
 
     "CLOSURE_SCRIPT_CHECK": {
@@ -45,11 +45,13 @@
         "issues": {
           "retry": "EXECUTE",
           "maxRetries": 3,
-          "append": { "template": "\n\n## Closure Audit Feedback\n\nThe plan `{{PLAN_FILE}}` was not properly closed. Re-execute it based on the following feedback:\n\nScript check result: {{SCRIPT_CHECK_RESULT}}\nScript check details: {{SCRIPT_CHECK_DETAILS}}\n\nAudit findings:\n${output}" }
+          "append": {
+            "extract": "REMAINING",
+            "template": "\n\n## Closure Audit Feedback\n\nThe plan `{{PLAN_FILE}}` was not properly closed. Re-execute it based on the following feedback:\n\nScript check result: {{SCRIPT_CHECK_RESULT}}\nScript check details: {{SCRIPT_CHECK_DETAILS}}\n\nAudit findings:\n${output}" }
         }
       },
       "onMaxRetries": { "goto": "BUILD_VERIFY" },
-      "onError": { "retry": "EXECUTE", "maxRetries": 2 }
+      "onError": { "retry": "EXECUTE", "maxRetries": 3 }
     },
 
     "BUILD_VERIFY": {
@@ -61,7 +63,7 @@
         "fail": { "retry": "EXECUTE", "maxRetries": 3 }
       },
       "onMaxRetries": { "done": "failed" },
-      "onError": { "retry": "EXECUTE", "maxRetries": 2 }
+      "onError": { "retry": "EXECUTE", "maxRetries": 3 }
     }
   }
 }

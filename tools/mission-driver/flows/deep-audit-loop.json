@@ -1,7 +1,7 @@
 {
   "name": "deep-audit-loop",
   "maxTotalSteps": 50,
-  "maxCycleVisits": 15,
+  "maxCycleVisits": 6,
   "pingPongWindow": 6,
   "entry": "CHECK_OPEN_AUDITS",
 
