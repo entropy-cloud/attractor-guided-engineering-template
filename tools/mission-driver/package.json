@@ -3,12 +3,16 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "OpenCode-based mission driver workflow engine for the flux pnpm/turbo workspace",
+  "description": "OpenCode-based mission driver workflow engine",
   "main": "src/main.js",
   "scripts": {
     "start": "node src/main.js",
-    "dry-run": "node src/main.js run --dry-run",
-    "test": "node --test test/core.test.js test/group-subflow.test.js test/transitions.test.js test/plan-check.test.js",
-    "go": "node src/main.js run --max-cycles 1 --model zhipuai-coding-plan/glm-4.7-flash"
+    "dry-run": "node src/main.js --dry-run",
+    "test": "node --test test/*.test.js",
+    "go": "node src/main.js --max-cycles 1 --model zhipuai-coding-plan/glm-4.7-flash",
+    "lint:prompts": "node src/prompt-check.mjs"
+  },
+  "dependencies": {
+    "commander": "^15.0.0"
   }
 }

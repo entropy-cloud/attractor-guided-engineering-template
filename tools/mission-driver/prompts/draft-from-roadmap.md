@@ -1,5 +1,12 @@
 Draft 1-3 plans from the remaining roadmap items, also considering deferred items recorded in previous plans. Do NOT try to cover all remaining roadmap items — pick the next 1-3 plans' worth of work.
 
+## Context
+
+Before drafting, read these context files so you understand the project's conventions and the target module's architecture instead of exploring the codebase ad-hoc:
+
+- `{{contextDir}}/project-context.md` — project-wide conventions, build commands, and module map.
+- `{{moduleContextFile}}` — the target module's own CONTEXT.md (its architecture, key files, and recent changes). If the path ends with "(不存在)", the module has no dedicated context file — skip it.
+
 Read `{{planGuide}}` **completely**. It defines the plan format, status lifecycle, and review rules.
 
 ## Workflow
@@ -22,6 +29,11 @@ If nothing to draft (roadmap done, no deferred items), return results in the fol
 <AI_STEP_RESULT>nothing</AI_STEP_RESULT>
 ```
 
+If the mission is fully complete (roadmap done, no triggerable deferred items, DEEP_AUDIT already ran and found nothing actionable), return:
+```
+<AI_STEP_RESULT>done</AI_STEP_RESULT>
+```
+
 When plans are created, return results in the following format:
 ```
 <AI_STEP_RESULT>created</AI_STEP_RESULT>
@@ -31,3 +43,5 @@ When plans are created, return results in the following format:
 ```
 
 In PLAN_FILE, provide only the first (lowest N) plan path. The engine discovers the rest via scan. All plan files must exist on disk — placeholder paths are rejected.
+
+Your output MUST end with exactly one `<AI_STEP_RESULT>` marker (`nothing`, `done`, or `created`, with the `<FLOW_VARS>` block only when `created`). This is the only marker that is parsed; a missing or malformed marker triggers an additional correction run, so emit it exactly as shown.

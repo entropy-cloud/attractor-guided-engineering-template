@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { execute } from "./executor.js";
 import { IS_WIN32, killProcessTree, isAlive } from "./platform.mjs";
@@ -92,6 +92,7 @@ function findLatestSessionId(projectRoot) {
       cwd: projectRoot,
       encoding: "utf8",
       timeout: 10_000,
+      windowsHide: true,
     });
     const sessions = JSON.parse(out);
     if (Array.isArray(sessions) && sessions.length > 0 && sessions[0].id) {
@@ -101,16 +102,15 @@ function findLatestSessionId(projectRoot) {
   return null;
 }
 
-export async function createRunner(config) {
+export async function createRunner(config, executeFn = execute) {
   let currentPid = null;
 
-  const realRun = async (stepName, prompt, system, sessionId, stepOptions = {}) => {
-    const model = stepOptions.model || `${config.model}`;
-    const variant = stepOptions.variant || config.variant;
+  const realRun = async (stepName, prompt, system, sessionId, modelOverride, opts = {}) => {
+    const model = modelOverride || config.model;
 
     process.stderr.write(`\n╔═══════════════════════════════════════════════\n`);
     process.stderr.write(`║ STEP: ${stepName}\n`);
-    process.stderr.write(`║ Model: ${model}${variant ? " (variant=" + variant + ")" : ""}\n`);
+    process.stderr.write(`║ Model: ${model}\n`);
     if (sessionId) process.stderr.write(`║ Session: ${sessionId.slice(0, 30)}...\n`);
     process.stderr.write(`╠═══════════════════════════════════════════════\n`);
     const preview = prompt.length > 500 ? prompt.slice(0, 500) + "..." : prompt;
@@ -118,19 +118,45 @@ export async function createRunner(config) {
     process.stderr.write(`╚═══════════════════════════════════════════════\n`);
 
     const markedPrompt = `[MISSION_DRIVER] ${prompt}`;
-    const args = ["run", "-m", model, "--agent", config.agent, "--dangerously-skip-permissions"];
-    if (variant) {
-      args.push("--variant", variant);
-    }
-    args.push(markedPrompt);
+    const args = ["run"];
+    if (config.pure) args.push("--pure");
+    args.push("-m", model, "--agent", config.agent, "--dangerously-skip-permissions");
     if (sessionId) {
       args.push("--session", sessionId);
     }
-    const result = await execute(config, `oc-${stepName}`, "opencode", args, {
+    const onStepUpdate = typeof config.onStepUpdate === "function" ? config.onStepUpdate : null;
+    let sessionPollTimer = null;
+    const result = await executeFn(config, `oc-${stepName}`, "opencode", args, {
       cwd: config.projectRoot,
-      onSpawn(pid) { currentPid = pid; },
-      shell: IS_WIN32,
+      stdin: markedPrompt,
+      // dre-d7 G2: thread per-step timeout + resultTag (undefined → executor
+      // defaults to BASE_TIMEOUT_MS / AI_STEP_RESULT, backward compatible).
+      timeoutMs: opts.timeoutMs,
+      resultTag: opts.resultTag,
+      onSpawn(pid, logFile) {
+        currentPid = pid;
+        const promptFile = logFile + '.prompt';
+        try { writeFileSync(promptFile, markedPrompt, 'utf8'); } catch {}
+        if (onStepUpdate) {
+          onStepUpdate({ stepName, logFile, promptFile });
+        }
+        let pollAttempts = 0;
+        const tryFindSession = () => {
+          pollAttempts++;
+          const sid = findLatestSessionId(config.projectRoot);
+          if (sid && onStepUpdate) {
+            onStepUpdate({ stepName, sessionId: sid });
+            if (sessionPollTimer) { clearTimeout(sessionPollTimer); sessionPollTimer = null; }
+            return;
+          }
+          if (pollAttempts < 4 && sessionPollTimer != null) {
+            sessionPollTimer = setTimeout(tryFindSession, 5000);
+          }
+        };
+        sessionPollTimer = setTimeout(tryFindSession, 6000);
+      },
     });
+    if (sessionPollTimer) { clearTimeout(sessionPollTimer); sessionPollTimer = null; }
     currentPid = null;
 
     let text = "";
@@ -139,11 +165,11 @@ export async function createRunner(config) {
     }
 
     let extractedSessionId = extractSessionId(text);
-    if (!extractedSessionId && result.ok) {
+    if (!extractedSessionId) {
       extractedSessionId = findLatestSessionId(config.projectRoot);
     }
 
-    return { text, logFile: result.logFile, ok: result.ok, sessionId: extractedSessionId };
+    return { text, logFile: result.logFile, promptFile: result.logFile ? result.logFile + '.prompt' : null, ok: result.ok, sessionId: extractedSessionId, exitCode: result.exitCode, errorTail: result.errorTail, stderrTail: result.stderrTail || null };
   };
 
   const mockRun = async (stepName, prompt, system) => {
@@ -168,7 +194,7 @@ export async function createRunner(config) {
     const parts = command.split(" ").filter(Boolean);
     const cmd = parts[0];
     const cmdArgs = parts.slice(1);
-    const result = await execute(config, stepName, cmd, cmdArgs, {
+    const result = await executeFn(config, stepName, cmd, cmdArgs, {
       cwd: config.projectRoot,
       onSpawn(pid) { currentPid = pid; },
       shell: IS_WIN32,
@@ -180,7 +206,13 @@ export async function createRunner(config) {
   return {
     runAgent,
     runTool,
-    runParseAgent: runAgent,
+    // OPT-3: runParseAgent is a dedicated function that routes the parse/correct
+    // fallback path to a cheaper model (config.parseModel, falling back to
+    // config.model). It forwards sessionId so the parse run continues the same
+    // opencode session. In dry-run mode the mock runner is reused (no model).
+    runParseAgent: config.dryRun
+      ? runAgent
+      : (stepName, prompt, system, sessionId) => realRun(stepName, prompt, system, sessionId, config.parseModel || config.model),
     async close() {
       if (currentPid) {
         await killTree(currentPid);

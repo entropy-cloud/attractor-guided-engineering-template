@@ -1,7 +1,12 @@
-import { appendFileSync, existsSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, writeFileSync, renameSync, readdirSync, mkdirSync } from "node:fs";
+import { resolve, basename, isAbsolute, dirname } from "node:path";
 import { snapshot as sysSnapshot } from "./sys-snapshot.mjs";
 import { reapStartupOrphans } from "./reap-orphans.mjs";
+import { getAllProcesses } from "./platform.mjs";
 import { evaluateExpression, isExpression, resolveTemplateVars } from "./expression.mjs";
+import { roadmapAllDone } from "./roadmap-check.mjs";
+/** Backoff helper for retry after short-duration failures (likely rate-limited). */
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function localTimeStr(d = new Date()) {
   const pad = (n) => String(n).padStart(2, "0");
@@ -18,17 +23,197 @@ function durationStr(ms) {
   return `${sec}s`;
 }
 
-function extractTag(text, tagName) {
+export function extractTag(text, tagName) {
   const re = new RegExp(`<${tagName}>([^<]+)</${tagName}>`, "g");
   const matches = [...text.matchAll(re)];
   if (matches.length === 0) return null;
   return matches[matches.length - 1][1].toLowerCase().trim();
 }
 
+// OPT-2: tolerant marker extraction — used as a second-chance pass before the
+// expensive runParseAgent fallback. Tolerates (a) tag-name case (`i` flag),
+// (b) whitespace between tag name and angle brackets (`< AI_STEP_RESULT >`),
+// (c) output wrapped in markdown code fences (value capture `[^<]+` is unaffected
+// by backtick fences). Value still takes the last match and is lowercased/trimmed,
+// matching extractTag semantics. Does NOT replace extractTag (strict path kept).
+export function extractTagTolerant(text, tagName) {
+  const escaped = String(tagName).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`<\\s*${escaped}\\s*>([^<]+)<\\s*/\\s*${escaped}\\s*>`, "gi");
+  const matches = [...text.matchAll(re)];
+  if (matches.length === 0) return null;
+  return matches[matches.length - 1][1].toLowerCase().trim();
+}
+
+// Fuzzy tag extraction: scans for ANY XML-ish tag pair <OPEN>value</CLOSE> whose
+// value matches one of the known marker values. Handles tag-name typos like
+// <AIE_STEP_RESULT> instead of <AI_STEP_RESULT>, INCLUDING the case where the
+// opening and closing tag names disagree (e.g. `<AIE_STEP_RESULT>done</AI_STEP_RESULT>`
+// — observed in real runs; the mismatched-tag variant previously slipped past a
+// `\1` backreference and hard-failed the whole mission). The tag-name char class
+// is CASE-INSENSITIVE (`[A-Za-z][A-Za-z_]{4,}`, length >= 5) so the LLM recovery
+// chain's mixed-case typo variant `<Ai_STEP_RESULT>done</AI_STEP_RESULT>` (lowercase
+// i, observed in real runs — memory L009 SEV1) is also recovered. The HTML guard
+// is preserved via the length>=5 floor + value whitelist (the primary guard):
+// HTML short tags (<b>, <span>, <code>) cannot reach the minimum tag-name length
+// nor carry a whitelisted marker value. Only invoked after strict and tolerant
+// extraction both fail, as a last-resort before the LLM fallback.
+export function extractTagFuzzy(text, validValues) {
+  if (!validValues || validValues.length === 0) return null;
+  const valuePattern = validValues
+    .map(v => v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|");
+  // Independent open/close tag names (no backreference) so a mismatched-but-
+  // clearly-a-result-tag pair is still recovered. Value ∈ whitelist keeps it safe.
+  const re = new RegExp(`<[A-Za-z][A-Za-z_]{4,}>\\s*(${valuePattern})\\s*</[A-Za-z][A-Za-z_]{4,}>`, "g");
+  const matches = [...text.matchAll(re)];
+  if (matches.length === 0) return null;
+  return matches[matches.length - 1][1].toLowerCase().trim();
+}
+
+// mdr-2 Phase 1 — strip ANSI escape sequences and common control characters from
+// agent output BEFORE any tag extraction pass. Real opencode/CLI output is often
+// log-colored with CSI sequences (e.g. `\x1b[31m...\x1b[0m`) which can sit inside
+// a `<TAG>value</TAG>` capture and break the strict/tolerant `[^<]+` / `[^<]`
+// value matchers (memory L009). Zero-dependency (no strip-ansi) — pure regex.
+// Covers: CSI sequences `ESC [ ... letter`, OSC sequences `ESC ] ... BEL/ST`,
+// other common ESC two-letter controls, and stray non-text C0 controls (except
+// \t \n \r which are meaningful whitespace). Idempotent: stripping an already-
+// clean string is a no-op.
+export function stripAnsiControl(text) {
+  if (!text) return "";
+  return String(text)
+    // CSI: ESC [ <params> <intermediate>* <final letter>
+    .replace(/\x1b\[[0-9;?]*[ -\/]*[@-~]/g, "")
+    // OSC: ESC ] ... terminated by BEL (\x07) or ST (ESC \)
+    .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, "")
+    // Other two-char ESC sequences (ESC X) not caught above
+    .replace(/\x1b[@-_]/g, "")
+    // Stray C0 control chars except HT(\t=0x09) LF(\n=0x0a) CR(\r=0x0d)
+    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "");
+}
+
 function extractXmlBlock(text, tagName) {
   const re = new RegExp(`<${tagName}>[\\s\\S]*?<\\/${tagName}>`);
   const m = text.match(re);
   return m ? m[0] : null;
+}
+
+// mdr-3 Phase 3: prompt size guard. Passing the prompt via stdin (mdr-3 Phase 2)
+// removed the 32K cmdline ceiling, but an unbounded prompt still blows the model
+// token budget and degrades tag recovery / fuzzy matching (memory L009, P1-3).
+// The worst offender is the closure-audit `issues` append, which previously fed
+// the FULL audit output (incl. `npm test` stdout) back into the next EXECUTE
+// prompt. Decision: cap at 24KB (well under the CreateProcess 32K limit even if
+// any positional fallback were ever reintroduced, and a sane model-context
+// budget). When exceeded, keep the head and tail with a clear truncation marker
+// so the agent retains both the opening instructions and the trailing
+// AI_STEP_RESULT contract; the dropped middle is logged/emitted. Byte length is
+// used (not char count) so multibyte CJK prompts are bounded correctly.
+// Rejected: dropping only the tail loses the AI_STEP_RESULT contract; dropping
+// only the head loses the task instructions — head+tail is the safe split.
+const PROMPT_MAX_BYTES = 24 * 1024;
+const PROMPT_KEEP_BYTES = 8 * 1024;
+
+export function boundPromptSize(prompt, opts = {}) {
+  if (!prompt) return prompt;
+  const max = opts.maxBytes != null ? opts.maxBytes : PROMPT_MAX_BYTES;
+  const keep = opts.keepBytes != null ? opts.keepBytes : PROMPT_KEEP_BYTES;
+  const len = Buffer.byteLength(prompt, "utf8");
+  if (len <= max) return prompt;
+  const head = Buffer.from(prompt, "utf8").slice(0, keep).toString("utf8");
+  const tail = Buffer.from(prompt, "utf8").slice(-keep).toString("utf8");
+  const dropped = len - Buffer.byteLength(head, "utf8") - Buffer.byteLength(tail, "utf8");
+  const marker = `\n\n[... PROMPT TRUNCATED: dropped ~${dropped} middle bytes to stay under the ${max}-byte budget. Head and tail retained; the AI_STEP_RESULT contract at the end is intact. ...]\n\n`;
+  const bounded = head + marker + tail;
+  if (typeof opts.onTruncate === "function") {
+    try { opts.onTruncate({ originalBytes: len, boundedBytes: Buffer.byteLength(bounded, "utf8"), droppedBytes: dropped }); } catch {}
+  }
+  return bounded;
+}
+
+// mdr-1 Phase 2 — signatures that indicate a transient provider error
+// (rate-limit / quota / overload) as emitted to stderr by the model CLI.
+// Matched case-insensitively against the captured stderr tail.
+const TRANSIENT_PROVIDER_SIGS = [
+  /\b429\b/,
+  /\btoo many requests\b/i,
+  /rate[\s_-]?limit/i,
+  /\bquota\b/i,
+  /\boverloaded\b/i,
+  /\bservice unavailable\b/i,
+];
+
+/**
+ * mdr-1 Phase 2 — pure classifier: is this subprocess failure a TRANSIENT
+ * provider error (rate-limit / quota / overload), as evidenced by a signature
+ * in the captured stderr tail?
+ *
+ * Decision: the OLD heuristic (`stepDur<60s && logLen<600` → "Likely rate
+ * limit") collapsed cmdline overflow / CLI crash / genuine failure / real
+ * rate-limit into one bucket (memory L001, count=4). It is replaced by a
+ * SINGLE criterion: a stderr signature must actually be present. Empty output
+ * with no stderr → `null` (cause unknown, NOT transient). A normal failure
+ * with no signature → `null`. Rejected alternative: keep the duration/length
+ * dual-condition as an OR — re-introduces the misdiagnosis this removes.
+ *
+ * Note on "non real agent fail marker": this function only inspects stderr. The
+ * call site additionally guards on `!result.marker` — a genuine extracted
+ * `<...>fail` marker is a real business failure and is never treated as
+ * transient, even if the literal signature text happens to appear in stderr.
+ *
+ * @returns {string|null} the matched signature source (truthy = transient), or null.
+ */
+export function isTransientProviderError({ exitCode, stderrTail, stepDurMs, logLen } = {}) {
+  const stderr = stderrTail ? String(stderrTail) : "";
+  if (!stderr) return null;
+  for (const re of TRANSIENT_PROVIDER_SIGS) {
+    if (re.test(stderr)) return re.source;
+  }
+  return null;
+}
+
+/** Strip the executor-written "# ..." header lines; return the real body text. */
+function bodyAfterHeader(text) {
+  if (!text) return "";
+  return String(text)
+    .split(/\r?\n/)
+    .filter((l) => l.trim().length > 0 && !/^#/.test(l))
+    .join("\n")
+    .trim();
+}
+
+// mdr-1 Phase 2 — below this body length, result.text is header-only / stray
+// garbage with no real AI output for the parse agent to infer a marker from.
+// Parsing it wastes a model call (memory L001: header-only logs repeatedly
+// reached runParseAgent with no parseable content). The executor header is
+// structured "# .../# .../# ..." so a header-only crash yields body="" here.
+// The threshold is a small floor (not 50+) so genuine short AI output (e.g.
+// "no tags here") still reaches the parse fallback — only truly empty/near-
+// empty bodies are short-circuited.
+const PARSE_MIN_BODY_CHARS = 10;
+
+// mdo-3 Phase 2: resolve the next-hop target when a step is skipped via
+// effectiveSkip (FSD §3.3.2A / §3.3.3A). Mirrors the intent of the when:false
+// path but picks the FIRST non-retry transition as the skip destination:
+//   1. scan stepDef.transitions for the first entry whose action is a plain
+//      goto (has `goto`, not a `retry`) → { goto }
+//   2. fall back to stepDef.otherwise (goto/done, non-retry)
+//   3. default to { done: "completed" } — a skipped terminal step completes the
+//      run rather than dead-ending (matches when:false's fallback).
+// A `done` transition is intentionally NOT returned from step 1: a skip should
+// advance the flow, not synthesize a terminal status from an unrelated marker's
+// done action. `done` is only honoured via `otherwise` (an explicit skip-route).
+function firstNonRetryTarget(stepDef) {
+  const transitions = stepDef.transitions || {};
+  for (const t of Object.values(transitions)) {
+    if (t && t.goto && !t.retry) return { goto: t.goto };
+  }
+  if (stepDef.otherwise) {
+    const o = stepDef.otherwise;
+    if (o.goto && !o.retry) return { goto: o.goto };
+    if (o.done) return { done: o.done };
+  }
+  return { done: "completed" };
 }
 
 export class FlowEngine {
@@ -40,6 +225,10 @@ export class FlowEngine {
     this.flowVars = new Map();
     this.visitCounts = new Map();
     this.retryCounts = new Map();
+    // mdr-1 Phase 3: independent retry counter for transient provider errors
+    // (rate-limit/quota/overload). Kept separate from retryCounts so transient
+    // retries do NOT consume the onError/fail transition budget (plan §Phase 3).
+    this.transientCounts = new Map();
     this.appendBuffers = new Map();
     this.pingPongHistory = [];
     this.pingPongViaRetry = new Set();
@@ -58,14 +247,281 @@ export class FlowEngine {
     }
   }
 
-   _result(status, stepCount, marker) {
+  /**
+   * mdr-1 Phase 3 — resolve the transient provider-error retry budget from the
+   * run config (populated by config.js from env/mission/hard-default), with a
+   * local hard fallback so the engine is safe even when config is absent (e.g.
+   * unit tests that build a bare FlowEngine without a full config object).
+   */
+  _transientConfig() {
+    const t = (this.delegates && this.delegates.config && this.delegates.config.transient) || {};
     return {
-      status,
-      stepCount,
-      marker: marker || null,
-      elapsed: this.startTime ? durationStr(Date.now() - this.startTime) : "N/A",
-      history: this.logEntries,
+      enabled: t.enabled !== false,
+      maxRetries: Number.isFinite(t.maxRetries) ? t.maxRetries : 6,
+      backoffBaseMs: Number.isFinite(t.backoffBaseMs) ? t.backoffBaseMs : 5_000,
+      backoffCapMs: Number.isFinite(t.backoffCapMs) ? t.backoffCapMs : 120_000,
     };
+  }
+
+  /** Write a script step's output to an oc-*.log file in runDir so it shows up
+   *  in the Log Viewer. Returns the absolute path. */
+  _writeScriptLog(stepName, text, marker) {
+    const cfg = this.delegates.config || {};
+    const runDir = cfg.runDir;
+    if (!runDir) return null;
+    const ts = Date.now();
+    const rand = Math.random().toString(36).slice(2, 8);
+    const fileName = `oc-${stepName}-${ts}-${rand}.log`;
+    const filePath = resolve(runDir, fileName);
+    try {
+      mkdirSync(dirname(filePath), { recursive: true });
+      const header = `[${localTimeStr()}] Script step: ${stepName}\n[${localTimeStr()}] Result: ${marker}\n\n`;
+      writeFileSync(filePath, header + text + "\n");
+    } catch {}
+    return filePath;
+  }
+
+  // ── workflow state tracking: run-state.json in {runDir} (separated from mission config, FSD §4.2) ──
+  _workflowFile() {
+    const cfg = this.delegates.config || {};
+    if (!cfg.runDir) return null;
+    if (cfg.subflowId) {
+      return resolve(cfg.runDir, `run-state-${cfg.subflowId}.json`);
+    }
+    return resolve(cfg.runDir, "run-state.json");
+  }
+
+  _listPlans() {
+    const cfg = this.delegates.config || {};
+    const plansDir = cfg.mission && cfg.mission.plansDir && cfg.projectRoot
+      ? resolve(cfg.projectRoot, cfg.mission.plansDir) : null;
+    if (!plansDir) return [];
+    try { return readdirSync(plansDir).filter((f) => f.endsWith(".md")).sort(); }
+    catch { return []; }
+  }
+
+  _initWorkflow() {
+    this.workflow = {
+      missionName: this.missionName || null,
+      flowName: this.flow.name || null,
+      runId: this.runId || null,
+      runDir: (this.delegates.config || {}).runDir || null,
+      // Persist the main process PID so stale-run reconciliation can decide
+      // liveness by PID survival (see src/run-reconcile.mjs, FSD §4.1). Old
+      // run-state.json without this field fall back to a conservative time
+      // threshold in reconcileStaleRuns (backward compatible).
+      pid: process.pid,
+      status: "running",
+      startedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      endedAt: null,
+      currentStep: null,
+      steps: [],
+    };
+    this._wfCurrent = null;
+    this._writeWorkflow();
+  }
+
+  _wfOpen(name, visits) {
+    this._wfClose(null, this._wfCurrent ? "continued" : null);
+    this._wfCurrent = { name, visits, startedAt: Date.now(), plansBefore: this._listPlans() };
+    if (this.workflow) {
+      this.workflow.currentStep = name;
+      this.workflow.updatedAt = new Date().toISOString();
+      const stepDef = (this.flow.steps && this.flow.steps[name]) || {};
+      const entry = {
+        name,
+        status: "running",
+        visits,
+        startedAt: new Date(this._wfCurrent.startedAt).toISOString(),
+        endedAt: null,
+        durationMs: null,
+        marker: null,
+        produced: [],
+        sessionId: null,
+      };
+      if (stepDef.type === "subflow") {
+        entry.type = "subflow";
+        entry.subflowRuns = [];
+      }
+      this.workflow.steps.push(entry);
+      this._writeWorkflow();
+    }
+  }
+
+  _wfClose(marker, status, sessionId, meta = {}) {
+    if (!this._wfCurrent || !this.workflow) return null;
+    const c = this._wfCurrent;
+    const now = Date.now();
+    const produced = this._listPlans().filter((f) => !c.plansBefore.includes(f));
+    const record = {
+      name: c.name,
+      status: status || "completed",
+      visits: c.visits,
+      startedAt: new Date(c.startedAt).toISOString(),
+      endedAt: new Date(now).toISOString(),
+      durationMs: now - c.startedAt,
+      marker,
+      produced,
+      // OPT-1: persist the opencode session id that executed this step so the
+      // run can be replayed (opencode export <sessionId>). null for non-agent
+      // steps (tool/script/subflow/group) and for legacy close points that
+      // intentionally have no session (skipped/continued/finalize).
+      sessionId: sessionId || null,
+      // OPT-7: carry forward the suspend flag (set on _wfCurrent by the
+      // onSuspend handler during execution) so the closed record + monitor
+      // timeline surface that the step was frozen by a system sleep. Omitted
+      // entirely when not suspended → backward compatible with old run-state.json.
+      ...(c.suspended ? { suspended: true, suspendGapMs: c.suspendGapMs ?? null } : {}),
+      ...meta,
+    };
+    // Replace the running placeholder (last entry with same name+visits, status "running")
+    const steps = this.workflow.steps;
+    let replaced = false;
+    for (let i = steps.length - 1; i >= 0; i--) {
+      if (steps[i].name === c.name && steps[i].visits === c.visits && steps[i].status === "running") {
+        steps[i] = record;
+        replaced = true;
+        break;
+      }
+    }
+    if (!replaced) steps.push(record);
+    this._wfCurrent = null;
+    this.workflow.updatedAt = new Date().toISOString();
+    this._writeWorkflow();
+    return record;
+  }
+
+  _finalizeWorkflow(status) {
+    if (!this.workflow) return;
+    if (this._wfCurrent) this._wfClose(null, status === "completed" ? "completed" : "failed");
+    this.workflow.status = status;
+    this.workflow.endedAt = new Date().toISOString();
+    this.workflow.updatedAt = new Date().toISOString();
+    this._writeWorkflow();
+  }
+
+  _writeWorkflow() {
+    if (!this.workflow) return;
+    const file = this._workflowFile();
+    if (!file) return;
+    try {
+      const tmp = file + ".tmp";
+      writeFileSync(tmp, JSON.stringify(this.workflow, null, 2) + "\n", "utf8");
+      renameSync(tmp, file);
+    } catch {}
+  }
+
+  _onAgentStepUpdate({ stepName, logFile, promptFile, sessionId }) {
+    if (!this.workflow) return;
+    const steps = this.workflow.steps;
+    for (let i = steps.length - 1; i >= 0; i--) {
+      if (steps[i].name === stepName && steps[i].status === "running") {
+        if (logFile) steps[i].logFile = basename(logFile);
+        if (promptFile) steps[i].promptFile = basename(promptFile);
+        if (sessionId) steps[i].sessionId = sessionId;
+        this._writeWorkflow();
+        break;
+      }
+    }
+  }
+
+  _emitEvent(type, data = {}) {
+    if (!this.eventsFile) return;
+    try {
+      const event = {
+        type,
+        ts: new Date().toISOString(),
+        missionName: this.missionName || null,
+        runId: this.runId || null,
+        flowName: this.flow?.name || null,
+        ...data,
+      };
+      appendFileSync(this.eventsFile, JSON.stringify(event) + "\n");
+    } catch {}
+  }
+
+  // One-time migration: strip any residual `workflow` node from the mission JSON
+  // config so runtime state no longer pollutes the (read-only) config file (FSD §4.2).
+  _cleanMissionJsonWorkflow() {
+    const cfg = this.delegates.config || {};
+    if (!cfg.missionsDir || !cfg.missionName) return;
+    const file = resolve(cfg.missionsDir, `${cfg.missionName}.json`);
+    try {
+      if (!existsSync(file)) return;
+      const obj = JSON.parse(readFileSync(file, "utf8"));
+      if (obj && obj.workflow) {
+        delete obj.workflow;
+        const tmp = file + ".tmp";
+        writeFileSync(tmp, JSON.stringify(obj, null, 2) + "\n", "utf8");
+        renameSync(tmp, file);
+      }
+    } catch {}
+  }
+
+   // mdo-3 Phase 3: terminal-state postmortem hook removed — postmortem is
+   // now manual-only via `node src/main.js analyze [runId]`.
+   async _result(status, stepCount, marker) {
+      const finalStatus = this._reconcileTerminal(status);
+      try { this._finalizeWorkflow(finalStatus); } catch {}
+      try {
+        this._emitEvent("run_completed", {
+          status: finalStatus,
+          stepCount,
+          elapsed: this.startTime ? durationStr(Date.now() - this.startTime) : "N/A",
+          marker: marker || null,
+        });
+      } catch {}
+
+      return {
+        status: finalStatus,
+        stepCount,
+        marker: marker || null,
+        elapsed: this.startTime ? durationStr(Date.now() - this.startTime) : "N/A",
+        history: this.logEntries,
+      };
+    }
+
+  // Terminal reconciliation (§1.4-4): a fully-completed mission must not be
+  // reported as failed just because a single terminal-step marker was lost (e.g.
+  // a typo'd result tag). Before emitting a failure-ish terminal status, cross-
+  // check the ground truth on disk: roadmap 100% done AND no active/draft plans
+  // AND no open audits ⇒ downgrade to "completed". Opt-in per flow via
+  // `reconcileOnTerminal: true` so SUBflows (plan-execution / deep-audit-loop)
+  // — which legitimately fail — are never masked.
+  _reconcileTerminal(status) {
+    const FAILISH = new Set(["failed", "max_cycles", "max_retries", "max_total_steps", "ping_pong"]);
+    if (!this.flow?.reconcileOnTerminal || !FAILISH.has(status)) return status;
+    try {
+      const ap = this.expressionFuncs?.activePlans?.() || [];
+      const dp = this.expressionFuncs?.draftPlans?.() || [];
+      const oa = this.expressionFuncs?.openAudits?.() || [];
+      if (ap.length || dp.length || oa.length) return status;
+
+      const vars = this.delegates?.vars || {};
+      const roadmapPath = vars.roadmapPath;
+      if (!roadmapPath) return status;
+      const projectRoot = vars.projectRoot || this.delegates?.config?.projectRoot || ".";
+      const abs = isAbsolute(roadmapPath) ? roadmapPath : resolve(projectRoot, roadmapPath);
+      if (!existsSync(abs)) return status;
+      if (!roadmapAllDone(readFileSync(abs, "utf8"))) return status;
+
+      this._log(
+        `  reconciliation: engine terminal "${status}" but roadmap is 100% done, ` +
+        `no active/draft plans, no open audits → downgrading to "completed"`,
+      );
+      try {
+        this._emitEvent("reconciled", {
+          from: status,
+          to: "completed",
+          reason: "roadmap complete, no pending plans or open audits",
+        });
+      } catch {}
+      return "completed";
+    } catch (e) {
+      this._log(`  reconciliation check failed (${e.message}) — keeping "${status}"`);
+      return status;
+    }
   }
 
   _templateVar(str, vars) {
@@ -87,7 +543,18 @@ export class FlowEngine {
     if (buf) {
       prompt += "\n" + buf;
     }
-    return prompt;
+    // mdr-3 Phase 3: enforce the prompt size guard AFTER all appends are folded
+    // in, so an unbounded closure-audit feedback block (full npm-test stdout)
+    // cannot inflate the next step's prompt past the model token budget. See
+    // boundPromptSize for the threshold rationale.
+    return boundPromptSize(prompt, {
+      onTruncate: (info) => {
+        this._log(`  [PROMPT_GUARD] ${stepName} prompt ${info.originalBytes}B → ${info.boundedBytes}B (dropped ~${info.droppedBytes}B middle)`);
+        try {
+          this._emitEvent("prompt_truncated", { step: stepName, originalBytes: info.originalBytes, boundedBytes: info.boundedBytes, droppedBytes: info.droppedBytes });
+        } catch {}
+      },
+    });
   }
 
   _extractFlowVars(text) {
@@ -150,19 +617,67 @@ export class FlowEngine {
 
   async _executeAgentStep(stepName, stepDef, sessionId) {
     const prompt = this._buildPrompt(stepName, stepDef);
-    const stepOpts = this._resolveStepModel(stepName);
-    const result = await this.delegates.runAgent(stepName, prompt, stepDef.system || "", sessionId, stepOpts);
+    // dre-d7 G2: thread per-step timeoutMs (agent executor watchdog) + resultTag
+    // (so buildErrorTail's L010 tag-absent diagnostic detects the step's CUSTOM
+    // tag). 5th arg (modelOverride) left undefined to keep the default model;
+    // 6th opts is absent on legacy callers (main.js brief/draft) → defaults {}.
+    const agentOpts = { timeoutMs: stepDef.timeoutMs, resultTag: stepDef.resultTag };
+    const result = await this.delegates.runAgent(stepName, prompt, stepDef.system || "", sessionId, undefined, agentOpts);
     if (result && result.sessionId) this.lastSessionId = result.sessionId;
 
     if (!result || !result.text) {
-      return { marker: null, vars: {}, ok: !!result?.ok, text: result?.text || "" };
+      // mdr-1: propagate exit code / errorTail / stderrTail so the main-loop
+      // failure diagnosis (and Phase 2/3 classification) can read them even on
+      // the empty-output short-circuit path (previously dropped here).
+      return { marker: null, vars: {}, ok: !!result?.ok, text: result?.text || "", sessionId: result?.sessionId || null, exitCode: result?.exitCode, errorTail: result?.errorTail, stderrTail: result?.stderrTail, logFile: result?.logFile || null };
     }
 
-    const vars = this._extractFlowVars(result.text);
+    // mdr-2 Phase 1: strip ANSI escape sequences + stray control chars from the
+    // agent output ONCE, before every extraction pass (strict/tolerant/fuzzy,
+    // the header-only body check, and the LLM fallback re-extract chain). Real
+    // CLI output is frequently log-colored (`\x1b[31m...\x1b[0m`) and those CSI
+    // bytes can sit inside a `<TAG>value</TAG>` capture, defeating the strict /
+    // tolerant `[^<]+` matchers (memory L009). The raw `result.text` is still
+    // returned for diagnostics; only extraction reads the cleaned text.
+    const cleanText = stripAnsiControl(result.text);
+
+    const vars = this._extractFlowVars(cleanText);
 
     let marker = null;
     const rTag = stepDef.resultTag || "AI_STEP_RESULT";
-    marker = extractTag(result.text, rTag);
+    marker = extractTag(cleanText, rTag);
+    // OPT-2: strict extract missed — try tolerant regex (case/whitespace/fence)
+    // before resorting to the expensive runParseAgent LLM fallback.
+    if (!marker) {
+      marker = extractTagTolerant(cleanText, rTag);
+    }
+
+    // Fuzzy: tag-name typo (e.g. <AIE_STEP_RESULT> or mixed-case <Ai_STEP_RESULT>).
+    // Scan for any <TAG>value</TAG> where value is a known marker. Avoids the LLM
+    // fallback for common AI typos.
+    if (!marker) {
+      const transitions = stepDef.transitions || {};
+      const aliases = this.flow.markerAliases || {};
+      const validValues = [...new Set([...Object.keys(transitions), ...Object.keys(aliases)])];
+      const fuzzy = extractTagFuzzy(cleanText, validValues);
+      if (fuzzy) {
+        this._log(`  fuzzy tag match: extracted "${fuzzy}" from typo'd tag name`);
+        marker = fuzzy;
+      }
+    }
+
+    // mdr-1 Phase 2: guard before the expensive parse-agent fallback. When the
+    // output is header-only / extremely short there is nothing for the parse
+    // agent to infer a marker from — short-circuit to a null marker instead of
+    // wasting a model call on noise (memory L001: header-only logs repeatedly
+    // reached runParseAgent with no parseable content).
+    if (!marker) {
+      const body = bodyAfterHeader(cleanText);
+      if (body.length < PARSE_MIN_BODY_CHARS) {
+        this._log(`  output is header-only/empty (${body.length} chars body) — skipping parse fallback`);
+        return { marker: null, vars, ok: result.ok, text: result.text, sessionId: result.sessionId || null, exitCode: result.exitCode, errorTail: result.errorTail, stderrTail: result.stderrTail, logFile: result.logFile || null };
+      }
+    }
 
     if (!marker && this.delegates.runParseAgent) {
       const parsePrompt = [
@@ -171,12 +686,23 @@ export class FlowEngine {
         `Output only <${rTag}>value</${rTag}> format, nothing else.`,
         ``,
         `AI output:`,
-        result.text,
+        cleanText,
       ].join("\n");
       const retry = await this.delegates.runParseAgent(
-        `parse-${rTag}`, parsePrompt, stepDef.system || "", stepOpts,
+        `parse-${rTag}`, parsePrompt, stepDef.system || "",
       );
-      marker = extractTag(retry.text, rTag);
+      // The parse agent can itself emit a typo'd / mismatched tag, and its output
+      // may carry ANSI coloring. Strip + reuse the full strict → tolerant → fuzzy
+      // chain instead of a bare strict extract, so the fallback is not defeated by
+      // the same class of tag typo / ANSI noise it is meant to cure (mdr-2 Phase 1).
+      const retryClean = stripAnsiControl(retry?.text || "");
+      marker = extractTag(retryClean, rTag) || extractTagTolerant(retryClean, rTag);
+      if (!marker) {
+        const transitions = stepDef.transitions || {};
+        const aliases = this.flow.markerAliases || {};
+        const validValues = [...new Set([...Object.keys(transitions), ...Object.keys(aliases)])];
+        marker = extractTagFuzzy(retryClean, validValues);
+      }
     }
 
     if (marker) {
@@ -184,29 +710,33 @@ export class FlowEngine {
       if (aliased) marker = aliased;
     }
 
+    const transitions = stepDef.transitions || {};
+
     if (marker) {
-      const transitions = stepDef.transitions || {};
       if (!transitions[marker]) {
         marker = await this._runCorrectionAgent(
-          marker, result.text, rTag, transitions, stepDef, this.lastSessionId, stepOpts,
+          marker, result.text, rTag, transitions, stepDef, this.lastSessionId,
         );
       }
     }
 
-    return { marker, vars, ok: result.ok, text: result.text };
+    // mdr-2 Phase 2: when strict parse missed but a fallback (tolerant/fuzzy/LLM
+    // /correction) recovered a marker that is VALID for the current step's
+    // transitions, the marker is the authoritative step outcome — the agent did
+    // emit a usable result, so flip ok=true and take the normal marker
+    // transition instead of onError. `ok` is otherwise bound to the raw
+    // subprocess exit code and can be false even when a valid marker was
+    // emitted (non-zero exit but recoverable output), which previously misrouted
+    // a genuinely-completed step to onError/step_failed. The guard is strictly
+    // "transition-valid marker": a null or invalid marker keeps the original ok
+    // so real failures still route to onError (memory L003). Recovering
+    // arbitrary noise never sets ok=true (Decision: 否决"恢复出任意 marker 即 ok")。
+    const resolvedOk = (marker && transitions[marker]) ? true : result.ok;
+
+    return { marker, vars, ok: resolvedOk, text: result.text, sessionId: result.sessionId || null, logFile: result.logFile || null, exitCode: result.exitCode, errorTail: result.errorTail, stderrTail: result.stderrTail };
   }
 
-  _resolveStepModel(stepName) {
-    const stepModels = this.delegates.config?.stepModels;
-    if (!stepModels || !stepModels[stepName]) return {};
-    const step = stepModels[stepName];
-    const opts = {};
-    if (step.model) opts.model = step.model;
-    if (step.variant) opts.variant = step.variant;
-    return opts;
-  }
-
-  async _runCorrectionAgent(marker, resultText, resultTag, transitions, stepDef, sessionId, stepOpts = {}) {
+  async _runCorrectionAgent(marker, resultText, resultTag, transitions, stepDef, sessionId) {
     const maxRetries = stepDef.onUnknownMaxRetries ?? 2;
     let currentMarker = marker;
 
@@ -221,8 +751,10 @@ export class FlowEngine {
       ].join("\n");
 
       try {
-        const corrected = await this.delegates.runAgent(
-          `correct-${i + 1}`, correctionPrompt, stepDef.system || "", sessionId, stepOpts,
+        // OPT-3: correction is a lightweight classification task — route it
+        // through runParseAgent (cheap parseModel) instead of the main runAgent.
+        const corrected = await this.delegates.runParseAgent(
+          `correct-${i + 1}`, correctionPrompt, stepDef.system || "", sessionId,
         );
         if (corrected && corrected.text) {
           const newMarker = extractTag(corrected.text, resultTag);
@@ -255,16 +787,49 @@ export class FlowEngine {
   }
 
   async _executeScriptStep(stepName, stepDef) {
-    const ret = await stepDef.run(this.delegates, this.flowVars);
-    if (ret && typeof ret === "object" && ret.marker !== undefined) {
-      return {
-        marker: ret.marker,
-        ok: true,
-        vars: ret.vars || {},
-        text: ret.text || String(ret.marker),
-      };
+    // dre-d7 G3: in-process wall-clock envelope for script steps. Script steps
+    // run in-process (engine.js:835 `await stepDef.run(...)`) with NO executor
+    // watchdog — a buggy/omitted internal timeout (no AbortController to cancel)
+    // could hang the whole engine process. When stepDef.timeoutMs is a positive
+    // finite number, race stepDef.run against a sleep; on timeout return
+    // marker "fail" + a transcript reason (Decision: fail semantics ≈ "no
+    // evidence gathered", EVALUATE reads the transcript). When absent → no race
+    // (backward compatible, relies on the script's internal timeout). NB4: a
+    // late stepDef.run() rejection AFTER the race settled on the timeout
+    // sentinel would surface as unhandledRejection — attach a no-op .catch to
+    // the run promise to swallow it.
+    const timeoutMs = stepDef.timeoutMs;
+    let ret;
+    if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
+      const TIMEOUT_SENTINEL = Symbol("script_step_timeout");
+      const runP = Promise.resolve().then(() => stepDef.run(this.delegates, this.flowVars));
+      runP.catch(() => {}); // NB4: swallow late rejection if timeout wins
+      const raced = await Promise.race([runP, sleep(timeoutMs).then(() => TIMEOUT_SENTINEL)]);
+      if (raced === TIMEOUT_SENTINEL) {
+        const failMarker = "fail";
+        const failText = `script step ${stepName} exceeded timeoutMs=${timeoutMs} (in-process wall-clock envelope)`;
+        const logFile = this._writeScriptLog(stepName, failText, failMarker);
+        return { marker: failMarker, ok: true, vars: {}, text: failText, logFile };
+      }
+      ret = raced;
+    } else {
+      ret = await stepDef.run(this.delegates, this.flowVars);
     }
-    return { marker: ret, ok: true, vars: {}, text: String(ret) };
+    let marker, vars, text;
+    if (ret && typeof ret === "object" && ret.marker !== undefined) {
+      marker = ret.marker;
+      vars = ret.vars || {};
+      text = ret.text || String(ret.marker);
+    } else {
+      marker = ret;
+      vars = {};
+      text = String(ret);
+    }
+    // Write script output to a log file so it's visible in the Log Viewer.
+    // Without this, script steps (e.g. CLOSURE_SCRIPT_CHECK) have no log to
+    // inspect when they fail — the reason is lost.
+    const logFile = this._writeScriptLog(stepName, text, marker);
+    return { marker, ok: true, vars, text, logFile };
   }
 
   async _executeScriptStepWithOverride(stepName, stepDef) {
@@ -375,29 +940,96 @@ export class FlowEngine {
         return { ok: true, marker: "all_complete", vars: {}, text: "all_complete" };
       }
 
+      const visit = this.visitCounts.get(stepName) || 1;
       let completed = 0, failed = 0;
       const aggregatedVars = {};
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        this._log(`  subflow ${stepName}: forEach item ${i + 1}/${items.length}`);
-        // Re-resolve flowArgs per iteration so forEachItem/forEachIndex/forEachTotal template vars work
-        const iterArgs = {};
-        if (stepDef.flowArgs) {
-          const iterVars = { ...this._allVars(), forEachItem: item, forEachIndex: i, forEachTotal: items.length };
-          for (const [k, v] of Object.entries(stepDef.flowArgs)) {
-            iterArgs[k] = this._templateVar(String(v), iterVars);
+      const subflowRuns = [];
+
+      const concurrency = Math.max(1, Number(stepDef.concurrency) || 1);
+
+      if (concurrency === 1) {
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          this._log(`  subflow ${stepName}: forEach item ${i + 1}/${items.length}`);
+          // Re-resolve flowArgs per iteration so forEachItem/forEachIndex/forEachTotal template vars work
+          const iterArgs = {};
+          if (stepDef.flowArgs) {
+            const iterVars = { ...this._allVars(), forEachItem: item, forEachIndex: i, forEachTotal: items.length };
+            for (const [k, v] of Object.entries(stepDef.flowArgs)) {
+              iterArgs[k] = this._templateVar(String(v), iterVars);
+            }
+          }
+          const childVars = { ...iterArgs, forEachItem: item, forEachIndex: i, forEachTotal: items.length, _subflowId: `${stepName}-${visit}-${i}` };
+          const { childResult, childFlowVars, subflowFile } = await this._runChildSubflow(flowDef, childVars);
+          Object.assign(aggregatedVars, childFlowVars);
+          subflowRuns.push({ forEachIndex: i, forEachItem: item, file: subflowFile ? basename(subflowFile) : null, status: childResult.status });
+          this._log(`  subflow ${stepName}: forEach item ${i + 1} → ${childResult.status}`);
+          if (childResult.status === "completed") {
+            completed++;
+          } else {
+            failed++;
+            if (stepDef.onItemError && stepDef.onItemError.stopOnError) break;
           }
         }
-        const childVars = { ...iterArgs, forEachItem: item, forEachIndex: i, forEachTotal: items.length };
-        const { childResult, childFlowVars } = await this._runChildSubflow(flowDef, childVars);
-        Object.assign(aggregatedVars, childFlowVars);
-        this._log(`  subflow ${stepName}: forEach item ${i + 1} → ${childResult.status}`);
-        if (childResult.status === "completed") {
-          completed++;
-        } else {
-          failed++;
-          if (stepDef.onItemError && stepDef.onItemError.stopOnError) break;
+      } else {
+        // Sliding-window dispatcher: keeps <=concurrency items in flight; as soon
+        // as one resolves the next pending item dispatches (no batch barrier).
+        // Wall clock approaches the concurrency lower bound max(sum_durations / concurrency, max_item).
+        const runItem = async (i) => {
+          const item = items[i];
+          this._log(`  subflow ${stepName}: forEach item ${i + 1}/${items.length} dispatch`);
+          const iterArgs = {};
+          if (stepDef.flowArgs) {
+            const iterVars = { ...this._allVars(), forEachItem: item, forEachIndex: i, forEachTotal: items.length };
+            for (const [k, v] of Object.entries(stepDef.flowArgs)) {
+              iterArgs[k] = this._templateVar(String(v), iterVars);
+            }
+          }
+          const childVars = { ...iterArgs, forEachItem: item, forEachIndex: i, forEachTotal: items.length, _subflowId: `${stepName}-${visit}-${i}` };
+          const { childResult, childFlowVars, subflowFile } = await this._runChildSubflow(flowDef, childVars);
+          return { i, item, childResult, childFlowVars, subflowFile };
+        };
+
+        const recordResult = (r) => {
+          Object.assign(aggregatedVars, r.childFlowVars);
+          subflowRuns.push({ forEachIndex: r.i, forEachItem: r.item, file: r.subflowFile ? basename(r.subflowFile) : null, status: r.childResult.status });
+          this._log(`  subflow ${stepName}: forEach item ${r.i + 1} → ${r.childResult.status}`);
+          if (r.childResult.status === "completed") {
+            completed++;
+          } else {
+            failed++;
+            if (stepDef.onItemError && stepDef.onItemError.stopOnError) stopRequested = true;
+          }
+        };
+
+        let nextIndex = 0;
+        let stopRequested = false;
+        const inflight = new Set();
+
+        const dispatch = () => {
+          if (stopRequested) return;
+          while (inflight.size < concurrency && nextIndex < items.length) {
+            const idx = nextIndex++;
+            const p = runItem(idx).then((r) => {
+              inflight.delete(p);
+              recordResult(r);
+              // a slot freed -> try to start the next pending item immediately
+              dispatch();
+            });
+            inflight.add(p);
+          }
+        };
+
+        this._log(`  subflow ${stepName}: forEach sliding-window concurrency=${concurrency} (items=${items.length})`);
+        dispatch();
+        // Drain: wait for in-flight items; dispatch() recurses on each resolve,
+        // refilling freed slots until stopRequested or every item has started.
+        while (inflight.size > 0) {
+          await Promise.allSettled([...inflight]);
         }
+        // Results were collected in resolve order; restore forEachIndex order
+        // (contract: subflowRuns stays ordered by forEachIndex for monitor.js / consumers).
+        subflowRuns.sort((a, b) => a.forEachIndex - b.forEachIndex);
       }
 
       let marker;
@@ -405,13 +1037,15 @@ export class FlowEngine {
       else if (completed === 0) marker = "all_failed";
       else marker = "some_failed";
       this._log(`  subflow ${stepName}: forEach done (${completed} completed, ${failed} failed) → ${marker}`);
-      return { ok: true, marker, vars: aggregatedVars, text: marker };
+      return { ok: true, marker, vars: aggregatedVars, text: marker, subflowRuns };
     }
 
-    const { childResult, childFlowVars } = await this._runChildSubflow(flowDef, baseArgs);
+    const visit = this.visitCounts.get(stepName) || 1;
+    const childArgs = { ...baseArgs, _subflowId: `${stepName}-${visit}-0` };
+    const { childResult, childFlowVars, subflowFile } = await this._runChildSubflow(flowDef, childArgs);
     const marker = childResult.status === "completed" ? "complete" : "failed";
     this._log(`  subflow ${stepName}: child ${childResult.status} → ${marker}`);
-    return { ok: true, marker, vars: childFlowVars, text: marker };
+    return { ok: true, marker, vars: childFlowVars, text: marker, subflowRuns: [{ forEachIndex: 0, forEachItem: null, file: subflowFile ? basename(subflowFile) : null, status: childResult.status }] };
   }
 
   _allVars() {
@@ -420,10 +1054,14 @@ export class FlowEngine {
 
   async _runChildSubflow(flowDef, extraVars) {
     const parentDelegates = this.delegates;
+    const subflowId = extraVars._subflowId || null;
     const childVars = { ...(parentDelegates.vars || {}), ...extraVars };
+    const parentConfig = parentDelegates.config || {};
+    const childConfig = subflowId ? { ...parentConfig, subflowId, isSubflow: true } : { ...parentConfig, isSubflow: true };
     const childDelegates = {
       ...parentDelegates,
       vars: childVars,
+      config: childConfig,
       callLog: parentDelegates.callLog,
     };
     const childEngine = new FlowEngine(flowDef, childDelegates);
@@ -433,9 +1071,11 @@ export class FlowEngine {
         this._log(`  [child] ${line}`);
       }
     }
+    const subflowFile = childEngine._workflowFile();
     return {
       childResult,
       childFlowVars: Object.fromEntries(childEngine.flowVars),
+      subflowFile,
     };
   }
 
@@ -583,6 +1223,12 @@ export class FlowEngine {
     if (count > maxRetries) {
       const onMax = stepDef.onMaxRetries || transition.onMaxRetries || { done: "max_retries" };
       this._log(`  maxRetries exceeded for ${retryKey} → ${JSON.stringify(onMax)}`);
+      this._emitEvent("limit_hit", {
+        limitType: "max_retries",
+        step: fromStep,
+        count,
+        max: maxRetries,
+      });
       return onMax;
     }
 
@@ -601,52 +1247,115 @@ export class FlowEngine {
 
   async run(entryOverride) {
     this.startTime = Date.now();
-    let currentStep = entryOverride || this.flow.entry;
     const cfg = this.delegates.config || {};
+    this.eventsFile = cfg.runDir ? resolve(cfg.runDir, "events.jsonl") : null;
+    this.missionName = cfg.missionName || null;
+    this.runId = cfg.runDir ? basename(cfg.runDir) : null;
+    this._cleanMissionJsonWorkflow();
+    this._initWorkflow();
+    // OPT-7: receive wall-clock suspend signals from executor (the shared config
+    // object is the same reference the runner→executor uses). Mark the currently
+    // open step so the monitor timeline shows the freeze live + in the closed
+    // record (carried by _wfClose). The run-state top-level status stays
+    // "running" — a suspend does not change flow semantics, only observability.
+    cfg.onSuspend = (payload) => {
+      try {
+        if (this._wfCurrent) {
+          this._wfCurrent.suspended = true;
+          if (payload && payload.gapMs != null) this._wfCurrent.suspendGapMs = payload.gapMs;
+          if (this.workflow) {
+            this.workflow.updatedAt = new Date().toISOString();
+            this._writeWorkflow();
+          }
+        }
+        this._emitEvent("step_suspended", {
+          step: this._wfCurrent ? this._wfCurrent.name : null,
+          gapMs: payload && payload.gapMs != null ? payload.gapMs : null,
+          label: payload && payload.label ? payload.label : null,
+        });
+      } catch {}
+    };
+    let currentStep = entryOverride || this.flow.entry;
     const maxTotalSteps = cfg.maxTotalSteps ?? this.flow.maxTotalSteps ?? 100;
     const maxCycleVisits = cfg.maxCycles ?? this.flow.maxCycleVisits ?? 10;
-    const pingPongWindow = this.flow.pingPongWindow ?? 6;
     const maxAuditRounds = this.flow.maxAuditRounds ?? 0;
     const auditEntry = this.flow.auditEntry || this.flow.entry;
+    // Ensure pingPongWindow is large enough that maxAuditRounds fires first.
+    // The audit cycle alternates DRAFT_PLANS ↔ DEEP_AUDIT, so we need room for
+    // at least maxAuditRounds+1 audit visits * 2 steps each before ping-pong triggers.
+    const minPingPongWindow = maxAuditRounds > 0 ? (maxAuditRounds + 1) * 2 : 6;
+    const pingPongWindow = Math.max(this.flow.pingPongWindow ?? 6, minPingPongWindow);
     let totalSteps = 0;
 
     const _runDir = cfg.runDir;
+
+    // One getAllProcesses() snapshot shared by startup sysmon + reaper (saves
+    // a duplicate execSync("ps ...") / PowerShell CIM query on every engine run).
+    let _procSnapshot = null;
+    const _getProcs = () => {
+      if (!_procSnapshot) _procSnapshot = getAllProcesses();
+      return _procSnapshot;
+    };
     const _sysMon = (label) => {
       if (!_runDir) return;
-      try { sysSnapshot(_runDir, label); } catch {}
+      try { sysSnapshot(_runDir, label, _getProcs()); } catch {}
     };
 
     const _warnOrphans = () => {
       if (!_runDir) return;
-      try { reapStartupOrphans(_runDir, process.pid); } catch {}
+      try { reapStartupOrphans(_runDir, process.pid, _getProcs()); } catch {}
     };
 
-    _sysMon(`START:${this.flow.name || "flow"}`);
-    _warnOrphans();
+    // Subflow child engines skip startup diagnostics — the parent already did
+    // sysmon + reaper, and children inherit the same process tree.
+    if (cfg.isSubflow !== true) {
+      _sysMon(`START:${this.flow.name || "flow"}`);
+      _warnOrphans();
+    }
+
+    this._emitEvent("run_started", {
+      flowName: this.flow.name || null,
+      runDir: cfg.runDir || null,
+      startedAt: this.workflow ? this.workflow.startedAt : new Date().toISOString(),
+      maxTotalSteps,
+      maxCycleVisits,
+    });
 
     while (totalSteps < maxTotalSteps) {
       const stepDef = this.flow.steps[currentStep];
       if (!stepDef) {
         this._log(`Unknown step: ${currentStep}`);
-        return this._result("unknown_step", totalSteps);
+        return await this._result("unknown_step", totalSteps);
       }
 
       const visits = (this.visitCounts.get(currentStep) || 0) + 1;
       this.visitCounts.set(currentStep, visits);
       if (visits > maxCycleVisits) {
         this._log(`maxCycleVisits (${maxCycleVisits}) exceeded for step ${currentStep}`);
-        return this._result("max_cycles", totalSteps);
+        this._emitEvent("limit_hit", {
+          limitType: "max_cycles",
+          step: currentStep,
+          count: visits,
+          max: maxCycleVisits,
+        });
+        return await this._result("max_cycles", totalSteps);
       }
 
       if (maxAuditRounds > 0 && currentStep === auditEntry && visits > maxAuditRounds) {
         this._log(`maxAuditRounds (${maxAuditRounds}) exceeded for ${currentStep} → completed`);
-        return this._result("completed", totalSteps);
+        return await this._result("completed", totalSteps);
       }
 
       totalSteps++;
       this._log(`[step ${totalSteps}] ${currentStep} (visit #${visits})`);
-
-      _sysMon(`step-${totalSteps}:${currentStep}`);
+      this._wfOpen(currentStep, visits);
+      this._emitEvent("step_started", {
+        step: currentStep,
+        visit: visits,
+        totalSteps,
+        stepType: stepDef.type || null,
+        runDir: cfg.runDir || null,
+      });
 
       this.pingPongHistory.push({ step: currentStep, viaRetry: false });
       if (this.pingPongHistory.length > pingPongWindow) {
@@ -666,10 +1375,40 @@ export class FlowEngine {
               this._log(`ping-pong ${a} ↔ ${b} detected but has retry transitions (protected by maxRetries) — skipping`);
             } else {
               this._log(`ping-pong detected: ${a} ↔ ${b} over last ${pingPongWindow} steps → failed`);
-              return this._result("ping_pong", totalSteps);
+              return await this._result("ping_pong", totalSteps);
             }
           }
         }
+      }
+
+      // mdo-3 Phase 2: skipSteps / fastRun check (FSD §3.3.2A / §3.3.3A).
+      // Evaluated BEFORE `when` (skipSteps skips the whole step regardless of
+      // any conditional). On hit: close the (already-opened) workflow record as
+      // skipped, emit step_skipped with reason "skipSteps", and jump to the
+      // first non-retry target (firstNonRetryTarget). Structure mirrors the
+      // when:false skip path below (same _wfClose / _emitEvent / goto / done
+      // shape) — only the trigger condition and reason differ.
+      if (cfg.effectiveSkip && cfg.effectiveSkip.has(currentStep)) {
+        this._log(`  skipSteps hit, skipping step ${currentStep}`);
+        this._wfClose("skipped", "skipped");
+        this._emitEvent("step_skipped", {
+          step: currentStep,
+          visit: visits,
+          reason: "skipSteps",
+        });
+        const next = firstNonRetryTarget(stepDef);
+        if (next.done) return await this._result(next.done, totalSteps);
+        if (next.goto) {
+          this._emitEvent("transition", {
+            from: currentStep,
+            to: next.goto,
+            marker: "skipped",
+            via: "skipSteps",
+          });
+          currentStep = next.goto;
+          continue;
+        }
+        return await this._result("completed", totalSteps);
       }
 
       const whenCondition = stepDef.when;
@@ -677,15 +1416,30 @@ export class FlowEngine {
         const pass = this._evaluateCondition(whenCondition, this._allVars());
         if (!pass) {
           this._log(`  when condition false, skipping step`);
+          this._wfClose(null, "skipped");
+          this._emitEvent("step_skipped", {
+            step: currentStep,
+            visit: visits,
+            reason: "when condition false",
+          });
           const otherwise = stepDef.otherwise || { done: "completed" };
-          if (otherwise.done) return this._result(otherwise.done, totalSteps);
+          if (otherwise.done) return await this._result(otherwise.done, totalSteps);
           if (otherwise.goto) { currentStep = otherwise.goto; continue; }
           if (otherwise.retry) {
             const action = this._handleRetry(currentStep, otherwise, stepDef, { ok: true, marker: "skipped" });
-            if (action.done) return this._result(action.done, totalSteps);
-            if (action.goto) { currentStep = action.goto; continue; }
+            if (action.done) return await this._result(action.done, totalSteps);
+            if (action.goto) {
+              this._emitEvent("transition", {
+                from: currentStep,
+                to: action.goto,
+                marker: "skipped",
+                via: "retry",
+              });
+              currentStep = action.goto;
+              continue;
+            }
           }
-          return this._result("skipped", totalSteps);
+          return await this._result("skipped", totalSteps);
         }
       }
 
@@ -704,14 +1458,14 @@ export class FlowEngine {
         } else if (stepDef.type === "subflow") {
           result = await this._executeSubflowStep(currentStep, stepDef);
         } else {
-          return this._result("unknown_type", totalSteps);
+          return await this._result("unknown_type", totalSteps);
         }
       } catch (err) {
         this._log(`  error: ${err.message}`);
         const onError = stepDef.onError || { done: "failed" };
-        if (onError.done) return this._result(onError.done, totalSteps);
+        if (onError.done) return await this._result(onError.done, totalSteps);
         if (onError.goto) { currentStep = onError.goto; continue; }
-        return this._result("failed", totalSteps);
+        return await this._result("failed", totalSteps);
       }
 
       this.context.set(currentStep, result);
@@ -719,7 +1473,108 @@ export class FlowEngine {
       if (!result.ok) {
         const onError = stepDef.onError || { done: "failed" };
         this._log(`  subprocess failed → ${JSON.stringify(onError)}`);
-        if (onError.done) return this._result(onError.done, totalSteps);
+        const failedMeta = result.subflowRuns ? { type: "subflow", subflowRuns: result.subflowRuns } : {};
+        // Persist the log as a bare filename (relative to runDir, which holds
+        // run-state.json) — not the absolute path. Logs are co-located with the
+        // state file, so the directory is implied; storing basename keeps the
+        // run dir portable and avoids leaking machine-specific absolute paths.
+        if (result.logFile) failedMeta.logFile = basename(result.logFile);
+        if (result.promptFile) failedMeta.promptFile = basename(result.promptFile);
+        // Build a diagnostic error reason from exit code + log tail so the
+        // dashboard can show WHY the step failed (timeout, API rate limit,
+        // crash, etc.) — previously only a truncated full-log dump was stored.
+        // mdr-1 Phase 2: classify transient provider errors via stderr SIGNATURE
+        // (replaces the old `stepDur<60s && logLen<600` heuristic that mislabeled
+        // every empty-output crash as a rate limit — memory L001, count=4).
+        // A genuine extracted marker is a real business failure, never transient.
+        const stepDurMs = this._wfCurrent ? Date.now() - this._wfCurrent.startedAt : null;
+        const transientSig = !result.marker
+          ? isTransientProviderError({
+              exitCode: result.exitCode,
+              stderrTail: result.stderrTail || result.errorTail,
+              stepDurMs,
+              logLen: result.text ? result.text.length : 0,
+            })
+          : null;
+        // Build a diagnostic error reason from exit code + log tail so the
+        // dashboard can show WHY the step failed (timeout, crash, rate-limit,
+        // etc.). NEUTRAL by default — a rate-limit hint is added ONLY when a
+        // stderr signature actually matches.
+        if (result.errorTail || result.exitCode != null) {
+           const parts = [];
+           if (transientSig) {
+             parts.push(`⚠ transient provider error (likely ${transientSig}) — see stderr tail`);
+           } else if (result.exitCode != null && result.exitCode !== 0) {
+             const durStr = stepDurMs != null ? ` (${Math.round(stepDurMs / 1000)}s)` : "";
+             parts.push(`empty/short output, exit=${result.exitCode}${durStr} — cause unknown; see stderr tail`);
+           }
+            if (result.errorTail) parts.push(String(result.errorTail).slice(0, 800));
+            failedMeta.error = parts.join(" — ") || "process exited with non-zero code";
+         }
+         // mdr-1 Phase 3: independent transient provider-error retry path.
+         // A transient provider error (rate-limit / quota / overload, per the
+         // stderr signature classified above) is retried on its OWN budget — it
+         // does NOT consume onError.maxRetries, does NOT emit step_failed (it
+         // emits transient_retry), and does NOT trip ping-pong / maxCycleVisits.
+         // Exceeding the transient hard cap degrades to a real failure that
+         // falls through to step_failed + onError below.
+         // (memory L003, count=3: onError carried the tightest budget for the
+         // faults that most needed retrying.)
+         if (transientSig) {
+           const tCfg = this._transientConfig();
+           if (tCfg.enabled) {
+             const tCount = (this.transientCounts.get(currentStep) || 0) + 1;
+             this.transientCounts.set(currentStep, tCount);
+             if (tCount <= tCfg.maxRetries) {
+               this._log(`  ⚡ transient provider error (${transientSig}) — independent retry ${tCount}/${tCfg.maxRetries} for ${currentStep} (does not consume onError budget)`);
+               // Close this attempt as a transient (non-terminal) record so the
+               // timeline shows it; the retry below reopens the step.
+               this._wfClose(result.marker || "transient", "transient_retry", result.sessionId, { transientSig, error: failedMeta.error });
+               this._emitEvent("transient_retry", {
+                 step: currentStep,
+                 visit: visits,
+                 signature: transientSig,
+                 attempt: tCount,
+                 max: tCfg.maxRetries,
+                 durationMs: stepDurMs,
+               });
+               // Exponential backoff: base * 2^(attempt-1), hard-capped.
+               const backoffMs = Math.min(
+                 tCfg.backoffBaseMs * 2 ** (tCount - 1),
+                 tCfg.backoffCapMs,
+               );
+               this._log(`  ⏳ transient backoff ${Math.round(backoffMs / 1000)}s (exponential, cap ${Math.round(tCfg.backoffCapMs / 1000)}s)`);
+               this._emitEvent("backoff", {
+                 step: currentStep,
+                 retryStep: currentStep,
+                 durationMs: backoffMs,
+                 reason: "transient_provider_retry",
+               });
+               await sleep(backoffMs);
+               // Roll back this iteration's visit increment so transient retries
+               // are invisible to maxCycleVisits. Ping-pong is structurally
+               // impossible for same-step retries (detection needs 2 distinct
+               // alternating steps), so no ping-pong exemption is required. The
+               // next loop iteration re-runs the SAME step via normal dispatch.
+               this.visitCounts.set(currentStep, visits - 1);
+               continue;
+             }
+             // Transient budget exhausted → degrade to a real failure below.
+             this._log(`  ⚡ transient retry budget exhausted for ${currentStep} (${tCfg.maxRetries}) → degrading to real failure`);
+           }
+         }
+         const failedRec = this._wfClose(result.marker || "fail", "failed", result.sessionId, failedMeta);
+        if (failedRec) {
+          this._emitEvent("step_failed", {
+            step: currentStep,
+            visit: visits,
+            marker: result.marker || "fail",
+            durationMs: failedRec.durationMs,
+            sessionId: failedRec.sessionId,
+            error: failedMeta.error || (result.text ? String(result.text).slice(0, 500) : null),
+          });
+        }
+        if (onError.done) return await this._result(onError.done, totalSteps);
         if (onError.goto) {
           if (onError.append) {
             const appendText = this._formatAppend(onError.append, currentStep, result);
@@ -731,20 +1586,48 @@ export class FlowEngine {
         }
         if (onError.retry) {
           const action = this._handleRetry(currentStep, onError, stepDef, result);
-          if (action.done) return this._result(action.done, totalSteps);
+          if (action.done) return await this._result(action.done, totalSteps);
           if (action.goto) {
             if (action.append) {
               const appendText = this._formatAppend(action.append, currentStep, result);
               const existing = this.appendBuffers.get(action.goto) || "";
               this.appendBuffers.set(action.goto, existing + appendText);
             }
+            // Backoff before retrying after a short-duration failure (likely
+            // model API rate limit). Without this, immediate retries cascade-
+            // fail because the rate limit window hasn't reset.
+            if (failedRec && failedRec.durationMs < 60_000) {
+              const retryCount = this.retryCounts.get(`${currentStep}→${action.goto}`) || 1;
+              const retryBaseMs = cfg.retryBackoffBaseMs ?? 30_000;
+              const backoffMs = Math.min(retryBaseMs * retryCount, cfg.retryBackoffCapMs ?? 120_000);
+              this._log(`  ⏳ backing off ${backoffMs / 1000}s before retry (previous attempt lasted ${Math.round(failedRec.durationMs / 1000)}s — likely rate-limited)`);
+              this._emitEvent("backoff", {
+                step: currentStep,
+                retryStep: action.goto,
+                durationMs: backoffMs,
+                previousDurationMs: failedRec.durationMs,
+                reason: "short_failure_likely_rate_limit",
+              });
+              await sleep(backoffMs);
+            }
+            this._emitEvent("transition", {
+              from: currentStep,
+              to: action.goto,
+              marker: result.marker || "fail",
+              via: "retry",
+            });
             currentStep = action.goto;
             this._markPingPongRetry();
             continue;
           }
         }
-        return this._result("failed", totalSteps);
+        return await this._result("failed", totalSteps);
       }
+
+      // mdr-1 Phase 3: a successful (non-transient) resolution clears the
+      // transient retry debt for this step so a later, independent transient
+      // storm can still use its full budget.
+      this.transientCounts.delete(currentStep);
 
       let marker = result.marker;
 
@@ -783,13 +1666,52 @@ export class FlowEngine {
       }
       if (!marker) {
         this._log(`  marker not found in output`);
-        const onUnknown = stepDef.onUnknown || { done: "failed" };
-        if (onUnknown.done) return this._result(onUnknown.done, totalSteps);
+        // Observability (§6): even on a null-marker failure, persist logFile +
+        // sessionId + a raw tail so the run is traceable back to the exact log
+        // (previously this path returned without recording either).
+        const unknownMeta = {};
+        if (result.logFile) unknownMeta.logFile = basename(result.logFile);
+        if (result.promptFile) unknownMeta.promptFile = basename(result.promptFile);
+        const unknownRec = this._wfClose(null, "failed", result.sessionId, unknownMeta);
+        if (unknownRec) {
+          this._emitEvent("step_failed", {
+            step: currentStep,
+            visit: visits,
+            marker: null,
+            durationMs: unknownRec.durationMs,
+            sessionId: unknownRec.sessionId,
+            error: result.text ? String(result.text).slice(-500) : "no marker found in output",
+          });
+        }
+        // Soft-landing: honor an explicit onUnknown; otherwise, if the step defines
+        // an onMaxRetries route, degrade through it rather than hard-failing the
+        // whole mission on a single unparseable marker (root cause class of §1).
+        const onUnknown =
+          stepDef.onUnknown ||
+          (stepDef.onMaxRetries && (stepDef.onMaxRetries.goto || stepDef.onMaxRetries.done)
+            ? stepDef.onMaxRetries
+            : { done: "failed" });
         if (onUnknown.goto) { currentStep = onUnknown.goto; continue; }
-        return this._result("failed", totalSteps);
+        if (onUnknown.done) return await this._result(onUnknown.done, totalSteps);
+        return await this._result("failed", totalSteps);
       }
 
       this._log(`  marker: ${marker}`);
+      const completedMeta = result.subflowRuns ? { type: "subflow", subflowRuns: result.subflowRuns } : {};
+      if (result.logFile) completedMeta.logFile = basename(result.logFile);
+      if (result.promptFile) completedMeta.promptFile = basename(result.promptFile);
+      const completedRec = this._wfClose(marker, "completed", result.sessionId, completedMeta);
+      if (completedRec) {
+        this._emitEvent("step_completed", {
+          step: currentStep,
+          visit: visits,
+          marker,
+          durationMs: completedRec.durationMs,
+          produced: completedRec.produced,
+          sessionId: completedRec.sessionId,
+          logFile: completedRec.logFile || null,
+        });
+      }
 
       let transition = stepDef.transitions[marker];
 
@@ -805,25 +1727,37 @@ export class FlowEngine {
       if (!transition) {
         this._log(`  no transition for marker "${marker}"`);
         const onUnknown = stepDef.onUnknown || { done: "no_transition" };
-        if (onUnknown.done) return this._result(onUnknown.done, totalSteps);
+        if (onUnknown.done) return await this._result(onUnknown.done, totalSteps);
         if (onUnknown.goto) { currentStep = onUnknown.goto; continue; }
-        return this._result("no_transition", totalSteps);
+        return await this._result("no_transition", totalSteps);
       }
 
       if (transition.done) {
         this._log(`  → done: ${transition.done}`);
-        return this._result(transition.done, totalSteps, result.marker);
+        this._emitEvent("transition", {
+          from: currentStep,
+          to: null,
+          marker,
+          via: "done",
+        });
+        return await this._result(transition.done, totalSteps, result.marker);
       }
 
       if (transition.retry) {
         const action = this._handleRetry(currentStep, transition, stepDef, result);
-        if (action.done) return this._result(action.done, totalSteps);
+        if (action.done) return await this._result(action.done, totalSteps);
         if (action.goto) {
           if (action.append) {
             const appendText = this._formatAppend(action.append, currentStep, result);
             const existing = this.appendBuffers.get(action.goto) || "";
             this.appendBuffers.set(action.goto, existing + appendText);
           }
+          this._emitEvent("transition", {
+            from: currentStep,
+            to: action.goto,
+            marker,
+            via: "retry",
+          });
           currentStep = action.goto;
           this._markPingPongRetry();
           continue;
@@ -842,14 +1776,26 @@ export class FlowEngine {
         if (transition.evidence) {
           this._log(`  recording evidence for ${currentStep}`);
         }
+        this._emitEvent("transition", {
+          from: currentStep,
+          to: transition.goto,
+          marker,
+          via: "goto",
+        });
         currentStep = transition.goto;
         continue;
       }
 
       this._log(`  invalid transition: ${JSON.stringify(transition)}`);
-      return this._result("invalid_transition", totalSteps);
+      return await this._result("invalid_transition", totalSteps);
     }
 
-    return this._result("max_total_steps", totalSteps);
+    this._emitEvent("limit_hit", {
+      limitType: "max_total_steps",
+      step: currentStep,
+      count: totalSteps,
+      max: maxTotalSteps,
+    });
+    return await this._result("max_total_steps", totalSteps);
   }
 }

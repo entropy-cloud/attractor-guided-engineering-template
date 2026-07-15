@@ -79,6 +79,7 @@ function getTopProcesses(limit, allProcs) {
     const sorted = [...allProcs].sort((a, b) => b.rss_kb - a.rss_kb);
     return sorted.slice(0, limit).map((p) => ({
       pid: p.pid,
+      ppid: p.ppid,
       rss_mb: Math.round((p.rss_kb / 1024) * 10) / 10,
       cpu_pct: 0,
       elapsed: "",
@@ -86,17 +87,18 @@ function getTopProcesses(limit, allProcs) {
     }));
   }
 
-  const raw = safeExec("ps -eo pid,rss,%cpu,etime,comm -r");
+  const raw = safeExec("ps -eo pid,ppid,rss,%cpu,etime,comm -r");
   if (!raw) return [];
   const lines = raw.split("\n").slice(1);
   return lines.slice(0, limit).map((line) => {
     const parts = line.trim().split(/\s+/);
     return {
       pid: parseInt(parts[0], 10),
-      rss_mb: Math.round((parseInt(parts[1], 10) / 1024) * 10) / 10,
-      cpu_pct: parseFloat(parts[2]),
-      elapsed: parts[3],
-      name: parts.slice(4).join(" ").slice(0, 50),
+      ppid: parseInt(parts[1], 10),
+      rss_mb: Math.round((parseInt(parts[2], 10) / 1024) * 10) / 10,
+      cpu_pct: parseFloat(parts[3]),
+      elapsed: parts[4],
+      name: parts.slice(5).join(" ").slice(0, 50),
     };
   });
 }
@@ -170,12 +172,12 @@ function getMemoryPressureLevel() {
   return `${100 - parseInt(m[1], 10)}%`;
 }
 
-function snapshot(runDir, label = "") {
+function snapshot(runDir, label = "", procs = null) {
   const now = new Date();
   const tsISO = now.toISOString();
   const tsLocal = now.toLocaleString("en-US", { hour12: false });
 
-  const allProcs = getAllProcesses();
+  const allProcs = procs || getAllProcesses();
 
   const snap = {
     ts: tsISO,
