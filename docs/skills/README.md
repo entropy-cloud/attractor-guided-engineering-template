@@ -10,6 +10,18 @@ A skill library is not the attractor. Without routing through `AGENTS.md`, `docs
 
 These prompts are generic defaults for copied projects. After copying the template, you MUST customize them to the project's real owner docs, protected areas, verification stack, naming conventions, known failure modes, and false-positive tolerance.
 
+### Project Customization Layer
+
+When customizing, add a dedicated section at the top of each applicable skill:
+
+- **Protected areas**: list paths/files AI must not auto-modify, with authorization rules (`ask-first`/`blocked`/`research-only`).
+- **Known failure modes**: list project-specific recurring error patterns, sorted by severity. Audit and implementation skills must check these explicitly.
+- **Verification commands**: the exact commands that prove a change is correct for this project.
+- **Naming conventions**: entity/field/route/component naming rules the project enforces.
+- **Context constraints**: known framework limitations, runtime constraints, or false-positive triggers specific to this project's stack.
+
+Without these customizations, a generic prompt lacks the project-specific memory to avoid repeating the same mistakes.
+
 ## Skill Routing Rule
 
 Before choosing a skill:
@@ -41,6 +53,7 @@ Do not add broad business-scenario skills as a replacement for project-specific 
 | `code-quality-audit-prompt.md`            | reviewing code for behavioral risk and implementation quality                      | only formatting or trivial nits are needed    | changed files, owner docs, tests or verification evidence                    | severity-ordered findings                      |
 | `code-refactor-discovery-prompt.md`       | structural cleanup candidates need discovery before refactoring                    | the structural target is already agreed       | target area, owner docs, current code                                        | ranked refactor candidates                     |
 | `code-refactor-prompt.md`                 | behavior-preserving structural refactor work is the task                           | the task changes supported behavior           | target area, invariants, verification commands                               | safe refactor execution and proof              |
+| `development-wisdom-gate-prompt.md`       | an AI self-check before declaring any non-trivial design, plan, or implementation complete | the work only needs a narrow object-level audit              | current output (design doc, plan, or code), assumption inventory               | challenged output with surfaced assumptions, depth gaps, cross-layer inconsistencies |
 
 ## Starter Skills
 
@@ -58,13 +71,25 @@ Do not add broad business-scenario skills as a replacement for project-specific 
 - `code-quality-audit-prompt.md`
 - `code-refactor-discovery-prompt.md`
 - `code-refactor-prompt.md`
+- `development-wisdom-gate-prompt.md`
 
 ## Relationship With Tool-Native Skills
 
 `docs/skills/` holds method- and audit-type skills that live inside the repository and stay portable across tools and editors. Some AI tools also support their own native skill loading (for example a project-local skills directory that the tool auto-loads). The two are complementary, not competing:
 
-- put reusable review/audit methods and prompts in `docs/skills/` so they are versioned with the docs and readable by any agent or human
-- put tool-loaded operational skills (framework-specific how-tos, codegen recipes, debug recipes) in the tool's own conventions if you use one
-- keep routing through `AGENTS.md`, `docs/index.md`, and owner docs regardless of where a skill physically lives; skills select the work method, they do not replace owner-doc routing
+- **Audit/method skills** (`docs/skills/`): repository-versioned, cross-tool portable. Provide review frameworks, checklists, and audit prompts. An AI or human can always find and read them.
+- **Operational skills** (tool-native, e.g. `.opencode/skills/`): auto-loaded by the AI tool during development. Provide framework-specific how-tos, codegen recipes, debug workflows. Not portable across tools.
 
-The template itself stays tool-neutral and does not assume any specific AI tool.
+Which goes where:
+
+| Content | Home | Reason |
+|---------|------|--------|
+| Review/audit prompts | `docs/skills/` | Must survive tool changes, versioned with docs |
+| Framework-specific codegen recipes | Tool-native | Only useful during active coding, tool loads automatically |
+| Debug workflows for project-specific stack | Tool-native | Only useful during active debugging |
+| General development methodology | `docs/skills/` | Tool-neutral, applies regardless of environment |
+| Plan/closure audit prompts | `docs/skills/` | Required by AGENTS.md, must be discoverable by any reviewer |
+
+Keep routing through `AGENTS.md`, `docs/index.md`, and owner docs regardless of where a skill physically lives; skills select the work method, they do not replace owner-doc routing.
+
+The template itself stays tool-neutral and does not assume any specific AI tool. Projects that use a tool with native skill loading should set up both tracks after copying the template.

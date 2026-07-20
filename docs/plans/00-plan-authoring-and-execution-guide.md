@@ -38,8 +38,9 @@ If unsure, use a full plan.
 9. **Record Decisions with rationale.** Every `Decision` item must document the choice, the alternatives considered, and the residual risk if any. Write the rationale into the plan or a referenced doc. If a decision requires prototyping or exploration before committing, add a temporary `Explore` item that must conclude before the `Decision` resolves. Framework-forced or obvious choices (e.g., "must match existing framework pattern") can be noted as constrained without full alternatives analysis.
 10. **Checklist integrity before closure.** Before marking a plan complete, no in-scope checklist item may remain unchecked. Either complete it or explicitly move it out of scope with a written reason. Scope narrowing after plan approval is a scope change and must be recorded with rationale; silently removing items from scope is a violation.
 11. **Text consistency before closure.** Before closing, verify that `Plan Status`, every phase `Status`, every phase `Exit Criteria`, `Closure Gates`, and the `docs/logs/` entry all agree. No `completed` at the top while a phase inside still says `draft`.
-12. **Independent draft review and closure audit.** Do not implement a created plan until independent draft review has revised it into an acceptable execution contract, and do not mark it complete as a side effect of finishing the last implementation slice. Use a separate review pass. Closure audit must be performed by an independent subagent or reviewer; self-review cannot mark a created plan complete. Protected areas, unresolved product risk, and source-of-truth conflicts require human/subagent review or stay open.
-13. **Non-degradable items** cannot be downgraded to non-blocking follow-ups: confirmed live defects, confirmed contract drift, confirmed owner-doc drift, and CI/lint rules already fixed in the repo.
+12. **Status/checkbox consistency.** A `Status: completed` phase must have all its checkboxes ticked (`[x]`). An `active` phase may have unticked items in its current phase, but all prior phases must be fully ticked. Inconsistency between `Status: completed` and unchecked `[ ]` items can cause automated workflows to loop infinitely between `EXECUTE` and `VERIFY`. Verify with: `grep -B5 "\- \[ \]" <plan-file> | grep "Status: completed"` — result must be empty.
+13. **Independent draft review and closure audit.** Do not implement a created plan until independent draft review has revised it into an acceptable execution contract, and do not mark it complete as a side effect of finishing the last implementation slice. Use a separate review pass. Closure audit must be performed by an independent subagent or reviewer; self-review cannot mark a created plan complete. Protected areas, unresolved product risk, and source-of-truth conflicts require human/subagent review or stay open.
+14. **Non-degradable items** cannot be downgraded to non-blocking follow-ups: confirmed live defects, confirmed contract drift, confirmed owner-doc drift, and CI/lint rules already fixed in the repo.
 
 ## Plan Status Flow
 
@@ -90,13 +91,14 @@ Before setting `Plan Status: completed`, do all of the following:
 3. Verify text consistency: top status, phase statuses, exit criteria, closure gates, and log entry all agree.
 4. Distinguish "interface exists" from "behavior is complete". Verify the actual runtime behavior with a test or demo, not just the type signature.
 5. Run the real verification commands for the repo. For plans whose primary result surface is visual, behavioral, or UX-driven, customize the verification gates with explicit justification in the plan.
-6. Perform an independent closure audit by an independent subagent or reviewer.
-7. If the plan used a solo cold-replay fallback (see `AGENTS.md` Reviewer-Availability Fallback), the closure record MUST state it was used and confirm the cold-replay self-check was performed against the plan, affected docs, the actual diff, and real verification commands.
+6. **Scoped verification is not full verification.** If a scoped command (e.g. affected-modules-only build) was used instead of the full verification suite, note "verification scope limited" explicitly in the plan and evaluate residual risk. A scoped pass cannot be reported as full green.
+7. Perform an independent closure audit by an independent subagent or reviewer.
+8. If the plan used a solo cold-replay fallback (see `AGENTS.md` Reviewer-Availability Fallback), the closure record MUST state it was used and confirm the cold-replay self-check was performed against the plan, affected docs, the actual diff, and real verification commands.
 
 **Full closure** (multi-session, multi-module, or high-risk plans — add these):
 
-7. Re-read the entire plan from the top, not just the most recent slice.
-8. Record independent closure-audit evidence in the plan's `Closure` section and link any stored audit file under `docs/audits/` when one exists.
+9. Re-read the entire plan from the top, not just the most recent slice.
+10. Record independent closure-audit evidence in the plan's `Closure` section and link any stored audit file under `docs/audits/` when one exists.
 
 If any of these fail, the plan stays open.
 
@@ -170,6 +172,7 @@ Exit Criteria:
 - [ ] in-scope behavior is complete
 - [ ] relevant docs are aligned
 - [ ] verification has run (specify which commands; customize for visual/UX domains if needed)
+- [ ] scoped verification is not conflated with full verification — if scope was limited, "verification scope limited" is noted explicitly
 - [ ] no in-scope item downgraded to deferred/follow-up
 - [ ] independent draft review completed and recorded
 - [ ] text consistency verified: status, phases, gates, and log all agree

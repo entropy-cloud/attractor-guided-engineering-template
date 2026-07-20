@@ -95,6 +95,19 @@ Level 3: Full suite (only before commit / PR)
 
 ---
 
+## Log-First Debugging
+
+When an E2E test fails with timeout, blank page, or slow rendering, always check the server log first. These symptoms are almost always caused by server-side errors, not browser issues. Do not adjust timeout parameters or retry strategies before identifying the specific error code or exception stack.
+
+Diagnostic protocol:
+
+- **Fresh instance**: start a new server instance with an isolated data source for each diagnostic session. Do not reuse a shared or stale server.
+- **Health polling**: loop until HTTP 200 before running tests — do not rely on a fixed wait time.
+- **Minimum reproduction**: reproduce the failure with a single test case or pass/fail pair first, not the full suite.
+- **Reverse log reading**: read the server log from the tail backward. Look for `ERROR`, `exception`, or error codes near the end of the log first — not from the beginning.
+
+---
+
 ## Common Failure Patterns
 
 ### Timeout / Element Not Visible
@@ -117,6 +130,8 @@ Level 3: Full suite (only before commit / PR)
 **Cause**: Previous dev server still running.
 
 **Fix**: Kill stale server processes before starting tests. Do **not** increment port numbers to evade conflicts — this leaves orphaned processes.
+
+**Avoid repeated rediscovery**: The first time you encounter a port mismatch between your framework default and your application config, record the fix in a shared reference doc. Do not rediscover the same port conflict across multiple plans.
 
 ```bash
 # Linux / macOS
