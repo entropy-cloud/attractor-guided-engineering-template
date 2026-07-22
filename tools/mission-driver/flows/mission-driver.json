@@ -87,10 +87,10 @@
       "type": "subflow",
       "flow": "deep-audit-loop",
       "transitions": {
-        "complete": { "goto": "DRAFT_PLANS" },
-        "failed": { "goto": "DRAFT_PLANS" }
+        "complete": { "goto": "REVIEW_PLANS" },
+        "failed": { "goto": "REVIEW_PLANS" }
       },
-      "onError": { "goto": "DRAFT_PLANS" }
+      "onError": { "goto": "REVIEW_PLANS" }
     }
   }
 }

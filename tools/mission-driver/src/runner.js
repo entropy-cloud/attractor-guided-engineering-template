@@ -121,6 +121,7 @@ export async function createRunner(config, executeFn = execute) {
     const args = ["run"];
     if (config.pure) args.push("--pure");
     args.push("-m", model, "--agent", config.agent, "--dangerously-skip-permissions");
+    if (config.variant) args.push("--variant", config.variant);
     if (sessionId) {
       args.push("--session", sessionId);
     }

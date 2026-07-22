@@ -29,10 +29,7 @@ If nothing to draft (roadmap done, no deferred items), return results in the fol
 <AI_STEP_RESULT>nothing</AI_STEP_RESULT>
 ```
 
-If the mission is fully complete (roadmap done, no triggerable deferred items, DEEP_AUDIT already ran and found nothing actionable), return:
-```
-<AI_STEP_RESULT>done</AI_STEP_RESULT>
-```
+The engine will decide when the mission is fully complete based on DEEP_AUDIT visit rounds — do NOT return `done` here.
 
 When plans are created, return results in the following format:
 ```
@@ -44,4 +41,4 @@ When plans are created, return results in the following format:
 
 In PLAN_FILE, provide only the first (lowest N) plan path. The engine discovers the rest via scan. All plan files must exist on disk — placeholder paths are rejected.
 
-Your output MUST end with exactly one `<AI_STEP_RESULT>` marker (`nothing`, `done`, or `created`, with the `<FLOW_VARS>` block only when `created`). This is the only marker that is parsed; a missing or malformed marker triggers an additional correction run, so emit it exactly as shown.
+Your output MUST end with exactly one `<AI_STEP_RESULT>` marker (`nothing` or `created`, with the `<FLOW_VARS>` block only when `created`). This is the only marker that is parsed; a missing or malformed marker triggers an additional correction run, so emit it exactly as shown.

@@ -500,6 +500,7 @@ async function cmdRunMission(mission, opts) {
   console.log(`Test cmd:   ${g.commands.test}`);
   console.log(`Agent:      ${config.agent}`);
   console.log(`Model:      ${config.model}`);
+  if (config.variant) console.log(`Variant:    ${config.variant}`);
   console.log(`DryRun:     ${config.dryRun}`);
   console.log(`TestMode:   ${config.testMode}`);
   console.log(`Timeout:    60min (auto-extend on output)`);

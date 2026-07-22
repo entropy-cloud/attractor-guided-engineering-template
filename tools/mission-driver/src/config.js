@@ -503,9 +503,10 @@ export function resolveConfig(args = {}) {
   // openAudits() (which read mission.auditsDir) see the derived path.
   mission.auditsDir = resolveAuditsDir(mission.auditsDir, mission.plansDir, projectRoot);
 
-  // Resolve model/parseModel/max* with fallback chain: CLI > env > mission base > hard default
+  // Resolve model/parseModel/variant/max* with fallback chain: CLI > env > mission base > hard default
   const resolvedModel = model || mission.model || "zhipuai-coding-plan/glm-5.2";
   const resolvedParseModel = parseModel || mission.parseModel || undefined;
+  const resolvedVariant = mission.variant || undefined;
   const resolvedAgent = agent || mission.agent || "build";
   const resolvedMaxCycles = maxCycles ?? mission.maxCycles ?? undefined;
   const resolvedMaxInnerCycles = maxInnerCycles ?? mission.maxInnerCycles ?? undefined;
@@ -575,6 +576,7 @@ export function resolveConfig(args = {}) {
     timestamp,
     agent: resolvedAgent,
     model: resolvedModel,
+    variant: resolvedVariant,
     parseModel: resolvedParseModel,
     maxCycles: resolvedMaxCycles,
     maxInnerCycles: resolvedMaxInnerCycles,

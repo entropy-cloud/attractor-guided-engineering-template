@@ -54,11 +54,11 @@ pnpm audit:suspects
 
 `tools/mission-driver/` is a **mission-driven development loop engine** — a generic opencode-based workflow that cycles through health-check → execute plans → draft plans → review plans → deep audit.
 
-It is the template's **single source of truth** for this tool. Projects reference it via a thin shell script rather than maintaining their own copy.
+It is the template's **single source of truth** for this tool. **Projects must NOT copy this directory.** Instead, reference it via a thin shell script setting `MISSION_DRIVER_HOME`. This keeps the engine single-sourced: fixes and improvements go into the template, and all projects that reference it get them automatically.
 
-### Integration
+### Integration (Do NOT Copy — Only Reference)
 
-Create `tools/mission-driver.sh` in your project:
+Create a thin `tools/mission-driver.sh` in your project. Do not copy `tools/mission-driver/`:
 
 ```bash
 #!/bin/bash

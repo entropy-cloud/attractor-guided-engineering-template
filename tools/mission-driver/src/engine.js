@@ -712,11 +712,16 @@ export class FlowEngine {
 
     const transitions = stepDef.transitions || {};
 
-    if (marker) {
-      if (!transitions[marker]) {
-        marker = await this._runCorrectionAgent(
-          marker, result.text, rTag, transitions, stepDef, this.lastSessionId,
-        );
+    // ForEach per-item: marker validation is handled by aggregation
+    // (ok-based), not by per-item marker values. Skip correction + resolvedOk
+    // check so per-item prompts can emit their own markers (e.g. "approved").
+    if (!stepDef._forEachPerItem) {
+      if (marker) {
+        if (!transitions[marker]) {
+          marker = await this._runCorrectionAgent(
+            marker, result.text, rTag, transitions, stepDef, this.lastSessionId,
+          );
+        }
       }
     }
 
@@ -731,7 +736,7 @@ export class FlowEngine {
     // "transition-valid marker": a null or invalid marker keeps the original ok
     // so real failures still route to onError (memory L003). Recovering
     // arbitrary noise never sets ok=true (Decision: 否决"恢复出任意 marker 即 ok")。
-    const resolvedOk = (marker && transitions[marker]) ? true : result.ok;
+    const resolvedOk = (stepDef._forEachPerItem || (marker && transitions[marker])) ? true : result.ok;
 
     return { marker, vars, ok: resolvedOk, text: result.text, sessionId: result.sessionId || null, logFile: result.logFile || null, exitCode: result.exitCode, errorTail: result.errorTail, stderrTail: result.stderrTail };
   }
@@ -885,7 +890,10 @@ export class FlowEngine {
       let iterResult;
       try {
         if (stepDef.type === "agent") {
-          iterResult = await this._executeAgentStep(stepName, stepDef, null);
+          // ForEach per-item: marker validation is handled by aggregation
+          // (ok-based), not by per-item marker value. Skip validation.
+          const itemStepDef = { ...stepDef, _forEachPerItem: true };
+          iterResult = await this._executeAgentStep(stepName, itemStepDef, null);
         } else if (stepDef.type === "tool") {
           iterResult = await this._executeToolStep(stepName, stepDef);
         } else if (stepDef.type === "script") {
