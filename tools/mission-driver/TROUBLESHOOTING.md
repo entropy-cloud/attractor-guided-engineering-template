@@ -311,7 +311,7 @@ node tools/mission-driver/src/reap-orphans.mjs <PGID> _tmp/<run-dir>
 
 ---
 
-## 9. Related
+## 10. Related
 
 - `design/mission-driver-flow-design.md` — top-level flow orchestration (steps, transitions, retries)
 - `design/flow-engine-design.md` — engine layer (Step / Transition / StepResult / subflows)

@@ -3,7 +3,7 @@
   "description": "Describe what this mission covers",
   "flowName": "mission-driver",
   "roadmapPath": "docs/backlog/implementation-roadmap.md",
-  "plansDir": "docs/plans",
+  "plansDir": "docs/plans/my-user/my-mission",
   "planGuide": "docs/plans/00-plan-authoring-and-execution-guide.md",
   "auditsDir": "audits",
   "contextDir": "docs/context",
@@ -18,9 +18,5 @@
     "multiAudit": "docs/skills/multi-dimensional-audit-prompt.md",
     "openAudit": "docs/skills/open-ended-audit-prompt.md"
   },
-  "commitFormat": "feat(<scope>): <description>",
-  "models": {
-    "DRAFT_PLANS": { "model": "zhipuai-coding-plan/glm-5.2", "variant": "max" },
-    "MULTI_AUDIT": { "model": "zhipuai-coding-plan/glm-5.2", "variant": "high" }
-  }
+  "commitFormat": "feat(<scope>): <description>"
 }

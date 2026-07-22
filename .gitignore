@@ -8,3 +8,6 @@ coverage/
 tmp/
 _tmp/
 report/
+.obsidian/
+.opencode/
+nul

@@ -1,0 +1,17 @@
+{
+  "extends": "base",
+  "name": "mission-driver-step-audit",
+  "description": "优化 mission-driver 的步骤执行模式（修固 --step、新增 --from-step）与 deep audit 计数权威化（落盘 run-state、DRAFT_PLANS 决策引擎化）。设计文档见 tools/mission-driver/design/step-execution-and-audit-count-design.md。",
+  "flowName": "mission-driver",
+  "roadmapPath": "docs/backlog/mission-driver-step-audit-roadmap.md",
+  "plansDir": "docs/plans/mission-driver-step-audit",
+  "planGuide": "docs/plans/00-plan-authoring-and-execution-guide.md",
+  "auditsDir": "docs/audits/mission-driver-step-audit",
+  "contextDir": "docs/context",
+  "moduleDir": "tools/mission-driver",
+  "prompts": {
+    "multiAudit": "docs/skills/multi-dimensional-audit-prompt.md",
+    "openAudit": "docs/skills/open-ended-audit-prompt.md"
+  },
+  "commitFormat": "<type>(mission-driver): <description>"
+}

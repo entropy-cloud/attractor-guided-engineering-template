@@ -68,4 +68,4 @@ If any check fails, fix the issue by editing the file with the Edit tool, then r
 </REMAINING>
 ```
 
-Do NOT output plan content, fix details, or any explanatory text — only the marker above.
+Do NOT output plan content, fix details, or any explanatory text — only the marker above. Use exactly the tag `AI_STEP_RESULT` with matching open/close tags (`approved` or `issues`); a missing or malformed marker triggers an additional correction run.

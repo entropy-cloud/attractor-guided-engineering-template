@@ -5,6 +5,7 @@
 **Status**: active
 **Replaces**: v3 `execute-all-active-plans` subflow + `plan-router` script
 **Changes**:
+- 2026-07-20 (WI4): DRAFT_PLANS exit restructured — removed the `done` exit so the AI can no longer unilaterally declare the mission complete. `onMaxRetries` changed from `{ goto: "DEEP_AUDIT" }` to `{ done: "failed" }` (retry exhaustion = failure). The `markerAliases["done"]` alias was removed. Mission completion is now decided by the engine's audit-gate when `DRAFT_PLANS` emits `nothing` and the per-run audit budget is exhausted with no active plans or open audits (see `step-execution-and-audit-count-design.md` §4.2). Section 3 mermaid + DRAFT_PLANS step description + Exit Mechanism updated.
 - 2026-06-21: Reordered main cycle from `CHECK -> EXEC -> DRAFT -> REVIEW -> EXEC` to `CHECK -> REVIEW -> EXEC -> DRAFT -> REVIEW`. Single transition change: `CHECK.pass` now goes to `REVIEW_PLANS` instead of `EXEC_PLANS`. Rationale: on resume (restart with state on disk), the previous order ran `DRAFT_PLANS` before `REVIEW_PLANS`, which risks re-drafting plans that already exist as `draft` from a previous run. New order ensures any `draft` backlog is reviewed and promoted to `active` before `DRAFT_PLANS` is allowed to create new work. Steady-state cycle is unchanged in shape (3-step), just rotated. Empty `draftPlans()` forEach short-circuits to `all_complete` without an AI call, so the extra REVIEW on fresh start is one cheap file scan. Also brought Section 3 mermaid in line with the actual JSON transitions (REVIEW_PLANS is `type: "agent"` with `forEach: draftPlans()`, not the doc's old "group + scan-reviewed-plans script" — that broader drift is not fully cleaned up here, only the arrows relevant to this reorder).
 
 ---
@@ -53,6 +54,7 @@ flowchart TD
 
     DP -->|created| RP
     DP -->|nothing| DAL["DEEP_AUDIT<br/>subflow: deep-audit-loop"]
+    DP -.->|nothing + audit-gate hits| DONE["completed<br/>(engine audit-gate, not AI)"]
 
     DAL -->|complete| DP
     DAL -->|failed| DP
@@ -63,6 +65,8 @@ flowchart TD
 Steady-state cycle: `REVIEW_PLANS -> EXEC_PLANS -> DRAFT_PLANS -> REVIEW_PLANS -> ...`
 
 Entry point is now `REVIEW_PLANS` (right after `CHECK`), not `EXEC_PLANS`. This ensures that on resume (restart with `draft` plans left over from a previous run), the backlog is reviewed and promoted to `active` *before* `DRAFT_PLANS` gets a chance to create duplicate plans for the same roadmap items. On a fresh start with empty queues, `REVIEW_PLANS` runs with `draftPlans() -> []`, the engine short-circuits the empty forEach to `all_complete` without invoking the AI, and the flow falls through to `EXEC_PLANS` -> `DRAFT_PLANS` normally.
+
+> **WI4 — DRAFT_PLANS exit change**: the `done` exit was removed; the AI can no longer unilaterally declare the mission complete. Mission completion is decided by the engine's audit-gate: when `DRAFT_PLANS` emits `nothing` AND `auditRound >= maxAuditRounds` AND `activePlans()`/`openAudits()` are both empty, the run completes via the audit-gate (emits a `transition` event with `via: "audit_gate"`). In all other `nothing` cases the flow goes to `DEEP_AUDIT` as before. See `step-execution-and-audit-count-design.md` §4.2.
 
 ### Step Descriptions
 
@@ -85,6 +89,7 @@ Entry point is now `REVIEW_PLANS` (right after `CHECK`), not `EXEC_PLANS`. This 
 - Review loop completes within a single step, no engine-level PLAN_AUDIT step.
 - On failure to pass: degraded mode, still outputs `created`, plan proceeds to execution, downstream closure/deep audit provides fallback.
 - Independence guarantee: review sub-agent is an independent session (different task_id), cannot see coordinator context.
+- **Exits (post-WI4)**: `created` → REVIEW_PLANS; `nothing` → DEEP_AUDIT, OR audit-gate short-circuit to `completed` when `auditRound >= maxAuditRounds && openAudits().length === 0 && activePlans().length === 0` (engine decision, not AI). The legacy `done` exit was removed in WI4 — the AI can no longer unilaterally declare the mission complete. `onMaxRetries` was changed to `done: "failed"` (retry exhaustion = failure, not escape into audit).
 
 **REVIEW_PLANS** (`type: "group"`, `maxRounds: 1`)
 - Pure mechanical step: `scan-reviewed-plans` script finds `reviewed` plans -> `PROMOTE_EACH_PLAN` promotes each to `active` via `plan-promote` subflow.
@@ -95,6 +100,7 @@ Entry point is now `REVIEW_PLANS` (right after `CHECK`), not `EXEC_PLANS`. This 
 
 **Exit Mechanism**
 - `EXEC_PLANS` `done` -> `DRAFT_PLANS` `nothing` -> `AUDIT` -> `DRAFT_PLANS` -> ...
+- WI4 (post-change): when `DRAFT_PLANS` emits `nothing` and `auditRound >= maxAuditRounds && openAudits().length === 0 && activePlans().length === 0`, the engine's audit-gate short-circuits the run to `completed` without entering another DEEP_AUDIT round.
 - Engine's `maxCycleVisits` (default 30) or `maxTotalSteps` (default 500) triggers natural termination.
 - When all active plans executed, no roadmap backlog, no new audit findings, the loop idles until `maxCycleVisits`.
 - `EXEC_PLANS` is a group (`maxRounds: 1`), no internal loop -- re-scanning relies on main flow returning from `DRAFT_PLANS`/`AUDIT`.

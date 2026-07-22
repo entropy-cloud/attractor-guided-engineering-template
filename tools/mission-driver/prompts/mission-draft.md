@@ -2,7 +2,19 @@ Generate a mission config file for the mission driver, based on the user request
 
 Read `AGENTS.md` **completely** for project structure, tech stack, build commands, and conventions.
 
-The roadmap MUST already exist. Locate it in the project (referenced from AGENTS.md, docs index, or directory scan). If no roadmap is found, return results in the following format and stop: `<AI_STEP_RESULT>failed</AI_STEP_RESULT>` with the reason.
+## Brief gate (two-stage draft)
+
+If `{{briefPath}}` is non-empty, a mission brief was generated in stage 1. **Read it first** (`{{briefPath}}`) and use its 目标 / 范围 / 目标产物 / 验收标准 / 模块 / 依赖 / 非目标 to drive the roadmap + mission.json generation. The brief is the authoritative scope gate — do not contradict its 非目标.
+
+If `{{briefPath}}` is empty, no brief exists; fall back to the user request text directly (backward-compatible single-stage behaviour).
+
+## Roadmap
+
+If a roadmap already exists at `{{backlogDir}}/{mission-name}-roadmap.md` or is referenced by the user, use it. Otherwise, generate the roadmap first following the format in `{{backlogDir}}/00-roadmap-authoring-guide.md`, save it at `{{backlogDir}}/{mission-name}-roadmap.md`, then generate the mission.json referencing it. The roadmap must include phase status, framework/platform reuse, current baseline, phase table, phase details, dependency graph, and cross-cutting concerns.
+
+## Flow hint
+
+When `{{flowHint}}` is non-empty, set the mission.json `flowName` to `{{flowHint}}` (the user/wizard explicitly selected this flow). Only omit `flowName` (to use the built-in `mission-driver` flow) when `{{flowHint}}` is empty.
 
 Scan the project to determine correct values. Generate the file at `{{missionsDir}}/{mission-name}.json` and return results in the following format:
 ```
@@ -37,7 +49,8 @@ The mission.json MUST follow this format:
 ```
 
 Notes:
-- `flowName` — custom main flow name; omit to use the built-in `mission-driver` flow. Custom flows are loaded from `missions/flows/<flowName>.json` first, then the tool's built-in `flows/`
+- `plansDir` — MUST be a per-mission subdirectory: `docs/plans/{USER}/{mission-name}`. Determine `{USER}` from `git config user.name` (slug: lowercase, spaces to `-`). Each mission MUST have its own subdirectory to prevent plan cross-contamination between missions. Create the directory if it does not exist.
+- `flowName` — custom main flow name; omit to use the built-in `mission-driver` flow. When a flow hint was provided via `{{flowHint}}`, use that value verbatim. Custom flows are loaded from `missions/flows/<flowName>.json` first, then the tool's built-in `flows/`
 - `moduleDir` — the target module or project directory for this mission; audit steps focus on this scope (code, config, tests, docs). Use project root for simple single-module projects
 - `prompts.multiAudit` / `prompts.openAudit` — project-specific audit skill prompt files; empty or omitted = skip that audit type
 - `commitFormat` — git commit message format hint for BUILD_VERIFY, e.g. `feat(<scope>): <title>` or `imperative mood; reference plan path in footer`

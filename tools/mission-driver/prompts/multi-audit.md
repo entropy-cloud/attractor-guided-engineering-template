@@ -10,6 +10,6 @@ Write results to `{{auditsDir}}/{{TIMESTAMP}}-multi-audit-{{missionName}}.md`. T
 > Mission: {{missionName}}
 ```
 
-Return results in the following format:
+Your output MUST end with exactly one `<AI_STEP_RESULT>` marker:
 - Issues found: `<AI_STEP_RESULT>issues</AI_STEP_RESULT>`
 - Clean: `<AI_STEP_RESULT>clean</AI_STEP_RESULT>`

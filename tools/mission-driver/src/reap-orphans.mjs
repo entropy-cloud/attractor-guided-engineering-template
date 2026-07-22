@@ -145,8 +145,8 @@ function _getDescendants(rootPid, allProcs) {
  *   3. Orphaned build/test tooling (turbo/tsc/vite/vitest) that escaped
  *      process group / tree kill
  */
-export function reapStartupOrphans(runDir, excludePpid = null) {
-  const allProcs = getAllProcesses();
+export function reapStartupOrphans(runDir, excludePpid = null, procs = null) {
+  const allProcs = procs || getAllProcesses();
 
   const killed = [];
   const killedPids = new Set();
