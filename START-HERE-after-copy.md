@@ -29,6 +29,27 @@ Fill these as soon as they are needed. Do not block the first small feature just
 - [ ] Decide which optional layers are active by checking boxes in `docs/context/project-context.md`.
 - [ ] Remove or ignore optional directories you will not maintain yet.
 
+## Module Registration Checklist
+
+When adding a new module to a multi-module project, update all aggregation points:
+
+- [ ] Root build file (`pom.xml`/`build.gradle`/`Cargo.toml` etc.) includes the new module
+- [ ] Aggregator/main-app build file depends on the new module
+- [ ] Route/menu/page registration includes the new module's entry
+- [ ] Data model merge point is updated (if using an ORM merge mechanism)
+
+Verification: search the aggregator config for all registered modules and confirm the new one is in the list.
+
+## Do Not Copy (Template-Internal)
+
+The following are part of the template's own design history and methodology explanation, NOT part of the project workspace:
+
+- `docs/articles/` — outward-facing articles about AGE methodology. These describe the template's design rationale, not your project. Do not copy.
+- `docs/retrospectives/template-design-decisions.md` — the template's own evolution record. Your project should have its own `docs/retrospectives/` for project-specific retrospectives, but do NOT carry over the template's history.
+- `tools/mission-driver/` (the full directory) — the engine lives in the template and is referenced by path, not copied.
+
+You may keep the generic guide files (`docs/retrospectives/README.md`, `docs/retrospectives/00-retrospective-writing-guide.md`, `docs/articles/README.md`) as format references if you plan to use those layers.
+
 ## Optional Starter Skeletons (Use Only When Justified)
 
 These are on-demand. Do not fill them just to be complete; adopt the ones the project actually needs. Delete the ones that do not apply.
@@ -39,7 +60,7 @@ These are on-demand. Do not fill them just to be complete; adopt the ones the pr
 - [ ] `docs/design/flow-overview.md` — when the project has cross-domain flows that need one global view.
 - [ ] `docs/architecture/api-response-conventions.md` — when the project exposes HTTP/REST or RPC APIs.
 - [ ] `docs/architecture/integration-and-transaction-patterns.md` — when the project integrates with external systems or runs background/polling work.
-- [ ] **Mission driver integration** — when the project needs an AI-guided development loop. See `tools/README.md` "Mission Driver" section. Create `tools/mission-driver.sh` pointing at this template's `tools/mission-driver/`. Set `MISSION_DRIVER_HOME` if the template path differs.
+- [ ] **Mission driver integration** — when the project needs an AI-guided development loop. See `tools/README.md` "Mission Driver" section. Create `tools/mission-driver.sh` pointing at this template's `tools/mission-driver/`. **Do NOT copy `tools/mission-driver/` into your project** — always reference it via `MISSION_DRIVER_HOME` or relative path. Set `MISSION_DRIVER_HOME` if the template path differs.
 
 ## Minimum Before Coding
 
@@ -48,6 +69,12 @@ These are on-demand. Do not fill them just to be complete; adopt the ones the pr
 - [ ] Protected-area placeholders are replaced with real entries or explicit `none`.
 - [ ] Verification commands are real commands for this repository.
 - [ ] Any conflict between raw input, requirements, owner docs, and live code is resolved or explicitly blocked.
+
+## Generated Code Warning
+
+If your project uses a code generator (generating entities, services, or pages from a model), **never edit generated files directly**. Generated files are overwritten on every build. Write custom logic in **hand-written layers** that reference generated files through the framework's extension mechanism (extends, override, or other incremental customization). Understand which files are generated vs. hand-written before editing anything.
+
+This is the most common and costly mistake in codegen-based projects.
 
 ## Do Not Start If
 

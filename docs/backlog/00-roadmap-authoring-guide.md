@@ -102,6 +102,12 @@ Omit sections that do not apply.
 | Closure reveals new reuse opportunity | Update the Reuse section and the work item | Closure complete |
 | New or adjusted owner doc | Check impact on Work Item Details | — |
 
+## Multiple Roadmaps
+
+If the project has multiple orthogonal dimensions with independent "done" definitions (e.g. core business logic vs. frontend UI vs. third-party integrations), create separate roadmap files under `docs/backlog/`. Name each file to reflect its dimension, for example `core-business-roadmap.md`, `frontend-ui-roadmap.md`. Each roadmap file follows the same structure as `implementation-roadmap.md` and loads its own GRIND notes independently.
+
+When multiple roadmaps exist, list all of them in `docs/backlog/README.md` with a brief description of each roadmap's scope. The template does not prescribe when to split — scope is defined entirely by the user.
+
 ## Anti-Patterns
 
 - Writing the roadmap as a detailed implementation specification

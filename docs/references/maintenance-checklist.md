@@ -10,6 +10,7 @@ Use this file after changes land to check whether repo memory stayed in sync.
 2. The daily log in `docs/logs/`
 3. Any affected requirement, plan, bug note, or testing note
 4. `docs/testing/known-good-baselines.md` when a meaningful full verification baseline was established
+5. **Cross-reference integrity**: if any document section was renumbered, run `grep -rn "§<old-number>" docs/` to find and fix all stale cross-references before commit
 
 ## Change Triggers
 

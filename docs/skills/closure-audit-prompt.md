@@ -22,6 +22,7 @@ Focus on:
 - whether task routing and recorded skill usage still match the delivered work
 - whether any autonomy or backlog state was loosened without durable evidence
 - whether verification failures or unrun commands are being hidden
+- whether scoped/partial verification (e.g. affected-modules-only) was conflated with full integration verification; if scope was limited, the plan must explicitly note "verification scope limited" and the auditor must evaluate the residual risk
 
 Return findings first, ordered by severity.
 If closure is blocked, say `needs revision` and list the exact missing proof or changes.

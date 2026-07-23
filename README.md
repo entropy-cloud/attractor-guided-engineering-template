@@ -1,5 +1,7 @@
 # Attractor-Guided Engineering Template
 
+[中文版本](README.zh.md)
+
 This template is a lightweight application-layer project scaffold for AI-assisted product development.
 
 It is meant for ordinary business applications such as admin systems, portals, workflow apps, dashboards, internal tools, and CRUD-heavy domain products.
@@ -171,6 +173,33 @@ For created plans, independent draft review and closure audit are part of the de
 - `docs/analysis/` - research and design investigation notes
 - `docs/retrospectives/` - optional post-implementation gap analysis and process improvement notes
 
+## Mission Driver — Automated Development Loop Engine
+
+`tools/mission-driver/` is a Flow DSL engine that automates the AGE development loop. It reads `missions/<name>.json`, drives a state machine through health-check → review → execute → draft → deep-audit, and spawns `opencode run` for each AI step.
+
+**Core capabilities:**
+
+- **Flow DSL**: Declarative JSON state machine with 5 step types (script/tool/agent/group/subflow), result-driven transitions, and subflow composition
+- **Plan system**: Full lifecycle (draft → active → completed) with independent draft review and closure audit
+- **Roadmap guidance**: `roadmap.md` drives task selection — DRAFT_PLANS reads remaining items and creates 1-3 plans per cycle
+- **Reflexion memory**: `--analyze-run` produces postmortems; durable lessons feed back into future runs via `_index.md`
+- **Monitor Dashboard**: Vue 3 frontend with run history, log viewer, resource charts, and SSE event streaming
+
+**Quick start:**
+
+```bash
+# Generate a mission from description
+./tools/mission-driver.sh draft "Build the component library"
+
+# Run the mission loop
+./tools/mission-driver.sh <mission-name>
+
+# Analyze a completed run
+./tools/mission-driver.sh --analyze-run
+```
+
+See `tools/mission-driver/README.md` for full documentation. Do not copy the engine directory — reference it via `MISSION_DRIVER_HOME` (see `tools/README.md`).
+
 ## Optional Starter Skeletons
 
 These are on-demand owner-doc shapes for larger or integration-heavy projects. They ship as placeholder skeletons and should be adopted only when the project justifies them; small projects can ignore or delete them.
@@ -249,6 +278,17 @@ Do not push important work through chat alone.
 3. Put PM notes, prototype links, card-set docs, article extracts, and external references into `docs/input/`.
 4. If the input is still ambiguous, capture clarification in `docs/discussions/` before implementation.
 5. Convert settled scope into `docs/requirements/` before asking AI to code.
+
+## What NOT To Copy
+
+Not everything in this template belongs in your project:
+
+- `docs/articles/` — outward-facing articles about AGE methodology. These are the template's own explanatory writing, not project content. Do not copy them into your project.
+- `docs/retrospectives/template-design-decisions.md` — the template's own evolution record. Your project should have its own retrospectives but should not carry over the template's history.
+- `tools/mission-driver/` (the engine code) — do not copy this directory. Instead, create a thin `tools/mission-driver.sh` that references the template's `tools/mission-driver/` via `MISSION_DRIVER_HOME` (see `tools/README.md`). This keeps the engine single-sourced and your project lean.
+- The generic skills in `docs/skills/` — these are default templates and MUST be customized after copy (see customization note below). Do not keep them unchanged.
+
+Generic guide files (`docs/retrospectives/00-retrospective-writing-guide.md`, `docs/skills/README.md` etc.) can be kept as format references if you plan to use those layers.
 
 ## Recommended Execution Pattern
 

@@ -10,6 +10,50 @@ This file is the template evolution record for stable reusable changes.
 
 ---
 
+## 2026-07-20: Add Development Wisdom Gate, Generated-Code Warning, Log-First Debugging, And 8 Other Hardening Items From 30-Day Real-World Usage
+
+### Context
+
+The template was used for 30 days by a real project (19 business domains, 634+ commits, 154-module build, full E2E coverage). The project's logs, lessons, and audit records revealed recurring failure patterns that the template's default rules and checks did not prevent:
+
+- **Three wasted execution rounds** editing generated files that get overwritten on every build, because no warning existed about handwritten vs. generated code distinction.
+- **Unnoticed module omission** — a complete module existed with code, tests, and files, but was inaccessible because its registration was missing from the aggregation point. No checklist caught this.
+- **Mission-driver infinite loop** caused by `Status: completed` while checkboxes remained unchecked, because no consistency rule existed between status field and checkbox state.
+- **13 E2E failures carried across 10+ plans** misdiagnosed as environment problems, when the actual cause was a view template referencing a non-existent property. No "check the server log first" protocol existed.
+- **Section renumbering broke cross-references** project-wide because no stale-cross-ref scan was performed before commit.
+- **Port conflicts rediscovered across 4 separate plans** instead of being recorded once in a shared reference.
+- **Partial build verification conflated with full integration pass**, creating false confidence during closure audits.
+- **No reusable AI self-check methodology** existed — the project's human provided most value through general development intuition (question assumptions, check cross-layer consistency, verify intent fidelity), but this methodology was not encoded anywhere in the template.
+
+### Decision
+
+Added 11 net-new changes to the template (1 already existed):
+
+1. **Development Wisdom Gate** (`docs/skills/development-wisdom-gate-prompt.md`) — a 6-dimension AI self-check gate (Assumption Surfacing, Completeness Depth Charge, Cross-Layer Consistency, Intent Fidelity, Ecosystem Constraints, First-Principles Verification) to be run before declaring completion, embedding the human's "self-doubt" pattern directly into the development flow.
+2. **Generated code warning** (`START-HERE-after-copy.md`) — a bold warning in the startup checklist: never edit generated files, write custom logic in hand-written layers through the framework's extension mechanism.
+3. **Status/checkbox consistency rule** (`docs/plans/00-plan-authoring-and-execution-guide.md`) — new Rule 12 requiring `Status: completed` to have all checkboxes ticked, with a `grep` verification command to detect mismatches.
+4. **Log-first debugging protocol** (`docs/references/playwright-e2e-guide.md`) — diagnostic rules: check server log before adjusting timeouts, use fresh instance + isolated data source, health polling until HTTP 200, minimum reproduction before full suite, reverse log reading from tail.
+5. **Project Customization Layer** (`docs/skills/README.md`) — structured customization fields (protected areas, known failure modes, verification commands, naming conventions, context constraints) that each skill must include to carry project-specific memory.
+6. **Skill dual-track model** (`docs/skills/README.md`) — expanded "Relationship With Tool-Native Skills" with a Which- goes-where table clarifying when content belongs in `docs/skills/` vs. tool-native skill directories.
+7. **Module registration checklist** (`START-HERE-after-copy.md`) — pre-built checklist for adding new modules (root build file, aggregator dependency, route/menu registration, data model merge point).
+8. **Multi-roadmap pattern** (`docs/backlog/00-roadmap-authoring-guide.md`) — guide for creating multiple orthogonal roadmaps when a project has independent dimensions (e.g. core logic vs. frontend UI vs. integrations), with scope entirely user-defined.
+9. **Cross-reference renumbering scan** (`docs/references/maintenance-checklist.md`) — mandatory `grep -rn "§<old-number>"` check before committing after document section renumbering.
+10. **Scoped≠full verification gate** — added to three places: closure audit prompt (check item), plan closing guide (step 6), and plan template (Closure Gates checkbox). Partial verification must be explicitly noted as scope-limited.
+11. **Port conflict repetition note** (`docs/references/playwright-e2e-guide.md`) — guidance to record the fix in a shared reference on first encounter instead of rediscovering across plans.
+12. **Known-good baseline exercise** — already existed in `START-HERE-after-copy.md` ("Add the first known-good verification row").
+
+### Rationale
+
+These changes close the gap between what the template provided and what real usage proved necessary. The most valuable pattern was encoding general-purpose development intuition (the Wisdom Gate) — the project logs showed that the human's main contribution was not domain knowledge but universal self-doubt heuristics: surface assumptions, check deeper layers, verify cross-layer consistency, confirm intent fidelity, know ecosystem constraints, and verify from first principles. Making this a reusable skill available from the start prevents every copied project from having to rediscover the same gate.
+
+The other changes address concrete failure modes that recurred despite existing template rules. None are framework-specific — they apply to any multi-module, codegen-using, or E2E-tested project. The generated-code warning addresses the single most costly mistake in codegen-based projects. The scoped≠full verification gate prevents false closure confidence. The status/checkbox rule prevents automated workflow stalls.
+
+### Consequences
+
+Copied projects get a stronger defensive baseline from day one without adding ceremony to the default workflow. The Wisdom Gate is an optional self-check (not a mandatory audit step) — projects that do not use automated development loops can skip it. The generated-code warning and module-registration checklist are startup-only costs. The scoped≠full verification gate and status/checkbox rule harden existing processes without changing the plan lifecycle. The dual-track model and customization layer make the skill system more accessible to new projects.
+
+---
+
 ## 2026-07-01: Restructure Roadmap Around Milestone + Work Item, Remove Plan Vocabulary
 
 ### Context
