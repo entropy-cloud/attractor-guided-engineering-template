@@ -621,7 +621,18 @@ export class FlowEngine {
     const oa = this.expressionFuncs?.openAudits?.() || [];
     const round = (this.workflow && this.workflow.auditRound) || 0;
     const max = this.flow?.maxAuditRounds ?? 0;
-    return max > 0 && round >= max && ap.length === 0 && oa.length === 0;
+    // mdc-1 (convergence R2): early clean short-circuit. Once DEEP_AUDIT has run
+    // at least once (auditRound >= 1) and left NO remediation work behind — no
+    // active plans AND no open audits (P2-only audits self-mark `triaged`, which
+    // openAudits() excludes) — the mission is done. We no longer wait for the
+    // full `round >= maxAuditRounds` budget: that requirement made every
+    // enter-pure-audit-mode run burn all rounds even when clean (the deleted
+    // legacy DRAFT_PLANS `done` exit used to end on round 1). The
+    // `round >= maxAuditRounds` ceiling still fires independently in run() as the
+    // safety upper bound when audits keep surfacing P0/P1 work. The `auditRound
+    // >= 1` guard preserves "audit at least once before completing" (cold start
+    // with an already-empty roadmap still enters DEEP_AUDIT once first).
+    return max > 0 && round >= 1 && ap.length === 0 && oa.length === 0;
   }
 
   _templateVar(str, vars) {
@@ -1930,14 +1941,15 @@ export class FlowEngine {
         // DRAFT_PLANS nothing → DEEP_AUDIT), the gate decides whether another
         // audit round is warranted or whether the run is allowed to complete.
         // Zero-intrusion: `_shouldCompleteOnAuditQuota` returns false unless
-        // `flow.auditEntry` exists AND the per-run quota is exhausted AND no
-        // active plans or open audits remain.
+        // `flow.auditEntry` exists AND DEEP_AUDIT has run at least once AND no
+        // active plans or open audits remain (mdc-1 clean short-circuit; the
+        // `round >= maxAuditRounds` ceiling still fires separately in run()).
         if (marker === "nothing" && this._shouldCompleteOnAuditQuota(currentStep, marker, transition)) {
           const round = (this.workflow && this.workflow.auditRound) || 0;
           const max = this.flow?.maxAuditRounds ?? 0;
           this._log(
-            `  audit-gate: ${currentStep} nothing + quota exhausted (auditRound=${round}/${max}) ` +
-            `+ no active plans/open audits → completed`,
+            `  audit-gate: ${currentStep} nothing + audited >=1 round (auditRound=${round}/${max}) ` +
+            `+ no active plans/open audits → completed (clean short-circuit)`,
           );
           this._emitEvent("transition", {
             from: currentStep,

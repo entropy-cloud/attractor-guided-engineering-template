@@ -126,10 +126,10 @@ describe("WI4 DRAFT_PLANS audit-gate (Plan mdo-step-audit-4)", () => {
     }
   });
 
-  it("Case B (truth-table row 3): auditRound === maxAuditRounds, nothing, no plans/audits → completed via gate", async () => {
+  it("Case B (mdc-1 clean short-circuit): auditRound >= 1, nothing, no plans/audits → completed via gate BEFORE maxAuditRounds", async () => {
     const runDir = mkdtempSync(join(tmpdir(), "md-gate-b-"));
     try {
-      const flow = gateFlow({ maxAuditRounds: 2 });
+      const flow = gateFlow({ maxAuditRounds: 3 });
       const delegates = makeMockDelegates({
         responses: {
           DRAFT_PLANS: NOTHING,
@@ -145,14 +145,13 @@ describe("WI4 DRAFT_PLANS audit-gate (Plan mdo-step-audit-4)", () => {
       const engine = new FlowEngine(flow, delegates);
       const result = await engine.run();
 
-      // Trace (maxAuditRounds=2, auditEntry=DEEP_AUDIT):
-      //   step1 D(nothing) → gate sees round=0 < 2 → goto A
+      // Trace (maxAuditRounds=3, auditEntry=DEEP_AUDIT) — mdc-1 semantics:
+      //   step1 D(nothing) → gate sees round=0 < 1 → goto A (audit at least once)
       //   step2 A(r1) → goto D
-      //   step3 D(nothing) → gate sees round=1 < 2 → goto A
-      //   step4 A(r2) → goto D
-      //   step5 D(nothing) → gate sees round=2 >= 2 && clean → completed via gate
+      //   step3 D(nothing) → gate sees round=1 >= 1 && clean → completed via gate
+      // The run must NOT burn the remaining 2 audit rounds once the tree is clean.
       assert.equal(result.status, "completed",
-        "run must complete via audit-gate when quota exhausted and no plans/audits remain");
+        "run must complete via audit-gate once audited >=1 round with no plans/audits remaining");
 
       const events = readEvents(runDir);
       const gateEvents = events.filter((e) => e.type === "transition" && e.via === "audit_gate");
@@ -163,11 +162,11 @@ describe("WI4 DRAFT_PLANS audit-gate (Plan mdo-step-audit-4)", () => {
       assert.equal(ge.marker, "nothing");
       assert.equal(ge.to, null, "gate transition has no destination (mission completes)");
 
-      // run-state.json must reflect auditRound === maxAuditRounds.
+      // run-state.json must reflect the EARLY exit: auditRound === 1, not 3.
       const state = JSON.parse(readFileSync(join(runDir, "run-state.json"), "utf8"));
-      assert.equal(state.auditRound, 2,
-        "auditRound must equal the number of actually-executed DEEP_AUDIT rounds");
-      assert.equal(state.maxAuditRounds, 2);
+      assert.equal(state.auditRound, 1,
+        "clean short-circuit must complete after the FIRST audit round, not run to maxAuditRounds");
+      assert.equal(state.maxAuditRounds, 3);
     } finally {
       rmSync(runDir, { recursive: true, force: true });
     }

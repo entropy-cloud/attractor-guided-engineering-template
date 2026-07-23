@@ -33,16 +33,16 @@ CLI registration lives in `src/main.js` (`commander` subcommand declarations in 
 
 Enforced by `src/mission-check.mjs`. Mission configs live in `{projectRoot}/missions/<name>.json` (NOT under `tools/`).
 
-**Required fields** (`REQUIRED_FIELDS`, `mission-check.mjs:13`):
+**Required fields** (`REQUIRED_FIELDS` in `src/mission-check.mjs`):
 - `name`
 - `roadmapPath`
 - `plansDir`
 - `commands`
 
-**Required commands** (`REQUIRED_COMMANDS`, `mission-check.mjs:14`):
+**Required commands** (`REQUIRED_COMMANDS` in `src/mission-check.mjs`):
 - `commands.test` — every mission must declare a test command (the verification baseline).
 
-**`extends` merge chain** (`resolveExtends`, `mission-check.mjs:24-50`): `base.json` → `base.local.json` (gitignored per-user overrides) → mission.json. Merge is **shallow** — nested objects (e.g. `commands`) are replaced wholesale, not deep-merged. `_`-prefixed keys are stripped at load time.
+**`extends` merge chain** (`resolveExtends` in `src/mission-check.mjs`): `base.json` → `base.local.json` (gitignored per-user overrides) → mission.json. Merge is **shallow** — nested objects (e.g. `commands`) are replaced wholesale, not deep-merged. `_`-prefixed keys are stripped at load time.
 
 Optional path fields whose existence is checked when `projectRoot` is supplied: `roadmapPath`, `plansDir`, `contextDir`, `moduleDir`.
 
