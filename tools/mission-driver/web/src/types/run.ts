@@ -82,6 +82,11 @@ export interface Step {
   logFile?: string
   promptFile?: string
   type?: 'subflow'
+  /** Set by monitor backend (mergeSubflowChildren) when any subflowRuns entry
+   * has a non-null forEachItem — signals a forEach subflow so the frontend
+   * shows "Plan N" labels for all children (including disk-only in-flight
+   * ones whose own forEachItem is null). */
+  forEach?: boolean
   forEachItem?: string
   forEachIndex?: number
   children?: SubflowGroup[]

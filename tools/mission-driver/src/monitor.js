@@ -333,10 +333,13 @@ export function mergeSubflowChildren(runDir, steps) {
         if (liveCurrentStep) existing.currentStep = liveCurrentStep;
         if (!existing.file) existing.file = fileName;
       } else {
-        // Disk-only: in-flight item not yet in subflowRuns.
+        // Disk-only: in-flight item not yet in subflowRuns. Read forEachItem
+        // (plan path) from the child's own state file — engine.js _initWorkflow
+        // persists it at child start time specifically so the monitor can
+        // display the plan name before the parent appends to subflowRuns.
         childrenByIndex.set(idx, {
           forEachIndex: idx,
-          forEachItem: null,
+          forEachItem: (cs && cs.forEachItem) || null,
           file: fileName,
           status: liveStatus || "unknown",
           steps: liveSteps,
@@ -348,6 +351,16 @@ export function mergeSubflowChildren(runDir, steps) {
     if (childrenByIndex.size > 0) {
       step.children = [...childrenByIndex.values()]
         .sort((a, b) => a.forEachIndex - b.forEachIndex);
+    }
+
+    // Flag forEach subflows so the frontend can show "Plan N" labels for ALL
+    // children (including disk-only in-flight ones whose forEachItem is null).
+    // Without this flag, the frontend can't distinguish a disk-only forEach
+    // child (forEachItem=null because not yet in subflowRuns) from a non-forEach
+    // subflow child (forEachItem=null because there's no iteration). Detection:
+    // any subflowRuns entry carries a non-null forEachItem → forEach subflow.
+    if (Array.isArray(step.subflowRuns) && step.subflowRuns.some((r) => r.forEachItem != null)) {
+      step.forEach = true;
     }
   }
 }

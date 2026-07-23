@@ -324,6 +324,16 @@ export class FlowEngine {
       auditRound: 0,
       maxAuditRounds: this.flow.maxAuditRounds ?? 0,
     };
+    // For forEach subflow children: persist forEachItem (the plan path) at
+    // init time so the monitor can display the plan name for in-flight
+    // children whose placeholder hasn't been appended to the parent's
+    // subflowRuns yet (engine appends on COMPLETION, not start). Without
+    // this, the dashboard shows "Plan N" without the file name while the
+    // child is still running.
+    const vars = this.delegates.vars || {};
+    if (vars.forEachItem != null) {
+      this.workflow.forEachItem = vars.forEachItem;
+    }
     this._wfCurrent = null;
     this._writeWorkflow();
   }
