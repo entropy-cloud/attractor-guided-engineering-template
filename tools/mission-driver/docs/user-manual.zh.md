@@ -53,6 +53,136 @@
 
 每个方框是一个 **step**，由 AI agent（`opencode run` 子进程）或工具脚本执行。方框之间的箭头是 **transition**，由 agent 输出的 marker（`pass` / `created` / `nothing` / `complete` 等）决定。
 
+### 1.3 安装（首次使用前必读）
+
+引擎核心几乎零依赖（CLI 只用 `commander`），但 **Web 监控面板需要单独装依赖并打包**，否则 `monitor` 打开只会看到占位页。
+
+**前置条件**：Node.js ≥ 18、`pnpm`、`opencode` CLI 在 PATH 中；Windows 用 Git Bash / WSL。
+
+**① 安装引擎依赖**（`commander`）：
+
+```bash
+cd tools/mission-driver
+pnpm install
+```
+
+**② 安装并打包 Web 监控面板**（让 `monitor` 直接出界面）：
+
+```bash
+cd tools/mission-driver/web
+pnpm install         # 装前端依赖（vue / naive-ui / echarts / xterm / vue-flow …）
+pnpm build           # vue-tsc 类型检查 + vite 打包 → 产出 web/dist/
+```
+
+> monitor 从 `web/dist/` 静态托管界面。**只要 build 过一次**，`./tools/mission-driver.sh monitor`
+> 打开 `http://localhost:9300` 就能直接看到完整 Dashboard。
+> 若**没 build**，:9300 只显示一个占位提示页（提示你去 build 或用 dev 模式）。
+> 前端开发时用 dev 模式：`./tools/mission-driver.sh monitor --dev` + 另开
+> `pnpm --prefix tools/mission-driver/web run dev`（vite 跑在 :5173，`/api` 代理到 :9300）。
+
+**③ 验证安装**：
+
+```bash
+npm --prefix tools/mission-driver test    # 引擎自测（应全绿 + 末行 prompt-check: OK）
+./tools/mission-driver.sh list            # 能列出 missions 即安装成功
+```
+
+### 1.4 在其他项目中集成（不复制引擎，用 shim）
+
+引擎**只在本模板仓库维护一份**（单一真相源）。其他项目**不复制引擎**，而是放一个瘦 shim 脚本，
+经环境变量 / `.env` 指向本模板的 `tools/mission-driver`。下面用一个示例项目 **`orion-pay`**
+（一个 Java/Maven 多模块项目，模块如 `CORE` / `BILLING`）演示完整集成步骤——这套流程已在真实项目落地验证。
+
+**前提**：本模板已按 §1.3 装好依赖（若要监控，也 build 过 web）。
+
+**① 在 `orion-pay` 项目建 shim** `tools/mission-driver.sh`：
+
+```bash
+#!/bin/bash
+# 引擎不在本仓库；经 MISSION_DRIVER_HOME（环境变量 或 仓库根 .env）指向共享模板引擎。
+DIR="$(cd "$(dirname "$0")" && pwd | tr -d '\r')"
+PROJECT_ROOT="$(cd "$DIR/.." && pwd | tr -d '\r')"
+
+# 环境变量优先于 .env：先存已设值，加载 .env，再恢复
+_ENV_MDH="$MISSION_DRIVER_HOME"
+if [ -f "$PROJECT_ROOT/.env" ]; then set -a; . "$PROJECT_ROOT/.env"; set +a; fi
+[ -n "$_ENV_MDH" ] && MISSION_DRIVER_HOME="$_ENV_MDH"
+
+if [ -z "$MISSION_DRIVER_HOME" ]; then
+  echo "ERROR: MISSION_DRIVER_HOME 未配置。请 cp .env.example .env 并设置引擎路径。" >&2
+  exit 1
+fi
+
+# 相对路径从项目根解析；绝对路径直接用
+case "$MISSION_DRIVER_HOME" in
+  /*|[A-Za-z]:[/\\]*) ABS_HOME="$MISSION_DRIVER_HOME" ;;
+  *) ABS_HOME="$(cd "$PROJECT_ROOT/$MISSION_DRIVER_HOME" 2>/dev/null && pwd | tr -d '\r')" ;;
+esac
+if [ -z "$ABS_HOME" ] || [ ! -f "$ABS_HOME/src/main.js" ]; then
+  echo "ERROR: MISSION_DRIVER_HOME 无效：$MISSION_DRIVER_HOME" >&2; exit 1
+fi
+
+exec node "$ABS_HOME/src/main.js" --dir "$PROJECT_ROOT" --missions-dir "missions" "$@"
+```
+
+**② 配置引擎路径——用相对路径，别写死绝对路径**。建 `.env.example`（进 git）+ `.env`（进 `.gitignore`）：
+
+```bash
+# orion-pay/.env.example
+# 从项目根解析的相对路径；按你本地模板检出位置调整
+MISSION_DRIVER_HOME=../attractor-guided-engineering-template/tools/mission-driver
+```
+
+```bash
+cp .env.example .env        # 复制后按需修改；.env 不进 git
+echo ".env" >> .gitignore   # 若尚未忽略
+```
+
+> env 优先于 .env：CI 里可直接 `export MISSION_DRIVER_HOME=...` 覆盖，无需改 .env。
+
+**③ 建 `missions/` 配置**。先写共享默认 `missions/base.json`（以 orion-pay 的 Maven 为例）：
+
+```json
+{
+  "model": "zhipuai-coding-plan/glm-5.2",
+  "agent": "build",
+  "maxCycles": 8,
+  "planGuide": "docs/plans/00-plan-authoring-and-execution-guide.md",
+  "auditsDir": "docs/audits",
+  "contextDir": "docs/context",
+  "moduleDir": "CORE",
+  "commands": {
+    "test": "mvn -pl CORE -am test -T 4",
+    "build": "mvn -pl CORE -am clean package -DskipTests -T 4",
+    "lint": "mvn -pl CORE -am validate",
+    "typecheck": "mvn -pl CORE -am test-compile -T 4"
+  },
+  "commitFormat": "<type>: [ORION-XXXX] [CORE] <description>"
+}
+```
+
+再为每个目标写 `missions/<name>.json`（`extends: "base"`，只填差异字段：`name` / `description` /
+`roadmapPath` / `plansDir` / 目标模块的 `moduleDir` + `commands`）。
+**注意**：`moduleDir` 必须是真实存在的目录（引擎会校验）。
+
+**④ 项目级定制（不 fork 引擎）**。引擎**优先搜索项目目录**，再回退模板内置，所以定制放本项目即可：
+
+- `missions/flows/*.json` — 项目专属 flow / 子流程（引擎先搜这里）
+- `missions/prompts/*.md` — 覆盖某个内置 prompt，或新增项目专属 prompt
+
+**⑤ 跑起来**：
+
+```bash
+./tools/mission-driver.sh list                   # 列出 missions（验证 shim 通了）
+./tools/mission-driver.sh list-steps <name>      # 校验 mission + 看步骤
+./tools/mission-driver.sh run <name> --dry-run   # mock 验证编排（不调真实模型）
+./tools/mission-driver.sh run <name>             # 正式运行
+```
+
+**⑥ 限制（务必知道）**：自定义 `type: script` 步骤依赖引擎侧 `SCRIPT_REGISTRY` 注册，
+**无法**从项目 `missions/` 注入。若你的 flow 用了自定义 scriptId，共享引擎会报 `Unknown scriptId`。
+这类需求需在模板引擎里加脚本插件点，或暂不走共享引擎。**普通 mission（默认 flow）不受此限制**。
+
 ---
 
 ## 2. 核心概念
