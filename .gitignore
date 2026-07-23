@@ -9,5 +9,6 @@ tmp/
 _tmp/
 report/
 .obsidian/
-.opencode/
+.opencode/*
+!.opencode/skills/
 nul
