@@ -3,6 +3,36 @@ import { resolve, join } from "node:path";
 import { loadMission } from "./mission-check.mjs";
 
 /**
+ * Inject env vars from a mission/base `env` object into process.env.
+ * Never overwrites existing vars (shell export wins).
+ *
+ * Proxy shorthand: if only `http_proxy` (or `HTTP_PROXY`) is set, the other
+ * three case variants are derived from it automatically, so a single key is
+ * enough in base.local.json.
+ */
+function injectEnv(env) {
+  if (!env || typeof env !== "object") return;
+  for (const [k, v] of Object.entries(env)) {
+    if (process.env[k] === undefined) process.env[k] = String(v);
+  }
+  // Derive missing proxy variants from whichever one was set
+  const proxy =
+    process.env.HTTP_PROXY || process.env.http_proxy ||
+    process.env.HTTPS_PROXY || process.env.https_proxy;
+  if (proxy) {
+    for (const k of ["HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy"]) {
+      if (process.env[k] === undefined) process.env[k] = proxy;
+    }
+  }
+  // Derive NO_PROXY variants
+  const noProxy = process.env.NO_PROXY || process.env.no_proxy;
+  if (noProxy) {
+    if (process.env.NO_PROXY === undefined) process.env.NO_PROXY = noProxy;
+    if (process.env.no_proxy === undefined) process.env.no_proxy = noProxy;
+  }
+}
+
+/**
  * Mission-based config resolver.
  *
  * A "mission" is a fixed project config (missions/<name>.json) that tells the
@@ -59,6 +89,29 @@ export function resolveTargetRun(projectRoot, sel) {
   return hit
     ? { dir: hit.full, id: hit.d, isLatest: false }
     : { dir: null, id: null, isLatest: false };
+}
+
+/**
+ * Load base.json + base.local.json and inject their env fields into process.env.
+ * Uses raw JSON.parse (not loadMission) because base.json is a partial config
+ * that intentionally omits required mission fields like name/roadmapPath/plansDir.
+ * Merge order: base.json env → base.local.json env (local wins, shell wins over both).
+ */
+function loadBaseAndInjectEnv(missionsDir) {
+  const baseFile = resolve(missionsDir, "base.json");
+  let base = {};
+  if (existsSync(baseFile)) {
+    try { base = JSON.parse(readFileSync(baseFile, "utf8")); } catch { /* ignore */ }
+  }
+  injectEnv(base.env);
+  const localFile = resolve(missionsDir, "base.local.json");
+  if (existsSync(localFile)) {
+    try {
+      const local = JSON.parse(readFileSync(localFile, "utf8"));
+      injectEnv(local.env);
+    } catch { /* malformed local file — ignore */ }
+  }
+  return base;
 }
 
 /**
@@ -406,6 +459,10 @@ export function resolveConfig(args = {}) {
   const devMode = args.dev === true || process.env.MONITOR_DEV === "1";
 
   const agent = args.agent || process.env.OPENCODE_AGENT || "build";
+  const driver = args.driver || process.env.MISSION_DRIVER_EXEC || "opencode";
+  const driverArgs = args.driverArgs || process.env.MISSION_DRIVER_ARGS || undefined;
+  const promptMode = args.promptMode || process.env.MISSION_PROMPT_MODE || "arg";
+  const autonomyMode = args.autonomyMode || process.env.AUTONOMY_MODE || "auto";
   const model = args.model || process.env.OPENCODE_MODEL || undefined;
   const parseModel = args.parseModel || process.env.OPENCODE_PARSE_MODEL || undefined;
   const maxCycles = args.maxCycles || Number(process.env.MAX_CYCLES) || undefined;
@@ -435,12 +492,18 @@ export function resolveConfig(args = {}) {
       ? resolve(projectRoot, args.draftJobDir)
       : resolve(projectRoot, "_tmp", `draft-mission-${Date.now()}`);
     mkdirSync(runDir, { recursive: true });
+    // Load base config so driver, model, agent, env etc. from base.json are
+    // available even when no specific mission is named (draft / analyze paths).
+    const base = loadBaseAndInjectEnv(missionsDir);
     return {
       projectRoot, missionsDir, runDir,
       missionName: null, mission: null,
       draftMission: args.draftMission,
-      agent: args.agent || "build",
-      model: args.model || "zhipuai-coding-plan/glm-5.2",
+      agent: args.agent || process.env.OPENCODE_AGENT || base.agent || "build",
+      driver: args.driver || process.env.MISSION_DRIVER_EXEC || base.driver || "opencode",
+      driverArgs: args.driverArgs || process.env.MISSION_DRIVER_ARGS || base.driverArgs || undefined,
+      promptMode: args.promptMode || process.env.MISSION_PROMPT_MODE || base.promptMode || "arg",
+      model: args.model || process.env.OPENCODE_MODEL || base.model || "zhipuai-coding-plan/glm-5.2",
       dryRun, testMode,
       devMode,
       pure,
@@ -465,6 +528,7 @@ export function resolveConfig(args = {}) {
     const moduleInfo = resolveRunModule(projectRoot, missionsDir, targetRunDir);
     const runDir = resolve(projectRoot, "_tmp", `analyze-run-${Date.now()}`);
     mkdirSync(runDir, { recursive: true });
+    const baseA = loadBaseAndInjectEnv(missionsDir);
     return {
       projectRoot, missionsDir, runDir,
       missionName: null, mission: null,
@@ -473,8 +537,11 @@ export function resolveConfig(args = {}) {
       targetRunId,
       analyzeRunIsLatest: isLatest,
       moduleInfo,
-      agent: args.agent || "build",
-      model: args.model || "zhipuai-coding-plan/glm-5.2",
+      agent: args.agent || process.env.OPENCODE_AGENT || baseA.agent || "build",
+      driver: args.driver || process.env.MISSION_DRIVER_EXEC || baseA.driver || "opencode",
+      driverArgs: args.driverArgs || process.env.MISSION_DRIVER_ARGS || baseA.driverArgs || undefined,
+      promptMode: args.promptMode || process.env.MISSION_PROMPT_MODE || baseA.promptMode || "arg",
+      model: args.model || process.env.OPENCODE_MODEL || baseA.model || "zhipuai-coding-plan/glm-5.2",
       dryRun, testMode,
       devMode,
       pure,
@@ -510,7 +577,14 @@ export function resolveConfig(args = {}) {
   // openAudits() (which read mission.auditsDir) see the derived path.
   mission.auditsDir = resolveAuditsDir(mission.auditsDir, mission.plansDir, projectRoot);
 
+  // Inject mission.env into process.env (never overwrite existing vars).
+  // base.local.json is the right place for machine-local config (proxy etc.) not committed to git.
+  loadBaseAndInjectEnv(missionsDir);
+  if (mission.env) injectEnv(mission.env);
+
   // Resolve model/parseModel/variant/max* with fallback chain: CLI > env > mission base > hard default
+  const resolvedDriver = driver || mission.driver || "opencode";
+  const resolvedAutonomyMode = (autonomyMode === "ask" || mission.autonomyMode === "ask") ? "ask" : "auto";
   const resolvedModel = model || mission.model || "zhipuai-coding-plan/glm-5.2";
   const resolvedParseModel = parseModel || mission.parseModel || undefined;
   const resolvedVariant = mission.variant || undefined;
@@ -581,6 +655,10 @@ export function resolveConfig(args = {}) {
     mission,
     runDir,
     timestamp,
+    driver: resolvedDriver,
+    driverArgs: driverArgs || mission.driverArgs || undefined,
+    promptMode: promptMode || mission.promptMode || "arg",
+    autonomyMode: resolvedAutonomyMode,
     agent: resolvedAgent,
     model: resolvedModel,
     variant: resolvedVariant,

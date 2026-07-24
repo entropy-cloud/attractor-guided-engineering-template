@@ -3,6 +3,52 @@ import { execSync } from "node:child_process";
 import { execute } from "./executor.js";
 import { IS_WIN32, killProcessTree, isAlive } from "./platform.mjs";
 
+/**
+ * Build CLI args for the configured driver.
+ *
+ * config.driver     = executable name on PATH (e.g. "opencode", "oc", "op")
+ *                     Must be a real executable, not a .bat/.cmd wrapper,
+ *                     because shell:false is always used (avoids Windows shell
+ *                     encoding issues with Unicode prompts).
+ * config.driverArgs = argument template. Tokens: {model} {agent} {session}
+ *                     Default: "run -m {model} --agent {agent} --dangerously-skip-permissions"
+ * config.promptMode = "arg" (default) – prompt appended as last positional arg
+ *                     "stdin"         – prompt piped via stdin
+ *
+ * Proxy / env vars: set them in mission base.json "env" field or base.local.json,
+ * not via a wrapper script. config.js injects mission.env into process.env before
+ * spawning, so the child process inherits them via executor's env spread.
+ */
+const DEFAULT_DRIVER_ARGS = "run -m {model} --agent {agent} --dangerously-skip-permissions";
+
+function buildDriverArgs(config, sessionId, prompt) {
+  const template = config.driverArgs || DEFAULT_DRIVER_ARGS;
+  const promptMode = config.promptMode || "arg";
+
+  let rendered = template
+    .replace("{model}", config.model || "")
+    .replace("{agent}", config.agent || "build");
+
+  if (sessionId) {
+    rendered = rendered.replace("{session}", `--session ${sessionId}`);
+  } else {
+    rendered = rendered.replace(/\s*\{session\}/g, "");
+  }
+
+  const args = rendered.split(/\s+/).filter(Boolean);
+  // Preserve github/main extras: --pure and --variant
+  if (config.pure && !args.includes("--pure")) args.splice(1, 0, "--pure");
+  if (config.variant) args.push("--variant", config.variant);
+  if (promptMode === "arg" && prompt) args.push(prompt);
+
+  return {
+    args,
+    useStdin: promptMode === "stdin",
+    shell: false,
+    exe: config.driver || "opencode",
+  };
+}
+
 async function killTree(pid) {
   try {
     if (IS_WIN32) {
@@ -110,7 +156,7 @@ export async function createRunner(config, executeFn = execute) {
 
     process.stderr.write(`\n╔═══════════════════════════════════════════════\n`);
     process.stderr.write(`║ STEP: ${stepName}\n`);
-    process.stderr.write(`║ Model: ${model}\n`);
+    process.stderr.write(`║ Driver: ${config.driver || "opencode"}  Model: ${model}\n`);
     if (sessionId) process.stderr.write(`║ Session: ${sessionId.slice(0, 30)}...\n`);
     process.stderr.write(`╠═══════════════════════════════════════════════\n`);
     const preview = prompt.length > 500 ? prompt.slice(0, 500) + "..." : prompt;
@@ -118,20 +164,18 @@ export async function createRunner(config, executeFn = execute) {
     process.stderr.write(`╚═══════════════════════════════════════════════\n`);
 
     const markedPrompt = `[MISSION_DRIVER] ${prompt}`;
-    const args = ["run"];
-    if (config.pure) args.push("--pure");
-    args.push("-m", model, "--agent", config.agent, "--dangerously-skip-permissions");
-    if (config.variant) args.push("--variant", config.variant);
-    if (sessionId) {
-      args.push("--session", sessionId);
-    }
+    const effectiveModel = modelOverride || config.model;
+    const { args, useStdin, shell, exe } = buildDriverArgs(
+      { ...config, model: effectiveModel }, sessionId, markedPrompt
+    );
     const onStepUpdate = typeof opts.onStepUpdate === "function"
       ? opts.onStepUpdate
       : (typeof config.onStepUpdate === "function" ? config.onStepUpdate : null);
     let sessionPollTimer = null;
-    const result = await executeFn(config, `oc-${stepName}`, "opencode", args, {
+    const result = await executeFn(config, `oc-${stepName}`, exe, args, {
       cwd: config.projectRoot,
-      stdin: markedPrompt,
+      stdin: useStdin ? markedPrompt : undefined,
+      shell: shell ?? false,
       // dre-d7 G2: thread per-step timeout + resultTag (undefined → executor
       // defaults to BASE_TIMEOUT_MS / AI_STEP_RESULT, backward compatible).
       timeoutMs: opts.timeoutMs,
@@ -161,6 +205,14 @@ export async function createRunner(config, executeFn = execute) {
     });
     if (sessionPollTimer) { clearTimeout(sessionPollTimer); sessionPollTimer = null; }
     currentPid = null;
+
+    // Always surface stderr so spawn/crash errors are visible in the console
+    if (result.stderrTail) {
+      process.stderr.write(`  [STDERR] ${result.stderrTail}\n`);
+    }
+    if (!result.ok && result.errorTail) {
+      process.stderr.write(`  [ERROR] exit=${result.exitCode} ${result.errorTail}\n`);
+    }
 
     let text = "";
     if (result.logFile) {
