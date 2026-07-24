@@ -11,8 +11,5 @@
     "test": "node --test test/*.test.js && node src/prompt-check.mjs",
     "go": "node src/main.js --max-cycles 1 --model zhipuai-coding-plan/glm-4.7-flash",
     "lint:prompts": "node src/prompt-check.mjs"
-  },
-  "dependencies": {
-    "commander": "^15.0.0"
   }
 }
