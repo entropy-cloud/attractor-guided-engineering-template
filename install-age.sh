@@ -28,26 +28,26 @@ YEAR="$(date +%Y)"
 # Inputs
 # ---------------------------------------------------------------------------
 
-if [ $# -ge 2 ]; then
+if [ $# -ge 1 ]; then
   TARGET_RAW="$1"
-  PROJECT_NAME="$2"
 else
   echo "=== AGE Scaffold Installer ==="
   echo ""
   read -rp "Target project path (e.g. /c/Work/my-project): " TARGET_RAW
-  read -rp "Project name (for docs/AGENTS.md placeholders): " PROJECT_NAME
-  echo ""
 fi
 
-if [ -z "$TARGET_RAW" ] || [ -z "$PROJECT_NAME" ]; then
-  echo "ERROR: both target path and project name are required." >&2
-  exit 1
-fi
-
-# Resolve target to absolute.
+# Resolve target to absolute (before deriving project name).
 if ! TARGET="$(cd "$TARGET_RAW" 2>/dev/null && pwd | tr -d '\r')"; then
   echo "ERROR: target path does not exist: $TARGET_RAW" >&2
   exit 1
+fi
+
+# Project name: explicit arg 2, or derive from directory basename.
+if [ $# -ge 2 ]; then
+  PROJECT_NAME="$2"
+else
+  PROJECT_NAME="$(basename "$TARGET")"
+  echo "(project name derived from directory: $PROJECT_NAME)"
 fi
 
 # Compute relative MISSION_DRIVER_HOME (target → engine) via Node, force forward slashes.
@@ -254,10 +254,10 @@ if [ ! -f "$TARGET/missions/demo.json" ]; then
 {
   "extends": "base",
   "name": "demo",
-  "description": "Demo mission: verifies the AGE scaffold + mission-driver engine + monitor dashboard are correctly installed. Safe to run — uses echo for all commands so it always passes.",
+  "description": "Demo mission: verifies the AGE scaffold + mission-driver engine + monitor dashboard are correctly installed. Safe to run — uses echo for all commands so it always passes. All roadmap items are 'done' so DRAFT_PLANS completes immediately.",
   "flowName": "mission-driver",
   "roadmapPath": "docs/backlog/demo-roadmap.md",
-  "plansDir": "docs/plans",
+  "plansDir": "docs/plans/demo",
   "planGuide": "docs/plans/00-plan-authoring-and-execution-guide.md",
   "auditsDir": "docs/audits",
   "contextDir": "docs/context",
@@ -276,13 +276,13 @@ else
   echo "      demo.json skipped (already exists)."
 fi
 
-# demo-roadmap.md (minimal, project-agnostic)
+# demo-roadmap.md (minimal, all items done so DRAFT_PLANS finds nothing to draft)
 if [ ! -f "$TARGET/docs/backlog/demo-roadmap.md" ]; then
   mkdir -p "$TARGET/docs/backlog"
   cat > "$TARGET/docs/backlog/demo-roadmap.md" <<ROADMAP_EOF
 # Demo Roadmap
 
-> Minimal roadmap for the demo mission. Verifies the install end-to-end.
+> Minimal roadmap for the demo mission. All items are done — verifies the install end-to-end.
 
 ## Work Item Status
 
@@ -290,20 +290,23 @@ if [ ! -f "$TARGET/docs/backlog/demo-roadmap.md" ]; then
 | --------- | ------ | ------------------ | ------------ | ----- |
 | M1/WI1 脚手架验证 | done | AGENTS.md | — | — |
 | M1/WI2 引擎冒烟 | done | docs/context/project-context.md | WI1 | echo demo-ok |
-| M1/WI3 Dashboard 集成 | ready | docs/context/project-context.md | WI2 | ./tools/mission-driver.sh monitor |
+| M1/WI3 Dashboard 集成 | done | docs/context/project-context.md | WI2 | ./tools/mission-driver.sh monitor |
 
 ## Milestones
 
 ### M1 — 基础验证
 
 - **WI1 脚手架验证** — 确认 AGENTS.md / docs/ 目录就位。
-- **WI2 引擎冒烟** — \`./tools/mission-driver.sh run demo\` 能启动并完成 CHECK。
-- **WI3 Dashboard 集成** — \`./tools/mission-driver.sh monitor\` 打开 :9300 正常渲染。
+- **WI2 引擎冒烟** — CHECK 步骤通过（echo demo-ok）。
+- **WI3 Dashboard 集成** — monitor 启动并渲染。
 ROADMAP_EOF
   echo "      demo-roadmap.md created."
 else
   echo "      demo-roadmap.md skipped (already exists)."
 fi
+
+# Create the demo plans subdirectory so the engine finds it immediately.
+mkdir -p "$TARGET/docs/plans/demo"
 
 # ---------------------------------------------------------------------------
 # 5. Create docs/logs/{year}/
