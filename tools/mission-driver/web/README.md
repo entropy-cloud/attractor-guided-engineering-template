@@ -4,7 +4,9 @@ The production frontend for the Mission-Driver Monitor Server. Replaces the lega
 single-file Alpine.js UI in [`../web/`](../web/README.md) (deprecated).
 
 Built with **Vue 3 + TypeScript + Naive UI + Pinia + Vue Router**, bundling
-**xterm.js** (log viewer) and **ECharts** (resource charts) via Vite.
+**xterm.js** (log viewer) via Vite. Resource monitoring is a plain Naive UI
+table (recent snapshots); ECharts was removed to cut ~65MB of node_modules and
+a ~539KB lazy chunk.
 
 ## Quick start
 
@@ -58,7 +60,7 @@ placeholder page while all APIs keep working (FSD §8).
 src/
 ├── api/              REST client (6 endpoints) + SSE consumer
 ├── components/
-│   ├── chart/        ResourceChart.vue        (ECharts, 3-line resource monitor)
+│   ├── chart/        ResourceChart.vue        (recent-snapshots table + active processes)
 │   ├── layout/       AppHeader.vue
 │   ├── log/          LogViewer.vue            (xterm.js, ANSI color, search)
 │   ├── roadmap/      RoadmapProgress.vue      (overall + per-phase badges)
@@ -103,7 +105,7 @@ feature was verified feature-by-feature against `../web/index.html.bak-2026-06-3
 - Live SSE updates (`step_started` / `step_completed` / `state_update` / `heartbeat` / `run_completed`)
 - Step timeline (subflow nesting, suspend badge, sessionId copy)
 - Log viewer (ANSI color, step switching, find next/previous, 3s auto-refresh of running step, load-more)
-- Resource chart (3-line realtime, dual Y-axis, dataZoom)
+- Resource table (recent snapshots: time, free mem, opencode RSS/count, node count, pressure) + active processes
 - Roadmap progress (overall pill + per-phase badges, milestone ★)
 - Plans table
 - Mission config collapse (with copy buttons)

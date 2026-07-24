@@ -62,7 +62,7 @@ sourcePaths（依赖模块源码路径，不同同事路径不同）
 
 ## Monitor Dashboard 前端
 
-**技术栈**: Vue 3 + Naive UI 2 + TypeScript + Vite + xterm.js + ECharts + Pinia
+**技术栈**: Vue 3 + Naive UI 2 + TypeScript + Vite + xterm.js + Pinia（资源监控用 Naive UI 表格，ECharts 已移除）
 
 **路由**: `/` → RunList, `/runs/:runId` → RunDetail
 
@@ -81,9 +81,9 @@ sourcePaths（依赖模块源码路径，不同同事路径不同）
 - Mission Config: n-card（可折叠，默认收起，标题右侧 ChevronDown/Up 切换）
 - Log Viewer: xterm.js 终端，文件名点击 → Blob URL 新标签页打开完整日志
 - Log Viewer 图标: ArrowDownOutline/PauseOutline/ChevronDownOutline/ChevronUpOutline（Ionicons 5）
-- Resource Chart: Free Memory + Opencode RSS + Process Count 三线
+- Resource View: Naive UI 表格，最近 8 条 sysmon 快照（Time / Free Mem GB / Opencode RSS GB / Opencode / Node / Pressure）+ Active Processes 表（ECharts 已移除）
 - Base Config: 任意页面右上角 ⚙ 齿轮按钮 → Modal（n-code JSON 高亮）
-- NFR-3: echarts/xterm 按 RunDetail 路由懒加载，首屏 <500KB
+- NFR-3: xterm 按 RunDetail 路由懒加载，首屏 <500KB（ECharts 已移除，无 echarts chunk）
 - WI5: `GET /api/runs/:id` 返回的 `run` 含 `auditRound` / `maxAuditRounds`（旧 run-state.json `?? 0` 兜底）；RunDetail 顶部展示 'Deep Audit: N / M'（仅当 `maxAuditRounds > 0`；额度用完 tag→success，进行中→info）。RunList 与 AppHeader 的 `statusTagType` 同步把 `single_step_done` 识别为 success（与 `main.js` exitMap 的 exit code 0 对齐）。
 
 

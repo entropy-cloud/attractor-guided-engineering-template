@@ -36,7 +36,7 @@
         <LogViewer :run-id="runId" />
       </n-card>
 
-      <n-card title="Resource Chart" size="small" class="pane-card">
+      <n-card title="Resource Monitor" size="small" class="pane-card">
         <ResourceChart />
       </n-card>
 

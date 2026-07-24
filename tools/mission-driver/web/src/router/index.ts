@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 // FSD §4.1 — history mode. Both views are lazy-loaded so the initial bundle
-// stays small (NFR-3 / NFR-6): RunDetail pulls xterm/echarts chunks, and its
+// stays small (NFR-3 / NFR-6): RunDetail pulls the xterm chunk, and its
 // renderer registry pulls Vue Flow chunks on demand for non-default renderers.
 const router = createRouter({
   history: createWebHistory(),

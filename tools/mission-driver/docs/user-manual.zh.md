@@ -303,7 +303,7 @@ Roadmap 文档是 markdown，格式大致：
   - 顶部 timeline：每个 step 的开始/结束/耗时/marker
   - 中部 log viewer：点击 step 名查看完整 agent 日志（xterm.js 终端样式）
   - 右侧 MissionConfig：展开看 mission.json 解析后的配置
-  - 底部 Resource Chart：内存、opencode RSS、进程数曲线（看资源压力）
+  - 底部 Resource Monitor：最近若干条快照的内存、opencode RSS/数量、node 数量、内存压力表格（看资源压力）
   - 顶部右侧 Deep Audit tag：显示当前 audit round / maxAuditRounds
 - 实时事件流（SSE）：step 启动/完成、transition、心跳——无需刷新
 
