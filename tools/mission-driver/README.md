@@ -11,8 +11,9 @@ node src/main.js <mission-name>
 ```
 
 Common flags: `--dry-run`, `--model <model>`, `--agent <agent>`,
-`--max-cycles <n>`, `--step <STEP>`, `--no-monitor`, `--monitor` (standalone
-browsing), `--list-missions`.
+`--max-cycles <n>`, `--step <STEP>` (single-step debug, maxSteps=1),
+`--from-step <STEP>` (entry override + keep looping; mutually exclusive with
+`--step`), `--no-monitor`, `--monitor` (standalone browsing), `--list-missions`.
 
 ## 配置项 (Configuration)
 

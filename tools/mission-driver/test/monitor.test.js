@@ -10,11 +10,12 @@ import {
   utimesSync,
   renameSync,
   existsSync,
+  readdirSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import http from "node:http";
-import { startMonitor, parseRoadmapMarkdown, __setSpawnerForTest } from "../src/monitor.js";
+import { startMonitor, parseRoadmapMarkdown, __setSpawnerForTest, handleStartDraft } from "../src/monitor.js";
 
 // ── Test helpers ──────────────────────────────────────────────────────────
 
@@ -2289,7 +2290,7 @@ describe("Monitor — Mission Draft endpoints (mdo-2 / FSD §3.1A-C)", () => {
     try {
       const monitor = await startMonitor({ projectRoot: root, port: 0, webDir: join(root, "web") });
       try {
-        const start = await postJson(`${baseUrl(monitor)}/api/missions/draft`, { desc: "x" });
+        const start = await postJson(`${baseUrl(monitor)}/api/missions/draft`, { desc: "make mission" });
         const jobId = start.body.jobId;
         // Simulate completion: overwrite state + write a log.
         const jobDir = join(root, "_tmp", jobId);
@@ -2322,8 +2323,8 @@ describe("Monitor — Mission Draft endpoints (mdo-2 / FSD §3.1A-C)", () => {
       const monitor = await startMonitor({ projectRoot: root, port: 0, webDir: join(root, "web") });
       try {
         // Start 2 draft jobs
-        await postJson(`${baseUrl(monitor)}/api/missions/draft`, { desc: "a" });
-        await postJson(`${baseUrl(monitor)}/api/missions/draft`, { desc: "b" });
+        await postJson(`${baseUrl(monitor)}/api/missions/draft`, { desc: "make mission one" });
+        await postJson(`${baseUrl(monitor)}/api/missions/draft`, { desc: "make mission two" });
         const res = await fetchJson(`${baseUrl(monitor)}/api/missions/draft`);
         assert.equal(res.status, 200);
         assert.equal(res.body.jobs.length, 2);
@@ -2453,7 +2454,7 @@ describe("Monitor — P2 draft body extension + flows + browse (mdo-4)", () => {
       const monitor = await startMonitor({ projectRoot: root, port: 0, webDir: join(root, "web") });
       try {
         const res = await postJson(`${baseUrl(monitor)}/api/missions/draft`, {
-          desc: "x",
+          desc: "build feature",
           targetFile: "../../etc/passwd",
         });
         assert.equal(res.status, 400);
@@ -2473,7 +2474,7 @@ describe("Monitor — P2 draft body extension + flows + browse (mdo-4)", () => {
       const monitor = await startMonitor({ projectRoot: root, port: 0, webDir: join(root, "web") });
       try {
         const res = await postJson(`${baseUrl(monitor)}/api/missions/draft`, {
-          desc: "x",
+          desc: "build feature",
           flowHint: "bad flow;rm -rf",
         });
         assert.equal(res.status, 400);
@@ -2580,6 +2581,102 @@ describe("Monitor — P2 draft body extension + flows + browse (mdo-4)", () => {
       } finally {
         await monitor.close();
       }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+// ── mdr-remediate-2 N2: monitor-side pre-validation (handleStartDraft) ─────
+
+describe("Monitor — handleStartDraft pre-validation (mdr-remediate-2 N2)", () => {
+  // Mirror the __setSpawnerForTest setup at the mdo-2 draft test block. A
+  // spawn counter captures how many times the spawner was invoked so N2
+  // tests can assert "0 spawns on validation failure" and N2-D can assert
+  // "exactly 1 spawn on valid desc". handleStartDraft is called directly
+  // (no HTTP) so the test isolates the pre-validation gate from the server.
+  let spawnCount = 0;
+  let prevSpawner = null;
+
+  beforeEach(() => {
+    spawnCount = 0;
+    prevSpawner = __setSpawnerForTest(() => {
+      spawnCount += 1;
+      return { unref() {}, pid: 9900 };
+    });
+  });
+  afterEach(() => {
+    __setSpawnerForTest(prevSpawner);
+  });
+
+  function makeTmpRoot() {
+    const root = mkdtempSync(join(tmpdir(), "md-n2-"));
+    mkdirSync(join(root, "_tmp"), { recursive: true });
+    mkdirSync(join(root, "missions"), { recursive: true });
+    return root;
+  }
+
+  function draftDirs(root) {
+    try {
+      return readdirSync(join(root, "_tmp")).filter((f) => f.startsWith("draft-"));
+    } catch {
+      return [];
+    }
+  }
+
+  it("N2-A: rejects too-short desc → 400, no spawn, no jobDir", () => {
+    const root = makeTmpRoot();
+    try {
+      const res = handleStartDraft(root, { desc: "d" });
+      assert.equal(res.status, 400);
+      assert.match(res.error, /too short/i);
+      assert.equal(spawnCount, 0, "spawner not invoked on validation failure");
+      assert.equal(draftDirs(root).length, 0, "no jobDir created under _tmp/draft-*");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("N2-B: rejects placeholder desc → 400, no spawn", () => {
+    const root = makeTmpRoot();
+    try {
+      const res = handleStartDraft(root, { desc: "test" });
+      assert.equal(res.status, 400);
+      assert.match(res.error, /placeholder/i);
+      assert.equal(spawnCount, 0, "spawner not invoked on placeholder rejection");
+      assert.equal(draftDirs(root).length, 0, "no jobDir created");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("N2-C: honors base.json draft.minDescLength override → 400, no spawn", () => {
+    const root = makeTmpRoot();
+    try {
+      writeFileSync(
+        join(root, "missions", "base.json"),
+        JSON.stringify({ draft: { minDescLength: 8 } }),
+      );
+      // "add xy" has length 6 — passes default threshold (4) but < 8.
+      const res = handleStartDraft(root, { desc: "add xy" });
+      assert.equal(res.status, 400);
+      assert.match(res.error, /too short/i);
+      assert.equal(spawnCount, 0, "spawner not invoked when configured threshold rejects");
+      assert.equal(draftDirs(root).length, 0, "no jobDir created");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("N2-D: valid desc proceeds → jobId/pid returned, spawner invoked once", () => {
+    const root = makeTmpRoot();
+    try {
+      const res = handleStartDraft(root, { desc: "add audit count to dashboard" });
+      assert.ok(res.jobId, "jobId returned");
+      assert.ok(res.jobId.startsWith("draft-"), "jobId has draft- prefix");
+      assert.equal(res.pid, 9900, "pid from fake spawner");
+      assert.equal(spawnCount, 1, "spawner invoked exactly once for valid desc");
+      assert.equal(draftDirs(root).length, 1, "jobDir created");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

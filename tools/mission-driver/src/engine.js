@@ -317,7 +317,23 @@ export class FlowEngine {
       endedAt: null,
       currentStep: null,
       steps: [],
+      // WI1 — DEEP_AUDIT round counter (1-based once incremented). Persisted
+      // so monitor / replay / the maxAuditRounds gate all read the authoritative
+      // count. Old run-state.json without this field falls back to 0 elsewhere
+      // via `|| 0` / `?? 0`. See design/step-execution-and-audit-count-design.md §4.1.
+      auditRound: 0,
+      maxAuditRounds: this.flow.maxAuditRounds ?? 0,
     };
+    // For forEach subflow children: persist forEachItem (the plan path) at
+    // init time so the monitor can display the plan name for in-flight
+    // children whose placeholder hasn't been appended to the parent's
+    // subflowRuns yet (engine appends on COMPLETION, not start). Without
+    // this, the dashboard shows "Plan N" without the file name while the
+    // child is still running.
+    const vars = this.delegates.vars || {};
+    if (vars.forEachItem != null) {
+      this.workflow.forEachItem = vars.forEachItem;
+    }
     this._wfCurrent = null;
     this._writeWorkflow();
   }
@@ -328,6 +344,18 @@ export class FlowEngine {
     if (this.workflow) {
       this.workflow.currentStep = name;
       this.workflow.updatedAt = new Date().toISOString();
+      // WI1 — increment the per-run audit round counter when the MAIN flow
+      // enters its auditEntry step (the DEEP_AUDIT top-level step). Subflow
+      // children share this code path but carry isSubflow:true in their
+      // delegates.config, so their internal steps do not count. Incrementing
+      // here (before _writeWorkflow) makes "audit in progress" crash-safe:
+      // a mid-audit crash leaves run-state reflecting "round N in progress".
+      // The maxAuditRounds gate (run()) reads the PRE-increment value with
+      // `>=`, see design §5.2 写法 2.
+      if ((this.delegates.config || {}).isSubflow !== true
+        && name === (this.flow.auditEntry || this.flow.entry)) {
+        this.workflow.auditRound = (this.workflow.auditRound || 0) + 1;
+      }
       const stepDef = (this.flow.steps && this.flow.steps[name]) || {};
       const entry = {
         name,
@@ -354,6 +382,21 @@ export class FlowEngine {
     const c = this._wfCurrent;
     const now = Date.now();
     const produced = this._listPlans().filter((f) => !c.plansBefore.includes(f));
+    const steps = this.workflow.steps;
+    // Find the running placeholder to replace. Capture its live sessionId /
+    // logFile / promptFile (set by _onAgentStepUpdate during execution via
+    // onSpawn polling) as fallback when the close parameters are null — the
+    // runner sometimes can't extract these from the result text even though
+    // onSpawn polling already found them, and _wfClose builds a fresh record
+    // that would otherwise overwrite the live values with null.
+    let replaceIdx = -1;
+    for (let i = steps.length - 1; i >= 0; i--) {
+      if (steps[i].name === c.name && steps[i].visits === c.visits && steps[i].status === "running") {
+        replaceIdx = i;
+        break;
+      }
+    }
+    const live = replaceIdx >= 0 ? steps[replaceIdx] : null;
     const record = {
       name: c.name,
       status: status || "completed",
@@ -366,8 +409,14 @@ export class FlowEngine {
       // OPT-1: persist the opencode session id that executed this step so the
       // run can be replayed (opencode export <sessionId>). null for non-agent
       // steps (tool/script/subflow/group) and for legacy close points that
-      // intentionally have no session (skipped/continued/finalize).
-      sessionId: sessionId || null,
+      // intentionally have no session (skipped/continued/finalize). Falls
+      // back to the live value from _onAgentStepUpdate when the close
+      // parameter is null (runner couldn't re-extract from result text).
+      sessionId: sessionId || (live && live.sessionId) || null,
+      // Same preservation for logFile / promptFile — _onAgentStepUpdate sets
+      // these during execution; don't let _wfClose's fresh-record build drop them.
+      ...(live && live.logFile ? { logFile: live.logFile } : {}),
+      ...(live && live.promptFile ? { promptFile: live.promptFile } : {}),
       // OPT-7: carry forward the suspend flag (set on _wfCurrent by the
       // onSuspend handler during execution) so the closed record + monitor
       // timeline surface that the step was frozen by a system sleep. Omitted
@@ -375,17 +424,11 @@ export class FlowEngine {
       ...(c.suspended ? { suspended: true, suspendGapMs: c.suspendGapMs ?? null } : {}),
       ...meta,
     };
-    // Replace the running placeholder (last entry with same name+visits, status "running")
-    const steps = this.workflow.steps;
-    let replaced = false;
-    for (let i = steps.length - 1; i >= 0; i--) {
-      if (steps[i].name === c.name && steps[i].visits === c.visits && steps[i].status === "running") {
-        steps[i] = record;
-        replaced = true;
-        break;
-      }
+    if (replaceIdx >= 0) {
+      steps[replaceIdx] = record;
+    } else {
+      steps.push(record);
     }
-    if (!replaced) steps.push(record);
     this._wfCurrent = null;
     this.workflow.updatedAt = new Date().toISOString();
     this._writeWorkflow();
@@ -394,7 +437,12 @@ export class FlowEngine {
 
   _finalizeWorkflow(status) {
     if (!this.workflow) return;
-    if (this._wfCurrent) this._wfClose(null, status === "completed" ? "completed" : "failed");
+    // WI5 — map single_step_done to step-level "completed" so the run-state
+    // step record does not contradict main.js exitMap (which maps
+    // single_step_done → exit code 0, i.e. success). The top-level workflow
+    // status below stays as the original `status` value, preserving the
+    // single_step_done vs completed distinction for monitor / consumers.
+    if (this._wfCurrent) this._wfClose(null, (status === "completed" || status === "single_step_done") ? "completed" : "failed");
     this.workflow.status = status;
     this.workflow.endedAt = new Date().toISOString();
     this.workflow.updatedAt = new Date().toISOString();
@@ -412,6 +460,21 @@ export class FlowEngine {
     } catch {}
   }
 
+  // mdr-remediate-3 N3 (Decision — Option B, doc-only): this method matches on
+  // `name + status === "running"` only, WITHOUT the `visits` guard that
+  // `_wfAppendSubflowRun` (below) carries. That asymmetry is intentional and
+  // safe under the current architecture: the run loop is strictly sequential
+  // and `_wfOpen` (`:332`) closes the prior `_wfCurrent` before pushing the
+  // next "running" entry, so at most ONE step record is ever "running" at a
+  // time — a `name + status === "running"` match therefore always uniquely
+  // resolves to the in-flight step. (`_wfClose` at `:400` also matches on
+  // `name+visits+status` when replacing placeholders.) `_wfAppendSubflowRun`
+  // keeps the visits guard because forEach subflow re-entry + the pre-run
+  // placeholder pattern (mdr-remediate-4 H2) are closer to that method's
+  // failure surface. If a future flow ever allows re-entrant / concurrent
+  // agent steps (two same-named records both "running"), retrofit the
+  // `name + visits + status === "running"` triple match from
+  // `_wfAppendSubflowRun`.
   _onAgentStepUpdate({ stepName, logFile, promptFile, sessionId }) {
     if (!this.workflow) return;
     const steps = this.workflow.steps;
@@ -422,6 +485,29 @@ export class FlowEngine {
         if (sessionId) steps[i].sessionId = sessionId;
         this._writeWorkflow();
         break;
+      }
+    }
+  }
+
+  // draft-robustness WI5 — append a subflow run record to the placeholder entry
+  // of the currently-running forEach step so the main run-state.json reflects
+  // progress even if the parent process is killed mid-forEach. Mirrors the
+  // "find the running record + patch + _writeWorkflow" pattern of
+  // _onAgentStepUpdate above, but additionally requires `visits` to match:
+  // the same stepName can be re-entered (visitCounts accumulates), and when
+  // two visits both have status:"running" placeholders a stepName-only match
+  // would write into the wrong entry. See design/draft-robustness-design.md
+  // §4.5.1.
+  _wfAppendSubflowRun(stepName, visits, run) {
+    if (!this.workflow) return;
+    const steps = this.workflow.steps;
+    for (let i = steps.length - 1; i >= 0; i--) {
+      if (steps[i].name === stepName && steps[i].visits === visits && steps[i].status === "running") {
+        if (!Array.isArray(steps[i].subflowRuns)) steps[i].subflowRuns = [];
+        steps[i].subflowRuns.push(run);
+        this.workflow.updatedAt = new Date().toISOString();
+        this._writeWorkflow();
+        return;
       }
     }
   }
@@ -522,6 +608,41 @@ export class FlowEngine {
       this._log(`  reconciliation check failed (${e.message}) — keeping "${status}"`);
       return status;
     }
+  }
+
+  // WI4 — DRAFT_PLANS audit-gate (design §4.2.3 B-2 / §4.2.4 truth table).
+  // Called from transition resolution when a step would `goto` the flow's
+  // `auditEntry` (e.g. DRAFT_PLANS nothing → DEEP_AUDIT). Returns true only when
+  // the per-run audit budget is exhausted AND there is no remaining work
+  // (active plans / open audits) — in that case the run is allowed to complete
+  // WITHOUT entering another audit round. Zero-intrusion on flows without an
+  // `auditEntry` (returns false unconditionally).
+  //
+  // Truth-table row 4 (§4.2.4): if open audits exist, never short-circuit even
+  // when the round budget is exhausted — those issues must be allowed to surface
+  // through DEEP_AUDIT → DRAFT_PLANS → REVIEW_PLANS rather than be silently
+  // dropped.
+  _shouldCompleteOnAuditQuota(currentStep, marker, transition) {
+    const auditEntry = this.flow?.auditEntry;
+    if (!auditEntry) return false;
+    if (!transition || transition.goto !== auditEntry) return false;
+    if (marker !== "nothing") return false;
+    const ap = this.expressionFuncs?.activePlans?.() || [];
+    const oa = this.expressionFuncs?.openAudits?.() || [];
+    const round = (this.workflow && this.workflow.auditRound) || 0;
+    const max = this.flow?.maxAuditRounds ?? 0;
+    // mdc-1 (convergence R2): early clean short-circuit. Once DEEP_AUDIT has run
+    // at least once (auditRound >= 1) and left NO remediation work behind — no
+    // active plans AND no open audits (P2-only audits self-mark `triaged`, which
+    // openAudits() excludes) — the mission is done. We no longer wait for the
+    // full `round >= maxAuditRounds` budget: that requirement made every
+    // enter-pure-audit-mode run burn all rounds even when clean (the deleted
+    // legacy DRAFT_PLANS `done` exit used to end on round 1). The
+    // `round >= maxAuditRounds` ceiling still fires independently in run() as the
+    // safety upper bound when audits keep surfacing P0/P1 work. The `auditRound
+    // >= 1` guard preserves "audit at least once before completing" (cold start
+    // with an already-empty roadmap still enters DEEP_AUDIT once first).
+    return max > 0 && round >= 1 && ap.length === 0 && oa.length === 0;
   }
 
   _templateVar(str, vars) {
@@ -712,16 +833,11 @@ export class FlowEngine {
 
     const transitions = stepDef.transitions || {};
 
-    // ForEach per-item: marker validation is handled by aggregation
-    // (ok-based), not by per-item marker values. Skip correction + resolvedOk
-    // check so per-item prompts can emit their own markers (e.g. "approved").
-    if (!stepDef._forEachPerItem) {
-      if (marker) {
-        if (!transitions[marker]) {
-          marker = await this._runCorrectionAgent(
-            marker, result.text, rTag, transitions, stepDef, this.lastSessionId,
-          );
-        }
+    if (marker) {
+      if (!transitions[marker]) {
+        marker = await this._runCorrectionAgent(
+          marker, result.text, rTag, transitions, stepDef, this.lastSessionId,
+        );
       }
     }
 
@@ -736,7 +852,7 @@ export class FlowEngine {
     // "transition-valid marker": a null or invalid marker keeps the original ok
     // so real failures still route to onError (memory L003). Recovering
     // arbitrary noise never sets ok=true (Decision: 否决"恢复出任意 marker 即 ok")。
-    const resolvedOk = (stepDef._forEachPerItem || (marker && transitions[marker])) ? true : result.ok;
+    const resolvedOk = (marker && transitions[marker]) ? true : result.ok;
 
     return { marker, vars, ok: resolvedOk, text: result.text, sessionId: result.sessionId || null, logFile: result.logFile || null, exitCode: result.exitCode, errorTail: result.errorTail, stderrTail: result.stderrTail };
   }
@@ -890,10 +1006,7 @@ export class FlowEngine {
       let iterResult;
       try {
         if (stepDef.type === "agent") {
-          // ForEach per-item: marker validation is handled by aggregation
-          // (ok-based), not by per-item marker value. Skip validation.
-          const itemStepDef = { ...stepDef, _forEachPerItem: true };
-          iterResult = await this._executeAgentStep(stepName, itemStepDef, null);
+          iterResult = await this._executeAgentStep(stepName, stepDef, null);
         } else if (stepDef.type === "tool") {
           iterResult = await this._executeToolStep(stepName, stepDef);
         } else if (stepDef.type === "script") {
@@ -971,6 +1084,7 @@ export class FlowEngine {
           const { childResult, childFlowVars, subflowFile } = await this._runChildSubflow(flowDef, childVars);
           Object.assign(aggregatedVars, childFlowVars);
           subflowRuns.push({ forEachIndex: i, forEachItem: item, file: subflowFile ? basename(subflowFile) : null, status: childResult.status });
+          this._wfAppendSubflowRun(stepName, visit, subflowRuns[subflowRuns.length - 1]);
           this._log(`  subflow ${stepName}: forEach item ${i + 1} → ${childResult.status}`);
           if (childResult.status === "completed") {
             completed++;
@@ -1001,6 +1115,7 @@ export class FlowEngine {
         const recordResult = (r) => {
           Object.assign(aggregatedVars, r.childFlowVars);
           subflowRuns.push({ forEachIndex: r.i, forEachItem: r.item, file: r.subflowFile ? basename(r.subflowFile) : null, status: r.childResult.status });
+          this._wfAppendSubflowRun(stepName, visit, subflowRuns[subflowRuns.length - 1]);
           this._log(`  subflow ${stepName}: forEach item ${r.i + 1} → ${r.childResult.status}`);
           if (r.childResult.status === "completed") {
             completed++;
@@ -1050,6 +1165,14 @@ export class FlowEngine {
 
     const visit = this.visitCounts.get(stepName) || 1;
     const childArgs = { ...baseArgs, _subflowId: `${stepName}-${visit}-0` };
+    // mdr-remediate-4 H2 — extend §4.5's incremental persistence to the
+    // non-forEach (single-child) branch. Write a status:"running" placeholder
+    // BEFORE awaiting the child so a mid-child SIGKILL leaves the main
+    // run-state.json reflecting "in progress" instead of the initial `[]`.
+    // After the child returns, run()'s caller (~:1799) builds completedMeta
+    // from result.subflowRuns and _wfClose replaces this placeholder record
+    // with the terminal-state record (no duplicate, no stale running entry).
+    this._wfAppendSubflowRun(stepName, visit, { forEachIndex: 0, forEachItem: null, file: null, status: "running" });
     const { childResult, childFlowVars, subflowFile } = await this._runChildSubflow(flowDef, childArgs);
     const marker = childResult.status === "completed" ? "complete" : "failed";
     this._log(`  subflow ${stepName}: child ${childResult.status} → ${marker}`);
@@ -1073,6 +1196,29 @@ export class FlowEngine {
       callLog: parentDelegates.callLog,
     };
     const childEngine = new FlowEngine(flowDef, childDelegates);
+
+    // Wrap runAgent so in-flight updates (logFile/sessionId via onSpawn) route
+    // to the CHILD engine, not the parent. Without this, the runner reads
+    // config.onStepUpdate (bound to the parent engine at main.js:752), which
+    // searches the parent's workflow.steps for the stepName — but the
+    // subflow's step names (EXECUTE, BUILD_VERIFY, MULTI_AUDIT, …) aren't in
+    // the parent's workflow, so logFile/sessionId updates are silently dropped.
+    // Result: the dashboard showed no log button and no session button until
+    // the step completed and _wfClose persisted them. The wrapper injects the
+    // child engine's _onAgentStepUpdate via opts.onStepUpdate (runner.js
+    // prefers opts over config), so each subflow step's live updates land in
+    // the child's run-state-<subflowId>.json immediately.
+    const parentRunAgent = typeof parentDelegates.runAgent === "function"
+      ? parentDelegates.runAgent.bind(parentDelegates)
+      : null;
+    if (parentRunAgent) {
+      childDelegates.runAgent = (stepName, prompt, system, sessionId, modelOverride, opts) =>
+        parentRunAgent(stepName, prompt, system, sessionId, modelOverride, {
+          ...(opts || {}),
+          onStepUpdate: (payload) => childEngine._onAgentStepUpdate(payload),
+        });
+    }
+
     const childResult = await childEngine.run();
     if (childResult.history) {
       for (const line of childResult.history) {
@@ -1285,6 +1431,11 @@ export class FlowEngine {
     };
     let currentStep = entryOverride || this.flow.entry;
     const maxTotalSteps = cfg.maxTotalSteps ?? this.flow.maxTotalSteps ?? 100;
+    // WI2: engine-level hard cap for `--step <STEP>` single-step mode. Replaces
+    // the old main.js transition-rewrite hack that only covered `transitions`
+    // and let onError/onUnknown/onMaxRetries escape the single-step boundary.
+    // `Infinity` when not in single-step mode → zero behavioral change.
+    const maxSteps = cfg.singleStep ? 1 : Infinity;
     const maxCycleVisits = cfg.maxCycles ?? this.flow.maxCycleVisits ?? 10;
     const maxAuditRounds = this.flow.maxAuditRounds ?? 0;
     const auditEntry = this.flow.auditEntry || this.flow.entry;
@@ -1329,7 +1480,7 @@ export class FlowEngine {
       maxCycleVisits,
     });
 
-    while (totalSteps < maxTotalSteps) {
+    while (totalSteps < maxTotalSteps && totalSteps < maxSteps) {
       const stepDef = this.flow.steps[currentStep];
       if (!stepDef) {
         this._log(`Unknown step: ${currentStep}`);
@@ -1349,20 +1500,42 @@ export class FlowEngine {
         return await this._result("max_cycles", totalSteps);
       }
 
-      if (maxAuditRounds > 0 && currentStep === auditEntry && visits > maxAuditRounds) {
-        this._log(`maxAuditRounds (${maxAuditRounds}) exceeded for ${currentStep} → completed`);
-        return await this._result("completed", totalSteps);
+      // WI1 — maxAuditRounds gate reads the PRE-increment workflow.auditRound
+      // with `>=` (design §5.2 写法 2). Gate stays BEFORE totalSteps++ and
+      // _wfOpen, so an exhausted iteration produces NO phantom step record,
+      // NO extra totalSteps++, and NO step_started event. Counter trace for
+      // maxAuditRounds=3: 1st entry gate sees 0 → _wfOpen bumps to 1 → run;
+      // 2nd → 1 → 2 → run; 3rd → 2 → 3 → run; 4th → 3 >= 3 → completed (no
+      // bump). Final auditRound === 3 === maxAuditRounds (quota exhausted).
+      if (maxAuditRounds > 0 && currentStep === auditEntry) {
+        const round = (this.workflow && this.workflow.auditRound) || 0;
+        if (round >= maxAuditRounds) {
+          this._log(`maxAuditRounds (${maxAuditRounds}) reached for ${currentStep} → completed`);
+          return await this._result("completed", totalSteps);
+        }
       }
 
       totalSteps++;
-      this._log(`[step ${totalSteps}] ${currentStep} (visit #${visits})`);
       this._wfOpen(currentStep, visits);
+      // WI5 — surface auditRound on the main-flow auditEntry step. _log moved
+      // after _wfOpen so events / log / run-state.json all observe the same
+      // post-increment "round N in progress" value. Subflow child engines
+      // never hit this branch (isSubflow:true), so internal steps stay clean.
+      const isMainAuditEntry = currentStep === auditEntry && cfg.isSubflow !== true;
+      const auditRoundSuffix = isMainAuditEntry
+        ? ` (audit round ${(this.workflow && this.workflow.auditRound) || 0}/${maxAuditRounds})`
+        : "";
+      this._log(`[step ${totalSteps}] ${currentStep} (visit #${visits})${auditRoundSuffix}`);
       this._emitEvent("step_started", {
         step: currentStep,
         visit: visits,
         totalSteps,
         stepType: stepDef.type || null,
         runDir: cfg.runDir || null,
+        ...(isMainAuditEntry ? {
+          auditRound: this.workflow?.auditRound ?? 0,
+          maxAuditRounds: this.flow.maxAuditRounds ?? 0,
+        } : {}),
       });
 
       this.pingPongHistory.push({ step: currentStep, viaRetry: false });
@@ -1773,6 +1946,29 @@ export class FlowEngine {
       }
 
       if (transition.goto) {
+        // WI4 — audit-gate short-circuit (design §4.2.3 B-2 / §4.2.4 truth table).
+        // When a step's `nothing` marker is bound for `auditEntry` (e.g.
+        // DRAFT_PLANS nothing → DEEP_AUDIT), the gate decides whether another
+        // audit round is warranted or whether the run is allowed to complete.
+        // Zero-intrusion: `_shouldCompleteOnAuditQuota` returns false unless
+        // `flow.auditEntry` exists AND DEEP_AUDIT has run at least once AND no
+        // active plans or open audits remain (mdc-1 clean short-circuit; the
+        // `round >= maxAuditRounds` ceiling still fires separately in run()).
+        if (marker === "nothing" && this._shouldCompleteOnAuditQuota(currentStep, marker, transition)) {
+          const round = (this.workflow && this.workflow.auditRound) || 0;
+          const max = this.flow?.maxAuditRounds ?? 0;
+          this._log(
+            `  audit-gate: ${currentStep} nothing + audited >=1 round (auditRound=${round}/${max}) ` +
+            `+ no active plans/open audits → completed (clean short-circuit)`,
+          );
+          this._emitEvent("transition", {
+            from: currentStep,
+            to: null,
+            marker,
+            via: "audit_gate",
+          });
+          return await this._result("completed", totalSteps, marker);
+        }
         if (transition.append) {
           const appendText = this._formatAppend(transition.append, currentStep, result);
           // Replace (not accumulate): each cycle = template + this round's append only.
@@ -1798,6 +1994,15 @@ export class FlowEngine {
       return await this._result("invalid_transition", totalSteps);
     }
 
+    // WI2: distinguish single-step cap from the regular maxTotalSteps cap.
+    // When `--step X` is in effect, the loop exits after one executed step
+    // regardless of which exit (transitions / onError / onUnknown /
+    // onMaxRetries / retry) the step would have taken — the cap is physical.
+    // `single_step_done` maps to exit code 0 in main.js (treated as success).
+    if (cfg.singleStep && totalSteps >= maxSteps) {
+      this._log(`single-step cap (maxSteps=${maxSteps}) reached → single_step_done`);
+      return await this._result("single_step_done", totalSteps);
+    }
     this._emitEvent("limit_hit", {
       limitType: "max_total_steps",
       step: currentStep,

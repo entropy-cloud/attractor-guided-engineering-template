@@ -1,0 +1,17 @@
+{
+  "extends": "base",
+  "name": "mission-driver-draft-robustness",
+  "description": "强化 mission-driver 的 draft 管线健壮性：CLI 层描述校验、brief gate marker 引擎化、路径基准统一。设计文档见 tools/mission-driver/design/draft-robustness-design.md。与 mission-driver-step-audit 相互独立、可并行。",
+  "flowName": "mission-driver",
+  "roadmapPath": "docs/backlog/mission-driver-draft-robustness-roadmap.md",
+  "plansDir": "docs/plans/mission-driver-draft-robustness",
+  "planGuide": "docs/plans/00-plan-authoring-and-execution-guide.md",
+  "auditsDir": "docs/audits/mission-driver-draft-robustness",
+  "contextDir": "docs/context",
+  "moduleDir": "tools/mission-driver",
+  "prompts": {
+    "multiAudit": "docs/skills/multi-dimensional-audit-prompt.md",
+    "openAudit": "docs/skills/open-ended-audit-prompt.md"
+  },
+  "commitFormat": "<type>(mission-driver): <description>"
+}

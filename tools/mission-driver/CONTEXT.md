@@ -84,12 +84,13 @@ sourcePaths（依赖模块源码路径，不同同事路径不同）
 - Resource Chart: Free Memory + Opencode RSS + Process Count 三线
 - Base Config: 任意页面右上角 ⚙ 齿轮按钮 → Modal（n-code JSON 高亮）
 - NFR-3: echarts/xterm 按 RunDetail 路由懒加载，首屏 <500KB
+- WI5: `GET /api/runs/:id` 返回的 `run` 含 `auditRound` / `maxAuditRounds`（旧 run-state.json `?? 0` 兜底）；RunDetail 顶部展示 'Deep Audit: N / M'（仅当 `maxAuditRounds > 0`；额度用完 tag→success，进行中→info）。RunList 与 AppHeader 的 `statusTagType` 同步把 `single_step_done` 识别为 success（与 `main.js` exitMap 的 exit code 0 对齐）。
 
 
 ## 构建与验证
 
 ```bash
-# 后端测试
+# 后端测试（同时跑 prompt-check.mjs 结构性校验，任一失败即整体失败）
 npm --prefix tools/mission-driver test
 
 # 前端构建
@@ -114,6 +115,7 @@ node tools/mission-driver/src/main.js <mission-name> --step CHECK --dry-run --no
 - `extends` 为浅合并——嵌套对象（如 `commands`）整体替换，非深度合并
 - Windows 环境：Git Bash 启动脚本
 - 监控端口默认 9300，冲突时自动 +1 重试
+- draft-robustness WI5（mdr-remediate-4 后扩展到非-forEach 分支）：subflow step 的 `subflowRuns` 在 `_executeSubflowStep` 中，无论 forEach 还是单子流程，都在子流程开始前写入 `status: "running"` placeholder（`_wfAppendSubflowRun`，镜像 `_onAgentStepUpdate` 模式但额外匹配 `visits` 以避免 re-entry 串味），forEach 每项完成后增量追加、子流程结束后由 `_wfClose` 用终态覆盖 placeholder，父进程中途被杀时 run-state 仍反映"在跑"或已完成项（不依赖 monitor fallback 扫描磁盘 `run-state-<stepName>-<visits>-<i>.json` 文件）。`_wfClose` 仍是最终真相（forEach 结束时 sort + 覆盖 placeholder）。与 step-audit mission 的 WI5（auditRound / maxAuditRounds 计数，见上方 Monitor Dashboard 段）同名但分属不同 mission。
 
 
 ## 故障排查

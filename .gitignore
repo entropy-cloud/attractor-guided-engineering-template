@@ -8,3 +8,7 @@ coverage/
 tmp/
 _tmp/
 report/
+.obsidian/
+.opencode/*
+!.opencode/skills/
+nul

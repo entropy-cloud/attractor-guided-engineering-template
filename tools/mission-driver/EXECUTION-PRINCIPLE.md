@@ -98,7 +98,8 @@ stateDiagram-v2
     EXEC_PLANS --> DRAFT_PLANS: all_complete / some_failed / all_failed
     DRAFT_PLANS --> REVIEW_PLANS: created
     DRAFT_PLANS --> DEEP_AUDIT: nothing
-    DEEP_AUDIT --> DRAFT_PLANS: complete / failed
+    DEEP_AUDIT --> REVIEW_PLANS: complete
+    DEEP_AUDIT --> DRAFT_PLANS: failed
 
     note right of REVIEW_PLANS
         稳态循环:
@@ -113,8 +114,8 @@ stateDiagram-v2
         审计发现 → 起草修复计划
     end note
 
-    REVIEW_PLANS --> max_cycles: visitCount > 30
-    EXEC_PLANS --> max_cycles: visitCount > 30
+    REVIEW_PLANS --> max_cycles: visitCount > 8
+    EXEC_PLANS --> max_cycles: visitCount > 8
     DRAFT_PLANS --> completed: maxAuditRounds > 3
 
     max_cycles --> [*]
@@ -166,7 +167,7 @@ sequenceDiagram
     loop until done / maxTotalSteps(500) / max_cycles
 
         Eng->>Eng: 取 stepDef = flow.steps[currentStep]
-        Eng->>Eng: 检查 visitCount 是否超过 maxCycleVisits(30)?
+        Eng->>Eng: 检查 visitCount 是否超过 maxCycleVisits(8)?
         Eng->>Eng: pingPong 检测(最近6步是否两步循环)
         alt when 条件为 false
             Eng->>Eng: 走 otherwise 分支(skip / goto / done)
@@ -476,7 +477,7 @@ flowchart TD
 - **correction retry**（`engine.js:281`）：AI 输出非法 marker 时，再 spawn 一个子进程，prompt 只让它输出合法值，最多 2 次。
 - **retry 计数**（`engine.js:646`）：`retry: TARGET, maxRetries: 3` 达到上限走 `onMaxRetries`，避免无限重试。retry 时可通过 `append` 把反馈拼到下次 prompt。
 - **ping-pong 检测**（`engine.js:725-747`）：最近 6 步若只在两个 step 间来回（且无 retry 保护），直接判 `ping_pong` 失败，防止死循环。
-- **maxCycleVisits**（`engine.js:709`）：单个 step 累计访问超 30 次判 `max_cycles`。
+- **maxCycleVisits**（`engine.js:709`）：单个 step 累计访问超 8 次判 `max_cycles`。
 - **maxTotalSteps**（`engine.js:700`）：总步数超 500 判 `max_total_steps`。
 - **瞬时 provider 错误独立重试**（`engine.js`，mdr-1）：`isTransientProviderError` 按 **stderr 签名**（`429`/`rate_limit`/`quota`/`overloaded`）判定瞬时故障（取代旧的「stepDur<60s && logLen<600」启发式），命中时走**独立** `transientCounts` 预算（指数退避、硬上限默认 6、`config.transient.*` 可配）——**不**占 `onError.maxRetries`、**不**触发 ping-pong/maxCycleVisits、发 `transient_retry` 事件（非 `step_failed`）；超独立上限才降级为真失败走 `onError`。
 - **中性诊断**（`engine.js`，mdr-1）：空/短输出失败的事件 `error` 默认为中性 `empty/short output, exit=<code> — cause unknown; see stderr tail`；仅在 stderr 真含限流签名时才提示限流（消除「一律判限流」误诊）。
@@ -576,11 +577,11 @@ flowchart LR
 |---|---|---|---|
 | `done: completed`（如 DRAFT_PLANS 无可起草 + 审计无发现 + 达 maxAuditRounds） | `completed` | 0 | 正常完成 |
 | `done: failed`（如 CHECK 重试 3 次仍 fail） | `failed` | 1 | 不可恢复失败 |
-| 单 step 访问 > maxCycleVisits(30) | `max_cycles` | 2 | 循环上限 |
+| 单 step 访问 > maxCycleVisits(8) | `max_cycles` | 2 | 循环上限 |
 | 总步数 > maxTotalSteps(500) | `max_total_steps` | 2 | 总量上限 |
 | 某 retry 链达 maxRetries | `max_retries` | 2 | 重试上限 |
-| 检测到两步 ping-pong | `ping_pong` | — | 死循环保护 |
-| 未知 step / 类型 / 非法转换 | `unknown_step` 等 | 1 | 流程定义错误 |
+| 检测到两步 ping-pong | `ping_pong` | 2 | 死循环保护 |
+| 未知 step / 类型 / 非法转换 | `unknown_step` / `unknown_type` / `no_transition` / `invalid_transition` | 1 | 流程定义错误 |
 
 ---
 

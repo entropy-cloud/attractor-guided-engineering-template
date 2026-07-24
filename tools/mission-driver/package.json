@@ -8,7 +8,7 @@
   "scripts": {
     "start": "node src/main.js",
     "dry-run": "node src/main.js --dry-run",
-    "test": "node --test test/*.test.js",
+    "test": "node --test test/*.test.js && node src/prompt-check.mjs",
     "go": "node src/main.js --max-cycles 1 --model zhipuai-coding-plan/glm-4.7-flash",
     "lint:prompts": "node src/prompt-check.mjs"
   },

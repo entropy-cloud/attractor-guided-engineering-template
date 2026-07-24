@@ -10,7 +10,7 @@ If `{{briefPath}}` is empty, no brief exists; fall back to the user request text
 
 ## Roadmap
 
-If a roadmap already exists at `docs/backlog/{mission-name}-roadmap.md` or is referenced by the user, use it. Otherwise, generate the roadmap first following the format in `docs/backlog/00-roadmap-authoring-guide.md`, save it at `docs/backlog/{mission-name}-roadmap.md`, then generate the mission.json referencing it. The roadmap must include phase status, framework/platform reuse, current baseline, phase table, phase details, dependency graph, and cross-cutting concerns.
+If a roadmap already exists at `{{backlogDir}}/{mission-name}-roadmap.md` or is referenced by the user, use it. Otherwise, generate the roadmap first following the format in `{{backlogDir}}/00-roadmap-authoring-guide.md`, save it at `{{backlogDir}}/{mission-name}-roadmap.md`, then generate the mission.json referencing it. The roadmap must include phase status, framework/platform reuse, current baseline, phase table, phase details, dependency graph, and cross-cutting concerns.
 
 ## Flow hint
 

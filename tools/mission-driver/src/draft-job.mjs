@@ -37,6 +37,43 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const LOG_TAIL_LINES = 200;
 
 /**
+ * Deterministic pre-validation of the draft description (draft-robustness-design
+ * §4.1 / WI1). Rejects empty / placeholder / too-short descriptions BEFORE
+ * Stage 1 so the agent cannot pollute `docs/backlog/` and `missions/` with junk
+ * artifacts. `minLen` accepts a value from `base.json`'s `draft.minDescLength`
+ * but falls back to 4 when the value is missing, non-finite, or non-positive
+ * (defends against a mistyped config like `"garbage"` / `null` / `NaN`).
+ *
+ * Deviation from design §4.1: placeholder check fires BEFORE length check.
+ * Design's empty→length→placeholder order leaves 3-char blacklist entries
+ * (`xxx`, `foo`, `bar`, `n/a`) unreachable — they always trip length first.
+ * Swapping to empty→placeholder→length makes the blacklist actually useful,
+ * since "xxx" is a more actionable rejection reason than "too short".
+ *
+ * NOT a semantic check — "is the description meaningful" is WI2's brief gate.
+ *
+ * Lives in this leaf module (not `main.js`) so `monitor.js` can import it
+ * without forming a `monitor.js → main.js → monitor.js` cycle (`main.js`
+ * statically imports `startMonitor` from `./monitor.js` at its top level).
+ * `main.js` re-exports this function so existing consumers (e.g. test
+ * imports from `main.js`) are unaffected.
+ */
+export function validateDraftDesc(desc, minLen) {
+  const threshold = Number.isFinite(+minLen) && +minLen > 0 ? +minLen : 4;
+  const trimmed = String(desc ?? "").trim();
+  if (trimmed.length === 0) {
+    return { ok: false, reason: "description is empty" };
+  }
+  if (/^(test|asdf|foo|bar|todo|xxx|none|null|n\/a)$/i.test(trimmed)) {
+    return { ok: false, reason: `description looks like a placeholder ("${trimmed}")` };
+  }
+  if (trimmed.length < threshold) {
+    return { ok: false, reason: `description too short (${trimmed.length} chars); need at least a phrase describing the mission goal` };
+  }
+  return { ok: true };
+}
+
+/**
  * Build a compact timestamp for the jobId: `YYYYMMDD-HHmmss-sss`.
  *
  * Millisecond precision (mdo-2) avoids jobId collisions when two draft jobs

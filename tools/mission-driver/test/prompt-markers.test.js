@@ -56,13 +56,18 @@ describe("prompt-check — result-tag lint (§1.4-0, §11.8)", () => {
     assert.deepEqual(errors, []);
   });
 
-  it("maps prompts to their flow steps (draft-from-roadmap → created/nothing/done)", () => {
+  it("maps prompts to their flow steps (draft-from-roadmap → created/nothing)", () => {
     const map = buildPromptMarkerMap();
     const info = map.get("draft-from-roadmap.md");
     assert.ok(info, "draft-from-roadmap.md must be mapped");
-    for (const m of ["created", "nothing", "done"]) {
+    // WI4: DRAFT_PLANS no longer exposes a `done` exit — the engine's
+    // audit-gate decides mission completion, not the AI. Only `created`
+    // and `nothing` are valid markers for this step now.
+    for (const m of ["created", "nothing"]) {
       assert.ok(info.markers.has(m), `expected marker ${m}`);
     }
+    assert.ok(!info.markers.has("done"),
+      "done marker must NOT be present after WI4 (engine audit-gate owns mission completion)");
     assert.equal(map.get("plan-review.md")?.forEach, true, "plan-review step is forEach");
   });
 });

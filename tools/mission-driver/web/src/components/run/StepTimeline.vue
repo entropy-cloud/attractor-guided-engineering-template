@@ -93,8 +93,17 @@
               :key="`${step.name}-child-${gi}`"
               class="subflow-group"
             >
+              <!-- Label visibility:
+                   - forEach subflow (step.forEach set by monitor backend, or
+                     child has forEachItem): show "📋 Plan N: name" for every
+                     child, including disk-only in-flight ones whose
+                     forEachItem is null (they haven't been appended to
+                     subflowRuns yet — engine writes on completion, not start).
+                   - non-forEach subflow (DEEP_AUDIT, single child, no
+                     forEachItem anywhere): hide the misleading "Plan N" label,
+                     show only the status tag. -->
               <div class="subflow-label">
-                <span :title="group.forEachItem ?? ''">
+                <span v-if="step.forEach || group.forEachItem" :title="group.forEachItem ?? ''">
                   📋 Plan {{ group.forEachIndex + 1 }}{{ group.forEachItem ? `: ${shortPlanName(group.forEachItem)}` : '' }}
                 </span>
                 <n-tag

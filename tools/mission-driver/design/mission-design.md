@@ -237,7 +237,9 @@ CHECK_OPEN_AUDITS -> MULTI_AUDIT -> OPEN_AUDIT -> SCAN_NEW_RESULTS -> DRAFT_FROM
 
 ## 9. Mission Draft Step (AI)
 
-`draft <description>` triggers `mission-draft.md` prompt, AI executes:
+`draft <description>` triggers the **two-stage brief→draft pipeline** implemented by `cmdDraftMission` in `src/main.js` (see `draft-robustness-design.md` for the controlling contract). Stage 1 renders `prompts/mission-brief.md` and asks the brief agent to produce a scope-gate brief; Stage 2 renders `prompts/mission-draft.md` and asks the draft agent to produce the mission.json + roadmap. The brief agent emits a structured gate marker — `<BRIEF_GATE>pass|blocked</BRIEF_GATE>` plus `<BRIEF_GATE_REASON>...</BRIEF_GATE_REASON>` — that the engine parses via `extractBriefGate`; `pass` (or a missing marker, for backward compatibility) advances to Stage 2, while `blocked` stops the pipeline with `draft-state.json` marked `status: "blocked"` and prints a pointer to the brief. All artifact paths (`{{backlogDir}}`, `{{missionsDir}}`) are injected as absolute template variables anchored at `projectRoot`, eliminating the split-brain between literal-relative and absolute-path resolution. `--skip-brief` collapses to the legacy single-stage draft.
+
+The Stage 2 draft agent then executes:
 
 1. Read user input (objective intent).
 2. Read project structure: `AGENTS.md`, index files, `package.json`/`pom.xml`/`mvnw` (detect tech stack), directory structure.

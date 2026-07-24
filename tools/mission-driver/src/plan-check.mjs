@@ -25,6 +25,7 @@
 
 import { readFileSync } from "node:fs";
 import { relative } from "node:path";
+import { pathToFileURL } from "node:url";
 
 export const PLAN_STATUS_RE = /^>\s*(?:\*\*)?(?:Plan\s+)?Status(?:\*\*)?:\s*\*{0,2}([A-Za-z][A-Za-z /-]*)\*{0,2}\s*$/im;
 const CHECKLIST_UNCHECKED_RE = /^(\s*)-\s+\[\s?\]\s+(.+)$/gm;
@@ -139,7 +140,11 @@ export function inspectPlan(filePath, options = {}) {
 }
 
 // CLI entrypoint: node plan-check.mjs <plan.md> [--strict]
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Guard must use pathToFileURL(...).href (mirrors mission-check.mjs:107, WI4 /
+// design §2.5 "缺陷 4"): the naive `file://${process.argv[1]}` concatenation is
+// never equal to import.meta.url on Windows (file:///C:/... vs file://C:\...),
+// silently no-op'ing the whole CLI body.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const argv = process.argv.slice(2);
   const strict = argv.includes("--strict");
   const file = argv.find(a => !a.startsWith("--"));

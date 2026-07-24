@@ -8,6 +8,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
+import { pathToFileURL } from "node:url";
 
 const REQUIRED_FIELDS = ["name", "roadmapPath", "plansDir", "commands"];
 const REQUIRED_COMMANDS = ["test"];
@@ -103,7 +104,7 @@ export function loadMission(missionFile, projectRoot) {
   return mission;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [file, root] = process.argv.slice(2);
   if (!file) {
     console.error("Usage: mission-check.mjs <mission.json> [projectRoot]");

@@ -28,6 +28,12 @@ run's trajectory into concrete verbal feedback that reduces the same failures ne
 {{runSkeleton}}
 </run_skeleton>
 
+> WI5 note: `Audit rounds: N/M` indicates this run executed N rounds of DEEP_AUDIT
+> (upper bound M). If N === M and status is `completed`, the run may have been
+> terminated by the audit-gate or the `maxAuditRounds` cap — inspect
+> `events.jsonl` for a `transition` event with `via: "audit_gate"` or a
+> `limit_hit` event with `limitType: "max_audit_rounds"` to distinguish.
+
 ## Where to dig
 
 Target run directory (read-only): `{{targetRunDir}}`

@@ -38,6 +38,11 @@ export interface Run {
   // registered flowNames → their lazy renderer.
   flowName?: string | null
   runDir?: string
+  // WI5 — DEEP_AUDIT round progress (design/step-execution-and-audit-count-design.md
+  // §4.4). Both fields default to 0 for runs whose flow has no audit concept
+  // and for legacy run-state.json that predates WI1.
+  auditRound?: number
+  maxAuditRounds?: number
   steps: Step[]
   config?: MissionConfig | null
 }
@@ -56,6 +61,10 @@ export interface RunSummary {
   flowName?: string | null
   stepCount?: number
   runDir?: string
+  // WI5 — same pair as Run; the list view does not render them but exposing
+  // the fields keeps the summary type honest with the REST contract.
+  auditRound?: number
+  maxAuditRounds?: number
 }
 
 export interface Step {
@@ -73,6 +82,11 @@ export interface Step {
   logFile?: string
   promptFile?: string
   type?: 'subflow'
+  /** Set by monitor backend (mergeSubflowChildren) when any subflowRuns entry
+   * has a non-null forEachItem — signals a forEach subflow so the frontend
+   * shows "Plan N" labels for all children (including disk-only in-flight
+   * ones whose own forEachItem is null). */
+  forEach?: boolean
   forEachItem?: string
   forEachIndex?: number
   children?: SubflowGroup[]

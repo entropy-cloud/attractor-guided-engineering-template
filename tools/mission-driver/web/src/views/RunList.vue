@@ -195,10 +195,14 @@ async function loadMore(): Promise<void> {
 }
 
 // status → Naive UI tag type. max_* → warning, matches Alpine statusGroup('max').
+// WI5 — `single_step_done` (WI2 --step single-step mode) maps to success: it
+// already exits with code 0 in main.js exitMap and must not display as unknown
+// gray (would contradict AppHeader's status tag — both maps must stay in sync).
 function statusTagType(status: string | null | undefined): 'info' | 'success' | 'error' | 'warning' | 'default' {
   if (!status) return 'default'
   if (status === 'running') return 'info'
   if (status === 'completed') return 'success'
+  if (status === 'single_step_done') return 'success'
   if (status === 'failed') return 'error'
   if (status === 'aborted') return 'warning'
   if (status.startsWith('max_')) return 'warning'

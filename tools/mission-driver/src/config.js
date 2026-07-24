@@ -214,6 +214,13 @@ export function buildRunSkeleton(runDir) {
       `  Total top-steps: ${(state.steps || []).length}` +
       (wallMs != null ? `  Wall: ~${fmtDuration(wallMs)}` : "")
     );
+    // WI5 — surface DEEP_AUDIT round progress so postmortem agents can see how
+    // many audit rounds the run executed. Skipped entirely when the flow has
+    // no audit concept (maxAuditRounds === 0); legacy runs read as 0 via `?? 0`.
+    const maxAuditRounds = state.maxAuditRounds ?? 0;
+    if (maxAuditRounds > 0) {
+      lines.push(`Audit rounds: ${state.auditRound ?? 0}/${maxAuditRounds}`);
+    }
   } else {
     lines.push(`Mission: (run-state.json missing — cannot read)`);
     lines.push(`Run: ${basenameOf(runDir)}`);
@@ -593,6 +600,12 @@ export function resolveConfig(args = {}) {
     pure,
     dryRun,
     testMode,
+    // WI2/WI3: CLI-only flags consumed by main.js post-resolve to drive
+    // engine.run(entryOverride) and the singleStep cap. ResolveConfig itself
+    // is CLI-agnostic (draft/analyze branches don't pass these), so they
+    // pass through verbatim (undefined when absent — no behavior change).
+    entryStep: args.entryStep,
+    fromStep: args.fromStep,
     logFile: resolve(runDir, `${missionName}.log`),
   };
 }

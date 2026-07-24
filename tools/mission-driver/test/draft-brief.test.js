@@ -184,7 +184,7 @@ describe("cmdDraftMission — skipBrief single-stage (backward compat)", () => {
       __setRunnerFactoryForTest(() => runner);
 
       await assert.rejects(
-        () => cmdDraftMission("x", { dir: root, draftJobDir: jobDir, skipBrief: true }),
+        () => cmdDraftMission("fail draft", { dir: root, draftJobDir: jobDir, skipBrief: true }),
         /draft boom/,
       );
 

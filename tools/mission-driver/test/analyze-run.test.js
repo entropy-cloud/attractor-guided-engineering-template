@@ -327,6 +327,43 @@ describe("buildRunSkeleton", () => {
     const skel = buildRunSkeleton(dir);
     assert.match(skel, /RED FLAGS: none detected/);
   });
+
+  // WI5 — audit round progress surfaces in the skeleton so postmortem agents
+  // know how many DEEP_AUDIT rounds were executed. Skipped entirely when the
+  // flow has no audit concept (maxAuditRounds === 0).
+  it("WI5: emits 'Audit rounds: N/M' when state.maxAuditRounds > 0", () => {
+    const dir = makeRunDir(root, "2026-07-01-100000-mission-driver", {
+      state: {
+        missionName: "m", runId: "audit-run", status: "completed", steps: [],
+        auditRound: 2, maxAuditRounds: 3,
+      },
+      events: [{ type: "run_started" }],
+    });
+    const skel = buildRunSkeleton(dir);
+    assert.match(skel, /Audit rounds: 2\/3/);
+  });
+
+  it("WI5: omits the Audit rounds line when maxAuditRounds is 0 (audit-less flow)", () => {
+    const dir = makeRunDir(root, "2026-07-01-100000-mission-driver", {
+      state: { missionName: "m", runId: "plain", status: "completed", steps: [] },
+      events: [{ type: "run_started" }],
+    });
+    const skel = buildRunSkeleton(dir);
+    assert.doesNotMatch(skel, /Audit rounds:/);
+  });
+
+  it("WI5: falls back to 0 for legacy run-state.json missing the fields", () => {
+    const dir = makeRunDir(root, "2026-07-01-100000-mission-driver", {
+      state: {
+        missionName: "m", runId: "legacy", status: "completed", steps: [],
+        maxAuditRounds: 2,
+        // auditRound field intentionally absent (legacy run-state.json pre-WI1)
+      },
+      events: [{ type: "run_started" }],
+    });
+    const skel = buildRunSkeleton(dir);
+    assert.match(skel, /Audit rounds: 0\/2/);
+  });
 });
 
 // resolveRunModule ------------------------------------------------------------

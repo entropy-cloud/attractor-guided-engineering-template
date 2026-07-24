@@ -59,11 +59,14 @@ const openCommandModal = inject<(missionName?: string | null) => void>('openComm
 
 // FSD §4.3 header — status tag type mirrors the run status mapping used
 // elsewhere (running→info, completed→success, failed→error, max_*→warning).
+// WI5 — `single_step_done` maps to success here too so the RunDetail header
+// stays consistent with RunList's status tag (AppHeader.vue:60-61 mirror rule).
 const statusTagType = computed<'info' | 'success' | 'error' | 'warning' | 'default'>(() => {
   const s = props.status
   if (!s) return 'default'
   if (s === 'running') return 'info'
   if (s === 'completed') return 'success'
+  if (s === 'single_step_done') return 'success'
   if (s === 'failed') return 'error'
   if (typeof s === 'string' && s.startsWith('max_')) return 'warning'
   return 'default'

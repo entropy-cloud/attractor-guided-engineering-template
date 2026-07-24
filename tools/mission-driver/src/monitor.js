@@ -30,7 +30,7 @@ import { getSpawner, __setSpawnerForTest } from "./spawner.mjs";
 import { PLAN_STATUS_RE } from "./plan-check.mjs";
 import { getAllProcesses, getDescendants } from "./platform.mjs";
 import { reconcileStaleRuns, isAliveAndOurs, markAborted } from "./run-reconcile.mjs";
-import { startDraftJob, readDraftJob, listDraftJobs } from "./draft-job.mjs";
+import { startDraftJob, readDraftJob, listDraftJobs, validateDraftDesc } from "./draft-job.mjs";
 import {
   buildInjectionMap,
   listPrompts,
@@ -250,41 +250,117 @@ export function mergeSubflowChildren(runDir, steps) {
   for (const step of steps) {
     if (step.type !== "subflow") continue;
 
-    if (Array.isArray(step.subflowRuns) && step.subflowRuns.length > 0) {
-      step.children = step.subflowRuns.map(function (r) {
-        const cs = readSubflowState(runDir, r.file);
-        return {
+    // Build a per-forEachIndex map combining subflowRuns metadata + disk state.
+    // The disk file is the LIVE source of truth for status/steps/currentStep;
+    // subflowRuns provides forEachItem metadata (the disk file doesn't have it).
+    //
+    // Two bugs this unifies:
+    //  (a) subflowRuns placeholder with file=null (non-forEach subflow start):
+    //      engine writes {forEachIndex:0, status:"running", file:null} before
+    //      the child's run-state-<stepName>-<visits>-0.json exists, then never
+    //      updates file when the child starts writing. readSubflowState(null)
+    //      returns null → child renders with empty steps.
+    //  (b) forEach subflow with N completed + 1 in-flight: engine appends to
+    //      subflowRuns on item COMPLETION only (WI5 _wfAppendSubflowRun), so
+    //      while item N is running its disk file exists but is absent from
+    //      subflowRuns.
+    // Both are fixed by always scanning disk and MERGING live state over
+    // whatever subflowRuns seeded (previously the disk scan was either skipped
+    // entirely when subflowRuns was non-empty, or skipped per-index when the
+    // index was already seeded).
+    const childrenByIndex = new Map();
+
+    // 1. Seed forEachItem metadata + live state from subflowRuns. When r.file
+    //    is a valid path, read it directly (the authoritative source for
+    //    completed items — works even when step.visits is missing, which the
+    //    disk-scan prefix computation below cannot handle).
+    if (Array.isArray(step.subflowRuns)) {
+      for (const r of step.subflowRuns) {
+        const cs = r.file ? readSubflowState(runDir, r.file) : null;
+        childrenByIndex.set(r.forEachIndex, {
           forEachIndex: r.forEachIndex,
           forEachItem: r.forEachItem,
+          file: r.file || null,
           status: (cs && cs.status) || r.status || "unknown",
           steps: (cs && Array.isArray(cs.steps)) ? cs.steps : [],
           currentStep: (cs && cs.currentStep) || null,
-        };
-      });
-      continue;
-    }
-
-    if (step.status === "running") {
-      const prefix = `${step.name}-${step.visits}-`;
-      let matching = [];
-      try {
-        matching = readdirSync(runDir)
-          .filter(function (f) { return f.startsWith("run-state-") && f.endsWith(".json"); })
-          .map(function (f) { return f.slice("run-state-".length, -".json".length); })
-          .filter(function (id) { return id.startsWith(prefix); });
-      } catch {}
-      if (matching.length > 0) {
-        step.children = matching.map(function (id) {
-          const cs = readSubflowState(runDir, `run-state-${id}.json`);
-          return {
-            forEachIndex: parseInt(id.split("-").pop(), 10) || 0,
-            forEachItem: null,
-            status: (cs && cs.status) || "unknown",
-            steps: (cs && Array.isArray(cs.steps)) ? cs.steps : [],
-            currentStep: (cs && cs.currentStep) || null,
-          };
         });
       }
+    }
+
+    // 2. Scan disk for run-state-<stepName>-<visits>-<idx>.json files. MERGE
+    //    live state (status/steps/currentStep) into existing seed entries
+    //    (disk is fresher); ADD new entries for indices not in the seed
+    //    (catches in-flight forEach items not yet appended to subflowRuns).
+    //
+    //    The filename encodes visits (engine.js _wfOpen increments visits
+    //    on every entry, so real subflow steps always carry a numeric
+    //    visits). When visits is absent (synthetic test step, deserialized
+    //    legacy state, or corruption), the narrow `${step.name}-${step.visits}-`
+    //    prefix would silently produce "SUB-undefined-" and match nothing —
+    //    a silent no-op that drops the file:null placeholder case to empty
+    //    steps (O5). Fall back to a broader stepName-only prefix in that
+    //    case; the idx (trailing `-N` segment, parsed below) still
+    //    disambiguates forEach items, and the seed loop's direct r.file
+    //    read above remains the authoritative path when a real file
+    //    pointer exists.
+    const prefix = (step.visits == null)
+      ? `${step.name}-`
+      : `${step.name}-${step.visits}-`;
+    let matching = [];
+    try {
+      matching = readdirSync(runDir)
+        .filter(function (f) { return f.startsWith("run-state-") && f.endsWith(".json"); })
+        .map(function (f) { return f.slice("run-state-".length, -".json".length); })
+        .filter(function (id) { return id.startsWith(prefix); });
+    } catch {}
+
+    for (const id of matching) {
+      const idx = parseInt(id.split("-").pop(), 10) || 0;
+      const fileName = `run-state-${id}.json`;
+      const cs = readSubflowState(runDir, fileName);
+      const liveSteps = (cs && Array.isArray(cs.steps)) ? cs.steps : [];
+      const liveStatus = (cs && cs.status) || null;
+      const liveCurrentStep = (cs && cs.currentStep) || null;
+
+      if (childrenByIndex.has(idx)) {
+        // MERGE: disk state wins on live fields; seed keeps forEachItem
+        // (disk file doesn't carry it). This fixes the file=null placeholder
+        // case — the seed had no readable state, disk provides it.
+        const existing = childrenByIndex.get(idx);
+        if (liveStatus) existing.status = liveStatus;
+        if (liveSteps.length > 0) existing.steps = liveSteps;
+        if (liveCurrentStep) existing.currentStep = liveCurrentStep;
+        if (!existing.file) existing.file = fileName;
+      } else {
+        // Disk-only: in-flight item not yet in subflowRuns. Read forEachItem
+        // (plan path) from the child's own state file — engine.js _initWorkflow
+        // persists it at child start time specifically so the monitor can
+        // display the plan name before the parent appends to subflowRuns.
+        childrenByIndex.set(idx, {
+          forEachIndex: idx,
+          forEachItem: (cs && cs.forEachItem) || null,
+          file: fileName,
+          status: liveStatus || "unknown",
+          steps: liveSteps,
+          currentStep: liveCurrentStep,
+        });
+      }
+    }
+
+    if (childrenByIndex.size > 0) {
+      step.children = [...childrenByIndex.values()]
+        .sort((a, b) => a.forEachIndex - b.forEachIndex);
+    }
+
+    // Flag forEach subflows so the frontend can show "Plan N" labels for ALL
+    // children (including disk-only in-flight ones whose forEachItem is null).
+    // Without this flag, the frontend can't distinguish a disk-only forEach
+    // child (forEachItem=null because not yet in subflowRuns) from a non-forEach
+    // subflow child (forEachItem=null because there's no iteration). Detection:
+    // any subflowRuns entry carries a non-null forEachItem → forEach subflow.
+    if (Array.isArray(step.subflowRuns) && step.subflowRuns.some((r) => r.forEachItem != null)) {
+      step.forEach = true;
     }
   }
 }
@@ -322,6 +398,11 @@ function synthesizeFromEvents(runDir, dirName, events) {
     endedAt: completed ? completed.ts || null : null,
     currentStep: null,
     steps: [],
+    // WI5 — old runs without run-state.json (events-only fallback) get the
+    // same default shape as runs with state, so the frontend never observes
+    // undefined for these fields.
+    auditRound: 0,
+    maxAuditRounds: 0,
   };
 }
 
@@ -337,6 +418,10 @@ function summarizeRun(state, runDir, dirName) {
     currentStep: state.currentStep || null,
     stepCount: Array.isArray(state.steps) ? state.steps.length : 0,
     runDir: state.runDir || runDir,
+    // WI5 — surface DEEP_AUDIT progress in the run list. `?? 0` falls back
+    // for legacy run-state.json that predates WI1.
+    auditRound: state.auditRound ?? 0,
+    maxAuditRounds: state.maxAuditRounds ?? 0,
   };
 }
 
@@ -1135,7 +1220,7 @@ const BROWSE_SKIP_DIRS = new Set(["node_modules", "_tmp", ".git", "dist", "targe
 // mdo-4 P2: cap on entries returned by GET /api/browse (avoids huge directory dumps).
 const BROWSE_MAX_ENTRIES = 200;
 
-function handleStartDraft(projectRoot, body) {
+export function handleStartDraft(projectRoot, body) {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     return { error: "request body must be a JSON object", status: 400 };
   }
@@ -1145,6 +1230,22 @@ function handleStartDraft(projectRoot, body) {
   }
   if (Buffer.byteLength(desc, "utf8") > DRAFT_DESC_MAX_BYTES) {
     return { error: `desc must be ≤ ${DRAFT_DESC_MAX_BYTES} bytes`, status: 400 };
+  }
+
+  // N2 (mdr-remediate-2): upstream pre-validation mirroring cmdDraftMission's
+  // WI1 gate (design §4.1). Reads base.json's draft.minDescLength with the
+  // same pattern as src/main.js:344-348 so the dashboard's POST /api/draft
+  // path rejects placeholder/over-short desc BEFORE any jobDir creation /
+  // state write / spawn. validateDraftDesc is the single source of truth
+  // for the WI1 contract; this closes the "defense in depth on both ends"
+  // pair (F2 downstream terminal-state write + N2 upstream monitor gate).
+  let baseConfig = {};
+  try {
+    baseConfig = JSON.parse(readFileSync(resolve(projectRoot, "missions", "base.json"), "utf8"));
+  } catch { baseConfig = {}; }
+  const v = validateDraftDesc(desc, baseConfig?.draft?.minDescLength);
+  if (!v.ok) {
+    return { error: v.reason, status: 400 };
   }
 
   // mdo-4 P2: optional flowHint / targetFile / skipBrief pass-through.

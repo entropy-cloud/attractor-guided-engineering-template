@@ -24,12 +24,18 @@ Read `{{planGuide}}` **completely**. It defines the plan format, status lifecycl
 
 4. **Review before active**: For each drafted plan, follow the `Plan Review Rule` in `{{planGuide}}` — use an independent sub-agent (fresh session) to review repeatedly until consensus. **Only change `> Plan Status: draft` to `> Plan Status: active` after consensus is reached**; otherwise leave it `draft`.
 
-If nothing to draft (roadmap done, no deferred items), return results in the following format:
+## Mission Completion Decision
+
+Do not decide whether the mission is complete. Whether the mission is complete is decided by the engine based on the audit round count, not by you. You only answer one question per run: "is there a plan worth drafting right now?"
+
+In particular: `docs/audits/` may contain plan-level closure audit artifacts produced by the `plan-execution` subflow. Those are NOT mission-level audits and you MUST NOT read them as evidence that deep audit has run. The engine decides based on the audit round count whether to enter another deep-audit round or to complete the mission; you cannot influence that decision from this step.
+
+## Result Markers
+
+If there is no plan to draft this round (the roadmap's current todo items are empty and no deferred item is re-triggerable), return:
 ```
 <AI_STEP_RESULT>nothing</AI_STEP_RESULT>
 ```
-
-The engine will decide when the mission is fully complete based on DEEP_AUDIT visit rounds — do NOT return `done` here.
 
 When plans are created, return results in the following format:
 ```
@@ -41,4 +47,4 @@ When plans are created, return results in the following format:
 
 In PLAN_FILE, provide only the first (lowest N) plan path. The engine discovers the rest via scan. All plan files must exist on disk — placeholder paths are rejected.
 
-Your output MUST end with exactly one `<AI_STEP_RESULT>` marker (`nothing` or `created`, with the `<FLOW_VARS>` block only when `created`). This is the only marker that is parsed; a missing or malformed marker triggers an additional correction run, so emit it exactly as shown.
+Your output MUST end with exactly one `<AI_STEP_RESULT>` marker — either `nothing` or `created`, with the `<FLOW_VARS>` block only when `created`. This is the only marker that is parsed; a missing or malformed marker triggers an additional correction run, so emit it exactly as shown. Do not emit any other marker value.

@@ -125,7 +125,9 @@ export async function createRunner(config, executeFn = execute) {
     if (sessionId) {
       args.push("--session", sessionId);
     }
-    const onStepUpdate = typeof config.onStepUpdate === "function" ? config.onStepUpdate : null;
+    const onStepUpdate = typeof opts.onStepUpdate === "function"
+      ? opts.onStepUpdate
+      : (typeof config.onStepUpdate === "function" ? config.onStepUpdate : null);
     let sessionPollTimer = null;
     const result = await executeFn(config, `oc-${stepName}`, "opencode", args, {
       cwd: config.projectRoot,
