@@ -4,9 +4,11 @@ The production frontend for the Mission-Driver Monitor Server. Replaces the lega
 single-file Alpine.js UI in [`../web/`](../web/README.md) (deprecated).
 
 Built with **Vue 3 + TypeScript + Naive UI + Pinia + Vue Router**, bundling
-**xterm.js** (log viewer) via Vite. Resource monitoring is a plain Naive UI
-table (recent snapshots); ECharts was removed to cut ~65MB of node_modules and
-a ~539KB lazy chunk.
+**xterm.js** (log viewer) via Vite. Naive UI is imported **on-demand**
+(`unplugin-vue-components` + `NaiveUiResolver`, no global `app.use(naive)`), so
+unused components are tree-shaken out (first-screen JS gzip ≈198KB). Resource
+monitoring is a plain Naive UI table (recent snapshots); ECharts was removed to
+cut ~65MB of node_modules and a ~539KB lazy chunk.
 
 ## Quick start
 

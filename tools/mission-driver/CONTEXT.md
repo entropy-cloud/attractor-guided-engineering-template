@@ -83,7 +83,7 @@ sourcePaths（依赖模块源码路径，不同同事路径不同）
 - Log Viewer 图标: ArrowDownOutline/PauseOutline/ChevronDownOutline/ChevronUpOutline（Ionicons 5）
 - Resource View: Naive UI 表格，最近 8 条 sysmon 快照（Time / Free Mem GB / Opencode RSS GB / Opencode / Node / Pressure）+ Active Processes 表（ECharts 已移除）
 - Base Config: 任意页面右上角 ⚙ 齿轮按钮 → Modal（n-code JSON 高亮）
-- NFR-3: xterm 按 RunDetail 路由懒加载，首屏 <500KB（ECharts 已移除，无 echarts chunk）
+- NFR-3: xterm 按 RunDetail 路由懒加载；naive-ui 按需导入（`unplugin-vue-components` + `NaiveUiResolver`，无全局 `app.use(naive)`，Vite tree-shake 掉 Calendar/DatePicker/Transfer 等未用组件）；ECharts 已移除。首屏 JS gzip ≈198KB（由旧单一入口 409KB 降约一半）
 - WI5: `GET /api/runs/:id` 返回的 `run` 含 `auditRound` / `maxAuditRounds`（旧 run-state.json `?? 0` 兜底）；RunDetail 顶部展示 'Deep Audit: N / M'（仅当 `maxAuditRounds > 0`；额度用完 tag→success，进行中→info）。RunList 与 AppHeader 的 `statusTagType` 同步把 `single_step_done` 识别为 success（与 `main.js` exitMap 的 exit code 0 对齐）。
 
 
