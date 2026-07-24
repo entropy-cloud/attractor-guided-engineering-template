@@ -215,11 +215,12 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 4. Create missions/base.json
+# 4. Create missions/base.json + demo.json + demo-roadmap.md
 # ---------------------------------------------------------------------------
 
-echo "[4/7] Creating missions/base.json..."
+echo "[4/7] Creating missions/ (base.json + demo.json + demo-roadmap)..."
 mkdir -p "$TARGET/missions"
+
 if [ ! -f "$TARGET/missions/base.json" ]; then
   cat > "$TARGET/missions/base.json" <<BASE_EOF
 {
@@ -243,9 +244,65 @@ if [ ! -f "$TARGET/missions/base.json" ]; then
   "commitFormat": "<type>(<scope>): <description>"
 }
 BASE_EOF
-  echo "      created."
+  echo "      base.json created."
 else
-  echo "      skipped (already exists)."
+  echo "      base.json skipped (already exists)."
+fi
+
+if [ ! -f "$TARGET/missions/demo.json" ]; then
+  cat > "$TARGET/missions/demo.json" <<DEMO_EOF
+{
+  "extends": "base",
+  "name": "demo",
+  "description": "Demo mission: verifies the AGE scaffold + mission-driver engine + monitor dashboard are correctly installed. Safe to run — uses echo for all commands so it always passes.",
+  "flowName": "mission-driver",
+  "roadmapPath": "docs/backlog/demo-roadmap.md",
+  "plansDir": "docs/plans",
+  "planGuide": "docs/plans/00-plan-authoring-and-execution-guide.md",
+  "auditsDir": "docs/audits",
+  "contextDir": "docs/context",
+  "moduleDir": ".",
+  "commands": {
+    "test": "echo demo-ok",
+    "build": "echo demo-ok",
+    "lint": "echo demo-ok",
+    "typecheck": "echo demo-ok"
+  },
+  "commitFormat": "docs(demo): <description>"
+}
+DEMO_EOF
+  echo "      demo.json created."
+else
+  echo "      demo.json skipped (already exists)."
+fi
+
+# demo-roadmap.md (minimal, project-agnostic)
+if [ ! -f "$TARGET/docs/backlog/demo-roadmap.md" ]; then
+  mkdir -p "$TARGET/docs/backlog"
+  cat > "$TARGET/docs/backlog/demo-roadmap.md" <<ROADMAP_EOF
+# Demo Roadmap
+
+> Minimal roadmap for the demo mission. Verifies the install end-to-end.
+
+## Work Item Status
+
+| Work Item | Status | Owner Doc / Source | Dependencies | Reuse |
+| --------- | ------ | ------------------ | ------------ | ----- |
+| M1/WI1 脚手架验证 | done | AGENTS.md | — | — |
+| M1/WI2 引擎冒烟 | done | docs/context/project-context.md | WI1 | echo demo-ok |
+| M1/WI3 Dashboard 集成 | ready | docs/context/project-context.md | WI2 | ./tools/mission-driver.sh monitor |
+
+## Milestones
+
+### M1 — 基础验证
+
+- **WI1 脚手架验证** — 确认 AGENTS.md / docs/ 目录就位。
+- **WI2 引擎冒烟** — \`./tools/mission-driver.sh run demo\` 能启动并完成 CHECK。
+- **WI3 Dashboard 集成** — \`./tools/mission-driver.sh monitor\` 打开 :9300 正常渲染。
+ROADMAP_EOF
+  echo "      demo-roadmap.md created."
+else
+  echo "      demo-roadmap.md skipped (already exists)."
 fi
 
 # ---------------------------------------------------------------------------
@@ -294,7 +351,8 @@ echo ""
 echo "Also created:"
 echo "  - tools/mission-driver.sh            (shim, MISSION_DRIVER_HOME=$REL_MDH)"
 echo "  - .env + .env.example                (MISSION_DRIVER_HOME configured)"
-echo "  - missions/base.json                 (FILL IN commands.*)"
+echo "  - missions/base.json                 (shared defaults — FILL IN commands.*)"
+echo "  - missions/demo.json                 (verify install — run ./tools/mission-driver.sh run demo)"
 echo "  - docs/logs/$YEAR/                    (daily log dir)"
 echo ""
 echo "NEXT STEPS:"
