@@ -1,6 +1,6 @@
 # 2026-07-24-1030 mission-driver clone-and-run：提交预构建 dist + CI 新鲜度校验
 
-> Plan Status: active
+> Plan Status: completed
 > Last Reviewed: 2026-07-24
 > Source: user request — 首次 clone 需要“使用”的人被迫装前端依赖 + 手动打包太繁琐
 > Related: 2026-07-24-1030-mission-driver-web-bundle-slimming-plan.md（C，已 completed，使 committed dist 更小）；commit 0a40c5f（引擎 vendor commander 实现零 install）
@@ -105,16 +105,16 @@ Exit Criteria:
 
 ## Closure Gates
 
-- [ ] 消费者零 install/零 build 路径成立（干净 checkout 启 monitor 出完整 Dashboard）
-- [ ] user-manual、`web/README.md:77`、`CONTEXT.md` 与 clone-and-run 对齐
-- [ ] 验证已运行：干净 checkout 启 monitor、`check:dist` 正反用例、workflow 结构核对
-- [ ] scoped 验证不冒充全量
-- [ ] 无 in-scope 项降级为 deferred/follow-up
-- [ ] 独立 draft review 记录完整（iteration 1 + 用户人工批准）
-- [ ] ask-first 人工批准已取得并记录
-- [ ] 文本一致性：状态、phases、gates、log 一致
-- [ ] 独立 closure audit（subagent）
-- [ ] 闭环证据落盘
+- [x] 消费者零 install/零 build 路径成立（干净 checkout 启 monitor 出完整 Dashboard）
+- [x] user-manual、`web/README.md`、`CONTEXT.md` 与 clone-and-run 对齐
+- [x] 验证已运行：干净 checkout 启 monitor、`check:dist` 正反用例、workflow 结构核对
+- [x] scoped 验证不冒充全量
+- [x] 无 in-scope 项降级为 deferred/follow-up
+- [x] 独立 draft review 记录完整（iteration 1 + 用户人工批准）
+- [x] ask-first 人工批准已取得并记录
+- [x] 文本一致性：状态、phases、gates、log 一致
+- [x] 独立 closure audit（subagent）
+- [x] 闭环证据落盘
 
 ## Deferred But Adjudicated
 
@@ -126,13 +126,16 @@ Exit Criteria:
 
 ## Closure
 
-Status Note: <待 Phase1/2 落地 + 独立 closure audit 后填写>
+Status Note: clone-and-run 落地——引擎零依赖（commander vendored）+ `web/dist` 提交入 git，消费者 clone 即用、零 install 零 build；CI rebuild+`git diff` 守卫 dist 新鲜度。独立 closure audit 判 `closure accepted`。
 
 Closure Audit Evidence:
 
-- Auditor / Agent: <独立 subagent>
-- Evidence: <task id / log / walkthrough>
+- Auditor / Agent: 独立 subagent（task ses_06dc75832fferBEQsSBkkgI6ap，2026-07-24，read-only）
+- Evidence（独立复核逐项）：① dist 已跟踪（`git ls-files …/dist` = 17 文件，`git check-ignore` exit 1=未忽略）；② CI workflow 路径/pin/frozen-lockfile/git-diff 结构正确、YAML 合法、`working-directory`+`dist` 路径解析正确；③ **同机确定性已实证**（rebuild 后 `git diff --exit-code -- dist` exit 0、tree 干净）；④ check:dist 脚本逻辑正确；⑤ `.gitkeep` 经 build 存活；⑥ clone-and-run 证据：`tools/mission-driver/package.json` 无 dependencies、`vendor/commander/` 存在、monitor.js:170/1742-1748/1790-1797 静态托管 dist + 缺失降级占位；⑦ 文档全部对齐（zh §1.3/§1.4、README、CONTEXT）；⑧ plan 文本一致。
+- Verdict：`closure accepted`，无 blocking。唯一 Major(M1)=跨 Node(26→20)/跨 OS(Win→Ubuntu) 确定性为"假设非实证"——评 MEDIUM 残余，强缓解（frozen-lockfile 锁 esbuild/rollup/vite、esbuild 为确定性 Go 二进制、`.gitattributes eol=lf`、dist 无机器路径嵌入），CI 即权威验证器，drift 会响亮失败而非静默腐化。审计建议采纳：
+  - **已落地**：`web/package.json` 加 `packageManager: pnpm@10.27.0`；新增 `web/.nvmrc`（Node 20）→ 贡献者环境对齐 CI，M1 缓解转为预防。
+  - **不适用**：审计 m1 建议 sync `user-manual.en.md` §1.3——经核查英文手册**从无 §1.3 安装段**（§1.2 直接到 §2），无 stale 流，无需改。
 
 Follow-up:
 
-- <非阻塞项>
+- 无阻塞项。CI 首次运行即对跨环境确定性做最终实证（若 Node20/ubuntu 产物哈希与本地一致 → M1 残余消解）。
