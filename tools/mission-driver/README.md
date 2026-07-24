@@ -15,6 +15,31 @@ Common flags: `--dry-run`, `--model <model>`, `--agent <agent>`,
 `--from-step <STEP>` (entry override + keep looping; mutually exclusive with
 `--step`), `--no-monitor`, `--monitor` (standalone browsing), `--list-missions`.
 
+## Download & Run
+
+Pre-built releases: <https://github.com/pymjer/attractor-guided-engineering-template/releases>
+(download **Source code (zip/tar.gz)** of the latest tag).
+
+**Prerequisites** (same for Windows / macOS / Linux — the source is
+cross-platform Node.js, there is no per-OS binary):
+
+- **Node.js ≥ 18** in PATH
+- **`opencode` CLI** in PATH (mission-driver spawns `opencode run` per agent step)
+- Windows users: use Git Bash or WSL
+
+**Zero install, zero build.** The engine has no npm dependencies (`commander` is
+vendored under `vendor/`), and the monitor frontend's built `web/dist/` is
+committed, so after extracting the release:
+
+```bash
+node tools/mission-driver/src/main.js list       # verify it runs
+node tools/mission-driver/src/main.js monitor    # open the dashboard on :9300
+```
+
+To pin a known-good version, checkout the tag you downloaded, e.g.
+`git checkout v1.0.0`. Consumer projects reference a specific release via
+`MISSION_DRIVER_HOME` (see `docs/user-manual.zh.md §1.4`).
+
 ## 配置项 (Configuration)
 
 ### Model selection

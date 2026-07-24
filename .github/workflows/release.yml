@@ -1,0 +1,30 @@
+name: release
+
+# On a version tag push (v1.2.3, v1.2.0-rc.1), publish a GitHub Release with
+# auto-generated release notes. GitHub also attaches Source code (zip/tar.gz) for
+# every release automatically — those are the cross-platform download artifacts
+# (the source is platform-independent Node.js; see README prerequisites).
+#
+# Industry-standard pattern (lazygit / fnm / oh-my-zsh style): humans only `git
+# tag vX.Y.Z && git push --tags`; the release page + changelog are produced here.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
