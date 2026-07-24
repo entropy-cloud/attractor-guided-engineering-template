@@ -12,3 +12,4 @@ report/
 .opencode/*
 !.opencode/skills/
 nul
+.env
