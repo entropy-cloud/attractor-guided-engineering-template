@@ -1834,24 +1834,30 @@ export function startMonitor({ projectRoot, runDir, missionName, port, webDir })
       return;
     }
 
-    // Fixed port: retry +1 on EADDRINUSE (9300→9305, max 5 attempts, NFR-11)
+    // Fixed port: retry +1 on EADDRINUSE (9300→9319, max 20 attempts, NFR-11)
+    // Allows multiple project monitors to run concurrently.
     let attempt = 0;
-    const maxAttempts = 5;
+    const maxAttempts = 20;
 
     function tryListen() {
       const tryPort = basePort + attempt;
+      // Remove listeners from the previous (failed) attempt so stale callbacks
+      // don't fire with the wrong port when the next attempt succeeds.
       server.removeAllListeners("error");
+      server.removeAllListeners("listening");
       server.once("error", (err) => {
         if (err.code === "EADDRINUSE" && attempt < maxAttempts - 1) {
           attempt++;
+          console.log(`[monitor] :${tryPort} in use, trying :${basePort + attempt}...`);
           tryListen();
         } else {
           reject(err);
         }
       });
-      server.listen(tryPort, () => {
+      server.once("listening", () => {
         resolveFn({ server, port: tryPort, close: doClose });
       });
+      server.listen(tryPort);
     }
 
     tryListen();

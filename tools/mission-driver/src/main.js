@@ -2,7 +2,7 @@
 import { existsSync, readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
 import { resolve, dirname, relative, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Command } from "commander";
+import { Command } from "../vendor/commander/index.js";
 import { resolveConfig, buildRunSkeleton, inferModuleName, listMissionsString } from "./config.js";
 import { createRunner, resetMockState } from "./runner.js";
 import { FlowEngine, stripAnsiControl } from "./engine.js";

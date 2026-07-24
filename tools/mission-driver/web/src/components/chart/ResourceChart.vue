@@ -1,21 +1,34 @@
 <!--
-  ResourceChart — vue-echarts resource monitoring + active process table.
-  FSD §4.6. Chart: Free Memory (GB, left axis) / Opencode RSS (GB, left axis) / Opencode Count (right axis).
+  ResourceChart — resource monitoring history table + active process table.
+  FSD §4.6. History: last N sysmon snapshots (newest first) — Time / Free Memory (GB) /
+  Opencode RSS (GB) / Opencode Count / Node Count / Mem Pressure.
   Table: latest snapshot's top processes (RSS-sorted).
 
   Opencode Count replaces the old Process Count — knowing there are 347
   processes on the machine is useless for mission diagnostics; knowing there
   are 3 opencode instances (when only 1 should be running) directly spots
   orphans/stuck spawns.
+
+  ECharts was removed (see docs/logs): the line chart was the only echarts
+  consumer and pulled a ~539KB lazy chunk + ~65MB node_modules. A compact
+  recent-history table covers the same diagnostic need at zero dependency cost.
 -->
 <template>
   <div class="resource-chart">
-    <VChart
-      v-if="hasData"
-      :option="option"
-      autoresize
-      class="chart"
-    />
+    <div v-if="hasData" class="hist-section">
+      <div class="proc-head">
+        <span class="proc-title">Resource History</span>
+        <span class="proc-meta">最近 {{ recentSnapshots.length }} 条</span>
+      </div>
+      <n-data-table
+        :columns="histColumns"
+        :data="recentSnapshots"
+        :row-key="(s: SysmonSnapshot) => s.ts ?? ''"
+        size="small"
+        :bordered="false"
+        :single-line="false"
+      />
+    </div>
     <n-empty
       v-else
       description="暂无资源监控数据"
@@ -48,17 +61,74 @@
 <script setup lang="ts">
 import { computed, h } from 'vue'
 import { NDataTable, NEmpty, NTag } from 'naive-ui'
-import VChart from 'vue-echarts'
-import type { EChartsOption } from 'echarts'
-import './echarts-setup'
 import { useSysmonStore } from '@/stores/sysmon'
 import { useMissionStore } from '@/stores/mission'
-import type { SysmonTopProc } from '@/types/sysmon'
+import type { SysmonSnapshot, SysmonTopProc } from '@/types/sysmon'
 
 const sysmonStore = useSysmonStore()
 const missionStore = useMissionStore()
 
-const hasData = computed(() => sysmonStore.freeSeries.length > 0)
+// How many recent snapshots to show in the history table.
+const RECENT_LIMIT = 8
+
+const hasData = computed(() => sysmonStore.snapshots.length > 0)
+
+/** Last N snapshots, newest first. */
+const recentSnapshots = computed<SysmonSnapshot[]>(() =>
+  sysmonStore.snapshots.slice(-RECENT_LIMIT).reverse()
+)
+
+function fmtTime(ts: string | null): string {
+  if (!ts) return '—'
+  const d = new Date(ts)
+  if (Number.isNaN(d.getTime())) return ts
+  return d.toLocaleTimeString(undefined, { hour12: false })
+}
+
+const histColumns = computed(() => [
+  {
+    title: 'Time',
+    key: 'ts',
+    width: 90,
+    render: (row: SysmonSnapshot) => h('span', { class: 'mono-sm' }, fmtTime(row.ts)),
+  },
+  {
+    title: 'Free (GB)',
+    key: 'freeGB',
+    width: 80,
+    render: (row: SysmonSnapshot) =>
+      h('span', { class: 'mono-sm' }, row.freeGB != null ? row.freeGB.toFixed(2) : '—'),
+  },
+  {
+    title: 'OC RSS (GB)',
+    key: 'opencodeRSS_MB',
+    width: 90,
+    render: (row: SysmonSnapshot) =>
+      h(
+        'span',
+        { class: 'mono-sm' },
+        row.opencodeRSS_MB != null ? (row.opencodeRSS_MB / 1024).toFixed(2) : '—'
+      ),
+  },
+  {
+    title: 'OC',
+    key: 'opencodeCount',
+    width: 50,
+    render: (row: SysmonSnapshot) => h('span', { class: 'mono-sm' }, String(row.opencodeCount ?? '—')),
+  },
+  {
+    title: 'Node',
+    key: 'nodeCount',
+    width: 56,
+    render: (row: SysmonSnapshot) => h('span', { class: 'mono-sm' }, String(row.nodeCount ?? '—')),
+  },
+  {
+    title: 'Pressure',
+    key: 'memPressure',
+    width: 80,
+    render: (row: SysmonSnapshot) => row.memPressure ?? '—',
+  },
+])
 
 const topProcs = computed(() => sysmonStore.latest?.topProcs ?? [])
 
@@ -108,88 +178,14 @@ const procColumns = computed(() => [
     render: (row: SysmonTopProc) => row.elapsed || '—',
   },
 ])
-
-const freeGBSeries = computed<[string, number][]>(() =>
-  sysmonStore.freeSeries.map(([ts, mb]) => [ts, +(mb / 1024).toFixed(2)])
-)
-const rssGBSeries = computed<[string, number][]>(() =>
-  sysmonStore.rssSeries.map(([ts, mb]) => [ts, +(mb / 1024).toFixed(2)])
-)
-
-const option = computed<EChartsOption>(() => ({
-  backgroundColor: 'transparent',
-  textStyle: { color: '#cbd5e1' },
-  tooltip: { trigger: 'axis' },
-  legend: {
-    data: ['Free Memory (GB)', 'Opencode RSS (GB)', 'Opencode Count'],
-    textStyle: { color: '#cbd5e1' },
-    top: 0,
-  },
-  grid: { left: 56, right: 48, top: 36, bottom: 44 },
-  xAxis: {
-    type: 'time',
-    axisLabel: { color: '#94a3b8' },
-    axisLine: { lineStyle: { color: '#334155' } },
-  },
-  yAxis: [
-    {
-      type: 'value',
-      name: 'GB',
-      axisLabel: { color: '#94a3b8' },
-      splitLine: { lineStyle: { color: '#1e293b' } },
-      nameTextStyle: { color: '#94a3b8' },
-    },
-    {
-      type: 'value',
-      name: 'Count',
-      axisLabel: { color: '#94a3b8' },
-      splitLine: { show: false },
-      nameTextStyle: { color: '#94a3b8' },
-    },
-  ],
-  dataZoom: [
-    { type: 'inside' },
-    { type: 'slider', height: 16, bottom: 6, textStyle: { color: '#94a3b8' } },
-  ],
-  series: [
-    {
-      name: 'Free Memory (GB)',
-      type: 'line',
-      yAxisIndex: 0,
-      symbol: 'none',
-      itemStyle: { color: '#22c55e' },
-      lineStyle: { color: '#22c55e', width: 2 },
-      data: freeGBSeries.value,
-    },
-    {
-      name: 'Opencode RSS (GB)',
-      type: 'line',
-      yAxisIndex: 0,
-      symbol: 'none',
-      itemStyle: { color: '#3b82f6' },
-      lineStyle: { color: '#3b82f6', width: 2, type: 'dashed' },
-      data: rssGBSeries.value,
-    },
-    {
-      name: 'Opencode Count',
-      type: 'line',
-      yAxisIndex: 1,
-      symbol: 'circle',
-      symbolSize: 4,
-      itemStyle: { color: '#f97316' },
-      lineStyle: { color: '#f97316', width: 1, type: 'dotted' },
-      data: sysmonStore.ocCountSeries,
-    },
-  ],
-}))
 </script>
 
 <style scoped>
 .resource-chart {
   width: 100%;
 }
-.chart {
-  height: 280px;
+.hist-section {
+  margin-bottom: 4px;
 }
 .empty {
   padding: 24px 0;

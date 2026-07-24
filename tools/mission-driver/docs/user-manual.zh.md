@@ -55,47 +55,106 @@
 
 ### 1.3 安装（首次使用前必读）
 
-引擎核心几乎零依赖（CLI 只用 `commander`），但 **Web 监控面板需要单独装依赖并打包**，否则 `monitor` 打开只会看到占位页。
+**两种使用方式**：① 在本模板仓库直接试用；② 一键安装到你的项目。两者都是**零安装、零构建**——引擎已零 npm 依赖（`commander` vendor 内联）、`web/dist/` 已提交入 git。
 
-**前置条件**：Node.js ≥ 18、`pnpm`、`opencode` CLI 在 PATH 中；Windows 用 Git Bash / WSL。
+**前置条件**：Node.js ≥ 18、`opencode` CLI 在 PATH 中；Windows 用 Git Bash / WSL。
 
-**① 安装引擎依赖**（`commander`）：
+---
+
+#### 方式一：在本模板仓库直接试用
 
 ```bash
-cd tools/mission-driver
-pnpm install
+# 从 GitHub Releases 下载最新 Source code (zip/tar.gz)：
+#   https://github.com/pymjer/attractor-guided-engineering-template/releases
+# 或直接 clone：
+git clone https://github.com/pymjer/attractor-guided-engineering-template.git
+cd attractor-guided-engineering-template
+
+# 验证即可用（无需 pnpm install / build）
+./tools/mission-driver.sh list                  # 列出 missions
+./tools/mission-driver.sh run demo --dry-run    # 跑 demo（全栈可跑，echo 命令）
+./tools/mission-driver.sh monitor               # 打开 http://localhost:9300 → 完整 Dashboard
+npm --prefix tools/mission-driver test          # 引擎自测（556 pass + prompt-check: OK）
 ```
 
-**② 安装并打包 Web 监控面板**（让 `monitor` 直接出界面）：
+> monitor 从已提交的 `web/dist/` 静态托管界面，**无需 build**。
+
+---
+
+#### 方式二：一键安装到你的项目（推荐）
+
+模板自带 `install-age.sh` 脚本，自动完成脚手架拷贝、shim 创建、环境配置：
+
+```bash
+cd attractor-guided-engineering-template       # 进入模板仓库
+
+# 安装到目标项目（项目名可选，缺省从目录名推导）
+./install-age.sh /c/Work/my-project
+./install-age.sh /c/Work/my-project "My Project"
+```
+
+脚本自动完成（~10 秒）：
+
+| 步骤 | 内容 |
+|------|------|
+| ① 拷脚手架 | 77 个 docs/ 文件（manifest 精确控制，排除 template-internal 产物） |
+| ② 建 shim | `tools/mission-driver.sh`（引擎不复制，经 `MISSION_DRIVER_HOME` 引用） |
+| ③ 配环境 | `.env` + `.env.example`（自动算相对路径） |
+| ④ 建 mission | `missions/base.json`（commands 占位待填）+ `demo.json` + `demo-roadmap.md` |
+| ⑤ 建日志目录 | `docs/logs/{year}/` |
+| ⑥ 补 .gitignore | `.env`、`_tmp/` |
+| ⑦ 报告 | 打印 COPIED / SKIPPED 清单 |
+
+安装后验证：
+
+```bash
+cd /c/Work/my-project
+
+./tools/mission-driver.sh list                 # 应显示 base + demo
+./tools/mission-driver.sh run demo --dry-run   # 全流程跑通（不消耗 AI 额度）
+./tools/mission-driver.sh monitor              # 打开 :9300，多项目同时运行自动切换端口
+```
+
+安装后还需填写的 4 个文件（详见 `docs/context/project-context.md` 开头的注释）：
+
+1. `docs/context/project-context.md` — 项目身份 + 验证命令
+2. `docs/context/ai-autonomy-policy.md` — 保护区域 + reviewer availability
+3. `docs/context/codebase-map.md` — 入口点 + 常见变更路径
+4. `missions/base.json` — `commands.*` 改为你的 test/build/lint/typecheck 命令
+
+---
+
+#### （可选）前端开发者
+
+只有修改 `web/` 前端源码时才需要装依赖并重建：
 
 ```bash
 cd tools/mission-driver/web
-pnpm install         # 装前端依赖（vue / naive-ui / echarts / xterm / vue-flow …）
-pnpm build           # vue-tsc 类型检查 + vite 打包 → 产出 web/dist/
+pnpm install                              # 装前端依赖（vue / naive-ui / xterm / vue-flow …）
+pnpm dev                                  # 热更新开发：vite 跑在 :5173，/api 代理到 :9300
+#   另开一个终端：./tools/mission-driver.sh monitor --dev   （只提供 API/SSE，不托管静态文件）
+
+# 改完前端后，必须重建并提交 dist（否则别人 clone 到的是旧界面）：
+pnpm build                                # vue-tsc 类型检查 + vite 打包 → 更新 web/dist/
+pnpm check:dist                           # 校验 dist 与源码一致（CI 也会跑同样检查）
+git add dist && git commit                # 把更新后的 dist 一并提交
 ```
 
-> monitor 从 `web/dist/` 静态托管界面。**只要 build 过一次**，`./tools/mission-driver.sh monitor`
-> 打开 `http://localhost:9300` 就能直接看到完整 Dashboard。
-> 若**没 build**，:9300 只显示一个占位提示页（提示你去 build 或用 dev 模式）。
-> 前端开发时用 dev 模式：`./tools/mission-driver.sh monitor --dev` + 另开
-> `pnpm --prefix tools/mission-driver/web run dev`（vite 跑在 :5173，`/api` 代理到 :9300）。
-
-**③ 验证安装**：
-
-```bash
-npm --prefix tools/mission-driver test    # 引擎自测（应全绿 + 末行 prompt-check: OK）
-./tools/mission-driver.sh list            # 能列出 missions 即安装成功
-```
+> **为什么要提交 dist？** 让使用者 clone 即用、免安装免构建。CI（`.github/workflows/web-dist-check.yml`）会在 `web/` 变更时自动重建并比对，若忘了提交最新 dist 就会失败拦截。
 
 ### 1.4 在其他项目中集成（不复制引擎，用 shim）
 
+> **快速路径**：上节"方式二"的 `install-age.sh` 已自动完成下面 ①②③ 的全部手动步骤。
+> 本节描述**脚本背后做了什么**，以及脚本完成后的**手动定制要点**。如果你已用脚本安装，
+> 直接跳到 [③ missions 配置](#③-missions-配置) 和 [④ 项目级定制](#④-项目级定制)。
+
 引擎**只在本模板仓库维护一份**（单一真相源）。其他项目**不复制引擎**，而是放一个瘦 shim 脚本，
 经环境变量 / `.env` 指向本模板的 `tools/mission-driver`。下面用一个示例项目 **`orion-pay`**
-（一个 Java/Maven 多模块项目，模块如 `CORE` / `BILLING`）演示完整集成步骤——这套流程已在真实项目落地验证。
+（一个 Java/Maven 多模块项目，模块如 `CORE` / `BILLING`）演示。
 
-**前提**：本模板已按 §1.3 装好依赖（若要监控，也 build 过 web）。
+**前提**：本模板已 clone 到本地（引擎零依赖、`web/dist/` 已随仓库提交，无需安装或构建）。
 
-**① 在 `orion-pay` 项目建 shim** `tools/mission-driver.sh`：
+**① 在 `orion-pay` 项目建 shim** `tools/mission-driver.sh`（`install-age.sh` 自动生成，内容如下）：
 
 ```bash
 #!/bin/bash
@@ -125,7 +184,7 @@ fi
 exec node "$ABS_HOME/src/main.js" --dir "$PROJECT_ROOT" --missions-dir "missions" "$@"
 ```
 
-**② 配置引擎路径——用相对路径，别写死绝对路径**。建 `.env.example`（进 git）+ `.env`（进 `.gitignore`）：
+**② 配置引擎路径**——用相对路径，别写死绝对路径。建 `.env.example`（进 git）+ `.env`（进 `.gitignore`）：
 
 ```bash
 # orion-pay/.env.example
@@ -140,7 +199,9 @@ echo ".env" >> .gitignore   # 若尚未忽略
 
 > env 优先于 .env：CI 里可直接 `export MISSION_DRIVER_HOME=...` 覆盖，无需改 .env。
 
-**③ 建 `missions/` 配置**。先写共享默认 `missions/base.json`（以 orion-pay 的 Maven 为例）：
+<a id="③-missions-配置"></a>
+
+**③ `missions/` 配置**。先写共享默认 `missions/base.json`（以 orion-pay 的 Maven 为例）：
 
 ```json
 {
@@ -165,19 +226,33 @@ echo ".env" >> .gitignore   # 若尚未忽略
 `roadmapPath` / `plansDir` / 目标模块的 `moduleDir` + `commands`）。
 **注意**：`moduleDir` 必须是真实存在的目录（引擎会校验）。
 
+> **plansDir 约定**：每个 mission 的 `plansDir` 应指向 `docs/plans/<mission-name>/` 子目录
+> （如 `docs/plans/abo-bug-fixes`），而不是直接用 `docs/plans`。这样多个 mission 的 plan
+> 不会混在一起。`install-age.sh` 生成的 `demo.json` 已遵循此约定（`plansDir: "docs/plans/demo"`）。
+
+<a id="④-项目级定制"></a>
+
 **④ 项目级定制（不 fork 引擎）**。引擎**优先搜索项目目录**，再回退模板内置，所以定制放本项目即可：
 
 - `missions/flows/*.json` — 项目专属 flow / 子流程（引擎先搜这里）
 - `missions/prompts/*.md` — 覆盖某个内置 prompt，或新增项目专属 prompt
 
-**⑤ 跑起来**：
+**⑤ 验证与运行**：
 
 ```bash
-./tools/mission-driver.sh list                   # 列出 missions（验证 shim 通了）
+# 验证安装（install-age.sh 已自带 demo mission，可立即验证）
+./tools/mission-driver.sh list                   # 列出 missions（应有 base + demo）
+./tools/mission-driver.sh run demo --dry-run     # 全流程跑通（不消耗 AI 额度）
+./tools/mission-driver.sh monitor                # 打开 :9300 Dashboard
+
+# 正式运行你的 mission
 ./tools/mission-driver.sh list-steps <name>      # 校验 mission + 看步骤
 ./tools/mission-driver.sh run <name> --dry-run   # mock 验证编排（不调真实模型）
 ./tools/mission-driver.sh run <name>             # 正式运行
 ```
+
+> **多项目同时运行 monitor**：端口冲突自动切换（:9300 → :9301 → :9302…），
+> 最多支持 20 个并发 monitor。
 
 **⑥ 限制（务必知道）**：自定义 `type: script` 步骤依赖引擎侧 `SCRIPT_REGISTRY` 注册，
 **无法**从项目 `missions/` 注入。若你的 flow 用了自定义 scriptId，共享引擎会报 `Unknown scriptId`。
@@ -303,7 +378,7 @@ Roadmap 文档是 markdown，格式大致：
   - 顶部 timeline：每个 step 的开始/结束/耗时/marker
   - 中部 log viewer：点击 step 名查看完整 agent 日志（xterm.js 终端样式）
   - 右侧 MissionConfig：展开看 mission.json 解析后的配置
-  - 底部 Resource Chart：内存、opencode RSS、进程数曲线（看资源压力）
+  - 底部 Resource Monitor：最近若干条快照的内存、opencode RSS/数量、node 数量、内存压力表格（看资源压力）
   - 顶部右侧 Deep Audit tag：显示当前 audit round / maxAuditRounds
 - 实时事件流（SSE）：step 启动/完成、transition、心跳——无需刷新
 

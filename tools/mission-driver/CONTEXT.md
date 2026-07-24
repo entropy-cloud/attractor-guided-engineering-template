@@ -8,7 +8,7 @@
 `tools/mission-driver/` — AI 开发循环引擎。读 `missions/<name>.json`，按 flow JSON 定义的状态机循环执行 `opencode run` 子进程。附监控 Dashboard（Node http + SSE + Vue 3 前端）。
 
 **语言**: Node.js (ESM) + TypeScript (仅前端)  
-**依赖**: 引擎核心零依赖，CLI 层仅 `commander`；前端独立 `web/package.json`  
+**依赖**: 引擎**零 npm 依赖**（`commander` 已 vendor 内联至 `vendor/`，见 commit 0a40c5f）；前端独立 `web/package.json`，但 `web/dist/` 已提交入 git → **整体 clone 即跑，消费者零 install / 零 build**  
 **位置**: 本工具位于项目仓库的 `tools/mission-driver/` 子目录，所有路径以此为基准。运行命令从仓库根目录执行。
 
 
@@ -62,7 +62,7 @@ sourcePaths（依赖模块源码路径，不同同事路径不同）
 
 ## Monitor Dashboard 前端
 
-**技术栈**: Vue 3 + Naive UI 2 + TypeScript + Vite + xterm.js + ECharts + Pinia
+**技术栈**: Vue 3 + Naive UI 2 + TypeScript + Vite + xterm.js + Pinia（资源监控用 Naive UI 表格，ECharts 已移除）
 
 **路由**: `/` → RunList, `/runs/:runId` → RunDetail
 
@@ -81,9 +81,9 @@ sourcePaths（依赖模块源码路径，不同同事路径不同）
 - Mission Config: n-card（可折叠，默认收起，标题右侧 ChevronDown/Up 切换）
 - Log Viewer: xterm.js 终端，文件名点击 → Blob URL 新标签页打开完整日志
 - Log Viewer 图标: ArrowDownOutline/PauseOutline/ChevronDownOutline/ChevronUpOutline（Ionicons 5）
-- Resource Chart: Free Memory + Opencode RSS + Process Count 三线
+- Resource View: Naive UI 表格，最近 8 条 sysmon 快照（Time / Free Mem GB / Opencode RSS GB / Opencode / Node / Pressure）+ Active Processes 表（ECharts 已移除）
 - Base Config: 任意页面右上角 ⚙ 齿轮按钮 → Modal（n-code JSON 高亮）
-- NFR-3: echarts/xterm 按 RunDetail 路由懒加载，首屏 <500KB
+- NFR-3: xterm 按 RunDetail 路由懒加载；naive-ui 按需导入（`unplugin-vue-components` + `NaiveUiResolver`，无全局 `app.use(naive)`，Vite tree-shake 掉 Calendar/DatePicker/Transfer 等未用组件）；ECharts 已移除。首屏 JS gzip ≈198KB（由旧单一入口 409KB 降约一半）
 - WI5: `GET /api/runs/:id` 返回的 `run` 含 `auditRound` / `maxAuditRounds`（旧 run-state.json `?? 0` 兜底）；RunDetail 顶部展示 'Deep Audit: N / M'（仅当 `maxAuditRounds > 0`；额度用完 tag→success，进行中→info）。RunList 与 AppHeader 的 `statusTagType` 同步把 `single_step_done` 识别为 success（与 `main.js` exitMap 的 exit code 0 对齐）。
 
 
@@ -109,8 +109,8 @@ node tools/mission-driver/src/main.js <mission-name> --step CHECK --dry-run --no
 
 ## 关键约束
 
-- 引擎核心 **零 npm 依赖**（仅 CLI 层用 `commander`；monitor.js 仅用 Node 内置 `http`/`fs`/`path`/`url`）
-- 前端 **零构建步骤**于运行时（Vite 构建产物由 monitor 静态托管）
+- 引擎核心 **零 npm 依赖**（`commander` 已 vendor 至 `vendor/commander/`；monitor.js 仅用 Node 内置 `http`/`fs`/`path`/`url`）
+- 前端 **零构建步骤**于运行时（Vite 构建产物 `web/dist/` **已提交入 git**，由 monitor 静态托管；新鲜度由 `.github/workflows/web-dist-check.yml` + `pnpm check:dist` 守卫）
 - `memory/_index.md` 为 always-load 核心（`_` 前缀此处为例外，非生成文件）
 - `extends` 为浅合并——嵌套对象（如 `commands`）整体替换，非深度合并
 - Windows 环境：Git Bash 启动脚本

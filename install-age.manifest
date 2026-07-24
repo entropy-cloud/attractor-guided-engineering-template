@@ -1,0 +1,136 @@
+# install-age.manifest — Explicit list of scaffold files to copy into a target project.
+# One path per line, relative to the template root. Lines starting with # are comments.
+# The installer reads this file line-by-line; existing target files are SKIPPED.
+#
+# This manifest intentionally EXCLUDES template-internal artifacts:
+#   - docs/articles/                  (methodology articles, not project content)
+#   - docs/architecture/mission-driver-baseline.md   (engine's own baseline)
+#   - docs/audits/mission-driver-*/   (engine's own audit records)
+#   - docs/backlog/mission-driver-*-roadmap.md, demo-roadmap.md  (engine's roadmaps)
+#   - docs/discussions/2026-*         (engine's own discussions)
+#   - docs/logs/2026/                 (engine's own daily logs)
+#   - docs/plans/mission-driver-*/, docs/plans/2026-*  (engine's own plans)
+#   - docs/requirements/mission-driver-convergence-and-cost-optimization.md
+#   - docs/retrospectives/template-design-decisions.md  (template's evolution record)
+# When adding new scaffold files to the template, add them HERE too.
+
+# --- root ---
+AGENTS.md
+
+# --- docs root ---
+docs/index.md
+
+# --- docs/context (mandatory AI context — ALL) ---
+docs/context/README.md
+docs/context/project-context.md
+docs/context/ai-autonomy-policy.md
+docs/context/codebase-map.md
+docs/context/conventions.md
+docs/context/source-of-truth-and-precedence.md
+
+# --- docs/backlog (guides + skeleton, NOT engine roadmaps) ---
+docs/backlog/README.md
+docs/backlog/00-roadmap-authoring-guide.md
+docs/backlog/implementation-roadmap.md
+
+# --- docs/process ---
+docs/process/README.md
+docs/process/application-development-workflow.md
+
+# --- docs/input ---
+docs/input/README.md
+docs/input/00-input-processing-guide.md
+
+# --- docs/requirements (guides + skeletons, NOT engine requirements) ---
+docs/requirements/README.md
+docs/requirements/00-requirement-synthesis-guide.md
+docs/requirements/product-baseline.md
+docs/requirements/product-scope.md
+docs/requirements/mvp.md
+
+# --- docs/design ---
+docs/design/README.md
+docs/design/app-overview.md
+docs/design/domain-design-guidelines.md
+docs/design/feature-inventory.md
+docs/design/flow-overview.md
+docs/design/roles-and-permissions.md
+
+# --- docs/architecture (NOT mission-driver-baseline.md) ---
+docs/architecture/README.md
+docs/architecture/api-response-conventions.md
+docs/architecture/integration-and-transaction-patterns.md
+docs/architecture/module-boundaries.md
+docs/architecture/project-vision.md
+docs/architecture/system-baseline.md
+
+# --- docs/plans (guide only, NOT engine plans) ---
+docs/plans/README.md
+docs/plans/00-plan-authoring-and-execution-guide.md
+
+# --- docs/logs (guide + index only, NOT dated logs) ---
+docs/logs/00-log-writing-guide.md
+docs/logs/index.md
+
+# --- docs/testing ---
+docs/testing/00-testing-note-guide.md
+docs/testing/index.md
+docs/testing/known-good-baselines.md
+
+# --- docs/audits (guide only, NOT engine audit records) ---
+docs/audits/README.md
+docs/audits/00-audit-execution-guide.md
+
+# --- docs/skills (ALL generic defaults) ---
+docs/skills/README.md
+docs/skills/age-practice-gap-audit-prompt.md
+docs/skills/bug-diagnosis-prompt.md
+docs/skills/closure-audit-prompt.md
+docs/skills/code-quality-audit-prompt.md
+docs/skills/code-refactor-discovery-prompt.md
+docs/skills/code-refactor-prompt.md
+docs/skills/design-doc-audit-prompt.md
+docs/skills/development-wisdom-gate-prompt.md
+docs/skills/document-audit-prompt.md
+docs/skills/index-routing-audit-prompt.md
+docs/skills/multi-dimensional-audit-prompt.md
+docs/skills/open-ended-audit-prompt.md
+docs/skills/plan-audit-prompt.md
+docs/skills/requirement-gap-retrospective-prompt.md
+docs/skills/state-machine-business-review-prompt.md
+
+# --- docs/lessons ---
+docs/lessons/README.md
+
+# --- docs/bugs ---
+docs/bugs/00-bug-fix-note-writing-guide.md
+
+# --- docs/retrospectives (NOT template-design-decisions.md) ---
+docs/retrospectives/README.md
+docs/retrospectives/00-retrospective-writing-guide.md
+
+# --- docs/discussions (guide only, NOT dated) ---
+docs/discussions/README.md
+docs/discussions/00-discussion-writing-guide.md
+
+# --- docs/analysis ---
+docs/analysis/README.md
+
+# --- docs/references (ALL) ---
+docs/references/README.md
+docs/references/document-naming-and-timeliness.md
+docs/references/implementation-guide.md
+docs/references/maintenance-checklist.md
+docs/references/playwright-e2e-guide.md
+
+# --- docs/examples (ALL format references) ---
+docs/examples/README.md
+docs/examples/2026-05-21-0900-feature-requirement.example.md
+docs/examples/2026-05-21-1000-requirement-discussion.example.md
+docs/examples/2026-05-21-1030-feature-plan.example.md
+docs/examples/2026-05-21-1430-document-audit.example.md
+docs/examples/2026-05-21-1700-retrospective.example.md
+docs/examples/complete-small-app-walkthrough.md
+
+# --- docs/archive ---
+docs/archive/README.md

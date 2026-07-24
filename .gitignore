@@ -1,6 +1,9 @@
 node_modules/
 .DS_Store
 dist/
+# Exception: mission-driver web dist is COMMITTED (clone-and-run, zero build).
+# Freshness enforced by .github/workflows/web-dist-check.yml + `pnpm check:dist`.
+!tools/mission-driver/web/dist/
 coverage/
 .idea/
 .vite/
@@ -12,3 +15,4 @@ report/
 .opencode/*
 !.opencode/skills/
 nul
+.env
