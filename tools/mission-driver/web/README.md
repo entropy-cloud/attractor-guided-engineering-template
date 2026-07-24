@@ -76,7 +76,10 @@ src/
 └── main.ts
 ```
 
-`dist/` is a build artifact (gitignored) — always regenerate with `npm run build`.
+`dist/` is **committed to git** (clone-and-run: the monitor serves the prebuilt
+`web/dist/` so consumers need zero install and zero build). If you change the
+frontend, rebuild and commit `dist/` — CI (`.github/workflows/web-dist-check.yml`)
+and `pnpm check:dist` verify the committed `dist/` matches the source.
 
 ## RoadmapProgress rendering decision
 

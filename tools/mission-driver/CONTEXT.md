@@ -8,7 +8,7 @@
 `tools/mission-driver/` — AI 开发循环引擎。读 `missions/<name>.json`，按 flow JSON 定义的状态机循环执行 `opencode run` 子进程。附监控 Dashboard（Node http + SSE + Vue 3 前端）。
 
 **语言**: Node.js (ESM) + TypeScript (仅前端)  
-**依赖**: 引擎核心零依赖，CLI 层仅 `commander`；前端独立 `web/package.json`  
+**依赖**: 引擎**零 npm 依赖**（`commander` 已 vendor 内联至 `vendor/`，见 commit 0a40c5f）；前端独立 `web/package.json`，但 `web/dist/` 已提交入 git → **整体 clone 即跑，消费者零 install / 零 build**  
 **位置**: 本工具位于项目仓库的 `tools/mission-driver/` 子目录，所有路径以此为基准。运行命令从仓库根目录执行。
 
 
@@ -109,8 +109,8 @@ node tools/mission-driver/src/main.js <mission-name> --step CHECK --dry-run --no
 
 ## 关键约束
 
-- 引擎核心 **零 npm 依赖**（仅 CLI 层用 `commander`；monitor.js 仅用 Node 内置 `http`/`fs`/`path`/`url`）
-- 前端 **零构建步骤**于运行时（Vite 构建产物由 monitor 静态托管）
+- 引擎核心 **零 npm 依赖**（`commander` 已 vendor 至 `vendor/commander/`；monitor.js 仅用 Node 内置 `http`/`fs`/`path`/`url`）
+- 前端 **零构建步骤**于运行时（Vite 构建产物 `web/dist/` **已提交入 git**，由 monitor 静态托管；新鲜度由 `.github/workflows/web-dist-check.yml` + `pnpm check:dist` 守卫）
 - `memory/_index.md` 为 always-load 核心（`_` 前缀此处为例外，非生成文件）
 - `extends` 为浅合并——嵌套对象（如 `commands`）整体替换，非深度合并
 - Windows 环境：Git Bash 启动脚本

@@ -55,37 +55,40 @@
 
 ### 1.3 安装（首次使用前必读）
 
-引擎核心几乎零依赖（CLI 只用 `commander`），但 **Web 监控面板需要单独装依赖并打包**，否则 `monitor` 打开只会看到占位页。
+**好消息：clone 即跑，零安装、零构建。** 引擎已**零 npm 依赖**（`commander` 已 vendor 内联到仓库），Web 监控面板的构建产物 `web/dist/` 也**已提交入 git**并由 monitor 静态托管。所以只要 clone 下来就能直接用，**不需要 `pnpm install`，也不需要打包**。
 
-**前置条件**：Node.js ≥ 18、`pnpm`、`opencode` CLI 在 PATH 中；Windows 用 Git Bash / WSL。
+**前置条件**：Node.js ≥ 18、`opencode` CLI 在 PATH 中；Windows 用 Git Bash / WSL。（`pnpm` 只有在你要改前端源码时才需要，见下方“前端开发者”。）
 
-**① 安装引擎依赖**（`commander`）：
+**① 验证即可用**（无需任何安装步骤）：
 
 ```bash
-cd tools/mission-driver
-pnpm install
+./tools/mission-driver.sh list            # 能列出 missions 即可用
+npm --prefix tools/mission-driver test    # 引擎自测（应全绿 + 末行 prompt-check: OK）
 ```
 
-**② 安装并打包 Web 监控面板**（让 `monitor` 直接出界面）：
+**② 打开监控面板**（直接出完整界面）：
+
+```bash
+./tools/mission-driver.sh monitor         # 打开 http://localhost:9300 → 完整 Dashboard
+```
+
+> monitor 从已提交的 `web/dist/` 静态托管界面，**无需 build**。若该目录意外缺失，:9300 会降级为占位提示页。
+
+**（可选）前端开发者**——只有当你要修改 `web/` 前端源码时才需要装依赖并重建：
 
 ```bash
 cd tools/mission-driver/web
-pnpm install         # 装前端依赖（vue / naive-ui / echarts / xterm / vue-flow …）
-pnpm build           # vue-tsc 类型检查 + vite 打包 → 产出 web/dist/
+pnpm install                              # 装前端依赖（vue / naive-ui / xterm / vue-flow …）
+pnpm dev                                  # 热更新开发：vite 跑在 :5173，/api 代理到 :9300
+#   另开一个终端：./tools/mission-driver.sh monitor --dev   （只提供 API/SSE，不托管静态文件）
+
+# 改完前端后，必须重建并提交 dist（否则别人 clone 到的是旧界面）：
+pnpm build                                # vue-tsc 类型检查 + vite 打包 → 更新 web/dist/
+pnpm check:dist                           # 校验 dist 与源码一致（CI 也会跑同样检查）
+git add dist && git commit                # 把更新后的 dist 一并提交
 ```
 
-> monitor 从 `web/dist/` 静态托管界面。**只要 build 过一次**，`./tools/mission-driver.sh monitor`
-> 打开 `http://localhost:9300` 就能直接看到完整 Dashboard。
-> 若**没 build**，:9300 只显示一个占位提示页（提示你去 build 或用 dev 模式）。
-> 前端开发时用 dev 模式：`./tools/mission-driver.sh monitor --dev` + 另开
-> `pnpm --prefix tools/mission-driver/web run dev`（vite 跑在 :5173，`/api` 代理到 :9300）。
-
-**③ 验证安装**：
-
-```bash
-npm --prefix tools/mission-driver test    # 引擎自测（应全绿 + 末行 prompt-check: OK）
-./tools/mission-driver.sh list            # 能列出 missions 即安装成功
-```
+> **为什么要提交 dist？** 这是为了让使用者 clone 即用、免安装免构建。代价是前端改动后必须重建并提交 `dist/`；CI（`.github/workflows/web-dist-check.yml`）会在 `web/` 变更时自动重建并比对，若你忘了提交最新 dist 就会失败拦截。
 
 ### 1.4 在其他项目中集成（不复制引擎，用 shim）
 
@@ -93,7 +96,7 @@ npm --prefix tools/mission-driver test    # 引擎自测（应全绿 + 末行 pr
 经环境变量 / `.env` 指向本模板的 `tools/mission-driver`。下面用一个示例项目 **`orion-pay`**
 （一个 Java/Maven 多模块项目，模块如 `CORE` / `BILLING`）演示完整集成步骤——这套流程已在真实项目落地验证。
 
-**前提**：本模板已按 §1.3 装好依赖（若要监控，也 build 过 web）。
+**前提**：本模板已 clone 到本地即可（引擎零依赖、`web/dist/` 已随仓库提交，无需安装或构建）。
 
 **① 在 `orion-pay` 项目建 shim** `tools/mission-driver.sh`：
 

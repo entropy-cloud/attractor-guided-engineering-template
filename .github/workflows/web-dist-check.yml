@@ -1,0 +1,53 @@
+name: web dist freshness
+
+# Clone-and-run guarantee: tools/mission-driver/web/dist is committed so the
+# monitor serves the prebuilt UI with zero install/build. This job guards against
+# a stale committed dist — it rebuilds from source in a pinned environment and
+# fails if the result differs from what is committed. (Same pattern GitHub Actions
+# / @vercel/ncc use for committed build output.)
+#
+# Path-scoped: only runs when the frontend changes, so backend/consumer commits
+# are unaffected. Determinism: pinned Node + pnpm, --frozen-lockfile, and repo
+# .gitattributes (eol=lf) keep the rebuild byte-identical across machines.
+
+on:
+  push:
+    paths:
+      - 'tools/mission-driver/web/**'
+      - '.github/workflows/web-dist-check.yml'
+  pull_request:
+    paths:
+      - 'tools/mission-driver/web/**'
+      - '.github/workflows/web-dist-check.yml'
+
+jobs:
+  check-dist:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/mission-driver/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: tools/mission-driver/web/pnpm-lock.yaml
+
+      - name: Install deps (frozen)
+        run: pnpm install --frozen-lockfile
+
+      - name: Rebuild frontend
+        run: pnpm build
+
+      - name: Verify committed dist matches source
+        run: |
+          if ! git diff --exit-code -- dist; then
+            echo "::error::web/dist is out of date. Run 'pnpm build' in tools/mission-driver/web and commit the updated dist/."
+            exit 1
+          fi
