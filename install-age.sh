@@ -89,9 +89,10 @@ COPIED=()
 SKIPPED=()
 
 while IFS= read -r raw; do
-  # Strip comments and trim whitespace.
+  # Strip comments and trim whitespace using bash builtins (no fork).
   line="${raw%%#*}"
-  line="$(echo "$line" | xargs)"
+  line="${line#"${line%%[![:space:]]*}"}"
+  line="${line%"${line##*[![:space:]]}"}"
   [ -z "$line" ] && continue
 
   src="$TEMPLATE_ROOT/$line"
@@ -107,8 +108,11 @@ while IFS= read -r raw; do
     continue
   fi
 
-  mkdir -p "$(dirname "$dst")"
+  # dirname via builtin (no fork); only mkdir if parent doesn't exist yet.
+  dir="${dst%/*}"
+  [ -d "$dir" ] || mkdir -p "$dir"
   cp "$src" "$dst"
+  echo "  + $line"
   COPIED+=("$line")
 done < "$MANIFEST"
 
@@ -337,12 +341,11 @@ echo "      done."
 
 echo "[7/7] Report"
 echo ""
-echo "===== COPIED (${#COPIED[@]} files) ====="
-for f in "${COPIED[@]}"; do echo "  + $f"; done
+echo "Copied ${#COPIED[@]} files, skipped ${#SKIPPED[@]} existing."
 
 if [ ${#SKIPPED[@]} -gt 0 ]; then
   echo ""
-  echo "===== SKIPPED — already exists (${#SKIPPED[@]} files) ====="
+  echo "===== SKIPPED (already exists) ====="
   for f in "${SKIPPED[@]}"; do echo "  = $f"; done
 fi
 
