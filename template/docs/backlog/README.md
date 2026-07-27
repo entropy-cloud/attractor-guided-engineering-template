@@ -10,8 +10,7 @@ The backlog is not a replacement for requirements, owner docs, or plans. It only
 
 | Priority | Item            | Requirement                | Owner Doc            | Plan                        | Status              | AI Autonomy | Blocker                              | Last Checked   |
 | -------- | --------------- | -------------------------- | -------------------- | --------------------------- | ------------------- | ----------- | ------------------------------------ | -------------- |
-| P0       | (none currently open; scan `docs/plans/` for `Plan Status: active` or `draft`) | — | `tools/mission-driver/CONTEXT.md` | `docs/plans/2026-07-27-0000-template-realproject-split-plan.md` (closing) | `in-progress` | `implement` | `none` | 2026-07-27 |
-| P1       | Per-mission roadmaps under `docs/backlog/mission-driver-*-roadmap.md` drive their own work items; cross-reference those instead of duplicating here | `docs/requirements/mission-driver-convergence-and-cost-optimization.md` | `docs/architecture/mission-driver-baseline.md` | per-roadmap | `ready` | `plan-first` | `none` | 2026-07-27 |
+| P0       | `<first slice>` | `docs/requirements/<path>` | `docs/design/<path>` | `docs/plans/<path-or-none>` | `needs-requirement` | `blocked`   | `template placeholders not replaced` | `<YYYY-MM-DD>` |
 
 ## Readiness Invariants
 
@@ -27,6 +26,12 @@ The backlog is not a replacement for requirements, owner docs, or plans. It only
 `Plan: none` is valid only when the item clearly qualifies for the no-plan path in `docs/plans/00-plan-authoring-and-execution-guide.md`. If a plan is required, set AI autonomy to `plan-first` until the plan audit passes.
 
 Agents may downgrade stale rows from `ready` to `needs-*` or `blocked` with evidence. Agents must not upgrade rows to `ready`, change autonomy to `implement`, or clear blockers without human confirmation or human-approved owner-doc evidence.
+
+Example ready row after setup:
+
+```md
+| P0 | User Management first slice | `docs/requirements/2026-05-21-0900-user-management.md` | `docs/design/app-overview.md` | `docs/plans/2026-05-21-1000-user-management-plan.md` | `ready` | `plan-first` | `none` | `2026-05-21` |
+```
 
 ## Status Values
 
@@ -55,7 +60,3 @@ When asked to continue without a named task, choose the highest-priority `ready`
 Before implementation, confirm the linked requirement, owner doc, plan field, autonomy policy, and planning triggers are still valid. Do not infer readiness from chat alone.
 
 If the table is stale, downgrade the row or ask before implementation.
-
-## Project-Specific Note
-
-For `mission-driver` engine work, per-mission roadmaps under `docs/backlog/mission-driver-*-roadmap.md` (e.g., `mission-driver-step-audit-roadmap.md`, `mission-driver-draft-robustness-roadmap.md`) are the primary work-item source — each row in those roadmaps is a work item with its own plan under `docs/plans/mission-driver-*/`. This file tracks only cross-cutting backlog that does not belong to a specific mission.

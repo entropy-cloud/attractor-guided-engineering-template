@@ -1,8 +1,8 @@
-# mission-driver AGE Workspace Docs Index
+# <project-name> Docs Index
 
 ## Purpose
 
-This `docs/` tree is the durable memory and routing surface for `mission-driver` (the in-tree AGE loop engine this repo develops).
+This `docs/` tree is the durable memory and routing surface for `<project-name>`.
 
 - start here before making workflow, requirement, design, or implementation changes
 - prefer the smallest file that answers the current question
@@ -23,7 +23,7 @@ This file is the top-level docs router.
 | Understand mandatory AI context and current project state            | `docs/context/README.md`                            | `docs/context/project-context.md`, `docs/context/ai-autonomy-policy.md`, `docs/context/codebase-map.md`                                        |
 | Understand the lightweight default development workflow              | `docs/process/application-development-workflow.md`  | `AGENTS.md`                                                                                                                                    |
 | Choose the next AI-ready work item                                   | `docs/backlog/README.md`                            | `docs/context/ai-autonomy-policy.md`, active requirement and owner doc                                                                         |
-| Understand the in-tree tool (mission-driver engine + monitor)        | `tools/mission-driver/CONTEXT.md`                   | `docs/architecture/mission-driver-baseline.md`, `DEVELOPMENT.md`                                                                               |
+| Understand milestone-level progress and dependencies (when a roadmap exists) | `docs/backlog/00-roadmap-authoring-guide.md`     | `docs/backlog/implementation-roadmap.md`                                                                                                       |
 | Read raw PM, prototype, article, or card-set inputs                  | `docs/input/README.md`                              | the active file in `docs/input/`                                                                                                               |
 | Read explanatory methodology articles                                | `docs/articles/README.md`                           | the relevant article under `docs/articles/`                                                                                                    |
 | Clarify ambiguous requirements                                       | `docs/discussions/README.md`                        | `docs/requirements/00-requirement-synthesis-guide.md`                                                                                          |
@@ -31,13 +31,14 @@ This file is the top-level docs router.
 | Decide whether an existing skill applies                             | `docs/skills/README.md`                             | the relevant owner doc and active requirement                                                                                                  |
 | Understand the project goal and product shape                        | `docs/architecture/project-vision.md`               | `docs/design/app-overview.md`                                                                                                                  |
 | Understand the current app-layer baseline                            | `docs/design/app-overview.md`                       | `docs/design/feature-inventory.md`, `docs/design/roles-and-permissions.md`                                                                     |
+| Understand which domain doc owns a concept (multi-domain projects)   | `docs/design/domain-design-guidelines.md`           | the relevant domain doc under `docs/design/`                                                                                                   |
+| Understand the global flow and state/domain/page mapping             | `docs/design/flow-overview.md`                      | the relevant domain doc under `docs/design/`                                                                                                   |
 | Understand the current technical baseline                            | `docs/architecture/system-baseline.md`              | `docs/architecture/module-boundaries.md`                                                                                                       |
-| Understand why this repo has a `template/` subdirectory              | `docs/architecture/template-vs-realproject-boundary.md` | `README.md`, `install-age.manifest`                                                                                                            |
 | Understand owner-doc precedence and source-of-truth boundaries       | `docs/context/source-of-truth-and-precedence.md`    | the relevant owner doc                                                                                                                         |
 | Start or review a non-trivial implementation                         | `AGENTS.md`                                         | `docs/skills/README.md`, `docs/plans/00-plan-authoring-and-execution-guide.md`, the active plan, and `docs/audits/00-audit-execution-guide.md` |
 | Review audit workflows or required draft-review/closure-audit rules  | `docs/audits/00-audit-execution-guide.md`           | the relevant prompt in `docs/skills/`                                                                                                          |
 | Audit a business state machine for correctness and reachability      | `docs/skills/state-machine-business-review-prompt.md` | the owner doc that defines the state machine                                                                                                 |
-| Audit design docs as the app-layer behavior baseline                 | `docs/skills/design-doc-audit-prompt.md`            | `docs/design/README.md`                                                                                                                        |
+| Audit design docs as the app-layer behavior baseline                 | `docs/skills/design-doc-audit-prompt.md`            | `docs/design/README.md`, `docs/design/domain-design-guidelines.md` when present                                                                |
 | Understand which docs should use dated filenames versus stable names | `docs/references/document-naming-and-timeliness.md` | the relevant guide in the target directory                                                                                                     |
 | Quickly copy a recommended filename pattern for a new dated document | `docs/references/document-naming-and-timeliness.md` | the `Quick Copy Set` section                                                                                                                   |
 | Copy a ready-made dated document skeleton                            | `docs/examples/README.md`                           | rename the closest `.example.md` file                                                                                                          |
@@ -83,7 +84,11 @@ Skills select the work method. They do not replace requirements, design, archite
 
 ## Domain Quick-Reference (Optional)
 
-This project is a single-domain tool (mission-driver engine + monitor). Multi-domain quick-reference is not maintained. See `docs/architecture/module-boundaries.md` for module-level ownership.
+When a project has several domains, add a quick-reference table so a change can be routed to the right owner doc and skill in one lookup. This is optional; small projects can skip it. Fill the table from the real project and keep it in `AGENTS.md` or this file.
+
+| Change area | Read first | Skill to load |
+| ----------- | ---------- | ------------- |
+| <area>      | `docs/<path>` | `<skill-name \| none>` |
 
 ## Directory Roles
 

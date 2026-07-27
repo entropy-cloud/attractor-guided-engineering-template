@@ -87,6 +87,7 @@ echo "[1/7] Copying scaffold files from manifest..."
 
 COPIED=()
 SKIPPED=()
+TEMPLATE_COPIED=()   # fill-in files sourced from template/ — used for <project-name> sed-replace
 
 while IFS= read -r raw; do
   # Strip comments and trim whitespace using bash builtins (no fork).
@@ -96,7 +97,8 @@ while IFS= read -r raw; do
   [ -z "$line" ] && continue
 
   src="$TEMPLATE_ROOT/$line"
-  dst="$TARGET/$line"
+  dst_line="${line#template/}"   # B4 fix: strip leading template/ for target path
+  dst="$TARGET/$dst_line"
 
   if [ ! -f "$src" ]; then
     echo "  WARN: manifest lists '$line' but source missing — skipped." >&2
@@ -104,7 +106,7 @@ while IFS= read -r raw; do
   fi
 
   if [ -f "$dst" ]; then
-    SKIPPED+=("$line")
+    SKIPPED+=("$dst_line")       # B4 fix: track target-relative name (was "$line")
     continue
   fi
 
@@ -113,17 +115,25 @@ while IFS= read -r raw; do
   [ -d "$dir" ] || mkdir -p "$dir"
   cp "$src" "$dst"
   echo "  + $line"
-  COPIED+=("$line")
+  COPIED+=("$dst_line")
+  case "$line" in
+    template/*) TEMPLATE_COPIED+=("$dst_line") ;;   # track fill-in files for sed-replace
+  esac
 done < "$MANIFEST"
 
 echo "      copied ${#COPIED[@]} files, skipped ${#SKIPPED[@]} existing."
 
-# Replace <project-name> in AGENTS.md (only if it was just copied).
-for f in "${COPIED[@]}"; do
-  if [ "$f" = "AGENTS.md" ]; then
-    tmp="$(mktemp)"
-    sed "s/<project-name>/$PROJECT_NAME/g" "$TARGET/AGENTS.md" > "$tmp" && mv "$tmp" "$TARGET/AGENTS.md"
-  fi
+# Replace <project-name> in every fill-in .md file that was sourced from template/.
+# Shared methodology files (manifest entries without template/ prefix) are NOT touched —
+# they may legitimately contain `<project-name>` as a literal reference to the placeholder.
+for f in "${TEMPLATE_COPIED[@]:-}"; do
+  [ -z "$f" ] && continue
+  case "$f" in
+    *.md)
+      tmp="$(mktemp)"
+      sed "s/<project-name>/$PROJECT_NAME/g" "$TARGET/$f" > "$tmp" && mv "$tmp" "$TARGET/$f"
+      ;;
+  esac
 done
 
 # ---------------------------------------------------------------------------
@@ -313,6 +323,47 @@ fi
 mkdir -p "$TARGET/docs/plans/demo"
 
 # ---------------------------------------------------------------------------
+# 4b. Create missions/onboarding.json + docs/plans/onboarding/
+#
+# The onboarding mission drives the AI to read the consumer's codebase and
+# fill in the copied template docs (docs/context/*, docs/architecture/*, etc.)
+# with real content. The roadmap file (docs/backlog/onboarding-roadmap.md) is
+# sourced from template/ via install-age.manifest (NOT created here).
+# ---------------------------------------------------------------------------
+
+echo "[4b/7] Creating missions/onboarding.json + docs/plans/onboarding/..."
+
+if [ ! -f "$TARGET/missions/onboarding.json" ]; then
+  cat > "$TARGET/missions/onboarding.json" <<ONBOARDING_EOF
+{
+  "extends": "base",
+  "name": "onboarding",
+  "description": "Onboarding mission: AI reads your codebase and fills the copied AGE template docs based on your actual tech stack, entry points, and verification commands. Run after ./install-age.sh. Output: personalized project-context.md, codebase-map.md, architecture/*, etc. — ready to start feature development.",
+  "flowName": "mission-driver",
+  "roadmapPath": "docs/backlog/onboarding-roadmap.md",
+  "plansDir": "docs/plans/onboarding",
+  "planGuide": "docs/plans/00-plan-authoring-and-execution-guide.md",
+  "auditsDir": "docs/audits",
+  "contextDir": "docs/context",
+  "moduleDir": ".",
+  "commands": {
+    "test": "echo onboarding-ok",
+    "build": "echo onboarding-ok",
+    "lint": "echo onboarding-ok",
+    "typecheck": "echo onboarding-ok"
+  },
+  "commitFormat": "docs(onboarding): <description>"
+}
+ONBOARDING_EOF
+  echo "      onboarding.json created."
+else
+  echo "      onboarding.json skipped (already exists)."
+fi
+
+# Create the onboarding plans subdirectory.
+mkdir -p "$TARGET/docs/plans/onboarding"
+
+# ---------------------------------------------------------------------------
 # 5. Create docs/logs/{year}/
 # ---------------------------------------------------------------------------
 
@@ -358,12 +409,14 @@ echo "Also created:"
 echo "  - tools/mission-driver.sh            (shim, MISSION_DRIVER_HOME=$REL_MDH)"
 echo "  - .env + .env.example                (MISSION_DRIVER_HOME configured)"
 echo "  - missions/base.json                 (shared defaults — FILL IN commands.*)"
-echo "  - missions/demo.json                 (verify install — run ./tools/mission-driver.sh run demo)"
+echo "  - missions/demo.json                 (smoke test — run ./tools/mission-driver.sh run demo)"
+echo "  - missions/onboarding.json           (personalize — run ./tools/mission-driver.sh run onboarding)"
 echo "  - docs/logs/$YEAR/                    (daily log dir)"
 echo ""
 echo "NEXT STEPS:"
-echo "  1. Fill docs/context/project-context.md (identity + verification commands)."
-echo "  2. Fill docs/context/ai-autonomy-policy.md (protected areas)."
-echo "  3. Fill docs/context/codebase-map.md (entry points)."
-echo "  4. Fill missions/base.json commands.* for YOUR stack."
-echo "  5. Verify: ./tools/mission-driver.sh list"
+echo "  1. (smoke, 秒级) ./tools/mission-driver.sh run demo            # verify scaffold + engine + monitor"
+echo "  2. (personalize, 30-60min) ./tools/mission-driver.sh run onboarding   # AI reads your codebase, fills docs/context/* / architecture/* / etc."
+echo "  3. (optional) Fill docs/context/project-context.md verification commands if onboarding skipped any."
+echo "  4. (optional) Fill missions/base.json commands.* for YOUR stack (onboarding WI2 infers most)."
+echo "  5. (manual fallback) Read template/START-HERE-after-copy.md for the full Day-0 checklist."
+echo "  6. Verify: ./tools/mission-driver.sh list"

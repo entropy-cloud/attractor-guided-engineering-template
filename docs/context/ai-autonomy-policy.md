@@ -24,64 +24,52 @@ The default level is `implement` for work items with no explicit label. The defa
 
 ## Reviewer Availability
 
-Set one value for the copied project:
+- Reviewer availability: `subagent`
 
-- Reviewer availability: `<human | subagent | none>`
-
-If this value is still a placeholder, treat reviewer availability as `none` and treat protected-area or high-risk plans as blocked until human/subagent review is configured.
+This repo historically uses independent opencode subagents for plan draft review and closure audit (see `docs/plans/mission-driver-*/` and `docs/audits/mission-driver-*/` for evidence). The `mission-driver` engine itself also drives `opencode run` subprocesses for plan-review / closure-audit steps.
 
 Rules:
 
-- `human` or `subagent` - use that reviewer for required plan and closure audits.
-- `none` - cold replay may be used only for non-protected, non-high-risk plans. Cold replay is not a second reviewer; it is a documented self-check performed after implementation context is set aside.
-- Protected areas, unresolved product risk, or source-of-truth conflicts still require human/subagent review or must remain blocked.
+- `subagent` — use independent subagent for required plan draft review and closure audit. Solo cold-replay is acceptable ONLY for non-protected, non-high-risk plans per AGENTS.md Reviewer-Availability Fallback; the plan MUST record the limitation.
+- Protected areas, unresolved product risk, or source-of-truth conflicts still require human review or stay open.
 
 ## AI May Proceed Without Asking When
 
-- the work item is marked `implement` (or has no label and defaults to `implement`) or the user directly requests a local low-risk change
-- a requirement or owner doc describes the work's intended behavior with concrete acceptance criteria
-- for backlog-selected work, the backlog row is `ready`, has no stale links, and does not require a missing plan
-- verification commands in `docs/context/project-context.md` are real commands, not placeholders
-- protected-area placeholders in this file have been replaced with real entries or explicit `none`
-- documentation freshness in `docs/context/project-context.md` is `fresh`, or the active slice has explicitly verified fresh requirement, owner doc, codebase-map route, and touched code area
-- the task does not touch a protected area below
-- open questions are explicitly non-blocking
+- The work is a single-file low-risk edit (typo, doc fix, test-only cleanup, small styling) that touches no contract, data/model, auth, permission, integration, deployment, cross-surface behavior, or protected area.
+- A requirement or owner doc clearly describes the intended behavior AND the relevant verification commands are real (`project-context.md` Verification Commands not placeholders).
+- The change is a no-op refactor within a single module that preserves public contracts and is covered by existing tests.
+- Updating daily logs, scratch notes, or analysis docs that do not assert project behavior.
 
-## AI Must Ask Or Stop Before
+## AI MUST Stop And Ask When
 
-- changing product scope when the requirement or owner doc is ambiguous
-- changing database/model shape, data deletion, payment, auth, permission, deployment, or external integration behavior without an owner doc and test strategy
-- inventing behavior for an external system that is not described in committed integration docs or tests
-- skipping required verification because commands are missing, broken, or too slow
-- closing a plan whose audit, verification, docs, or checklist evidence is missing
-- proceeding when live code and owner docs conflict and resolving the conflict would change user-visible behavior or public contracts
-- loosening autonomy labels, protected-area rules, or blockers without human confirmation or human-approved owner-doc evidence
-- proceeding with implementation when documentation freshness is `stale`, `unknown`, or `partially stale` for the active slice; first perform baseline research or a plan-first alignment slice
+- The change touches any Protected Area below without an explicit human approval or plan covering the change.
+- The change modifies public contract behavior (CLI surface, `mission.json` schema, `draft-state.json` schema, `run-state.json` shape, `<BRIEF_GATE>` marker, public-exports-vs-test-seams) and no owner doc describes the new contract.
+- The change adds a new runtime npm dependency to the engine (breaks zero-dep invariant).
+- The change modifies `install-age.sh` personalization behavior or `install-age.manifest` membership.
+- Documentation freshness is `stale` or `unknown` and the task would change product behavior instead of auditing or aligning the baseline.
+- A source-of-truth conflict exists between raw input, requirements, owner docs, and live code, and the conflict has not been resolved or explicitly blocked.
 
 ## Protected Areas
 
-Fill these for the copied project.
+These are mission-driver-specific protected areas (in addition to AGENTS.md global rules).
 
-If this table still contains placeholders, AI must treat payment, auth/permissions, data deletion, database/model shape, deployment, and external integrations as `ask-first` or `blocked` until the table is replaced with real entries or explicit `none`.
+| Area | Rule | Notes |
+| --- | --- | --- |
+| `tools/mission-driver/src/engine.js` state-machine core | `ask-first` | Central `_result` / `_wfClose` / `_executeSubflowStep` / `_reconcileTerminal` paths. Changes need a plan + subagent review. |
+| Engine zero-npm-dependency invariant | `blocked` unless human approves | Adding any runtime dep in `tools/mission-driver/package.json` `dependencies` breaks the clone-and-run promise. `commander` is vendored; do not un-vendor. |
+| `tools/mission-driver/web/dist/` committed-artifact | `ask-first` | Re-adding `dist/` to `.gitignore` or removing committed dist must go through `.github/workflows/web-dist-check.yml` freshness check. |
+| `tools/mission-driver/memory/_index.md` always-load contract | `ask-first` | This file is injected into every mission prompt via `{{selfMemoryIndex}}`. Structural changes affect the Reflexion loop. |
+| `install-age.sh` personalization (sed-replace `<project-name>` at `:121-127`) | `ask-first` | Any change here requires updating the Phase 3 closure-gate test (see `docs/plans/2026-07-27-0000-template-realproject-split-plan.md`). |
+| `install-age.manifest` membership | `ask-first` | Adding/removing entries changes what consumers receive. Test with `./install-age.sh /tmp/test "Test"` after any change. |
+| Exit-code map (`main.js` `exitMap`) | `ask-first` | Documented in `EXECUTION-PRINCIPLE.md §11`. Status↔code mapping is a public contract for mission-driver consumers. |
+| Flow JSON contract (`flows/*.json` step types, transition schema) | `ask-first` | Documented in `tools/mission-driver/design/mission-design.md`. Changes affect all consumer missions. |
 
-| Area                 | Rule       | Required Evidence |
-| -------------------- | ---------- | ----------------- |
-| `<payment>`          | ask first  | owner doc + tests |
-| `<data deletion>`    | ask first  | owner doc + tests |
-| `<auth/permissions>` | plan-first | owner doc + tests |
+## Source-of-Truth Precedence
 
-Protected-area rule meanings:
+When facts conflict, follow `docs/context/source-of-truth-and-precedence.md`. In summary:
 
-- `ask first` - human approval is required before planning or implementation.
-- `plan-first` - AI may draft the plan, but implementation requires plan audit plus the required evidence in the table. If reviewer availability is `none`, implementation stays blocked.
-- `research-only` or `blocked` - AI may not change product behavior.
-
-## Backlog Selection Rule
-
-If the user asks AI to continue work without naming a task, choose the highest-priority item in `docs/backlog/README.md` whose autonomy is `implement` and whose blockers are `none`.
-
-Before implementing the selected item, re-check planning triggers. `Plan: none` does not waive the plan guide.
-
-Direct user requests for local low-risk edits do not require a backlog row, but they still must satisfy the no-plan path and verification rules.
-
-If no safe `implement` item exists, summarize the top blocked, `plan-first`, or `ask-first` item and ask for a decision.
+1. Human-confirmed statement (chat or doc marked human-approved)
+2. Active requirement / owner doc (`docs/requirements/`, `docs/design/`, `docs/architecture/`)
+3. Live code + tests
+4. Plans / audits / logs (history)
+5. AI-authored docs (cannot loosen autonomy or clear blockers without human approval)

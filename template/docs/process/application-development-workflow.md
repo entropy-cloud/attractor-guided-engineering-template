@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines the default lightweight workflow for AI-assisted application development in `mission-driver` (the in-tree AGE loop engine this repo develops).
+This document defines the default lightweight workflow for AI-assisted application development in `<project-name>`.
 
 It exists because app-layer projects often fail before coding quality becomes the main issue:
 

@@ -28,6 +28,7 @@ Do not keep one-off migration scripts, repo-specific cleanup scripts, or tools t
 - `check-doc-references.mjs`: validate backtick paths and markdown links referenced in active docs
 - `check-oversized-code-files.mjs`: flag tracked code files that exceed line thresholds
 - `check-docs-garbled.mjs`: scan docs for suspicious Unicode and mojibake
+- `check-install-age.sh`: closure-gate test for `install-age.sh` — runs the installer into a throwaway target and verifies scaffold correctness (used by the template-realproject-split plan + onboarding-mission plan)
 
 These are lightweight, generic, and reasonable to keep enabled by default.
 

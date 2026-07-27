@@ -8,6 +8,7 @@
     "check:oversized-code-files": "node ./check-oversized-code-files.mjs",
     "check:doc-references": "node ./check-doc-references.mjs",
     "check:docs-garbled": "node ./check-docs-garbled.mjs",
+    "check:install": "bash ./check-install-age.sh",
     "check:duplicates": "node ./check-duplicates.mjs",
     "audit:suspects": "node ./audit/discover-audit-suspects.mjs",
     "stats": "node ./code-stats.mjs",

@@ -15,27 +15,28 @@
 # When adding new scaffold files to the template, add them HERE too.
 
 # --- root ---
-AGENTS.md
+template/AGENTS.md
 
 # --- docs root ---
-docs/index.md
+template/docs/index.md
 
 # --- docs/context (mandatory AI context — ALL) ---
+template/docs/context/project-context.md
+template/docs/context/ai-autonomy-policy.md
+template/docs/context/codebase-map.md
 docs/context/README.md
-docs/context/project-context.md
-docs/context/ai-autonomy-policy.md
-docs/context/codebase-map.md
 docs/context/conventions.md
 docs/context/source-of-truth-and-precedence.md
 
-# --- docs/backlog (guides + skeleton, NOT engine roadmaps) ---
-docs/backlog/README.md
+# --- docs/backlog (guides + skeleton + onboarding roadmap template, NOT engine roadmaps) ---
+template/docs/backlog/README.md
 docs/backlog/00-roadmap-authoring-guide.md
-docs/backlog/implementation-roadmap.md
+template/docs/backlog/implementation-roadmap.md
+template/docs/backlog/onboarding-roadmap.md
 
 # --- docs/process ---
 docs/process/README.md
-docs/process/application-development-workflow.md
+template/docs/process/application-development-workflow.md
 
 # --- docs/input ---
 docs/input/README.md
@@ -51,18 +52,18 @@ docs/requirements/mvp.md
 # --- docs/design ---
 docs/design/README.md
 docs/design/app-overview.md
-docs/design/domain-design-guidelines.md
+template/docs/design/domain-design-guidelines.md
 docs/design/feature-inventory.md
-docs/design/flow-overview.md
+template/docs/design/flow-overview.md
 docs/design/roles-and-permissions.md
 
 # --- docs/architecture (NOT mission-driver-baseline.md) ---
-docs/architecture/README.md
+template/docs/architecture/README.md
 docs/architecture/api-response-conventions.md
 docs/architecture/integration-and-transaction-patterns.md
-docs/architecture/module-boundaries.md
-docs/architecture/project-vision.md
-docs/architecture/system-baseline.md
+template/docs/architecture/module-boundaries.md
+template/docs/architecture/project-vision.md
+template/docs/architecture/system-baseline.md
 
 # --- docs/plans (guide only, NOT engine plans) ---
 docs/plans/README.md
@@ -75,7 +76,7 @@ docs/logs/index.md
 # --- docs/testing ---
 docs/testing/00-testing-note-guide.md
 docs/testing/index.md
-docs/testing/known-good-baselines.md
+template/docs/testing/known-good-baselines.md
 
 # --- docs/audits (guide only, NOT engine audit records) ---
 docs/audits/README.md
