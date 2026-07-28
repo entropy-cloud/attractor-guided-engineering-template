@@ -8,6 +8,16 @@ Update it in place. Do not create dated copies.
 
 This file intentionally does **not** track "what is being worked on right now". That is found by scanning unfinished plans in `docs/plans/`. Keeping high-churn active-work state here makes the file hard to maintain and prone to staleness.
 
+## Companion Context Files
+
+This file is the AI entry point. The following `docs/context/` companions are read on demand — most mission-driver flow steps load this file first, then route to them:
+
+| File | When to read |
+|---|---|
+| `ai-autonomy-policy.md` | Before any task that changes code, model, or product behavior — autonomy levels, Protected Areas, reviewer availability |
+| `codebase-map.md` | When locating code, making cross-module changes, or entering an unfamiliar area — entry points, common change routes, fragile files |
+| `source-of-truth-and-precedence.md` | When facts conflict or it is unclear which doc is authoritative |
+
 ## Project Identity
 
 - Project name:

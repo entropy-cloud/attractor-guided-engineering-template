@@ -33,6 +33,7 @@ template/install/missions/base.json > missions/base.json
 template/install/missions/demo.json > missions/demo.json
 template/install/missions/onboarding.json > missions/onboarding.json
 template/install/docs/backlog/demo-roadmap.md > docs/backlog/demo-roadmap.md
+template/install/AGE-FILES-GUIDE.md > docs/references/age-files-guide.md
 
 # --- .opencode/skills/mission-driver (operator skill for the engine, ALL) ---
 .opencode/skills/mission-driver/SKILL.md
