@@ -1,6 +1,16 @@
 # install-age.manifest — Explicit list of scaffold files to copy into a target project.
-# One path per line, relative to the template root. Lines starting with # are comments.
-# The installer reads this file line-by-line; existing target files are SKIPPED.
+#
+# Format (one entry per line, relative to template root):
+#   <src>                              → dst defaults to src (strip leading template/)
+#   <src> > <dst>                      → dst differs from src
+#   <src> > <dst> :: <flag>[,<flag>]   → with flags
+#
+# Flags:
+#   exec    chmod +x the destination
+#   fill    replace <project-name> with the project name
+#   rel-mdh replace __REL_MDH__ with the computed engine path (relative from target)
+#
+# Lines starting with # are comments. The installer skips existing target files.
 #
 # This manifest intentionally EXCLUDES template-internal artifacts:
 #   - docs/articles/                  (methodology articles, not project content)
@@ -13,6 +23,16 @@
 #   - docs/requirements/mission-driver-convergence-and-cost-optimization.md
 #   - docs/retrospectives/template-design-decisions.md  (template's evolution record)
 # When adding new scaffold files to the template, add them HERE too.
+
+# --- engine bootstrap (install-only artifacts from template/install/) ---
+# Consumer-facing shim + env + mission defaults. Diverge from dogfood root files —
+# see template/install/README.md. Do NOT swap for the root dogfood versions.
+template/install/tools/mission-driver.sh > tools/mission-driver.sh :: exec
+template/install/.env.example > .env.example :: rel-mdh
+template/install/missions/base.json > missions/base.json
+template/install/missions/demo.json > missions/demo.json
+template/install/missions/onboarding.json > missions/onboarding.json
+template/install/docs/backlog/demo-roadmap.md > docs/backlog/demo-roadmap.md
 
 # --- root ---
 template/AGENTS.md

@@ -2,7 +2,7 @@
   "name": "age-template-tools",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@10.0.0",
+  "packageManager": "pnpm@10.27.0",
   "scripts": {
     "check": "pnpm check:oversized-code-files && pnpm check:doc-references && pnpm check:docs-garbled",
     "check:oversized-code-files": "node ./check-oversized-code-files.mjs",
@@ -13,7 +13,11 @@
     "audit:suspects": "node ./audit/discover-audit-suspects.mjs",
     "stats": "node ./code-stats.mjs",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "md:test": "pnpm --filter mission-driver test",
+    "md:web:build": "pnpm --filter mission-driver-monitor-web build",
+    "md:web:check:dist": "pnpm --filter mission-driver-monitor-web check:dist",
+    "install-age:test": "node --test ./install-age.test.mjs"
   },
   "devDependencies": {
     "jscpd": "^4.0.9",

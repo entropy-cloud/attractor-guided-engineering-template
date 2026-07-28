@@ -19,11 +19,11 @@ import { IS_WIN32, killProcessTree, isAlive } from "./platform.mjs";
  * not via a wrapper script. config.js injects mission.env into process.env before
  * spawning, so the child process inherits them via executor's env spread.
  */
-const DEFAULT_DRIVER_ARGS = "run -m {model} --agent {agent} --dangerously-skip-permissions";
+const DEFAULT_DRIVER_ARGS = "run -m {model} --agent {agent} --dangerously-skip-permissions {session}";
 
 function buildDriverArgs(config, sessionId, prompt) {
   const template = config.driverArgs || DEFAULT_DRIVER_ARGS;
-  const promptMode = config.promptMode || "arg";
+  const promptMode = config.promptMode || "stdin";
 
   let rendered = template
     .replace("{model}", config.model || "")

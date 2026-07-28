@@ -1,0 +1,19 @@
+{
+  "extends": "base",
+  "name": "onboarding",
+  "description": "Onboarding mission: AI reads your codebase and fills the copied AGE template docs based on your actual tech stack, entry points, and verification commands. Run after ./install-age.sh. Output: personalized project-context.md, codebase-map.md, architecture/*, etc. — ready to start feature development.",
+  "flowName": "mission-driver",
+  "roadmapPath": "docs/backlog/onboarding-roadmap.md",
+  "plansDir": "docs/plans/onboarding",
+  "planGuide": "docs/plans/00-plan-authoring-and-execution-guide.md",
+  "auditsDir": "docs/audits",
+  "contextDir": "docs/context",
+  "moduleDir": ".",
+  "commands": {
+    "test": "echo onboarding-ok",
+    "build": "echo onboarding-ok",
+    "lint": "echo onboarding-ok",
+    "typecheck": "echo onboarding-ok"
+  },
+  "commitFormat": "docs(onboarding): <description>"
+}
