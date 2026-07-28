@@ -34,6 +34,11 @@ template/install/missions/demo.json > missions/demo.json
 template/install/missions/onboarding.json > missions/onboarding.json
 template/install/docs/backlog/demo-roadmap.md > docs/backlog/demo-roadmap.md
 
+# --- .opencode/skills/mission-driver (operator skill for the engine, ALL) ---
+.opencode/skills/mission-driver/SKILL.md
+.opencode/skills/mission-driver/references/mission-config-schema.md
+.opencode/skills/mission-driver/references/roadmap-template.md
+
 # --- root ---
 template/AGENTS.md
 
