@@ -9,7 +9,7 @@ This roadmap tracks 4 root-cause-confirmed, directly-actionable fixes for the mi
 
 Does not contain implementation details. Each `planned` stage is owned by its execution plan.
 
-## Work Items
+## Work Item Status
 
 > **This is the only dynamic state block. Update status only here.**
 > The roadmap is a human-AI alignment artifact: humans set items and their order;
@@ -19,7 +19,7 @@ Does not contain implementation details. Each `planned` stage is owned by its ex
 - 1. REVIEW_PLANS approved marker alias fix: `done`
 - 2. Per-mission promptsDir config support: `done`
 - 3. CHECK configurable check command + prompt rewrite: `done`
-- 4. Draft description supports directory/multi-file references: `todo`
+- 4. Draft description supports directory/multi-file references: `done`
 
 ## Status values
 
