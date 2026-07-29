@@ -668,7 +668,13 @@ async function cmdRunMission(mission, opts) {
     const flow = createMissionDriverFlow({
       flowName: g.flowName,
       projectFlowsDir: resolve(config.missionsDir, "flows"),
-      projectPromptDirs: [resolve(config.missionsDir, "prompts")],
+      // mdr-fix-2: mission-level promptsDir wins, then shared missions/prompts/,
+      // then built-in TOOL_ROOT/prompts/ (loadPrompt fallback). filter(Boolean)
+      // drops the empty string when missionPromptsDir is unset.
+      projectPromptDirs: [
+        config.missionPromptsDir,
+        resolve(config.missionsDir, "prompts"),
+      ].filter(Boolean),
     });
     const delegates = {
       config,
@@ -691,6 +697,7 @@ async function cmdRunMission(mission, opts) {
         buildCmd: g.commands.build || "",
         lintCmd: g.commands.lint || "",
         typecheckCmd: g.commands.typecheck || "",
+        checkCmd: g.commands.check || "",
         commitFormat: g.commitFormat || "",
         multiAuditPrompt: g.prompts?.multiAudit || "",
         openAuditPrompt: g.prompts?.openAudit || "",

@@ -239,8 +239,13 @@ const SCRIPT_REGISTRY = {
 const TOOL_PROMPTS_DIR = resolve(TOOL_ROOT, "prompts");
 
 function loadPrompt(promptPath, projectDirs = []) {
+  // promptPath is relative to TOOL_ROOT (e.g. "prompts/health-check.md"), but
+  // projectDirs are already prompt directories — strip the leading "prompts/"
+  // so resolve produces "missions/prompts/health-check.md" instead of the
+  // double-nested "missions/prompts/prompts/health-check.md".
+  const relativePath = promptPath.replace(/^prompts[\\/]/, "");
   for (const dir of projectDirs) {
-    const projectPath = resolve(dir, promptPath);
+    const projectPath = resolve(dir, relativePath);
     if (existsSync(projectPath)) return readFileSync(projectPath, "utf8");
   }
   return readFileSync(resolve(TOOL_ROOT, promptPath), "utf8");
@@ -305,7 +310,15 @@ export function createMissionDriverFlow(options = {}) {
 
 export function loadSubFlow(name) {
   const missionsDir = this?.config?.missionsDir;
-  const projectPromptDirs = missionsDir ? [resolve(missionsDir, "prompts")] : [];
+  const missionPromptsDir = this?.config?.missionPromptsDir;
+  // mdr-fix-2: mission-level promptsDir wins, then shared missions/prompts/,
+  // then built-in TOOL_ROOT/prompts/ (loadPrompt fallback). Preserve the
+  // falsy-missionsDir guard so unconfigured missions (missionsDir unset) keep
+  // yielding only the mission-level dir (or [] when both are unset).
+  const projectPromptDirs = [
+    missionPromptsDir,
+    missionsDir ? resolve(missionsDir, "prompts") : "",
+  ].filter(Boolean);
 
   const searchDirs = [];
   if (missionsDir) searchDirs.push(resolve(missionsDir, "flows"));

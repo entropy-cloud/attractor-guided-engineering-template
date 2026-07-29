@@ -577,6 +577,15 @@ export function resolveConfig(args = {}) {
   // openAudits() (which read mission.auditsDir) see the derived path.
   mission.auditsDir = resolveAuditsDir(mission.auditsDir, mission.plansDir, projectRoot);
 
+  // mdr-fix-2: per-mission promptsDir override. Resolved to an absolute path
+  // (empty when unset) so both main.js (createMissionDriverFlow) and
+  // loadSubFlow read one flat config field — uniform with missionsDir/auditsDir.
+  // Existence is validated by mission-check.mjs (promptsDir is in its
+  // existence-checked list); resolving eagerly here keeps the chain consistent.
+  const missionPromptsDir = mission.promptsDir
+    ? resolve(projectRoot, mission.promptsDir)
+    : "";
+
   // Inject mission.env into process.env (never overwrite existing vars).
   // base.local.json is the right place for machine-local config (proxy etc.) not committed to git.
   loadBaseAndInjectEnv(missionsDir);
@@ -653,6 +662,7 @@ export function resolveConfig(args = {}) {
     missionsDir,
     missionName,
     mission,
+    missionPromptsDir,
     runDir,
     timestamp,
     driver: resolvedDriver,

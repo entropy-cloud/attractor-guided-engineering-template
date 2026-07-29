@@ -76,6 +76,7 @@ export function validateMission(mission, projectRoot) {
       ["plansDir", mission.plansDir],
       ["contextDir", mission.contextDir],
       ["moduleDir", mission.moduleDir],
+      ["promptsDir", mission.promptsDir],
     ]) {
       if (val && !existsSync(resolve(projectRoot, val))) {
         errors.push(`${field} does not exist: ${val}`);
