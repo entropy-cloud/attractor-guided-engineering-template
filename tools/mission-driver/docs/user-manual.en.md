@@ -101,10 +101,16 @@ The `draft` command:
 1. Runs a brief agent that asks scope questions and emits a short brief (`docs/backlog/<slug>-brief.md`).
 2. Runs a draft agent that generates mission.json + a Roadmap doc.
 
-You can pass `--target-file` to point at the requirements doc, and `--flow-hint` to name the flow:
+`--target-file` is an optional input aid — the description may reference any path (a single file, a directory, multiple files, or an abstract goal); `--target-file` just points the brief agent at one file or directory to ground the brief. `--flow-hint` names the flow:
 
 ```bash
 ./tools/mission-driver.sh draft "Implement X" --target-file docs/design/oauth-fsd.md --flow-hint mission-driver
+```
+
+The description may also reference a directory or multiple files directly, without `--target-file`:
+
+```bash
+./tools/mission-driver.sh draft "Read all requirement docs under docs/input/ and generate a roadmap"
 ```
 
 **Option 2: hand-write**
@@ -256,7 +262,7 @@ Two stages:
 1. **Brief stage**: produces a scope-gate brief (written to `docs/backlog/<slug>-brief.md`) — a brief agent judges whether the scope is clear.
 2. **Draft stage**: based on the brief, generates mission.json + a Roadmap.
 
-Flags: `--target-file <path>` (point at the requirements doc), `--flow-hint <name>` (name the flow), `--skip-brief` (skip the brief stage; collapse to single-stage draft).
+Flags: `--target-file <path>` (optional input aid — point at a target file or directory; the description may reference any path), `--flow-hint <name>` (name the flow), `--skip-brief` (skip the brief stage; collapse to single-stage draft).
 
 ### 4.3 analyze: postmortem
 

@@ -6,7 +6,7 @@ Read `AGENTS.md` **completely** for project structure, tech stack, build command
 
 - **User goal** (provided in the `## User Goal` section below).
 - **flowName**: `{{flowHint}}` (may be empty — empty means the built-in `mission-driver` flow).
-- **Target file** (optional): `{{targetFile}}` (project-relative path; may be empty). When non-empty, read this file to ground the brief in the actual code/design being changed.
+- **Target file or directory** (optional): `{{targetFile}}` (project-relative path; may be empty). The description may reference any path — a single file, a directory, multiple files, or an abstract goal. `--target-file` is an optional input aid, not a required constraint. When non-empty, read it (or scan it if it is a directory) to ground the brief in the actual code/design being changed.
 
 ## Task
 

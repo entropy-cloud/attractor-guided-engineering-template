@@ -306,10 +306,16 @@ mission-driver 不接受口头需求。你必须先有一份**结构化的需求
 1. 跑一个 brief agent，问清范围、生成简短的 brief 文档（`docs/backlog/<slug>-brief.md`）
 2. 跑一个 draft agent，生成 mission.json + Roadmap 文档
 
-你可以用 `--target-file` 指定目标文件、`--flow-hint` 指定 flow 类型：
+`--target-file` 是可选输入辅助——description 可引用任意路径（单个文件、目录、多个文件或抽象目标），`--target-file` 只是把某个文件/目录喂给 brief agent 锚定范围；`--flow-hint` 指定 flow 类型：
 
 ```bash
 ./tools/mission-driver.sh draft "实现 X" --target-file docs/design/oauth-fsd.md --flow-hint mission-driver
+```
+
+description 也可以直接引用目录或多个文件，不传 `--target-file`：
+
+```bash
+./tools/mission-driver.sh draft "读取 docs/input/ 下所有需求文档，生成 roadmap"
 ```
 
 **方式二：手写**
@@ -461,7 +467,7 @@ OPENCODE_PURE=1                 # opencode 以 --pure 模式运行（跳过外�
 1. **brief 阶段**：生成 scope-gate brief（写到 `docs/backlog/<slug>-brief.md`），让 brief agent 判断范围是否清晰
 2. **draft 阶段**：基于 brief 生成 mission.json + Roadmap
 
-flag：`--target-file <path>`（指定目标需求文档）、`--flow-hint <name>`（指定 flow）、`--skip-brief`（跳过 brief 阶段、退化成单阶段 draft）。
+flag：`--target-file <path>`（可选输入辅助——指向目标文件/目录；description 可引用任意路径）、`--flow-hint <name>`（指定 flow）、`--skip-brief`（跳过 brief 阶段、退化成单阶段 draft）。
 
 ### 4.3 analyze：复盘
 

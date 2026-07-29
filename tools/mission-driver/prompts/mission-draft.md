@@ -8,6 +8,8 @@ If `{{briefPath}}` is non-empty, a mission brief was generated in stage 1. **Rea
 
 If `{{briefPath}}` is empty, no brief exists; fall back to the user request text directly (backward-compatible single-stage behaviour).
 
+> Note: the user request may reference directories, multiple files, or an abstract goal — it is not limited to a single file. `--target-file` (when provided) is just one optional input aid that points the brief agent at a file/directory to ground the brief; it is never a required constraint.
+
 ## Roadmap
 
 If a roadmap already exists at `{{backlogDir}}/{mission-name}-roadmap.md` or is referenced by the user, use it. Otherwise, generate the roadmap first following the format in `{{backlogDir}}/00-roadmap-authoring-guide.md`, save it at `{{backlogDir}}/{mission-name}-roadmap.md`, then generate the mission.json referencing it. The roadmap must include phase status, framework/platform reuse, current baseline, phase table, phase details, dependency graph, and cross-cutting concerns.
