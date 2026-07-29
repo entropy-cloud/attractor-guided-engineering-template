@@ -18,7 +18,7 @@ Does not contain implementation details. Each `planned` stage is owned by its ex
 
 - 1. REVIEW_PLANS approved marker alias fix: `done`
 - 2. Per-mission promptsDir config support: `done`
-- 3. CHECK configurable check command + prompt rewrite: `todo`
+- 3. CHECK configurable check command + prompt rewrite: `done`
 - 4. Draft description supports directory/multi-file references: `todo`
 
 ## Status values

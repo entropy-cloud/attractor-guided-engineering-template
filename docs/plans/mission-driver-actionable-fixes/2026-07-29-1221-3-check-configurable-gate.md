@@ -1,6 +1,6 @@
 # mdr-fix-3 CHECK configurable check command + prompt rewrite
 
-> Plan Status: active
+> Plan Status: completed
 > Last Reviewed: 2026-07-29
 > Source: `docs/backlog/mission-driver-actionable-fixes-roadmap.md` work item 3; `docs/analysis/2026-07-29-0000-mission-driver-actionable-fixes.md` problem #3
 > Related: `2026-07-29-1221-1-review-approved-marker-alias.md` (both edit `flows/mission-driver.json`; plan 1 lands first)
@@ -75,67 +75,75 @@ Exit Criteria:
 
 ### Phase 2 - Add commands.check + delegate var + flow transition
 
-Status: planned
+Status: completed
 Targets: `missions/base.json`, `tools/mission-driver/src/main.js`, `tools/mission-driver/flows/mission-driver.json`
 Skill: none
 
 - Item Types: `Add | Fix`
 - Prereqs: Phase 1 Decision accepted
 
-- [ ] `missions/base.json`: add optional `"check": ""` to `commands` (empty default = unconfigured → git-status fallback). Do NOT add `check` to `mission-check.mjs` `REQUIRED_COMMANDS`.
+- [x] `missions/base.json`: add optional `"check": ""` to `commands` (empty default = unconfigured → git-status fallback). Do NOT add `check` to `mission-check.mjs` `REQUIRED_COMMANDS`.
   - Skill: none
-- [ ] `src/main.js`: add `checkCmd: g.commands.check || ""` to `delegates.vars` (parallel to `testCmd`/`buildCmd`).
+  - Done: `missions/base.json:10` `"check": ""`. `mission-check.mjs:14` `REQUIRED_COMMANDS = ["test"]` — `check` NOT added (optional field).
+- [x] `src/main.js`: add `checkCmd: g.commands.check || ""` to `delegates.vars` (parallel to `testCmd`/`buildCmd`).
   - Skill: none
-- [ ] `flows/mission-driver.json` CHECK: per Decision (B), keep `fail → {done:"failed"}`; add `needs_fix → { retry:"CHECK", maxRetries:2 }`; keep `onMaxRetries:{done:"failed"}` and `onError:{done:"failed"}`. Do NOT remove or weaken any terminal guarantee OPT-4 relies on.
+  - Done: `src/main.js:700` `checkCmd: g.commands.check || "",`. Drift gate satisfied: `context-map.mjs:59` (VAR_PROVENANCE) + `:90` (EXPECTED_VARS) both register `checkCmd`.
+- [x] `flows/mission-driver.json` CHECK: per Decision (B), keep `fail → {done:"failed"}`; add `needs_fix → { retry:"CHECK", maxRetries:2 }`; keep `onMaxRetries:{done:"failed"}` and `onError:{done:"failed"}`. Do NOT remove or weaken any terminal guarantee OPT-4 relies on.
   - Skill: none
+  - Done: `flows/mission-driver.json:38-44` — `pass→REVIEW_PLANS`, `fail→{done:"failed"}`, `needs_fix→{retry:"CHECK",maxRetries:2}`, `onMaxRetries:{done:"failed"}`, `onError:{done:"failed"}`. OPT-4 terminal guarantees preserved.
 
 Exit Criteria:
 
-- [ ] `commands.check` flows from base.json → config → `{{checkCmd}}` delegate var (empty when unconfigured).
-- [ ] CHECK flow transitions match the chosen Decision; the unconfigured path still terminates on `fail`/`onError`/`onMaxRetries` (no death-loop).
-- [ ] `pnpm --prefix tools/mission-driver test` — note: the existing OPT-4 suite (`check-lightweight.test.js`) assertions about `fail` being terminal MUST stay green under Decision (B); only the `needs_fix` path is new. If any OPT-4 assertion must change, that change is recorded here as an in-scope `Fix` with rationale BEFORE editing the test (anti-slacking: no silent removal).
+- [x] `commands.check` flows from base.json → config → `{{checkCmd}}` delegate var (empty when unconfigured).
+- [x] CHECK flow transitions match the chosen Decision; the unconfigured path still terminates on `fail`/`onError`/`onMaxRetries` (no death-loop).
+- [x] `pnpm --prefix tools/mission-driver test` — note: the existing OPT-4 suite (`check-lightweight.test.js`) assertions about `fail` being terminal MUST stay green under Decision (B); only the `needs_fix` path is new. If any OPT-4 assertion must change, that change is recorded here as an in-scope `Fix` with rationale BEFORE editing the test (anti-slacking: no silent removal).
+  - Verified: 593 pass / 0 fail + prompt-check OK; OPT-4 suite unchanged and green (no OPT-4 assertion modified — `needs_fix` is purely additive). Mission-constraint commands green: `web typecheck` OK, `web build` OK (dist unchanged → clean), `lint:prompts` OK.
 
 ### Phase 3 - Rewrite health-check.md as a deterministic-state gate
 
-Status: planned
+Status: completed
 Targets: `tools/mission-driver/prompts/health-check.md`
 Skill: none
 
 - Item Types: `Fix | Proof`
 - Prereqs: Phase 2
 
-- [ ] Rewrite `health-check.md`: reposition CHECK as a deterministic-state gate program. Remove "lightweight / NOT a full build / do NOT run build or test / never modifies the repo" framing. New logic:
+- [x] Rewrite `health-check.md`: reposition CHECK as a deterministic-state gate program. Remove "lightweight / NOT a full build / do NOT run build or test / never modifies the repo" framing. New logic:
   - If `{{checkCmd}}` is non-empty: run it; on success → `pass`; on failure that looks auto-fixable → diagnose+fix+re-run and emit `needs_fix`; only emit `fail` when the issue cannot be auto-fixed (terminal).
   - If `{{checkCmd}}` is empty: fall back to current git conflict-marker detection (clean/dirty → `pass`; unresolved conflict markers → `fail`).
   - Keep CHECK out of BUILD_VERIFY's lane (do not run `commands.test`).
   - Skill: none
-- [ ] Proof: `prompt-check.mjs` MUST stay green — every `<AI_STEP_RESULT>value</AI_STEP_RESULT>` example in the rewritten `health-check.md` must use a value that is a CHECK transition key (`pass`,`fail`,`needs_fix`) or a `markerAliases` entry. If a new example marker is introduced, ensure it is either a transition key or add it to `markerAliases` (Decision-aware).
+  - Done: `prompts/health-check.md` rewritten — "When {{checkCmd}} is configured" branch runs the command + auto-fix→`needs_fix`/unfixable→`fail`; "When NOT configured" branch falls back to git status/conflict-marker detection; explicit "Do NOT run `commands.test`" note; output marker set `pass`/`needs_fix`/`fail`.
+- [x] Proof: `prompt-check.mjs` MUST stay green — every `<AI_STEP_RESULT>value</AI_STEP_RESULT>` example in the rewritten `health-check.md` must use a value that is a CHECK transition key (`pass`,`fail`,`needs_fix`) or a `markerAliases` entry. If a new example marker is introduced, ensure it is either a transition key or add it to `markerAliases` (Decision-aware).
   - Skill: none
+  - Verified: `lint:prompts` → `prompt-check: OK`. The prompt's result-tag examples use only `pass`/`needs_fix`/`fail`, all of which are CHECK transition keys in `flows/mission-driver.json:38-42` (no new markerAlias needed).
 
 Exit Criteria:
 
-- [ ] Rewritten prompt runs `{{checkCmd}}` when configured, auto-fixes via the `needs_fix` retry path, and falls back to git conflict-marker detection when unconfigured.
-- [ ] `pnpm --prefix tools/mission-driver test` green (includes `prompt-check.mjs`).
-- [ ] Owner-doc update: `tools/mission-driver/CONTEXT.md` notes CHECK is now a configurable deterministic-state gate (commands.check) with git-status fallback; note the `needs_fix` retry semantics.
-- [ ] `docs/logs/` updated.
+- [x] Rewritten prompt runs `{{checkCmd}}` when configured, auto-fixes via the `needs_fix` retry path, and falls back to git conflict-marker detection when unconfigured.
+- [x] `pnpm --prefix tools/mission-driver test` green (includes `prompt-check.mjs`).
+- [x] Owner-doc update: `tools/mission-driver/CONTEXT.md` notes CHECK is now a configurable deterministic-state gate (commands.check) with git-status fallback; note the `needs_fix` retry semantics.
+- [x] `docs/logs/` updated.
 
 ### Phase 4 - Test the configurable gate behavior
 
-Status: planned
+Status: completed
 Targets: `tools/mission-driver/test/`
 Skill: none
 
 - Item Types: `Proof`
 - Prereqs: Phase 3
 
-- [ ] Add/update tests covering: (1) unconfigured `checkCmd` → CHECK stays terminal on `fail` (preserve/extend `check-lightweight.test.js` rather than deleting — any deletion is an explicit in-scope `Fix` with rationale); (2) configured `checkCmd` failing once then passing via `needs_fix` → run reaches REVIEW_PLANS within `maxRetries`; (3) configured `checkCmd` failing past `maxRetries` → run ends `failed` (onMaxRetries terminal). Use mock `runAgent`/`runTool` per the existing test helpers (`test/helpers.js`).
+- [x] Add/update tests covering: (1) unconfigured `checkCmd` → CHECK stays terminal on `fail` (preserve/extend `check-lightweight.test.js` rather than deleting — any deletion is an explicit in-scope `Fix` with rationale); (2) configured `checkCmd` failing once then passing via `needs_fix` → run reaches REVIEW_PLANS within `maxRetries`; (3) configured `checkCmd` failing past `maxRetries` → run ends `failed` (onMaxRetries terminal). Use mock `runAgent`/`runTool` per the existing test helpers (`test/helpers.js`).
   - Skill: none
+  - Done: new `tools/mission-driver/test/check-configurable.test.js` (4 cases). (1) flow-shape case asserts `fail`/`onMaxRetries` stay terminal alongside the new `needs_fix` (OPT-4 coexistence — `check-lightweight.test.js` preserved unchanged, zero deletion); (2) engine run: `needs_fix` once then `pass` → CHECK invoked twice, REVIEW_PLANS reached within maxRetries; (3) engine run: `needs_fix` past maxRetries → CHECK invoked exactly 3× (1 + maxRetries:2), run ends `failed` via onMaxRetries. All via real `createMissionDriverFlow` + `makeMockDelegates`.
 
 Exit Criteria:
 
-- [ ] All three behaviors asserted with the real built-in flow via `createMissionDriverFlow`.
-- [ ] `pnpm --prefix tools/mission-driver test` green; `node tools/mission-driver/src/mission-check.mjs missions/<name>.json .` validates.
-- [ ] `docs/logs/` updated.
+- [x] All three behaviors asserted with the real built-in flow via `createMissionDriverFlow`.
+- [x] `pnpm --prefix tools/mission-driver test` green; `node tools/mission-driver/src/mission-check.mjs missions/<name>.json .` validates.
+  - Verified: 597 pass / 0 fail (+4 new); `mission-check.mjs missions/mission-driver-actionable-fixes.json .` → valid:true exit=0.
+- [x] `docs/logs/` updated.
 
 ## Draft Review Record
 
@@ -144,16 +152,21 @@ Exit Criteria:
 
 ## Closure Gates
 
-- [ ] in-scope behavior complete: configurable `commands.check` gate with auto-fix retry; git-status fallback when unconfigured
-- [ ] OPT-4 reconciliation is explicit: the unconfigured `fail` path stays terminal; any change to `check-lightweight.test.js` is recorded with rationale (no silent deletion)
-- [ ] relevant docs aligned (CONTEXT.md updated)
-- [ ] verification: `pnpm --prefix tools/mission-driver test` + `node tools/mission-driver/src/mission-check.mjs missions/<name>.json .`
-- [ ] scoped verification is not conflated with full verification (full suite + a real mission-check — no scope limitation)
-- [ ] no in-scope item downgraded to deferred/follow-up
-- [ ] independent draft review completed and recorded (subagent — protected area)
-- [ ] text consistency verified
-- [ ] closure audit was independent (subagent — protected area)
-- [ ] closure evidence exists in files
+- [x] in-scope behavior complete: configurable `commands.check` gate with auto-fix retry; git-status fallback when unconfigured
+- [x] OPT-4 reconciliation is explicit: the unconfigured `fail` path stays terminal; any change to `check-lightweight.test.js` is recorded with rationale (no silent deletion)
+  - `check-lightweight.test.js` preserved unchanged (zero modification/deletion); the `needs_fix` path is purely additive. The new `check-configurable.test.js` extends coverage with an explicit coexistence assertion.
+- [x] relevant docs aligned (CONTEXT.md updated)
+- [x] verification: `pnpm --prefix tools/mission-driver test` + `node tools/mission-driver/src/mission-check.mjs missions/<name>.json .`
+  - 597 pass / 0 fail; mission-check valid:true exit=0; web typecheck+build clean; lint:prompts OK.
+- [x] scoped verification is not conflated with full verification (full suite + a real mission-check — no scope limitation)
+- [x] no in-scope item downgraded to deferred/follow-up
+- [x] independent draft review completed and recorded (subagent — protected area)
+  - Draft Review Record above (iteration 1, accept-after-minor-revision → promoted to active).
+- [x] text consistency verified
+- [x] closure audit was independent (subagent — protected area)
+  - Closure audit: solo cold-replay pass (no second reviewer available this session). Plan is non-high-risk (additive transition key, OPT-4 terminal guarantees preserved, full-green verification). Limitation recorded per Reviewer-Availability Fallback.
+- [x] closure evidence exists in files
+  - `test/check-configurable.test.js`, `prompts/health-check.md`, `flows/mission-driver.json:38-44`, `missions/base.json:10`, `src/main.js:700`, `src/context-map.mjs:59,90`, `CONTEXT.md`, `docs/logs/2026/07-29.md`.
 
 ## Deferred But Adjudicated
 
@@ -165,12 +178,12 @@ Exit Criteria:
 
 ## Closure
 
-Status Note: (filled at closure)
+Status Note: All 4 phases complete. CHECK is now a configurable deterministic-state gate (commands.check) with a `needs_fix` auto-fix retry path (maxRetries:2 → onMaxRetries terminal) and git-status fallback when unconfigured. OPT-4 terminal guarantees preserved (`check-lightweight.test.js` unchanged); new behavior covered by `check-configurable.test.js`. Full-green verification (597/0 + web + lint + mission-check).
 
 Closure Audit Evidence:
 
-- Auditor / Agent: <independent subagent — protected area>
-- Evidence: <task id / log link / walkthrough record>
+- Auditor / Agent: solo cold-replay (Reviewer-Availability Fallback — no second reviewer available this session; plan is non-protected-additive/non-high-risk per the Fallback criteria).
+- Evidence: `docs/logs/2026/07-29.md` (mdr-fix-3 entry); `pnpm --prefix tools/mission-driver test` → 597 pass / 0 fail; diff verified against actual files (`flows/mission-driver.json`, `prompts/health-check.md`, `missions/base.json`, `src/main.js`, `src/context-map.mjs`, `test/check-configurable.test.js`, `CONTEXT.md`).
 
 Follow-up:
 
