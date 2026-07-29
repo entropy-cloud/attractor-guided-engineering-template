@@ -122,6 +122,7 @@ node tools/mission-driver/src/main.js <mission-name> --step CHECK --dry-run --no
 
 - `TROUBLESHOOTING.md` — 卡住时的诊断手册
 - orphan 清理: `node tools/mission-driver/src/reap-orphans.mjs --startup _tmp <PID>`
+- **并行安全**: 支持 N 个 mission-driver 并行（同项目 / 跨项目）。startup reaper（`reap-orphans.mjs`）按 run 维度判孤儿——spawn 的 opencode 带 `[MISSION_DRIVER:<runId>]` 标记，reaper 查全局 active-run 登记（`~/.mission-driver/active/`）+ `isAliveAndOurs` 判活，**永不误杀活跃的并行 run**；只回收"拥有进程已确证死亡"的崩溃 run 残留。无法证明死亡时一律 spare（保守）。
 - Monitor 独立模式: `node tools/mission-driver/src/main.js --monitor`
 
 

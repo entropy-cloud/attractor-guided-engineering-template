@@ -4,6 +4,7 @@ import { basename, dirname, resolve } from "node:path";
 import { freemem } from "node:os";
 import { snapshot as sysSnapshot } from "./sys-snapshot.mjs";
 import { reapProcessGroup } from "./reap-orphans.mjs";
+import { touchActiveRun } from "./active-run-registry.mjs";
 import { IS_WIN32, killProcessTree } from "./platform.mjs";
 
 function pad(n) {
@@ -349,6 +350,13 @@ export function execute(config, label, cmd, args, opts = {}) {
       process.stderr.write(`  [${ts}] ${label} running ... (pid ${childPid}, timeout in ${remainMin}min)\n`);
 
       try { sysSnapshot(config.runDir, `heartbeat:${label}`); } catch {}
+
+      // Refresh this run's heartbeat in the global active-run registry so other
+      // concurrent runs' reapers keep recognizing us as alive. Best-effort; a
+      // missing entry (run never registered, e.g. missionName=null) is a no-op.
+      try {
+        if (config.runDir) touchActiveRun(basename(config.runDir), process.pid);
+      } catch {}
 
       // Append heartbeat event to events.jsonl (monitoring event stream, FSD §4.1.3)
       try {

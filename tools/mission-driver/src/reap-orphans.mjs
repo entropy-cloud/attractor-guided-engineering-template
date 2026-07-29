@@ -28,6 +28,8 @@ import {
   isAlive,
   sleepSync,
 } from "./platform.mjs";
+import { isAliveAndOurs } from "./run-reconcile.mjs";
+import { loadActiveRunIndex } from "./active-run-registry.mjs";
 
 const SIGTERM_GRACE_MS = 5_000;
 
@@ -126,27 +128,83 @@ function _getDescendants(rootPid, allProcs) {
 }
 
 /**
+ * Conservative fallback liveness for a tagged opencode process when no usable
+ * registry entry exists. Walks the parent chain looking for a live mission-
+ * driver driver (cmdline contains `main.js`).
+ *
+ * Returns true (→ SPARE) when:
+ *   - a live `main.js` ancestor is found (the owning run is still active), OR
+ *   - liveness is genuinely undecidable (a live ancestor whose cmdline cannot be
+ *     obtained) — mirrors run-reconcile R2: never risk mis-killing an active run.
+ * Returns false (→ reap) only when the parent chain positively dead-ends:
+ *   - an ancestor PID is dead (isAlive false), or
+ *   - the chain is reparented to init (ppid 0/1) without a main.js driver, or
+ *   - the chain exhausts (bounded depth) without finding a live main.js driver.
+ *
+ * @private
+ */
+function _parentIsAliveDriver(proc, allProcs) {
+  if (!proc || typeof proc.ppid !== "number") return true; // undecidable → spare
+  const pidsSet = allProcs.length ? new Set(allProcs.map((p) => p.pid)) : null;
+  let currentPid = proc.ppid;
+  let depth = 0;
+  // 0 and 1 mean reparented to the system init (Unix) or a system process —
+  // not a mission-driver driver. Bound the walk to avoid pathological trees.
+  while (currentPid && currentPid > 1 && depth < 16) {
+    depth++;
+    const parent = allProcs.find((p) => p.pid === currentPid);
+    if (!parent) {
+      // Ancestor not in snapshot. If it is provably dead → chain broke → reap.
+      // If alive but unlisted → cmdline unobtainable → conservative spare (R2).
+      return isAlive(currentPid);
+    }
+    if (!isAlive(currentPid)) return false; // positively dead ancestor → orphan
+    const cmd = parent.cmd || "";
+    if (/main\.js/i.test(cmd)) return true; // live mission-driver driver → spare
+    currentPid = parent.ppid;
+  }
+  // Reparented to init / chain exhausted with no live driver → orphan → reap.
+  // (pidsSet unused guard keeps the snapshot-intent explicit for future readers.)
+  void pidsSet;
+  return false;
+}
+
+/**
  * Startup reaper: find and kill all processes from a previous crashed
- * mission-driver run.
+ * mission-driver run, WITHOUT harming opencode children that belong to another
+ * ACTIVE concurrent mission-driver run.
  *
  * IDENTIFICATION: mission-driver spawns processes with a distinctive signature:
- *   opencode run -m <model> --agent <agent> --dangerously-skip-permissions [MISSION_DRIVER] <prompt>
+ *   opencode run -m <model> --agent <agent> --dangerously-skip-permissions [MISSION_DRIVER:<runId>] <prompt>
+ * (the legacy bare [MISSION_DRIVER] tag is also matched). The tag now carries a
+ * runId so the reaper can ask "is the run that owns this opencode still alive?"
  *
- * The interactive opencode is just `opencode` (no `run` subcommand), so it's
- * never matched. Combined with the constraint that only ONE mission-driver runs
- * at a time, any matching process at startup is definitively from a previous
- * crashed run.
+ * PER-RUN ORPHAN JUDGMENT (replaces the old "only one mission-driver at a time"
+ * assumption, which mis-killed concurrent runs):
+ *   - own run          → skip (self-protection via ownRunId + excludePpid).
+ *   - registry says    → isAliveAndOurs(driverPid,...): PID-reuse-safe liveness.
+ *     run alive          If ANY registry entry for this runId is alive → SPARE.
+ *   - no registry /    → _parentIsAliveDriver: walk the ppid chain for a live
+ *     no alive entry     main.js driver. Found → SPARE; positively gone → reap;
+ *                        undecidable → SPARE (conservative, mirrors R2).
  *
- * This function kills:
- *   1. All `opencode run` processes with `[MISSION_DRIVER]` marker + their
- *      descendants (catches MCP servers, build/test tooling)
+ * This kills:
+ *   1. opencode run processes whose owning run is confirmed dead + descendants
+ *      (catches MCP servers, build/test tooling)
  *   2. Orphaned MCP servers (ppid=1 on Unix, or reparented on Windows) from
  *      opencode instances that already died
  *   3. Orphaned build/test tooling (turbo/tsc/vite/vitest) that escaped
  *      process group / tree kill
+ *
+ * @param {string} runDir - Directory for logging
+ * @param {number} [excludePpid] - current run's pid (self-protection fallback)
+ * @param {Array} [procs] - injected process snapshot (testability / shared cache)
+ * @param {{ ownRunId?: string, registryDir?: string, projectRoot?: string }} [opts]
  */
-export function reapStartupOrphans(runDir, excludePpid = null, procs = null) {
+export function reapStartupOrphans(runDir, excludePpid = null, procs = null, opts = {}) {
   const allProcs = procs || getAllProcesses();
+  const ownRunId = (opts && opts.ownRunId) || null;
+  const activeIndex = loadActiveRunIndex(opts && opts.registryDir);
 
   const killed = [];
   const killedPids = new Set();
@@ -161,33 +219,56 @@ export function reapStartupOrphans(runDir, excludePpid = null, procs = null) {
     killed.push({ pid: proc.pid, rss_mb: Math.round(proc.rss_kb / 1024), cmd: proc.cmd.slice(0, 80), reason });
   };
 
-  // --- Phase 1: Find mission-driver opencode run processes ---
-  const missionDriverPattern = /\[MISSION_DRIVER\]/;
-  const ocPattern = /opencode\s+run\b/;
-  const ocProcs = allProcs.filter(
-    (p) =>
-      ocPattern.test(p.cmd) &&
-      missionDriverPattern.test(p.cmd) &&
-      p.ppid !== excludePpid
-  );
+  // --- Phase 1: mission-driver opencode run processes, judged per-run ---
+  // Match BOTH the new [MISSION_DRIVER:<runId>] and legacy [MISSION_DRIVER] tag.
+  const TAG_RE = /\[MISSION_DRIVER(?::([^\]]+))?\]/;
+  const OC_RE = /opencode\s+run\b/;
 
-  for (const oc of ocProcs) {
+  for (const oc of allProcs) {
+    if (!OC_RE.test(oc.cmd)) continue;
+    const m = oc.cmd.match(TAG_RE);
+    if (!m) continue;
+    const procRunId = m[1] || null;
+
+    // (a) self-protection: never reap our own run's opencode.
+    if (procRunId && procRunId === ownRunId) continue;
+    if (oc.ppid === excludePpid) continue;
+
+    // (b) is the run that owns this opencode still active?
+    let alive = false;
+    const entries = procRunId ? activeIndex.get(procRunId) : null;
+    if (entries && entries.length > 0) {
+      // Registry-seeded: PID-reuse-safe. Spare if ANY entry's driver is alive
+      // (handles same-second runId collisions — multiple drivers, one runId).
+      alive = entries.some((e) =>
+        isAliveAndOurs(e.driverPid, procRunId, e.missionName, allProcs)
+      );
+    }
+    if (!alive) {
+      // No usable registry entry → conservative parent-process liveness check
+      // (covers: registry loss, homedir unwritable, legacy bare tag, and
+      // missionName=null runs that are deliberately not registered).
+      alive = _parentIsAliveDriver(oc, allProcs);
+    }
+
+    if (alive) {
+      process.stderr.write(
+        `  [reaper] sparing PID ${oc.pid} — active concurrent run ${procRunId || "<legacy>"}\n`
+      );
+      continue;
+    }
+
+    // (c) confirmed dead run → reap descendants + self.
     if (IS_WIN32) {
-      // Windows: kill descendants by tree walk
-      const descendants = _getDescendants(oc.pid, allProcs);
-      for (const d of descendants) {
+      for (const d of _getDescendants(oc.pid, allProcs)) {
         _killOne(d, `descendant of mission-driver opencode PID ${oc.pid}`);
       }
     } else {
-      // Unix: kill process group members
-      const groupMembers = allProcs.filter(
-        (p) => p.pgid === oc.pid && p.pid !== oc.pid
-      );
-      for (const m of groupMembers) {
-        _killOne(m, `process group ${oc.pid} member (orphaned mission-driver child)`);
+      for (const mem of allProcs.filter((p) => p.pgid === oc.pid && p.pid !== oc.pid)) {
+        _killOne(mem, `process group ${oc.pid} member (orphaned mission-driver child)`);
       }
     }
-    _killOne(oc, "mission-driver opencode run (previous crashed run)");
+    _killOne(oc, `orphaned mission-driver opencode (dead run ${procRunId || "<legacy>"})`);
   }
 
   // --- Phase 2: Orphaned MCP servers (parent died, MCP survived) ---

@@ -1,4 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
+import { basename } from "node:path";
 import { execSync } from "node:child_process";
 import { execute } from "./executor.js";
 import { IS_WIN32, killProcessTree, isAlive } from "./platform.mjs";
@@ -163,7 +164,15 @@ export async function createRunner(config, executeFn = execute) {
     process.stderr.write(preview + "\n");
     process.stderr.write(`╚═══════════════════════════════════════════════\n`);
 
-    const markedPrompt = `[MISSION_DRIVER] ${prompt}`;
+    // Tag the spawned opencode with the run's identity so the startup reaper
+    // (reap-orphans.mjs) can tell it apart from other concurrent runs' opencode
+    // and spare active concurrent runs. Format: [MISSION_DRIVER:<runId>]; falls
+    // back to the legacy bare [MISSION_DRIVER] when no runDir is available. The
+    // reaper regex matches BOTH forms (optional runId), so old/new coexist.
+    const runTag = config.runDir
+      ? `[MISSION_DRIVER:${basename(config.runDir)}]`
+      : "[MISSION_DRIVER]";
+    const markedPrompt = `${runTag} ${prompt}`;
     const effectiveModel = modelOverride || config.model;
     const { args, useStdin, shell, exe } = buildDriverArgs(
       { ...config, model: effectiveModel }, sessionId, markedPrompt

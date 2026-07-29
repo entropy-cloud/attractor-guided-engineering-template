@@ -178,7 +178,7 @@ sequenceDiagram
             Note over Eng,OC: 示例: DRAFT_PLANS (agent step)
             Eng->>Eng: _buildPrompt() —— 模板替换 {{roadmapPath}} 等<br/>+ 追加 appendBuffer(重试反馈)
             Eng->>Run: runAgent(stepName, prompt, system, sessionId)
-            Run->>Run: markedPrompt = "[MISSION_DRIVER] " + prompt
+            Run->>Run: markedPrompt = "[MISSION_DRIVER:<runId>] " + prompt<br/>(runId = basename(runDir); 标记携带 run 身份,<br/>供 startup reaper 区分并行 run, 见 §并行安全)
             Run->>Run: args = ["run","-m",model,"--agent",config.agent,<br/>"--dangerously-skip-permissions", markedPrompt]
             Run->>Exe: execute(config, "oc-STEP", "opencode", args)
             Exe->>Disk: writeFileSync 日志头<br/># cmd / # cwd / # started
@@ -309,7 +309,7 @@ sequenceDiagram
 ```
 
 **通信方式总结**：
-- **父→子**：命令行参数（prompt 作为最后一个 argv 传入，加 `[MISSION_DRIVER]` 前缀）。
+- **父→子**：命令行参数（prompt 作为最后一个 argv 传入，加 `[MISSION_DRIVER:<runId>]` 前缀；runId 让 startup reaper 识别该 opencode 属于哪个 run，从而 spare 并行的活跃 run 而非误杀）。
 - **子→父**：子进程 stdout 写到日志文件，父进程 `readFileSync` **事后全文读取**；**stderr 经独立管道**（`stdio:["ignore",fd,"pipe"]`）实时捕获到滚动 buffer，即使子进程在写任何输出前崩溃，stderr tail 仍可用于诊断与签名匹配（mdr-1）。没有流式 stdout 管道、没有 stdin 交互。
 - **session 续跑**：从输出文本里正则抠 `ses_xxx`，下一次 `opencode run --session ses_xxx` 传回去。若抠不到则 fallback 到 `opencode session list -n 1`。
 - **结果契约**：AI 必须在输出里写 `<AI_STEP_RESULT>marker</AI_STEP_RESULT>`；引擎靠这个 marker 驱动状态机。若 AI 忘了写，引擎会再 spawn 一个修正子进程让它只输出合法 marker。

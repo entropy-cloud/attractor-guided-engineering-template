@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
-import { resolve, dirname, relative, isAbsolute } from "node:path";
+import { resolve, dirname, relative, isAbsolute, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "../vendor/commander/index.js";
 import { resolveConfig, buildRunSkeleton, inferModuleName, listMissionsString } from "./config.js";
@@ -12,6 +12,7 @@ import { runPostmortem } from "./postmortem.mjs";
 import { startMonitor } from "./monitor.js";
 import { loadDotenv } from "./env-loader.js";
 import { reconcileStaleRuns, markAborted } from "./run-reconcile.mjs";
+import { unregisterActiveRun } from "./active-run-registry.mjs";
 // validateDraftDesc lives in the draft-job.mjs leaf module (moved there by
 // mdr-remediate-5 N2 to avoid a monitor.js → main.js → monitor.js cycle).
 // Re-exported below so existing test imports from "./main.js" keep working.
@@ -768,6 +769,15 @@ async function cmdRunMission(mission, opts) {
     const exitCode = EXIT_MAP[result.status];
     if (exitCode !== undefined) process.exitCode = exitCode;
   } finally {
+    // Unregister this run from the global active-run registry. Single site:
+    // we deliberately do NOT scatter unregister across engine.run()'s ~25
+    // _result() return points. Best-effort + idempotent (ENOENT silently
+    // ignored) so it's a safe no-op for runs that were never registered
+    // (missionName=null draft/analyze path). Crash residue is reclaimed by the
+    // next run's reaper via isAliveAndOurs detecting the dead driverPid.
+    if (config && config.runDir) {
+      try { unregisterActiveRun(basename(config.runDir), process.pid); } catch {}
+    }
     if (monitor) { try { await monitor.close(); } catch {} }
     await runner.close();
   }
