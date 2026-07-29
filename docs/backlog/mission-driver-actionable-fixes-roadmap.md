@@ -17,7 +17,7 @@ Does not contain implementation details. Each `planned` stage is owned by its ex
 > plans), and writes the item back to `done` when closure audit passes.
 
 - 1. REVIEW_PLANS approved marker alias fix: `done`
-- 2. Per-mission promptsDir config support: `todo`
+- 2. Per-mission promptsDir config support: `done`
 - 3. CHECK configurable check command + prompt rewrite: `todo`
 - 4. Draft description supports directory/multi-file references: `todo`
 
