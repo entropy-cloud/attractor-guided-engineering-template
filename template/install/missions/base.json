@@ -1,0 +1,20 @@
+{
+  "_comment": "Shared defaults for all missions. Fill commands.* for YOUR stack.",
+  "model": "zhipuai-coding-plan/glm-5.2",
+  "parseModel": "zhipuai-coding-plan/glm-4.7-flash",
+  "agent": "build",
+  "maxCycles": 8,
+  "maxInnerCycles": 6,
+  "maxTotalSteps": 500,
+  "fastSkipSteps": [],
+  "planGuide": "docs/plans/00-plan-authoring-and-execution-guide.md",
+  "auditsDir": "docs/audits",
+  "contextDir": "docs/context",
+  "commands": {
+    "test": "REPLACE_WITH_YOUR_TEST_COMMAND",
+    "build": "REPLACE_WITH_YOUR_BUILD_COMMAND",
+    "lint": "REPLACE_WITH_YOUR_LINT_COMMAND",
+    "typecheck": "REPLACE_WITH_YOUR_TYPECHECK_COMMAND"
+  },
+  "commitFormat": "<type>(<scope>): <description>"
+}

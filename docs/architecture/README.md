@@ -1,36 +1,21 @@
-# Architecture Docs Index
+# Architecture
 
-## Purpose
+`docs/architecture/` defines the stable cross-cutting technical baseline for `mission-driver` (the in-tree tool this repo develops).
 
-`docs/architecture/` defines the stable cross-cutting technical baseline for `<project-name>`.
+## Owner Doc Map
 
-Use `docs/design/` for app-layer feature and business design. Use `docs/architecture/` for technical structure that spans multiple features.
+| Concern | Owner Doc |
+| --- | --- |
+| Engine CLI surface, exports, public contracts (run-state shape, exit map, etc.) | [`mission-driver-baseline.md`](mission-driver-baseline.md) — the single authoritative architecture reference for the engine. Read this first. |
+| Why this repo has a `template/` subdirectory + the boundary between real-project and template content | [`template-vs-realproject-boundary.md`](template-vs-realproject-boundary.md) |
+| Module boundaries (engine vs monitor vs web vs tooling) | [`module-boundaries.md`](module-boundaries.md) |
+| Long-term product direction and non-goals | [`project-vision.md`](project-vision.md) |
+| Current implementation baseline (stack, runtime, deployment) | [`system-baseline.md`](system-baseline.md) |
+| HTTP/REST response conventions (when the project exposes APIs) | [`api-response-conventions.md`](api-response-conventions.md) — currently a starter skeleton, not actively used by the file-based monitor |
+| External integration and transaction safety patterns | [`integration-and-transaction-patterns.md`](integration-and-transaction-patterns.md) — currently a starter skeleton, not actively used |
 
-## Suggested Reading Order
+## When This Directory Changes
 
-1. `project-vision.md`
-2. `system-baseline.md`
-3. `module-boundaries.md`
-4. `mission-driver-baseline.md` — public contracts for the `tools/mission-driver/` cross-cutting engine (CLI surface, `mission.json` / `draft-state.json` / `run-state.json` schemas, marker contracts, public exports vs test seams)
-5. more specific owner docs as the project grows
-
-## Owner-Doc Rules
-
-- keep one document responsible for one stable topic
-- explain current rationale and constraints, not step-by-step history
-- when implementation changes supported architecture, update the owner doc in the same change
-- move rejected options and exploration notes to `docs/analysis/`
-- cite the relevant app-layer owner doc under `docs/design/` when the technical rule exists to support a concrete product behavior
-
-## Precedence Boundary
-
-- `docs/design/` owns app behavior and feature semantics
-- `docs/architecture/` owns technical structure and cross-cutting implementation rules
-- if a question is about persistence or schema truth, the model/schema files themselves are authoritative
-
-## Initial Owner Docs
-
-- `project-vision.md` - product and system intent
-- `system-baseline.md` - current stack and runtime baseline
-- `module-boundaries.md` - package/module/domain ownership boundaries
-- `mission-driver-baseline.md` - public contracts for the mission-driver engine
+- Adding a new cross-cutting technical contract that spans multiple modules → add a doc here and reference it from `mission-driver-baseline.md` (do NOT duplicate content already in `mission-driver-baseline.md`).
+- Design-level decisions belong in `docs/design/` (or under `tools/mission-driver/design/` for engine internals); cross-cutting technical structure belongs here.
+- Per `AGENTS.md` Operating Rule 6, keep this directory focused on the current supported baseline, not migration history.

@@ -10,6 +10,8 @@ It is designed for small and medium-sized projects that already have a technical
 
 It is not a starter app and does not include generated product code. Its purpose is to give a repository enough durable structure for humans and AI to share requirements, owner-doc baselines, plans, verification, and project memory without heavyweight process overhead.
 
+> **Dual-audience repo.** This repository also develops `tools/mission-driver/` — a Flow DSL engine + Vue 3 monitor dashboard that automates the AGE development loop — using its own AGE workflow (it dogfoods itself). Files at the repo root and under `docs/` are the real-project versions (filled in for mission-driver development). Pristine template copies of the fill-in files live under `template/`. Consumers do not interact with `template/` directly; they run `./install-age.sh` (see "How To Start A New Project" below).
+
 ## What AGE Means
 
 AGE means **Attractor-Guided Engineering**.
@@ -118,13 +120,23 @@ Independent review found the template direction useful but warned about two risk
 
 ## First Use
 
-After copying this template, start with:
+After installing this template into a new project, the primary automated flow is:
 
-- `START-HERE-after-copy.md`
+```bash
+# From a clone of this repo, into your new project root:
+./install-age.sh /path/to/target-project "Project Name"
+
+# Then from the target project:
+cd /path/to/target-project
+./tools/mission-driver.sh run demo           # smoke test (秒级, verifies scaffold + engine + monitor)
+./tools/mission-driver.sh run onboarding     # personalize (30-60 min, AI reads your codebase and fills docs/context/* / architecture/* / etc.)
+```
+
+For a manual fallback flow (no bash) or the full Day-0 checklist, see `template/START-HERE-after-copy.md` (shipped via `install-age.sh` into the target's `template/` directory).
 
 Do not ask AI to implement features until the Day 0 checklist is complete enough for the first slice.
 
-The most important setup step is filling `docs/context/project-context.md` with real active work and real verification commands.
+The most important setup step is filling `docs/context/project-context.md` with real active work and real verification commands — `onboarding` mission's WI2 does this automatically by reading your codebase.
 
 ## What Problem This Template Solves
 
@@ -177,6 +189,8 @@ For created plans, independent draft review and closure audit are part of the de
 
 `tools/mission-driver/` is a Flow DSL engine that automates the AGE development loop. It reads `missions/<name>.json`, drives a state machine through health-check → review → execute → draft → deep-audit, and spawns `opencode run` for each AI step.
 
+**This repository is the engine's source of truth.** Consumers reference it via the `MISSION_DRIVER_HOME` env var (a thin `tools/mission-driver.sh` shim is created by `install-age.sh`); they do NOT copy the engine directory.
+
 **Core capabilities:**
 
 - **Flow DSL**: Declarative JSON state machine with 5 step types (script/tool/agent/group/subflow), result-driven transitions, and subflow composition
@@ -184,21 +198,28 @@ For created plans, independent draft review and closure audit are part of the de
 - **Roadmap guidance**: `roadmap.md` drives task selection — DRAFT_PLANS reads remaining items and creates 1-3 plans per cycle
 - **Reflexion memory**: `--analyze-run` produces postmortems; durable lessons feed back into future runs via `_index.md`
 - **Monitor Dashboard**: Vue 3 frontend with run history, log viewer, resource charts, and SSE event streaming
+- **Onboarding mission** (shipped to consumers via `install-age.sh`): AI reads the consumer's codebase and fills the copied template docs (`docs/context/*`, `docs/architecture/*`, etc.) with real content
 
-**Quick start:**
+**Quick start (from a target project that has run `install-age.sh`):**
 
 ```bash
-# Generate a mission from description
+# Smoke test (秒级)
+./tools/mission-driver.sh run demo
+
+# Personalize (30-60 min): AI reads your codebase, fills the copied docs
+./tools/mission-driver.sh run onboarding
+
+# Or, generate a custom mission from a description
 ./tools/mission-driver.sh draft "Build the component library"
 
-# Run the mission loop
+# Run a mission loop
 ./tools/mission-driver.sh <mission-name>
 
 # Analyze a completed run
 ./tools/mission-driver.sh --analyze-run
 ```
 
-See `tools/mission-driver/README.md` for full documentation. Do not copy the engine directory — reference it via `MISSION_DRIVER_HOME` (see `tools/README.md`).
+See `tools/mission-driver/README.md` for full documentation.
 
 ## Optional Starter Skeletons
 
@@ -273,11 +294,14 @@ Do not push important work through chat alone.
 
 ## How To Start A New Project
 
-1. Copy this template into a new repository root.
-2. Complete `START-HERE-after-copy.md`.
-3. Put PM notes, prototype links, card-set docs, article extracts, and external references into `docs/input/`.
-4. If the input is still ambiguous, capture clarification in `docs/discussions/` before implementation.
-5. Convert settled scope into `docs/requirements/` before asking AI to code.
+1. Clone this repository.
+2. Run `./install-age.sh /path/to/your-new-project-root "Project Name"` — copies the curated file set listed in `install-age.manifest` (fill-in files from `template/`, shared methodology guides from root), sed-replaces `<project-name>` in fill-in docs, creates the mission-driver shim, `.env`, `missions/base.json`, `missions/demo.json`, `missions/onboarding.json`, `docs/logs/{year}/`, and updates `.gitignore`.
+3. From the target project, run `./tools/mission-driver.sh run demo` (smoke test) then `./tools/mission-driver.sh run onboarding` (AI personalizes the docs by reading your codebase).
+4. Put PM notes, prototype links, card-set docs, article extracts, and external references into `docs/input/`.
+5. If the input is still ambiguous, capture clarification in `docs/discussions/` before implementation.
+6. Convert settled scope into `docs/requirements/` before asking AI to code.
+
+For a manual fallback (no bash), follow the Day-0 checklist in `template/START-HERE-after-copy.md` (shipped into the target's `template/` directory by `install-age.sh`).
 
 ## What NOT To Copy
 
@@ -285,8 +309,9 @@ Not everything in this template belongs in your project:
 
 - `docs/articles/` — outward-facing articles about AGE methodology. These are the template's own explanatory writing, not project content. Do not copy them into your project.
 - `docs/retrospectives/template-design-decisions.md` — the template's own evolution record. Your project should have its own retrospectives but should not carry over the template's history.
-- `tools/mission-driver/` (the engine code) — do not copy this directory. Instead, create a thin `tools/mission-driver.sh` that references the template's `tools/mission-driver/` via `MISSION_DRIVER_HOME` (see `tools/README.md`). This keeps the engine single-sourced and your project lean.
-- The generic skills in `docs/skills/` — these are default templates and MUST be customized after copy (see customization note below). Do not keep them unchanged.
+- `tools/mission-driver/` (the engine code) — do not copy this directory. Instead, `install-age.sh` creates a thin `tools/mission-driver.sh` that references the template's `tools/mission-driver/` via `MISSION_DRIVER_HOME` (see `tools/README.md`). This keeps the engine single-sourced and your project lean.
+- The generic skills in `docs/skills/` — these are default templates and MUST be customized after install (see customization note below). Do not keep them unchanged.
+- `template/` subdirectory at the repo root — this holds pristine copies of fill-in files for `install-age.sh` to source from. Consumers do not interact with it directly; it stays in this template repo. (If you cloned instead of running `install-age.sh`, simply delete `template/` after copying; the consumer-audience files are already in your target's docs tree.)
 
 Generic guide files (`docs/retrospectives/00-retrospective-writing-guide.md`, `docs/skills/README.md` etc.) can be kept as format references if you plan to use those layers.
 

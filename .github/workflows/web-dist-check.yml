@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: tools/mission-driver/web
+        working-directory: tools
     steps:
       - uses: actions/checkout@v4
 
@@ -37,17 +37,17 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
-          cache-dependency-path: tools/mission-driver/web/pnpm-lock.yaml
+          cache-dependency-path: tools/pnpm-lock.yaml
 
       - name: Install deps (frozen)
         run: pnpm install --frozen-lockfile
 
       - name: Rebuild frontend
-        run: pnpm build
+        run: pnpm --filter mission-driver-monitor-web build
 
       - name: Verify committed dist matches source
         run: |
-          if ! git diff --exit-code -- dist; then
-            echo "::error::web/dist is out of date. Run 'pnpm build' in tools/mission-driver/web and commit the updated dist/."
+          if ! git diff --exit-code -- mission-driver/web/dist; then
+            echo "::error::web/dist is out of date. Run 'pnpm --filter mission-driver-monitor-web build' from tools/ and commit the updated dist/."
             exit 1
           fi

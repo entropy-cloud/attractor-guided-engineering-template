@@ -1,5 +1,7 @@
 # Start Here After Copy
 
+> **DEPRECATED — manual fallback only.** The primary copy flow is now `./install-age.sh /path/to/target "Project Name"` from a clone of this repo. It automates every step below (file copy, `<project-name>` substitution, mission-driver shim creation, `.env`, `missions/base.json`, `docs/logs/{year}/`, `.gitignore`). This document remains for environments without bash or for understanding what install-age.sh does under the hood.
+
 Use this checklist immediately after copying the template into a new project.
 
 Do this before asking AI to implement features.

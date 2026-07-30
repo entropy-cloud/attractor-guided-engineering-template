@@ -10,6 +10,8 @@
 
 这不是一个 starter app，不包含生成的产品代码。其目的是为仓库提供足够的持久结构，让人类和 AI 能够共享需求、owner-doc 基线、计划、验证和项目记忆，而无需重量级的流程开销。
 
+> **双重身份仓库。** 本仓库同时开发 `tools/mission-driver/`（一个 Flow DSL 引擎 + Vue 3 监控仪表盘，自动化 AGE 开发循环），用自己的 AGE 工作流 dogfood 自己。仓库根和 `docs/` 下的文件是**真实项目版**（为 mission-driver 开发填好内容）；fill-in 文件的纯净模板版在 `template/` 子目录下。消费者不直接接触 `template/`，而是跑 `./install-age.sh`（见下方"如何开始新项目"）。
+
 ## AGE 的含义
 
 AGE 代表 **Attractor-Guided Engineering**（吸引子引导工程）。
@@ -34,6 +36,8 @@ AGE 从一个问题开始：
 
 `tools/mission-driver/` 是一个 Flow DSL 引擎，自动化 AGE 开发循环。它读取 `missions/<name>.json`，驱动状态机经过健康检查 → 审查 → 执行 → 草拟 → 深度审计，并为每个 AI 步骤生成 `opencode run`。
 
+**本仓库是引擎的单一来源。** 消费者通过 `MISSION_DRIVER_HOME` 环境变量引用它（`install-age.sh` 自动生成一个 thin `tools/mission-driver.sh` shim）；**不**复制引擎目录。
+
 **核心能力：**
 
 - **Flow DSL**：声明式 JSON 状态机，5 种步骤类型（script/tool/agent/group/subflow），结果驱动的转换，子流程组合
@@ -41,11 +45,18 @@ AGE 从一个问题开始：
 - **Roadmap 指导**：`roadmap.md` 驱动任务选择 — DRAFT_PLANS 每次循环读取剩余项并创建 1-3 个计划
 - **Reflexion 记忆**：`--analyze-run` 生成事后分析；持久教训通过 `_index.md` 反馈到后续运行
 - **Monitor Dashboard**：Vue 3 前端，含运行历史、日志查看器、资源图表和 SSE 事件流
+- **Onboarding mission**（通过 `install-age.sh` 提供给消费者）：AI 读消费者的 codebase，把复制过来的模板文档（`docs/context/*`、`docs/architecture/*` 等）填为真实内容
 
-**快速开始：**
+**快速开始（在跑过 `install-age.sh` 的目标项目里）：**
 
 ```bash
-# 从描述生成 mission
+# 冒烟测试（秒级）
+./tools/mission-driver.sh run demo
+
+# 个性化（30-60 分钟）：AI 读你的 codebase，填好复制过来的文档
+./tools/mission-driver.sh run onboarding
+
+# 或：从描述生成自定义 mission
 ./tools/mission-driver.sh draft "构建组件库"
 
 # 运行 mission 循环
@@ -55,7 +66,7 @@ AGE 从一个问题开始：
 ./tools/mission-driver.sh --analyze-run
 ```
 
-完整文档见 `tools/mission-driver/README.md`。不要复制引擎目录 — 通过 `MISSION_DRIVER_HOME` 引用（见 `tools/README.md`）。
+完整文档见 `tools/mission-driver/README.md`。
 
 ## 模板包含的内容
 
@@ -106,11 +117,14 @@ AGE 从一个问题开始：
 
 ## 如何开始新项目
 
-1. 将此模板复制到新的仓库根目录。
-2. 完成 `START-HERE-after-copy.md`。
-3. 将 PM 笔记、原型链接、卡片文档、文章摘录和外部引用放入 `docs/input/`。
-4. 如果输入仍不明确，在实现前在 `docs/discussions/` 中捕获澄清。
-5. 在要求 AI 编码之前，将确定的范围转换为 `docs/requirements/`。
+1. Clone 本仓库。
+2. 跑 `./install-age.sh /path/to/your-new-project-root "项目名"` — 按 `install-age.manifest` 复制精选文件集（fill-in 文件从 `template/`，共享方法论指南从根），sed 替换 fill-in 文档里的 `<project-name>`，创建 mission-driver shim、`.env`、`missions/base.json`、`missions/demo.json`、`missions/onboarding.json`、`docs/logs/{year}/`，更新 `.gitignore`。
+3. 在目标项目里，先跑 `./tools/mission-driver.sh run demo`（冒烟），再跑 `./tools/mission-driver.sh run onboarding`（AI 读你的 codebase，个性化文档）。
+4. 将 PM 笔记、原型链接、卡片文档、文章摘录和外部引用放入 `docs/input/`。
+5. 如果输入仍不明确，在实现前在 `docs/discussions/` 中捕获澄清。
+6. 在要求 AI 编码之前，将确定的范围转换为 `docs/requirements/`。
+
+无 bash 环境的手动 fallback：按 `template/START-HERE-after-copy.md` 的 Day-0 清单操作（`install-age.sh` 会把它装到目标项目的 `template/` 目录）。
 
 ## 许可证
 

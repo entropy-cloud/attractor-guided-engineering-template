@@ -1,14 +1,26 @@
 # Tools Workspace
 
-`tools/` is an independent pnpm subproject for repository-local engineering utilities.
+`tools/` is a pnpm workspace for repository-local engineering utilities and the mission-driver engine.
 
 The template root is intentionally not a Node.js project. This keeps the copied template usable for non-Node repositories while still allowing optional Node-based tooling.
 
 The scripts in this directory inspect the parent repository.
 
+## Workspace Layout
+
+`tools/` is the pnpm workspace root (see `pnpm-workspace.yaml`). Members:
+
+| Member | Path | Purpose |
+| ------ | ---- | ------- |
+| `age-template-tools` (root) | `tools/` | Shared devDeps (`jscpd`, `prettier`) + repo-level check/lint scripts |
+| `mission-driver` | `tools/mission-driver/` | The AGE dev-loop engine (zero npm deps; `commander` vendored) |
+| `mission-driver-monitor-web` | `tools/mission-driver/web/` | Vue 3 monitor dashboard frontend |
+
+Single lockfile (`tools/pnpm-lock.yaml`); single `packageManager` pin (`pnpm@10.27.0`, inherited by members). The engine member stays zero-dep — workspace membership does not inject dependencies.
+
 ## Install
 
-Run from `tools/`:
+Run from `tools/` (installs all workspace members):
 
 ```bash
 pnpm install
@@ -28,6 +40,7 @@ Do not keep one-off migration scripts, repo-specific cleanup scripts, or tools t
 - `check-doc-references.mjs`: validate backtick paths and markdown links referenced in active docs
 - `check-oversized-code-files.mjs`: flag tracked code files that exceed line thresholds
 - `check-docs-garbled.mjs`: scan docs for suspicious Unicode and mojibake
+- `check-install-age.sh`: closure-gate test for `install-age.sh` — runs the installer into a throwaway target and verifies scaffold correctness (used by the template-realproject-split plan + onboarding-mission plan)
 
 These are lightweight, generic, and reasonable to keep enabled by default.
 
@@ -44,10 +57,13 @@ These are kept as representative examples of reusable tooling patterns, not as m
 Run from `tools/`:
 
 ```bash
-pnpm check
-pnpm stats
-pnpm check:duplicates
-pnpm audit:suspects
+pnpm check                # repo-level doc/code checks
+pnpm stats                # code and docs statistics
+pnpm check:duplicates     # copy-paste detection via jscpd
+pnpm audit:suspects       # rule-based audit scanner
+pnpm md:test              # mission-driver engine tests (node --test + prompt-check)
+pnpm md:web:build         # rebuild monitor frontend dist
+pnpm md:web:check:dist    # verify committed dist is fresh (CI guard, local mirror)
 ```
 
 ## Mission Driver
