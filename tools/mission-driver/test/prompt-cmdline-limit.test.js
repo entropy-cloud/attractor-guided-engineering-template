@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, basename } from "node:path";
 import { createRunner } from "../src/runner.js";
 import { FlowEngine } from "../src/engine.js";
 import { boundPromptSize } from "../src/engine.js";
@@ -43,11 +43,13 @@ describe("runner — mdr-3 Phase 2: prompt via stdin", () => {
       assert.equal(opencodeCalls.length, 1);
       const { args, opts } = opencodeCalls[0];
 
-      // stdin carries the marked prompt
-      assert.equal(opts.stdin, "[MISSION_DRIVER] do the work");
+      // stdin carries the marked prompt. The tag now carries the run's identity
+      // ([MISSION_DRIVER:<runId>]) for parallel-run safety; runId = basename(runDir).
+      const runTag = `[MISSION_DRIVER:${basename(runDir)}]`;
+      assert.equal(opts.stdin, `${runTag} do the work`);
       // NO positional prompt arg: the last non-flag value must NOT be the prompt.
       // args = ["run","-m","main-model","--agent","build","--dangerously-skip-permissions","--session","ses_main"]
-      assert.ok(!args.includes("[MISSION_DRIVER] do the work"),
+      assert.ok(!args.includes(`${runTag} do the work`),
         "prompt must not appear as a positional cmdline arg");
       assert.ok(!args.includes("do the work"),
         "raw prompt must not appear as a positional cmdline arg");
@@ -78,9 +80,10 @@ describe("runner — mdr-3 Phase 2: prompt via stdin", () => {
       assert.equal(opencodeCalls.length, 1);
       const { args, opts } = opencodeCalls[0];
 
-      // stdin holds the FULL prompt intact
-      assert.equal(opts.stdin, `[MISSION_DRIVER] ${bigPrompt}`);
-      assert.equal(opts.stdin.length, 65466 + "[MISSION_DRIVER] ".length);
+      // stdin holds the FULL prompt intact (tag now carries runId).
+      const runTag = `[MISSION_DRIVER:${basename(runDir)}]`;
+      assert.equal(opts.stdin, `${runTag} ${bigPrompt}`);
+      assert.equal(opts.stdin.length, 65466 + `${runTag} `.length);
       // NO arg exceeds the 32K cmdline ceiling
       const oversized = args.filter((a) => typeof a === "string" && a.length > 32000);
       assert.deepEqual(oversized, [], "no positional arg may exceed the 32K cmdline ceiling");

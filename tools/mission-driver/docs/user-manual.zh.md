@@ -8,7 +8,7 @@
 
 ## 1. mission-driver 是什么
 
-**一句话**：mission-driver 是一个 AI 开发循环引擎。你给它一个 mission 配置文件和一份需求/路线图文档，它就会循环驱动 AI agent 子进程，自动完成"健康检查 → 评审计划 → 执行计划 → 起草新计划 → 深度审计"的完整闭环，直到任务完成或审计配额耗尽。
+**一句话**：mission-driver 是一个 AI 开发循环引擎。你给它一个 mission 配置文件和一份需求/路线图文档，它就会循环驱动 AI agent 子进程，自动完成"状态检查 → 评审计划 → 执行计划 → 起草新计划 → 深度审计"的完整闭环，直到任务完成或审计配额耗尽。
 
 它**不是**：
 - 不是一个 chatbot 框架（不和人对话，全自动跑）
@@ -36,7 +36,7 @@
         ↓
    mission-driver 启动
         ↓
-   ┌→ CHECK（健康检查：测试/构建是否过）
+   ┌→ CHECK（确定性状态门：commands.check 或 git 冲突标记检测）
    │      ↓ pass
    │  REVIEW_PLANS（评审 draft 状态的 plan）
    │      ↓ all_complete
@@ -120,7 +120,7 @@ cd /c/Work/my-project
 1. `docs/context/project-context.md` — 项目身份 + 验证命令
 2. `docs/context/ai-autonomy-policy.md` — 保护区域 + reviewer availability
 3. `docs/context/codebase-map.md` — 入口点 + 常见变更路径
-4. `missions/base.json` — `commands.*` 改为你的 test/build/lint/typecheck 命令
+4. `missions/base.json` — `commands.*` 改为你的 test/build/lint/typecheck 命令（`check` 可选，留空/省略 = git 冲突标记兜底）
 
 ---
 
@@ -216,7 +216,8 @@ echo ".env" >> .gitignore   # 若尚未忽略
     "test": "mvn -pl CORE -am test -T 4",
     "build": "mvn -pl CORE -am clean package -DskipTests -T 4",
     "lint": "mvn -pl CORE -am validate",
-    "typecheck": "mvn -pl CORE -am test-compile -T 4"
+    "typecheck": "mvn -pl CORE -am test-compile -T 4",
+    "check": "mvn -pl CORE -am compile -T 4"
   },
   "commitFormat": "<type>: [ORION-XXXX] [CORE] <description>"
 }
@@ -306,10 +307,16 @@ mission-driver 不接受口头需求。你必须先有一份**结构化的需求
 1. 跑一个 brief agent，问清范围、生成简短的 brief 文档（`docs/backlog/<slug>-brief.md`）
 2. 跑一个 draft agent，生成 mission.json + Roadmap 文档
 
-你可以用 `--target-file` 指定目标文件、`--flow-hint` 指定 flow 类型：
+`--target-file` 是可选输入辅助——description 可引用任意路径（单个文件、目录、多个文件或抽象目标），`--target-file` 只是把某个文件/目录喂给 brief agent 锚定范围；`--flow-hint` 指定 flow 类型：
 
 ```bash
 ./tools/mission-driver.sh draft "实现 X" --target-file docs/design/oauth-fsd.md --flow-hint mission-driver
+```
+
+description 也可以直接引用目录或多个文件，不传 `--target-file`：
+
+```bash
+./tools/mission-driver.sh draft "读取 docs/input/ 下所有需求文档，生成 roadmap"
 ```
 
 **方式二：手写**
@@ -328,12 +335,13 @@ mission-driver 不接受口头需求。你必须先有一份**结构化的需求
     "test": "pnpm test",
     "build": "pnpm build",
     "lint": "pnpm lint",
-    "typecheck": "pnpm typecheck"
+    "typecheck": "pnpm typecheck",
+    "check": ""
   }
 }
 ```
 
-`extends: "base"` 让 mission 继承 `missions/base.json` 里的共享默认值（model、agent、maxCycles 等），通常不用自己写。
+`extends: "base"` 让 mission 继承 `missions/base.json` 里的共享默认值（model、agent、maxCycles 等），通常不用自己写。`commands.check` 是 CHECK 步骤的可选确定性状态门；留空/省略则回退 git 冲突标记检测（见 [§5.1](#51-默认-flow-的-5-个-step)）。
 
 Roadmap 文档是 markdown，格式大致：
 
@@ -461,7 +469,7 @@ OPENCODE_PURE=1                 # opencode 以 --pure 模式运行（跳过外�
 1. **brief 阶段**：生成 scope-gate brief（写到 `docs/backlog/<slug>-brief.md`），让 brief agent 判断范围是否清晰
 2. **draft 阶段**：基于 brief 生成 mission.json + Roadmap
 
-flag：`--target-file <path>`（指定目标需求文档）、`--flow-hint <name>`（指定 flow）、`--skip-brief`（跳过 brief 阶段、退化成单阶段 draft）。
+flag：`--target-file <path>`（可选输入辅助——指向目标文件/目录；description 可引用任意路径）、`--flow-hint <name>`（指定 flow）、`--skip-brief`（跳过 brief 阶段、退化成单阶段 draft）。
 
 ### 4.3 analyze：复盘
 
@@ -497,7 +505,7 @@ flag：`--target-file <path>`（指定目标需求文档）、`--flow-hint <name
 
 | Step | 类型 | 干什么 | 输入 | 输出 marker |
 |------|------|--------|------|-------------|
-| **CHECK** | agent | 健康检查：跑测试/构建/lint，确认 baseline 是绿的 | mission.commands | `pass` / `fail` |
+| **CHECK** | agent | 确定性状态门：配置了 `commands.check` 就跑它（可自动修复则诊断 + 修复 + 重跑），没配置则回退 git 冲突标记检测。**不**跑 `commands.test`（那是 BUILD_VERIFY 的职责）。 | mission.commands | `pass` / `needs_fix` / `fail` |
 | **REVIEW_PLANS** | agent (forEach) | 评审所有 `draft` 状态的 plan | `draftPlans()` | `all_complete` / `some_failed` / `all_failed` |
 | **EXEC_PLANS** | subflow (forEach) | 执行所有 `active` 状态的 plan | `activePlans()` | `all_complete` / `some_failed` / `all_failed` |
 | **DRAFT_PLANS** | agent | 从 roadmap 起草新 plan | roadmap 文档 | `created` / `nothing` |
@@ -536,7 +544,7 @@ flag：`--target-file <path>`（指定目标需求文档）、`--flow-hint <name
 ```
 
 **第一次循环**（CHECK → REVIEW_PLANS → EXEC_PLANS → DRAFT_PLANS）：
-- CHECK 跑健康检查
+- CHECK 跑确定性状态门（配置了 commands.check 就跑它，否则 git 冲突标记检测）
 - REVIEW_PLANS 没东西可评审（还没 draft plan），forEach 为空 → `all_complete`
 - EXEC_PLANS 没东西可执行（还没 active plan），forEach 为空 → `all_complete`
 - DRAFT_PLANS 从 roadmap 起草第一批 plan → `created`
@@ -620,7 +628,8 @@ CHECK_OPEN_AUDITS → MULTI_AUDIT → OPEN_AUDIT → SCAN_NEW_RESULTS
     "test": "pnpm test",
     "build": "pnpm build",
     "lint": "pnpm lint",
-    "typecheck": "pnpm typecheck"
+    "typecheck": "pnpm typecheck",
+    "check": ""                             // 可选：CHECK 的确定性状态门；留空/省略 = git 冲突标记兜底
   },
   "prompts": {                             // 审计 prompt 模板路径
     "multiAudit": "docs/skills/multi-dimensional-audit-prompt.md",

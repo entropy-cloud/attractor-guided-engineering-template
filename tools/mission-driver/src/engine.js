@@ -2,6 +2,7 @@ import { appendFileSync, existsSync, readFileSync, writeFileSync, renameSync, re
 import { resolve, basename, isAbsolute, dirname } from "node:path";
 import { snapshot as sysSnapshot } from "./sys-snapshot.mjs";
 import { reapStartupOrphans } from "./reap-orphans.mjs";
+import { registerActiveRun } from "./active-run-registry.mjs";
 import { getAllProcesses } from "./platform.mjs";
 import { evaluateExpression, isExpression, resolveTemplateVars } from "./expression.mjs";
 import { roadmapAllDone } from "./roadmap-check.mjs";
@@ -1462,12 +1463,32 @@ export class FlowEngine {
 
     const _warnOrphans = () => {
       if (!_runDir) return;
-      try { reapStartupOrphans(_runDir, process.pid, _getProcs()); } catch {}
+      // Pass ownRunId so the reaper never reaps this run's own opencode via the
+      // registry path (double protection alongside excludePpid = process.pid).
+      try { reapStartupOrphans(_runDir, process.pid, _getProcs(), { ownRunId: this.runId }); } catch {}
     };
 
     // Subflow child engines skip startup diagnostics — the parent already did
     // sysmon + reaper, and children inherit the same process tree.
     if (cfg.isSubflow !== true) {
+      // Register this run in the global active-run registry so other concurrent
+      // mission-driver runs' reapers can recognize our opencode children as
+      // belonging to an ACTIVE run and spare them. Guarded on runId AND
+      // missionName both being non-null: isAliveAndOurs (used by the reaper)
+      // matches the driver's cmdline on missionName (the driver cmdline carries
+      // missionName but NOT runId), so a null-missionName run (draft/analyze)
+      // must NOT be registered — it would be mis-judged dead and mis-killed.
+      // Such runs still get the conservative _parentIsAliveDriver fallback.
+      if (this.runId && this.missionName) {
+        try {
+          registerActiveRun({
+            runId: this.runId,
+            driverPid: process.pid,
+            missionName: this.missionName,
+            projectRoot: cfg.projectRoot || null,
+          });
+        } catch { /* best-effort: reaper falls back to parent-process check */ }
+      }
       _sysMon(`START:${this.flow.name || "flow"}`);
       _warnOrphans();
     }

@@ -1,0 +1,18 @@
+{
+  "extends": "base",
+  "name": "mission-driver-actionable-fixes",
+  "description": "修复 mission-driver 的 4 个明确问题：#1 REVIEW_PLANS approved marker alias、#2 per-mission promptsDir、#3 CHECK 可配置指令 + 提示词重写、#5 draft description 支持目录引用。分析文档见 docs/analysis/2026-07-29-0000-mission-driver-actionable-fixes.md。",
+  "flowName": "mission-driver",
+  "roadmapPath": "docs/backlog/mission-driver-actionable-fixes-roadmap.md",
+  "plansDir": "docs/plans/mission-driver-actionable-fixes",
+  "planGuide": "docs/plans/00-plan-authoring-and-execution-guide.md",
+  "auditsDir": "docs/audits/mission-driver-actionable-fixes",
+  "contextDir": "docs/context",
+  "moduleDir": "tools/mission-driver",
+  "promptsDir": "missions/actionable-fixes-prompts",
+  "prompts": {
+    "multiAudit": "docs/skills/multi-dimensional-audit-prompt.md",
+    "openAudit": "docs/skills/open-ended-audit-prompt.md"
+  },
+  "commitFormat": "<type>(mission-driver): <description>"
+}

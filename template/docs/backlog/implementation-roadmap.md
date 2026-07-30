@@ -11,20 +11,6 @@ It contains no implementation detail. Each `ready` work item has been draft-revi
 
 > This roadmap is optional. See `docs/backlog/00-roadmap-authoring-guide.md` for authoring and update rules. Small projects can delete this file and rely on the backlog table alone.
 
-## Work Item Status
-
-> **This is the only dynamic status block. Update status here only.**
-> Status lives on **work items**, never on milestones. Work items are grouped under their milestone. AI takes the first `todo` work item in order, implements it automatically (humans do not review individual implementation), and writes it back to `done` on closure audit. See `docs/backlog/00-roadmap-authoring-guide.md` (Containment, Closed Loop).
-
-### Milestone 1 — <name>
-
-- <work item>: `todo`
-- <work item>: `todo`
-
-### Milestone 2 — <name>
-
-- <work item>: `todo`
-
 ## Status Values
 
 | Status | Meaning |
@@ -73,7 +59,7 @@ Capabilities already provided by the stack, so the project does not rebuild them
 
 ### <work item>
 
-> Status: see Work Item Status above
+> Status: see Milestones table above
 
 **Goal:** <one sentence>
 
@@ -109,4 +95,5 @@ graph TD
 - This file is a status index and coarse-grained split, not an implementation specification.
 - Each `ready` work item has been draft-reviewed and is queued for implementation.
 - Status lives on work items only; a milestone never carries a status.
-- Work-item status changes update the Work Item Status block at the top of this file only.
+- Work-item status changes update the Milestones table only.
+- AI takes the first `todo` work item in order, implements it automatically (humans do not review individual implementation), and writes it back to `done` on closure audit. See `docs/backlog/00-roadmap-authoring-guide.md` (Containment, Closed Loop).

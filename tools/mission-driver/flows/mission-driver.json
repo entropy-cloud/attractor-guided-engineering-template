@@ -26,7 +26,8 @@
     "findings": "issues",
     "concerns": "issues",
     "none": "created",
-    "revised": "created"
+    "revised": "created",
+    "approved": "all_complete"
   },
 
   "steps": {
@@ -36,7 +37,8 @@
       "onUnknownMaxRetries": 2,
       "transitions": {
         "pass": { "goto": "REVIEW_PLANS" },
-        "fail": { "done": "failed" }
+        "fail": { "done": "failed" },
+        "needs_fix": { "retry": "CHECK", "maxRetries": 2 }
       },
       "onMaxRetries": { "done": "failed" },
       "onError": { "done": "failed" }

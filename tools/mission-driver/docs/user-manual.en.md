@@ -8,7 +8,7 @@
 
 ## 1. What is mission-driver?
 
-**In one sentence**: mission-driver is an AI development-loop engine. Give it a mission config file plus a requirements/roadmap document, and it will autonomously drive AI agent subprocesses through the full closed loop of **health-check → review plans → execute plans → draft new plans → deep audit**, repeating until the task is complete or the audit budget is exhausted.
+**In one sentence**: mission-driver is an AI development-loop engine. Give it a mission config file plus a requirements/roadmap document, and it will autonomously drive AI agent subprocesses through the full closed loop of **state-check → review plans → execute plans → draft new plans → deep audit**, repeating until the task is complete or the audit budget is exhausted.
 
 What it is **not**:
 - Not a chatbot framework (it doesn't converse with you — it runs fully autonomously).
@@ -36,7 +36,7 @@ Your mission.json + Roadmap document
         ↓
    mission-driver starts
         ↓
-   ┌→ CHECK (health check: do tests/build pass?)
+   ┌→ CHECK (deterministic-state gate: commands.check or git-clean check)
    │      ↓ pass
    │  REVIEW_PLANS (review draft-status plans)
    │      ↓ all_complete
@@ -101,10 +101,16 @@ The `draft` command:
 1. Runs a brief agent that asks scope questions and emits a short brief (`docs/backlog/<slug>-brief.md`).
 2. Runs a draft agent that generates mission.json + a Roadmap doc.
 
-You can pass `--target-file` to point at the requirements doc, and `--flow-hint` to name the flow:
+`--target-file` is an optional input aid — the description may reference any path (a single file, a directory, multiple files, or an abstract goal); `--target-file` just points the brief agent at one file or directory to ground the brief. `--flow-hint` names the flow:
 
 ```bash
 ./tools/mission-driver.sh draft "Implement X" --target-file docs/design/oauth-fsd.md --flow-hint mission-driver
+```
+
+The description may also reference a directory or multiple files directly, without `--target-file`:
+
+```bash
+./tools/mission-driver.sh draft "Read all requirement docs under docs/input/ and generate a roadmap"
 ```
 
 **Option 2: hand-write**
@@ -123,12 +129,13 @@ See `tools/mission-driver/mission.json.example`. A minimal viable mission.json:
     "test": "pnpm test",
     "build": "pnpm build",
     "lint": "pnpm lint",
-    "typecheck": "pnpm typecheck"
+    "typecheck": "pnpm typecheck",
+    "check": ""
   }
 }
 ```
 
-`extends: "base"` inherits shared defaults (model, agent, maxCycles, etc.) from `missions/base.json` — usually you don't need to redefine those.
+`extends: "base"` inherits shared defaults (model, agent, maxCycles, etc.) from `missions/base.json` — usually you don't need to redefine those. `commands.check` is the optional deterministic-state gate for the CHECK step; empty/omitted falls back to git conflict-marker detection (see [§5.1](#51-the-default-flows-5-steps)).
 
 The Roadmap doc is markdown, roughly:
 
@@ -256,7 +263,7 @@ Two stages:
 1. **Brief stage**: produces a scope-gate brief (written to `docs/backlog/<slug>-brief.md`) — a brief agent judges whether the scope is clear.
 2. **Draft stage**: based on the brief, generates mission.json + a Roadmap.
 
-Flags: `--target-file <path>` (point at the requirements doc), `--flow-hint <name>` (name the flow), `--skip-brief` (skip the brief stage; collapse to single-stage draft).
+Flags: `--target-file <path>` (optional input aid — point at a target file or directory; the description may reference any path), `--flow-hint <name>` (name the flow), `--skip-brief` (skip the brief stage; collapse to single-stage draft).
 
 ### 4.3 analyze: postmortem
 
@@ -292,7 +299,7 @@ This section explains mission-driver's core loop. **Read this and you'll be able
 
 | Step | Type | What it does | Input | Output markers |
 |------|------|--------------|-------|----------------|
-| **CHECK** | agent | Health check: run tests/build/lint, confirm baseline is green. | mission.commands | `pass` / `fail` |
+| **CHECK** | agent | Deterministic-state gate: runs `commands.check` when configured (diagnose + fix + rerun if auto-fixable), else falls back to git conflict-marker detection. Does NOT run `commands.test` (that's BUILD_VERIFY's job). | mission.commands | `pass` / `needs_fix` / `fail` |
 | **REVIEW_PLANS** | agent (forEach) | Review all `draft`-status plans. | `draftPlans()` | `all_complete` / `some_failed` / `all_failed` |
 | **EXEC_PLANS** | subflow (forEach) | Execute all `active`-status plans. | `activePlans()` | `all_complete` / `some_failed` / `all_failed` |
 | **DRAFT_PLANS** | agent | Draft new plans from the roadmap. | roadmap doc | `created` / `nothing` |
@@ -331,7 +338,7 @@ This section explains mission-driver's core loop. **Read this and you'll be able
 ```
 
 **First loop** (CHECK → REVIEW_PLANS → EXEC_PLANS → DRAFT_PLANS):
-- CHECK runs the health check.
+- CHECK runs the deterministic-state gate (commands.check, else git-clean check).
 - REVIEW_PLANS has nothing to review (no draft plans yet) — forEach is empty → `all_complete`.
 - EXEC_PLANS has nothing to execute (no active plans yet) — forEach is empty → `all_complete`.
 - DRAFT_PLANS drafts the first batch of plans from the roadmap → `created`.
@@ -415,7 +422,8 @@ You can tune this. Audit-heavy work: raise it (5-10). Fast iteration: lower it (
     "test": "pnpm test",
     "build": "pnpm build",
     "lint": "pnpm lint",
-    "typecheck": "pnpm typecheck"
+    "typecheck": "pnpm typecheck",
+    "check": ""                             // optional deterministic-state gate for CHECK; empty/omitted = git conflict-marker fallback
   },
   "prompts": {                              // audit prompt templates
     "multiAudit": "docs/skills/multi-dimensional-audit-prompt.md",

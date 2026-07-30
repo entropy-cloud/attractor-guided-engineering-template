@@ -56,6 +56,7 @@ export const VAR_PROVENANCE = {
   buildCmd:           { source: "mission.commands.build (fallback: '')", runtime: false },
   lintCmd:            { source: "mission.commands.lint (fallback: '')", runtime: false },
   typecheckCmd:       { source: "mission.commands.typecheck (fallback: '')", runtime: false },
+  checkCmd:           { source: "mission.commands.check (fallback: '')", runtime: false },
   commitFormat:       { source: "mission.commitFormat (fallback: '')", runtime: false },
   multiAuditPrompt:   { source: "mission.prompts.multiAudit (fallback: '')", runtime: false },
   openAuditPrompt:    { source: "mission.prompts.openAudit (fallback: '')", runtime: false },
@@ -86,7 +87,8 @@ export const EXPECTED_VARS = [
   "buildCmd",           // main.js:534
   "lintCmd",            // main.js:535
   "typecheckCmd",       // main.js:536
-  "commitFormat",       // main.js:537
+  "checkCmd",           // main.js:537
+  "commitFormat",       // main.js:538
   "multiAuditPrompt",   // main.js:538
   "openAuditPrompt",    // main.js:539
   "sourcePaths",        // main.js:540

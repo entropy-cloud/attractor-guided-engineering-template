@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
-import { resolve, dirname, relative, isAbsolute } from "node:path";
+import { resolve, dirname, relative, isAbsolute, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "../vendor/commander/index.js";
 import { resolveConfig, buildRunSkeleton, inferModuleName, listMissionsString } from "./config.js";
@@ -12,6 +12,7 @@ import { runPostmortem } from "./postmortem.mjs";
 import { startMonitor } from "./monitor.js";
 import { loadDotenv } from "./env-loader.js";
 import { reconcileStaleRuns, markAborted } from "./run-reconcile.mjs";
+import { unregisterActiveRun } from "./active-run-registry.mjs";
 // validateDraftDesc lives in the draft-job.mjs leaf module (moved there by
 // mdr-remediate-5 N2 to avoid a monitor.js → main.js → monitor.js cycle).
 // Re-exported below so existing test imports from "./main.js" keep working.
@@ -667,7 +668,13 @@ async function cmdRunMission(mission, opts) {
     const flow = createMissionDriverFlow({
       flowName: g.flowName,
       projectFlowsDir: resolve(config.missionsDir, "flows"),
-      projectPromptDirs: [resolve(config.missionsDir, "prompts")],
+      // mdr-fix-2: mission-level promptsDir wins, then shared missions/prompts/,
+      // then built-in TOOL_ROOT/prompts/ (loadPrompt fallback). filter(Boolean)
+      // drops the empty string when missionPromptsDir is unset.
+      projectPromptDirs: [
+        config.missionPromptsDir,
+        resolve(config.missionsDir, "prompts"),
+      ].filter(Boolean),
     });
     const delegates = {
       config,
@@ -690,6 +697,7 @@ async function cmdRunMission(mission, opts) {
         buildCmd: g.commands.build || "",
         lintCmd: g.commands.lint || "",
         typecheckCmd: g.commands.typecheck || "",
+        checkCmd: g.commands.check || "",
         commitFormat: g.commitFormat || "",
         multiAuditPrompt: g.prompts?.multiAudit || "",
         openAuditPrompt: g.prompts?.openAudit || "",
@@ -768,6 +776,15 @@ async function cmdRunMission(mission, opts) {
     const exitCode = EXIT_MAP[result.status];
     if (exitCode !== undefined) process.exitCode = exitCode;
   } finally {
+    // Unregister this run from the global active-run registry. Single site:
+    // we deliberately do NOT scatter unregister across engine.run()'s ~25
+    // _result() return points. Best-effort + idempotent (ENOENT silently
+    // ignored) so it's a safe no-op for runs that were never registered
+    // (missionName=null draft/analyze path). Crash residue is reclaimed by the
+    // next run's reaper via isAliveAndOurs detecting the dead driverPid.
+    if (config && config.runDir) {
+      try { unregisterActiveRun(basename(config.runDir), process.pid); } catch {}
+    }
     if (monitor) { try { await monitor.close(); } catch {} }
     await runner.close();
   }
@@ -847,7 +864,7 @@ program.command("draft")
   .option("--pure", "以 --pure 模式运行")
   .option("--draft-job-dir <path>", "固定 draft job 目录（异步 job 跟踪用，mdo-2）")
   .option("--flow-hint <name>", "用户/向导选择的 flow 名（mdo-4 P2 两阶段 draft）")
-  .option("--target-file <path>", "目标文件项目相对路径（mdo-4 P2 brief 输入）")
+  .option("--target-file <path>", "目标文件/目录路径（可选输入辅助，非必填约束；description 可引用任意路径）")
   .option("--skip-brief", "跳过 brief 阶段，直接 draft（向后兼容单阶段）")
   .option("--dir <path>", "项目根目录")
   .option("--missions-dir <path>", "missions 目录")

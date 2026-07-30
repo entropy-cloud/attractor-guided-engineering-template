@@ -1,8 +1,8 @@
 ---
 scope: mission-driver
 kind: self-memory-index
-lesson_count: 0
-updated: 2026-07-14
+lesson_count: 4
+updated: 2026-07-29
 ---
 
 # Mission-Driver Self-Memory Index
@@ -17,4 +17,6 @@ This template copy ships **empty** — rules accumulate as real runs are analyze
 
 ## Rules
 
-_(none yet — populated by `mission-driver analyze <run-dir>`)_
+_No rules promoted yet — 4 lessons exist in `lessons.md` (L001–L004) but all are
+`count: 1` and do not meet the high-severity + recurring (`count >= 2`) promotion
+bar. Top rules will be lifted here once a lesson recurs across runs._

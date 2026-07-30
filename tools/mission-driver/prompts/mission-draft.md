@@ -8,6 +8,8 @@ If `{{briefPath}}` is non-empty, a mission brief was generated in stage 1. **Rea
 
 If `{{briefPath}}` is empty, no brief exists; fall back to the user request text directly (backward-compatible single-stage behaviour).
 
+> Note: the user request may reference directories, multiple files, or an abstract goal — it is not limited to a single file. `--target-file` (when provided) is just one optional input aid that points the brief agent at a file/directory to ground the brief; it is never a required constraint.
+
 ## Roadmap
 
 If a roadmap already exists at `{{backlogDir}}/{mission-name}-roadmap.md` or is referenced by the user, use it. Otherwise, generate the roadmap first following the format in `{{backlogDir}}/00-roadmap-authoring-guide.md`, save it at `{{backlogDir}}/{mission-name}-roadmap.md`, then generate the mission.json referencing it. The roadmap must include phase status, framework/platform reuse, current baseline, phase table, phase details, dependency graph, and cross-cutting concerns.
@@ -38,7 +40,8 @@ The mission.json MUST follow this format:
     "test": "{test command}",
     "build": "{build command}",
     "lint": "{lint command}",
-    "typecheck": "{typecheck command}"
+    "typecheck": "{typecheck command}",
+    "check": "{optional deterministic-state gate command, e.g. mvn clean compile; empty/omitted = git conflict-marker fallback}"
   },
   "prompts": {
     "multiAudit": "{path/to/multi-audit-prompt.md}",
@@ -54,3 +57,4 @@ Notes:
 - `moduleDir` — the target module or project directory for this mission; audit steps focus on this scope (code, config, tests, docs). Use project root for simple single-module projects
 - `prompts.multiAudit` / `prompts.openAudit` — project-specific audit skill prompt files; empty or omitted = skip that audit type
 - `commitFormat` — git commit message format hint for BUILD_VERIFY, e.g. `feat(<scope>): <title>` or `imperative mood; reference plan path in footer`
+- `commands.check` — optional deterministic-state gate for the CHECK step. Set it when the project has a fast command that confirms a clean/deterministic state (e.g. `mvn clean compile` for a Java project). Empty or omitted falls back to git conflict-marker detection. Note: `extends: "base"` is a shallow merge, so if you set any `commands` key you should also set `check` explicitly (otherwise the base `check` default is dropped).

@@ -21,7 +21,7 @@ A roadmap contains these sections in order (omit ones that don't apply):
 |---|---|---|---|
 | 1 | Title + last-updated date + sources | Yes | Sources point at input docs (FSD / bug list / analysis) |
 | 2 | Purpose | Yes | What this roadmap is (fixed text referencing the authoring guide) |
-| 3 | **Work Items** (the only dynamic block) | Yes | List, one line per item: `- N. name: \`todo\`/\`planned\`/\`done\`` |
+| 3 | **Work Item Status** (the only dynamic block) | Yes | The dynamic status section. Header MUST be exactly `## Work Item Status`. One line per item: `- N. name: \`todo\`/\`planned\`/\`done\`` |
 | 4 | Status values | Yes | Small table explaining the three states |
 | 5 | Framework / platform reuse | Recommended | Table: capability / provider / notes. Avoids rebuilding existing capability |
 | 6 | Current baseline | Recommended | Already implemented / main gaps (use ~~strikethrough~~+✅ for closed gaps) |
@@ -65,10 +65,18 @@ Does not contain implementation details. Each `planned` stage is owned by its ex
 details" — prevents roadmap decay into an execution plan. Optionally reference the
 mission launch command so the roadmap↔mission mapping is visible.
 
-### Section 3: Work Items (the only dynamic block)
+### Section 3: Work Item Status (the only dynamic block)
+
+> **Header is a hard contract.** The section header MUST be exactly `## Work Item Status`
+> (or the legacy `## 阶段状态`). The monitor dashboard's roadmap parser
+> (`tools/mission-driver/src/roadmap-check.mjs`, `BLOCK_HEADER_RE`) matches ONLY these
+> headers to extract progress. Any other wording — e.g. `## Work Items`, `## Tasks`,
+> `## Roadmap Status` — yields zero phases and the dashboard shows "暂无 roadmap 数据".
+> The engine's terminal reconciliation (`roadmapAllDone`) reads the same parser, so a
+> wrong header also breaks the "roadmap 100% done → downgrade false failure" path.
 
 ```md
-## Work Items
+## Work Item Status
 
 > **This is the only dynamic state block. Update status only here.**
 > The roadmap is a human-AI alignment artifact: humans set items and their order;
@@ -84,7 +92,8 @@ mission launch command so the roadmap↔mission mapping is visible.
 ```
 
 **Why**:
-- **Single source of state**. Anywhere else (stage details), write "status: see Work Items above".
+- **Single source of state**. Anywhere else (stage details), write "status: see Work Item Status above".
+- **Header wording is load-bearing** — see the callout above. Do not paraphrase it.
 - Milestones (★) are allowed but their status is **derived** (only `done` when all deps are done; never premature).
 - Issue IDs in parens help map back to source docs.
 - Order is execution order; AI takes the first `todo`.
@@ -226,7 +235,7 @@ nodes use ★. Must match the stage table.
 ## Rules
 - This file is a state index and coarse decomposition, not an execution plan.
 - Each `planned` stage is owned by its execution plan.
-- Status changes happen only in the Work Items block at the top.
+- Status changes happen only in the Work Item Status block at the top.
 - Milestones are derived: 2 and 3 must both be `done` before the milestone is marked `done`.
 ```
 
@@ -312,9 +321,10 @@ Milestones are not independent states — they're derived from dependency status
 
 | Anti-pattern | Consequence | Fix |
 |---|---|---|
+| Status section header paraphrased (e.g. `## Work Items`, `## Tasks`) | Parser extracts 0 phases → dashboard shows "暂无 roadmap 数据"; terminal reconciliation breaks | Header MUST be exactly `## Work Item Status` (parser contract) |
 | Roadmap contains implementation steps / checkboxes | Decays into execution plan, duplicates plans | Remove steps; keep only deliverable scope |
 | Stage larger than one plan's scope | No item to update when plan completes; loop stalls | Split into multiple work items |
-| Status maintained in multiple places (e.g. overlay tables) | Status desyncs | Maintain only in Section 3 Work Items |
+| Status maintained in multiple places (e.g. overlay tables) | Status desyncs | Maintain only in Section 3 Work Item Status |
 | Marking `done` before closure audit | Status lies; quality gate broken | Strictly wait for closure audit PASS |
 | Framework/platform reuse not annotated | AI rebuilds existing capability | Explicitly list in Section 5 |
 | AI re-arbitrates priority | Drifts from human intent | AI takes the first `todo` in order, no skipping |
