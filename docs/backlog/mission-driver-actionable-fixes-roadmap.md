@@ -1,6 +1,6 @@
 # Mission-Driver 明确可改问题 Roadmap（#1–#3, #5）
 
-> Last updated: 2026-07-29
+> Last updated: 2026-07-30
 > Sources: `docs/analysis/2026-07-29-0000-mission-driver-actionable-fixes.md` (primary)
 
 ## Purpose
@@ -152,3 +152,16 @@ graph TD
 - Each `planned` stage is owned by its execution plan.
 - Status changes happen only in the Work Items block at the top.
 - Item 3 modifies Flow JSON contract (`ask-first` protected area) — its plan must include subagent review.
+
+## Follow-up Backlog
+
+P2 findings from the open-ended audit do not get their own plan; they live here, each with its source audit path so they stay traceable. The single [P1] finding from the same audit DID get its own plan and is recorded here as resolved for traceability.
+
+- **[P1] `commands.check` not surfaced in mission-generation template — RESOLVED 2026-07-30.** The mdr-fix-3 feature (`commands.check` + configurable CHECK) was shipped and green but invisible on every mission-creation/doc surface; the `draft` agent never generated `check`, and the manuals' CHECK row factually contradicted shipped behavior (said CHECK runs tests/build/lint — exactly what `health-check.md` forbids). Surfaces `commands.check` in `prompts/mission-draft.md` (`commands` example + Notes, incl. shallow-merge reminder) and in both user manuals (en + zh `commands` examples + enumeration), and corrects the CHECK step rows to deterministic-state-gate semantics with `pass` / `needs_fix` / `fail`. Resolved by plan `docs/plans/mission-driver-actionable-fixes/2026-07-30-0902-1-surface-commands-check.md` (executed + closed; `pnpm --prefix tools/mission-driver test` → 597 pass / 0 fail, `prompt-check: OK`; no flow JSON / engine / mission-check.mjs / web-dist / dependency change).
+  - Source: `docs/audits/mission-driver-actionable-fixes/2026-07-29-1620-open-audit-mission-driver-actionable-fixes.md` [P1] finding.
+
+- **[P2] `context-map.mjs` `EXPECTED_VARS` line-number comments are stale** — `src/context-map.mjs:90-92` annotate `// main.js:5NN` references that drifted after the actionable-fixes work grew `main.js` (e.g. `checkCmd` is annotated `main.js:537` but the actual line is `main.js:700`; `commitFormat`/`multiAuditPrompt` both annotate `main.js:538`). Cosmetic comment rot only — the drift gate keys off live source extraction (`extractVarsKeysFromMainJs`), not these comments, so behavior is unaffected. The header at `context-map.mjs:71-74` already acknowledges these are point-in-time references. Trigger to promote into scope: whenever `EXPECTED_VARS` / `VAR_PROVENANCE` is next edited for a real change, refresh the line annotations in the same slice.
+  - Source: `docs/audits/mission-driver-actionable-fixes/2026-07-29-1620-open-audit-mission-driver-actionable-fixes.md` [P2] finding #1.
+
+- **[P2] `loadSubFlow` retains the dead `subflowDir` search-dir branch (pre-existing, explicitly adjudicated)** — `src/flow-loader.js:325-326` reads `this?.config?.subflowDir` and pushes it into `searchDirs`, but `src/config.js` never produces a `subflowDir` field, so the branch is unreachable in production. Pre-existing (not introduced by this mission); the mdr-fix-2 plan deliberately preserved it to keep the slice focused. Trigger to promote into scope: a future engine-hardening pass that collapses unreachable config-driven branches, or if `config.js` ever gains a `subflowDir` producer (which would make this branch live and require a real test).
+  - Source: `docs/audits/mission-driver-actionable-fixes/2026-07-29-1620-open-audit-mission-driver-actionable-fixes.md` [P2] finding #2.
