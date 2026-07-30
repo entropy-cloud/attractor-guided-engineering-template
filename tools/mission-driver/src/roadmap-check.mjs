@@ -21,8 +21,12 @@ const BLOCK_HEADER_RE = /^##\s*(?:阶段状态|Work\s+Item\s+Status)/i;
 //   Guide:   - 名称: `todo`   /   - 名称：`ready`
 // Numeric prefix optional; ASCII/fullwidth colon; ready added.
 const BULLET_RE = /^-\s+(?:(\d+)\.\s+)?(.+?)\s*[：:]\s*`?(todo|ready|planned|done)`?(?:\s*[（(][^)）]*[)）])?\s*$/;
-// Legacy milestone:  - ★ **里程碑：名称**（...）：未达成 | 已达成 | done
-const MILE_RE = /^-\s+★\s+\*\*里程碑[：:]\s*(.+?)\*\*.+?[：:]\s*`?(未达成|已达成|done)`?\s*$/;
+// Milestone:  - ★ **里程碑：名称**（...）：未达成 | 已达成 | done
+// Bilingual keyword: Chinese 里程碑 (legacy) or English Milestone (skill examples).
+// Status accepts Chinese (未达成/已达成) or English (todo/planned/done); non-done
+// English statuses normalize to "not-done" (milestones are derived: not-yet-reached
+// or done — never todo/planned as independent states).
+const MILE_RE = /^-\s+★\s+\*\*(?:里程碑|Milestone)[：:]\s*(.+?)\*\*.+?[：:]\s*`?(未达成|已达成|done|todo|planned)`?\s*$/;
 
 // Markdown table row: | name | status | … |
 // Header ("Work Item") and separator ("---") rows are filtered by the status check.
@@ -65,8 +69,8 @@ export function parseRoadmapMarkdown(content) {
     const mm = line.match(MILE_RE);
     if (mm) {
       let st = mm[2];
-      if (st === "已达成") st = "done";
-      else if (st === "未达成") st = "not-done";
+      if (st === "已达成" || st === "done") st = "done";
+      else st = "not-done"; // 未达成 / todo / planned → milestone not yet reached
       phases.push({ seq: null, name: "★ " + mm[1].trim(), status: st, isMilestone: true });
       continue;
     }

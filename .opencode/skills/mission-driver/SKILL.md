@@ -95,10 +95,16 @@ Path: `docs/backlog/{slug}-roadmap.md` where `{slug}` is a short kebab-case topi
 
 **Follow the structure in `references/roadmap-template.md`**. Core rules:
 
+- **Status-section header is a hard contract**: the dynamic status block MUST be headed
+  exactly `## Work Item Status` (legacy `## 阶段状态` also accepted). The monitor
+  dashboard's parser (`tools/mission-driver/src/roadmap-check.mjs`) matches ONLY these
+  headers — any paraphrase (`## Work Items`, `## Tasks`, …) yields zero phases and the
+  dashboard shows "暂无 roadmap 数据". The engine's terminal reconciliation reads the
+  same parser, so a wrong header also breaks the false-failure downgrade path.
 - **Work-item granularity**: each todo/planned/done item must be completable by a
   single execution plan (~5-15 files, 200-500 lines, 1-4 phases). Larger initiatives
   must be split into multiple items.
-- **Single dynamic state block**: maintain state only in the top "Work Items" list.
+- **Single dynamic state block**: maintain state only in the Work Item Status section.
   Do not duplicate status anywhere else.
 - **Human/AI division of labor**: humans set items and order; AI takes the first
   `todo` item, drafts/executes plans, marks `done` after closure audit passes.
@@ -113,12 +119,22 @@ An annotated example is in `references/roadmap-template.md`.
 
 After writing, verify against the anti-pattern list in `references/roadmap-template.md`:
 
+- [ ] Status section header is exactly `## Work Item Status` (parser contract — wrong wording = empty dashboard)
 - [ ] Each work item is completable by one plan (no epic-sized items)
-- [ ] Only one dynamic state block (the Work Items list)
+- [ ] Only one dynamic state block (the Work Item Status section)
 - [ ] Stage details have no checkboxes or implementation steps
 - [ ] Framework/platform reuse explicitly noted (avoid rebuilding existing capabilities)
 - [ ] Dependency graph matches the stage table
 - [ ] Owner-doc references are accurate (don't restate owner-doc business rules)
+
+**Parser smoke-test** (recommended): confirm the roadmap parses to non-zero phases
+before handing off to Workflow B:
+
+```bash
+node --input-type=module -e "import{parseRoadmapMarkdown}from'./tools/mission-driver/src/roadmap-check.mjs';import{readFileSync}from'node:fs';const r=parseRoadmapMarkdown(readFileSync('docs/backlog/<slug>-roadmap.md','utf8'));console.log('phases:',r.phases.length,'progress:',r.overallProgress)"
+```
+
+If `phases: 0`, the status-section header is wrong — fix it to `## Work Item Status`.
 
 Record the roadmap file path — Workflow B needs it.
 
@@ -156,17 +172,25 @@ Full schema in `references/mission-config-schema.md`. Key conventions:
 | Field | Value rule |
 |---|---|
 | `name` | Short kebab-case name matching the filename |
-| `extends` | `"base"` to inherit `missions/base.json` defaults (model, agent, maxCycles, commands) |
+| `extends` | `"base"` to inherit `missions/base.json` defaults (model, agent, maxCycles). **`commands` is NOT inherited silently — write it explicitly (see below).** |
 | `roadmapPath` | Output of Workflow A: `docs/backlog/{slug}-roadmap.md` |
 | `plansDir` | `docs/plans/{mission-name}` — **each mission must have its own subdirectory** or plans from different missions will mix |
 | `planGuide` | `docs/plans/00-plan-authoring-and-execution-guide.md` (fixed in this template) |
 | `auditsDir` | `docs/audits/{mission-name}` (recommended per-mission; legacy default `audits`) |
 | `contextDir` | `docs/context` (fixed) |
 | `moduleDir` | Target module root relative to project (e.g. `src/auth`, `packages/api`, `tools/parser`). Cross-cutting work uses project root `.` |
-| `commands.test` | **Required**. Read from `docs/context/project-context.md` "Verification Commands" if filled; otherwise infer from `package.json` / `pom.xml` / `Cargo.toml` / `pyproject.toml`. **Placeholder commands must be replaced before run.** |
-| `commands.build` / `lint` / `typecheck` | Optional. Missing = step skips that command. |
+| `commands` | **Required block — ALWAYS write it in the mission file.** Each mission targets a specific module, so its verification commands usually differ from `base`. Writing them makes the config self-documenting and survives `base.json` changes. |
+| `commands.test` | **Required, non-empty.** Read from `docs/context/project-context.md` "Verification Commands" if filled; otherwise infer from `package.json` / `pom.xml` / `Cargo.toml` / `pyproject.toml`. **Placeholder commands must be replaced before run.** |
+| `commands.build` / `lint` / `typecheck` | Optional. Missing/empty = step skips that command. |
 | `commitFormat` | Read from `AGENTS.md` or `missions/base.json`. |
 | `prompts.multiAudit` / `openAudit` | Optional paths to project-level audit prompts. Missing → corresponding audit step is skipped via `when`. |
+
+> **Why write `commands` explicitly even with `extends: "base"`?** A mission config that
+> silently inherits commands is not self-reviewable — you cannot tell from the mission
+> file which test/build commands the loop will run. Different missions target different
+> modules (e.g. an engine mission vs a web mission) and need different commands. If the
+> commands genuinely equal `base`, still write them: explicit > implicit, and a future
+> `base.json` edit won't silently change this mission's verification surface.
 
 **Stack command cheat-sheet** (replace brackets with real values):
 
@@ -181,11 +205,17 @@ Full schema in `references/mission-config-schema.md`. Key conventions:
 
 ### B.3 Validate the mission config
 
+Before running the validator, self-check:
+
+- [ ] `commands` block is present IN the mission file (not just inherited from base)
+- [ ] `commands.test` is a real, non-placeholder command for this mission's module
+- [ ] No `REPLACE_WITH_*` / `<fill ...>` placeholders anywhere in the config
+
 ```bash
 node tools/mission-driver/src/mission-check.mjs missions/<name>.json .
 ```
 
-Checks required fields (`name`, `roadmapPath`, `plansDir`, `commands.test`) and path
+Checks required fields (`name`, `roadmapPath`, `plansDir`, `commands`) and path
 existence. Fix failures and re-run.
 
 ### B.4 Pre-flight: plans directory and plan-guide
