@@ -8,7 +8,7 @@
 
 ## 1. mission-driver 是什么
 
-**一句话**：mission-driver 是一个 AI 开发循环引擎。你给它一个 mission 配置文件和一份需求/路线图文档，它就会循环驱动 AI agent 子进程，自动完成"健康检查 → 评审计划 → 执行计划 → 起草新计划 → 深度审计"的完整闭环，直到任务完成或审计配额耗尽。
+**一句话**：mission-driver 是一个 AI 开发循环引擎。你给它一个 mission 配置文件和一份需求/路线图文档，它就会循环驱动 AI agent 子进程，自动完成"状态检查 → 评审计划 → 执行计划 → 起草新计划 → 深度审计"的完整闭环，直到任务完成或审计配额耗尽。
 
 它**不是**：
 - 不是一个 chatbot 框架（不和人对话，全自动跑）
@@ -36,7 +36,7 @@
         ↓
    mission-driver 启动
         ↓
-   ┌→ CHECK（健康检查：测试/构建是否过）
+   ┌→ CHECK（确定性状态门：commands.check 或 git 冲突标记检测）
    │      ↓ pass
    │  REVIEW_PLANS（评审 draft 状态的 plan）
    │      ↓ all_complete
@@ -544,7 +544,7 @@ flag：`--target-file <path>`（可选输入辅助——指向目标文件/目�
 ```
 
 **第一次循环**（CHECK → REVIEW_PLANS → EXEC_PLANS → DRAFT_PLANS）：
-- CHECK 跑健康检查
+- CHECK 跑确定性状态门（配置了 commands.check 就跑它，否则 git 冲突标记检测）
 - REVIEW_PLANS 没东西可评审（还没 draft plan），forEach 为空 → `all_complete`
 - EXEC_PLANS 没东西可执行（还没 active plan），forEach 为空 → `all_complete`
 - DRAFT_PLANS 从 roadmap 起草第一批 plan → `created`

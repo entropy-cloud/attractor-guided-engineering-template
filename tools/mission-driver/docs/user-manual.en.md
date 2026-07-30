@@ -8,7 +8,7 @@
 
 ## 1. What is mission-driver?
 
-**In one sentence**: mission-driver is an AI development-loop engine. Give it a mission config file plus a requirements/roadmap document, and it will autonomously drive AI agent subprocesses through the full closed loop of **health-check → review plans → execute plans → draft new plans → deep audit**, repeating until the task is complete or the audit budget is exhausted.
+**In one sentence**: mission-driver is an AI development-loop engine. Give it a mission config file plus a requirements/roadmap document, and it will autonomously drive AI agent subprocesses through the full closed loop of **state-check → review plans → execute plans → draft new plans → deep audit**, repeating until the task is complete or the audit budget is exhausted.
 
 What it is **not**:
 - Not a chatbot framework (it doesn't converse with you — it runs fully autonomously).
@@ -36,7 +36,7 @@ Your mission.json + Roadmap document
         ↓
    mission-driver starts
         ↓
-   ┌→ CHECK (health check: do tests/build pass?)
+   ┌→ CHECK (deterministic-state gate: commands.check or git-clean check)
    │      ↓ pass
    │  REVIEW_PLANS (review draft-status plans)
    │      ↓ all_complete
@@ -338,7 +338,7 @@ This section explains mission-driver's core loop. **Read this and you'll be able
 ```
 
 **First loop** (CHECK → REVIEW_PLANS → EXEC_PLANS → DRAFT_PLANS):
-- CHECK runs the health check.
+- CHECK runs the deterministic-state gate (commands.check, else git-clean check).
 - REVIEW_PLANS has nothing to review (no draft plans yet) — forEach is empty → `all_complete`.
 - EXEC_PLANS has nothing to execute (no active plans yet) — forEach is empty → `all_complete`.
 - DRAFT_PLANS drafts the first batch of plans from the roadmap → `created`.
