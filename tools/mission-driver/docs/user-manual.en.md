@@ -129,12 +129,13 @@ See `tools/mission-driver/mission.json.example`. A minimal viable mission.json:
     "test": "pnpm test",
     "build": "pnpm build",
     "lint": "pnpm lint",
-    "typecheck": "pnpm typecheck"
+    "typecheck": "pnpm typecheck",
+    "check": ""
   }
 }
 ```
 
-`extends: "base"` inherits shared defaults (model, agent, maxCycles, etc.) from `missions/base.json` — usually you don't need to redefine those.
+`extends: "base"` inherits shared defaults (model, agent, maxCycles, etc.) from `missions/base.json` — usually you don't need to redefine those. `commands.check` is the optional deterministic-state gate for the CHECK step; empty/omitted falls back to git conflict-marker detection (see [§5.1](#51-the-default-flows-5-steps)).
 
 The Roadmap doc is markdown, roughly:
 
@@ -298,7 +299,7 @@ This section explains mission-driver's core loop. **Read this and you'll be able
 
 | Step | Type | What it does | Input | Output markers |
 |------|------|--------------|-------|----------------|
-| **CHECK** | agent | Health check: run tests/build/lint, confirm baseline is green. | mission.commands | `pass` / `fail` |
+| **CHECK** | agent | Deterministic-state gate: runs `commands.check` when configured (diagnose + fix + rerun if auto-fixable), else falls back to git conflict-marker detection. Does NOT run `commands.test` (that's BUILD_VERIFY's job). | mission.commands | `pass` / `needs_fix` / `fail` |
 | **REVIEW_PLANS** | agent (forEach) | Review all `draft`-status plans. | `draftPlans()` | `all_complete` / `some_failed` / `all_failed` |
 | **EXEC_PLANS** | subflow (forEach) | Execute all `active`-status plans. | `activePlans()` | `all_complete` / `some_failed` / `all_failed` |
 | **DRAFT_PLANS** | agent | Draft new plans from the roadmap. | roadmap doc | `created` / `nothing` |
@@ -421,7 +422,8 @@ You can tune this. Audit-heavy work: raise it (5-10). Fast iteration: lower it (
     "test": "pnpm test",
     "build": "pnpm build",
     "lint": "pnpm lint",
-    "typecheck": "pnpm typecheck"
+    "typecheck": "pnpm typecheck",
+    "check": ""                             // optional deterministic-state gate for CHECK; empty/omitted = git conflict-marker fallback
   },
   "prompts": {                              // audit prompt templates
     "multiAudit": "docs/skills/multi-dimensional-audit-prompt.md",

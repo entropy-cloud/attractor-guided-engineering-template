@@ -120,7 +120,7 @@ cd /c/Work/my-project
 1. `docs/context/project-context.md` — 项目身份 + 验证命令
 2. `docs/context/ai-autonomy-policy.md` — 保护区域 + reviewer availability
 3. `docs/context/codebase-map.md` — 入口点 + 常见变更路径
-4. `missions/base.json` — `commands.*` 改为你的 test/build/lint/typecheck 命令
+4. `missions/base.json` — `commands.*` 改为你的 test/build/lint/typecheck 命令（`check` 可选，留空/省略 = git 冲突标记兜底）
 
 ---
 
@@ -216,7 +216,8 @@ echo ".env" >> .gitignore   # 若尚未忽略
     "test": "mvn -pl CORE -am test -T 4",
     "build": "mvn -pl CORE -am clean package -DskipTests -T 4",
     "lint": "mvn -pl CORE -am validate",
-    "typecheck": "mvn -pl CORE -am test-compile -T 4"
+    "typecheck": "mvn -pl CORE -am test-compile -T 4",
+    "check": "mvn -pl CORE -am compile -T 4"
   },
   "commitFormat": "<type>: [ORION-XXXX] [CORE] <description>"
 }
@@ -334,12 +335,13 @@ description 也可以直接引用目录或多个文件，不传 `--target-file`�
     "test": "pnpm test",
     "build": "pnpm build",
     "lint": "pnpm lint",
-    "typecheck": "pnpm typecheck"
+    "typecheck": "pnpm typecheck",
+    "check": ""
   }
 }
 ```
 
-`extends: "base"` 让 mission 继承 `missions/base.json` 里的共享默认值（model、agent、maxCycles 等），通常不用自己写。
+`extends: "base"` 让 mission 继承 `missions/base.json` 里的共享默认值（model、agent、maxCycles 等），通常不用自己写。`commands.check` 是 CHECK 步骤的可选确定性状态门；留空/省略则回退 git 冲突标记检测（见 [§5.1](#51-默认-flow-的-5-个-step)）。
 
 Roadmap 文档是 markdown，格式大致：
 
@@ -503,7 +505,7 @@ flag：`--target-file <path>`（可选输入辅助——指向目标文件/目�
 
 | Step | 类型 | 干什么 | 输入 | 输出 marker |
 |------|------|--------|------|-------------|
-| **CHECK** | agent | 健康检查：跑测试/构建/lint，确认 baseline 是绿的 | mission.commands | `pass` / `fail` |
+| **CHECK** | agent | 确定性状态门：配置了 `commands.check` 就跑它（可自动修复则诊断 + 修复 + 重跑），没配置则回退 git 冲突标记检测。**不**跑 `commands.test`（那是 BUILD_VERIFY 的职责）。 | mission.commands | `pass` / `needs_fix` / `fail` |
 | **REVIEW_PLANS** | agent (forEach) | 评审所有 `draft` 状态的 plan | `draftPlans()` | `all_complete` / `some_failed` / `all_failed` |
 | **EXEC_PLANS** | subflow (forEach) | 执行所有 `active` 状态的 plan | `activePlans()` | `all_complete` / `some_failed` / `all_failed` |
 | **DRAFT_PLANS** | agent | 从 roadmap 起草新 plan | roadmap 文档 | `created` / `nothing` |
@@ -626,7 +628,8 @@ CHECK_OPEN_AUDITS → MULTI_AUDIT → OPEN_AUDIT → SCAN_NEW_RESULTS
     "test": "pnpm test",
     "build": "pnpm build",
     "lint": "pnpm lint",
-    "typecheck": "pnpm typecheck"
+    "typecheck": "pnpm typecheck",
+    "check": ""                             // 可选：CHECK 的确定性状态门；留空/省略 = git 冲突标记兜底
   },
   "prompts": {                             // 审计 prompt 模板路径
     "multiAudit": "docs/skills/multi-dimensional-audit-prompt.md",
