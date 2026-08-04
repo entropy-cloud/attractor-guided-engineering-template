@@ -261,6 +261,20 @@ echo ".env" >> .gitignore   # 若尚未忽略
 
 ---
 
+### 可选：切换到 pi 执行器
+
+默认每个 AI step 调用 `opencode run`。如果你更想用 [`pi`](https://github.com/earendil-works/pi-coding-agent)，一行参数即可切换（opencode 仍是默认，零变化）：
+
+```bash
+./tools/mission-driver.sh run <mission> --driver pi --model zai-coding-cn/glm-5.2
+```
+
+- 前置条件改为 `pi` CLI 在 PATH（不再需要 `opencode`）。
+- `--driver pi` 时引擎自动套用 pi 默认参数（`-p --append-system-prompt @<persona>` + stdin 传 prompt + 工具白名单），无需手填。
+- **模型 id 格式不同**：opencode 用 `zhipuai-coding-plan/glm-5.2`；pi 用自己的 `provider/model`（如 `zai-coding-cn/glm-5.2`）。
+- **已知限制**：pi 不支持跨 step 的 session 连续性，每个 step 起独立进程、靠 prompt 从磁盘读 roadmap/plans 恢复状态（与 prompt 设计一致）。
+- 完整配置项见 `tools/mission-driver/README.md` §Driver selection。
+
 ## 2. 核心概念
 
 读这一节不用全记住，遇到术语回来查就行。

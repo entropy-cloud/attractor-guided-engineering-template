@@ -14,5 +14,8 @@ report/
 .obsidian/
 .opencode/*
 !.opencode/skills/
+# pi CLI runtime/cache dirs (local agent sessions + subagent artifacts)
+.pi/
+.pi-subagents/
 nul
 .env
