@@ -69,6 +69,28 @@ The parse-fallback path is already short-circuited by a tolerant marker regex
 `parseModel` only affects the rare residual fallback and the correction retry,
 both of which are lightweight classification tasks.
 
+### Driver selection (`--driver`)
+
+The per-step subprocess driver defaults to `opencode`. Pass `--driver pi` to use
+the [`pi`](https://github.com/earendil-works/pi-coding-agent) CLI instead:
+
+```bash
+./tools/mission-driver.sh run <mission> --driver pi --model zai-coding-cn/glm-5.2
+```
+
+| Field | Source | Default | Notes |
+|---|---|---|---|
+| `driver` | `--driver` CLI · `MISSION_DRIVER_EXEC` env · `mission.json`/`base.json` `driver` | `opencode` | When `pi`, config.js auto-applies the pi defaults below if unset. |
+| `driverArgs` | `MISSION_DRIVER_ARGS` env · mission `driverArgs` | _pi default_: `-p --model {model} --append-system-prompt @{agentFile} --tools read,write,edit,bash,grep,find,ls` | Token template (`{model}`/`{agent}`/`{session}`/`{agentFile}`). For opencode the default is `run -m {model} --agent {agent} --dangerously-skip-permissions {session}`. |
+| `promptMode` | `MISSION_PROMPT_MODE` env · mission `promptMode` | _pi_: `stdin`; _opencode_: `arg` | `stdin` pipes the prompt (avoids the Windows 32k cmdline cap). |
+
+Notes:
+
+- **Model id format differs per driver.** opencode uses ids like `zhipuai-coding-plan/glm-5.2`; pi uses its own `provider/model` ids (e.g. `zai-coding-cn/glm-5.2`). Set `--model` / `OPENCODE_MODEL` / `mission.model` to a driver-compatible id; the engine passes it through untranslated.
+- **Persona.** The pi driver loads `<engine>/agents/build.pi.md` via `--append-system-prompt @{agentFile}` (engine-relative, resolves for consumers via `MISSION_DRIVER_HOME`). Override `driverArgs` to point at a different persona.
+- **opencode-only flags** (`--pure`, `--variant`, `--dangerously-skip-permissions`) are suppressed automatically when `driver=="pi"`.
+- **No session continuity (known limitation).** pi `-p` does not emit a session id in text-mode stdout, so each step starts a fresh pi process that recovers state from disk (roadmap/plans/run-state) — consistent with how the prompts are designed. opencode session threading is unaffected.
+
 ### Cycle limits (`--max-cycles`)
 
 `maxCycleVisits` is a **per-step** visit cap: each step may be visited at most

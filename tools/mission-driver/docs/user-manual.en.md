@@ -53,7 +53,19 @@ Your mission.json + Roadmap document
 
 Each box is a **step**, executed by an AI agent (`opencode run` subprocess) or a tool script. Arrows are **transitions**, chosen by the agent's emitted marker (`pass` / `created` / `nothing` / `complete`, etc.).
 
----
+### Optional: switch to the pi driver
+
+By default each AI step invokes `opencode run`. If you prefer [`pi`](https://github.com/earendil-works/pi-coding-agent), switch with one flag (opencode stays the default, unchanged):
+
+```bash
+./tools/mission-driver.sh run <mission> --driver pi --model zai-coding-cn/glm-5.2
+```
+
+- Prerequisite becomes the `pi` CLI on PATH (no longer `opencode`).
+- With `--driver pi` the engine auto-applies pi defaults (`-p --append-system-prompt @<persona>` + stdin prompt + a tool allowlist) — no extra config needed.
+- **Model id format differs**: opencode uses `zhipuai-coding-plan/glm-5.2`; pi uses its own `provider/model` (e.g. `zai-coding-cn/glm-5.2`).
+- **Known limitation**: pi has no cross-step session continuity — each step starts a fresh process and recovers state from disk (roadmap/plans), consistent with how the prompts are designed.
+- Full options: `tools/mission-driver/README.md` §Driver selection.
 
 ## 2. Core Concepts
 

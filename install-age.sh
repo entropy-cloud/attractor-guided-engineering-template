@@ -9,6 +9,7 @@
 # Usage:
 #   ./install-age.sh                                    # interactive
 #   ./install-age.sh /path/to/target "My Project Name"  # non-interactive
+#   ./install-age.sh /path/to/target "Name" --pi        # also bridge pi → .opencode/skills
 #
 # Prerequisites: Node.js >= 18 in PATH.
 

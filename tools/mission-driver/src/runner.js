@@ -30,6 +30,16 @@ function buildDriverArgs(config, sessionId, prompt) {
     .replace("{model}", config.model || "")
     .replace("{agent}", config.agent || "build");
 
+  // {agentFile}: pi loads a persona via --append-system-prompt @{agentFile}.
+  // When set, substitute the path; when unset (non-pi drivers, or a custom
+  // non-pi template that references the token), strip the whole token incl.
+  // any leading '@' so no standalone '@' arg survives.
+  if (config.agentFile) {
+    rendered = rendered.replace("{agentFile}", config.agentFile);
+  } else {
+    rendered = rendered.replace(/@?\{agentFile\}/g, "");
+  }
+
   if (sessionId) {
     rendered = rendered.replace("{session}", `--session ${sessionId}`);
   } else {
@@ -37,9 +47,11 @@ function buildDriverArgs(config, sessionId, prompt) {
   }
 
   const args = rendered.split(/\s+/).filter(Boolean);
-  // Preserve github/main extras: --pure and --variant
-  if (config.pure && !args.includes("--pure")) args.splice(1, 0, "--pure");
-  if (config.variant) args.push("--variant", config.variant);
+  // --pure / --variant are opencode-specific flags (github/main extras); skip
+  // them for non-opencode drivers (e.g. pi) that do not recognize them.
+  const ocExtras = (config.driver || "opencode") !== "pi";
+  if (ocExtras && config.pure && !args.includes("--pure")) args.splice(1, 0, "--pure");
+  if (ocExtras && config.variant) args.push("--variant", config.variant);
   if (promptMode === "arg" && prompt) args.push(prompt);
 
   return {
@@ -133,7 +145,10 @@ function extractSessionId(text) {
   return null;
 }
 
-function findLatestSessionId(projectRoot) {
+export function findLatestSessionId(projectRoot, driver) {
+  // opencode-only: pi has no equivalent CLI, and if opencode is also installed
+  // this would return an unrelated session id that pollutes run-state.json.
+  if (driver === "pi") return null;
   try {
     const out = execSync("opencode session list -n 1 --format json", {
       cwd: projectRoot,
@@ -199,7 +214,7 @@ export async function createRunner(config, executeFn = execute) {
         let pollAttempts = 0;
         const tryFindSession = () => {
           pollAttempts++;
-          const sid = findLatestSessionId(config.projectRoot);
+          const sid = findLatestSessionId(config.projectRoot, config.driver);
           if (sid && onStepUpdate) {
             onStepUpdate({ stepName, sessionId: sid });
             if (sessionPollTimer) { clearTimeout(sessionPollTimer); sessionPollTimer = null; }
@@ -230,7 +245,7 @@ export async function createRunner(config, executeFn = execute) {
 
     let extractedSessionId = extractSessionId(text);
     if (!extractedSessionId) {
-      extractedSessionId = findLatestSessionId(config.projectRoot);
+      extractedSessionId = findLatestSessionId(config.projectRoot, config.driver);
     }
 
     return { text, logFile: result.logFile, promptFile: result.logFile ? result.logFile + '.prompt' : null, ok: result.ok, sessionId: extractedSessionId, exitCode: result.exitCode, errorTail: result.errorTail, stderrTail: result.stderrTail || null };
