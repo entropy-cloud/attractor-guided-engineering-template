@@ -40,6 +40,14 @@ template/install/AGE-FILES-GUIDE.md > docs/references/age-files-guide.md
 .opencode/skills/mission-driver/references/mission-config-schema.md
 .opencode/skills/mission-driver/references/roadmap-template.md
 
+# --- .pi/skills/mission-driver (pi native skill copy, --pi only) ---
+# Same SKILL.md source as .opencode above; pi scans .pi/skills/ for SKILL.md
+# natively (no settings.json bridge needed — tested unreliable). pi-only flag
+# → skipped unless --pi passed to install-age.
+.opencode/skills/mission-driver/SKILL.md > .pi/skills/mission-driver/SKILL.md :: pi-only
+.opencode/skills/mission-driver/references/mission-config-schema.md > .pi/skills/mission-driver/references/mission-config-schema.md :: pi-only
+.opencode/skills/mission-driver/references/roadmap-template.md > .pi/skills/mission-driver/references/roadmap-template.md :: pi-only
+
 # --- root ---
 template/AGENTS.md
 

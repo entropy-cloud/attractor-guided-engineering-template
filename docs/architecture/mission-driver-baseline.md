@@ -10,7 +10,7 @@ This document does **not** re-derive implementation detail. It enumerates the co
 
 ## Scope
 
-`tools/mission-driver/` — Node.js (ESM) engine that reads `missions/<name>.json`, walks a flow-defined state machine, spawns `opencode run` subprocesses per step, and serves a monitor dashboard (Node `http` + SSE + Vue 3 frontend).
+`tools/mission-driver/` — Node.js (ESM) engine that reads `missions/<name>.json`, walks a flow-defined state machine, spawns a configurable **driver** subprocess per step (`opencode run` by default; `pi -p` via `--driver pi`), and serves a monitor dashboard (Node `http` + SSE + Vue 3 frontend).
 
 The engine core is **zero npm dependencies** (only CLI-layer `commander`; monitor uses only Node built-ins). This constraint is normative — see `tools/mission-driver/CONTEXT.md` "关键约束".
 
@@ -20,7 +20,7 @@ Registered by `src/main.js` via `commander`. Commands and their stable options:
 
 | Command | Purpose | Key options | Owner doc |
 | --- | --- | --- | --- |
-| `run <mission>` (also the implicit main command) | Run a mission end-to-end | `--step`, `--from-step`, `--dry-run`, `--max-cycles`, `--model`, `--parse-model`, `--no-monitor`, `--fast`, `--skip-steps`, `--dir`, `--missions-dir`, `--run-dir` | `mission-design.md` §6 |
+| `run <mission>` (also the implicit main command) | Run a mission end-to-end | `--step`, `--from-step`, `--dry-run`, `--max-cycles`, `--model`, `--parse-model`, `--driver` (`opencode` default \| `pi`), `--no-monitor`, `--fast`, `--skip-steps`, `--dir`, `--missions-dir`, `--run-dir` | `mission-design.md` §6 |
 | `draft <description>` | Two-stage brief→draft pipeline that generates `mission.json` + roadmap | `--draft-job-dir`, `--flow-hint`, `--target-file`, `--skip-brief`, `--dry-run`, `--dir`, `--missions-dir` | `draft-robustness-design.md` §1.1, `mission-design.md` §9 |
 | `list` (`ls`) | List available missions (skips configs without `roadmapPath`) | `--dir`, `--missions-dir` | `mission-design.md` |
 | `list-steps <mission>` | List single-step-executable steps for a mission | `--dir`, `--missions-dir` | `mission-design.md` |
@@ -28,6 +28,10 @@ Registered by `src/main.js` via `commander`. Commands and their stable options:
 | `monitor` | Standalone monitor-only mode (browse historical runs) | `--dev`, `--monitor-port`, `--dir` | `CONTEXT.md` "故障排查" |
 
 CLI registration lives in `src/main.js` (`commander` subcommand declarations in the `// ── Subcommands ──` / `// ── Subcommand: run ──` sections, the main `run` command, and the `program.parse()` entry call near EOF). `draft` is the AI-facing generation entry point; `run` is the execution entry point.
+
+### Driver selection
+
+The per-step subprocess driver is configurable, resolved in `src/config.js` with priority `CLI --driver` > `MISSION_DRIVER_EXEC` env > `mission.json`/`base.json` `driver` field > `"opencode"`. `driverArgs` (`{model}`/`{agent}`/`{session}`/`{agentFile}` tokens) and `promptMode` (`arg`|`stdin`) follow the same priority chain. When `driver=="pi"`, config.js applies pi-sensible defaults (driverArgs + `promptMode:"stdin"` + a computed `agentFile` persona path) so `--driver pi` switches without further config; explicit values always win. The persona lives at `<engine>/agents/build.pi.md` (engine-relative, resolved via `import.meta.url`, so it works for consumers referencing the engine via `MISSION_DRIVER_HOME`). `runner.js` suppresses opencode-only flags (`--pure`/`--variant`/`--dangerously-skip-permissions`) for non-opencode drivers. See `tools/mission-driver/README.md` §配置项.
 
 ## Mission Config Schema (`mission.json`)
 

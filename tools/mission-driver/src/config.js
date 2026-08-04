@@ -1,6 +1,39 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { resolve, join } from "node:path";
+import { resolve, join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { loadMission } from "./mission-check.mjs";
+
+// Engine root (parent of src/). Locates driver assets (e.g. the pi persona)
+// relative to the running engine, so paths resolve for both this repo and
+// consumers referencing the engine via MISSION_DRIVER_HOME. Mirrors the
+// TOOL_ROOT pattern in flow-loader.js / main.js.
+const TOOL_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+// pi driver convenience defaults: when driver=="pi" and the caller did not
+// explicitly set driverArgs/promptMode, these apply so `--driver pi` switches
+// without forcing the user to also pass driverArgs/promptMode. Explicit values
+// (CLI/env/mission) always win — these are the lowest-priority fallback applied
+// at each resolveConfig return point. agentFile is relative to TOOL_ROOT and
+// resolved to an absolute path at use.
+const PI_DEFAULTS = Object.freeze({
+  driverArgs: "-p --model {model} --append-system-prompt @{agentFile} --tools read,write,edit,bash,grep,find,ls",
+  promptMode: "stdin",
+  agentFile: "agents/build.pi.md",
+});
+
+// Apply pi driver defaults to driverArgs/promptMode/agentFile. `driverArgs` and
+// `promptMode` are the values after args/env/mission fallback (may be undefined).
+// promptMode is ALWAYS returned concrete (never undefined) so runner.js's
+// `config.promptMode || "stdin"` fallback never silently triggers for opencode.
+// opencode (non-pi) path is byte-for-byte unchanged (undefined→undefined, "arg").
+function resolveDriverFields(driver, driverArgs, promptMode) {
+  const isPi = driver === "pi";
+  return {
+    driverArgs: driverArgs !== undefined ? driverArgs : (isPi ? PI_DEFAULTS.driverArgs : undefined),
+    promptMode: promptMode !== undefined ? promptMode : (isPi ? PI_DEFAULTS.promptMode : "arg"),
+    agentFile: isPi ? resolve(TOOL_ROOT, PI_DEFAULTS.agentFile) : undefined,
+  };
+}
 
 /**
  * Inject env vars from a mission/base `env` object into process.env.
@@ -459,9 +492,15 @@ export function resolveConfig(args = {}) {
   const devMode = args.dev === true || process.env.MONITOR_DEV === "1";
 
   const agent = args.agent || process.env.OPENCODE_AGENT || "build";
-  const driver = args.driver || process.env.MISSION_DRIVER_EXEC || "opencode";
+  // driver: drop the hard "opencode" default here so mission.driver (consulted
+  // below in resolvedDriver) is not dead-coded; opencode remains the final
+  // fallback at the return point.
+  const driver = args.driver || process.env.MISSION_DRIVER_EXEC || undefined;
   const driverArgs = args.driverArgs || process.env.MISSION_DRIVER_ARGS || undefined;
-  const promptMode = args.promptMode || process.env.MISSION_PROMPT_MODE || "arg";
+  // promptMode: drop the hard "arg" default; each return point applies a
+  // driver-aware fallback (pi→"stdin", else "arg") via resolveDriverFields so
+  // the pi default can trigger. config.promptMode is always concrete on return.
+  const promptMode = args.promptMode || process.env.MISSION_PROMPT_MODE || undefined;
   const autonomyMode = args.autonomyMode || process.env.AUTONOMY_MODE || "auto";
   const model = args.model || process.env.OPENCODE_MODEL || undefined;
   const parseModel = args.parseModel || process.env.OPENCODE_PARSE_MODEL || undefined;
@@ -495,14 +534,20 @@ export function resolveConfig(args = {}) {
     // Load base config so driver, model, agent, env etc. from base.json are
     // available even when no specific mission is named (draft / analyze paths).
     const base = loadBaseAndInjectEnv(missionsDir);
+    const drvDraft = args.driver || process.env.MISSION_DRIVER_EXEC || base.driver || "opencode";
+    const drvFieldsDraft = resolveDriverFields(
+      drvDraft,
+      args.driverArgs || process.env.MISSION_DRIVER_ARGS || base.driverArgs,
+      args.promptMode || process.env.MISSION_PROMPT_MODE || base.promptMode);
     return {
       projectRoot, missionsDir, runDir,
       missionName: null, mission: null,
       draftMission: args.draftMission,
       agent: args.agent || process.env.OPENCODE_AGENT || base.agent || "build",
-      driver: args.driver || process.env.MISSION_DRIVER_EXEC || base.driver || "opencode",
-      driverArgs: args.driverArgs || process.env.MISSION_DRIVER_ARGS || base.driverArgs || undefined,
-      promptMode: args.promptMode || process.env.MISSION_PROMPT_MODE || base.promptMode || "arg",
+      driver: drvDraft,
+      driverArgs: drvFieldsDraft.driverArgs,
+      promptMode: drvFieldsDraft.promptMode,
+      agentFile: drvFieldsDraft.agentFile,
       model: args.model || process.env.OPENCODE_MODEL || base.model || "zhipuai-coding-plan/glm-5.2",
       dryRun, testMode,
       devMode,
@@ -529,6 +574,11 @@ export function resolveConfig(args = {}) {
     const runDir = resolve(projectRoot, "_tmp", `analyze-run-${Date.now()}`);
     mkdirSync(runDir, { recursive: true });
     const baseA = loadBaseAndInjectEnv(missionsDir);
+    const drvAnalyze = args.driver || process.env.MISSION_DRIVER_EXEC || baseA.driver || "opencode";
+    const drvFieldsAnalyze = resolveDriverFields(
+      drvAnalyze,
+      args.driverArgs || process.env.MISSION_DRIVER_ARGS || baseA.driverArgs,
+      args.promptMode || process.env.MISSION_PROMPT_MODE || baseA.promptMode);
     return {
       projectRoot, missionsDir, runDir,
       missionName: null, mission: null,
@@ -538,9 +588,10 @@ export function resolveConfig(args = {}) {
       analyzeRunIsLatest: isLatest,
       moduleInfo,
       agent: args.agent || process.env.OPENCODE_AGENT || baseA.agent || "build",
-      driver: args.driver || process.env.MISSION_DRIVER_EXEC || baseA.driver || "opencode",
-      driverArgs: args.driverArgs || process.env.MISSION_DRIVER_ARGS || baseA.driverArgs || undefined,
-      promptMode: args.promptMode || process.env.MISSION_PROMPT_MODE || baseA.promptMode || "arg",
+      driver: drvAnalyze,
+      driverArgs: drvFieldsAnalyze.driverArgs,
+      promptMode: drvFieldsAnalyze.promptMode,
+      agentFile: drvFieldsAnalyze.agentFile,
       model: args.model || process.env.OPENCODE_MODEL || baseA.model || "zhipuai-coding-plan/glm-5.2",
       dryRun, testMode,
       devMode,
@@ -657,6 +708,14 @@ export function resolveConfig(args = {}) {
     : resolve(projectRoot, "_tmp", `${ts}-mission-driver`);
   mkdirSync(runDir, { recursive: true });
 
+  // pi driver defaults: lowest-priority fallback for driverArgs/promptMode +
+  // computed agentFile (engine-relative absolute path). opencode path unchanged.
+  const drvFields = resolveDriverFields(
+    resolvedDriver,
+    driverArgs || mission.driverArgs,
+    promptMode || mission.promptMode,
+  );
+
   return {
     projectRoot,
     missionsDir,
@@ -666,8 +725,9 @@ export function resolveConfig(args = {}) {
     runDir,
     timestamp,
     driver: resolvedDriver,
-    driverArgs: driverArgs || mission.driverArgs || undefined,
-    promptMode: promptMode || mission.promptMode || "arg",
+    driverArgs: drvFields.driverArgs,
+    promptMode: drvFields.promptMode,
+    agentFile: drvFields.agentFile,
     autonomyMode: resolvedAutonomyMode,
     agent: resolvedAgent,
     model: resolvedModel,

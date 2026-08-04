@@ -156,7 +156,7 @@ export function ensureGitignoreEntry(gitignorePath, entry) {
  * @param {{target: string, projectName: string}} opts
  */
 export async function installAge(opts) {
-  const { target, projectName } = opts;
+  const { target, projectName, withPi = false } = opts;
   const templateRoot = resolve(__dirname, "..");
   const manifestPath = join(templateRoot, "install-age.manifest");
   const mdhAbs = join(templateRoot, "tools", "mission-driver");
@@ -197,6 +197,9 @@ export async function installAge(opts) {
       console.error(`  WARN: manifest lists '${entry.src}' but source missing — skipped.`);
       continue;
     }
+    // pi-only entries (.pi/skills native copy) are skipped unless --pi is passed.
+    if (entry.flags.includes("pi-only") && !withPi) continue;
+
     if (existsSync(dst)) {
       skipped.push(entry.dst);
       continue;
@@ -287,6 +290,10 @@ export async function installAge(opts) {
   console.log("  4. (optional) Fill missions/base.json commands.* for YOUR stack.");
   console.log("  5. (manual fallback) Read template/START-HERE-after-copy.md");
   console.log("  6. Verify: ./tools/mission-driver.sh list");
+  if (withPi) {
+    console.log("  7. (pi driver) trust the project in pi, then:");
+    console.log("     MISSION_DRIVER_EXEC=pi OPENCODE_MODEL=<pi-model-id> ./tools/mission-driver.sh run demo");
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -294,11 +301,22 @@ export async function installAge(opts) {
 // ---------------------------------------------------------------------------
 
 async function main() {
+  // Parse argv: positional (target, projectName) + flags (--pi, ...). Flags
+  // may appear anywhere after the script name, so scan rather than index fixed
+  // positions (supports both `/p "Name" --pi` and `--pi /p "Name"`).
+  const flags = new Set();
+  const positional = [];
+  for (const a of process.argv.slice(2)) {
+    if (a.startsWith("--")) flags.add(a.slice(2));
+    else positional.push(a);
+  }
+  const withPi = flags.has("pi");
+
   let targetRaw, projectName;
 
-  if (process.argv[2]) {
-    targetRaw = process.argv[2];
-    projectName = process.argv[3] || basename(resolve(targetRaw));
+  if (positional[0]) {
+    targetRaw = positional[0];
+    projectName = positional[1] || basename(resolve(targetRaw));
   } else {
     // Interactive mode
     const rl = createInterface({ input, output });
@@ -315,7 +333,7 @@ async function main() {
     process.exit(1);
   }
 
-  await installAge({ target, projectName });
+  await installAge({ target, projectName, withPi });
 }
 
 // Run only when invoked directly (not when imported by tests).

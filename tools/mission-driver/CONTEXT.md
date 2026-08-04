@@ -5,7 +5,7 @@
 
 ## 是什么
 
-`tools/mission-driver/` — AI 开发循环引擎。读 `missions/<name>.json`，按 flow JSON 定义的状态机循环执行 `opencode run` 子进程。附监控 Dashboard（Node http + SSE + Vue 3 前端）。
+`tools/mission-driver/` — AI 开发循环引擎。读 `missions/<name>.json`，按 flow JSON 定义的状态机循环执行**可配置 driver 子进程**（默认 `opencode run`；`--driver pi` 切到 `pi -p`）。附监控 Dashboard（Node http + SSE + Vue 3 前端）。
 
 **语言**: Node.js (ESM) + TypeScript (仅前端)  
 **依赖**: 引擎**零 npm 依赖**（`commander` 已 vendor 内联至 `vendor/`，见 commit 0a40c5f）；前端独立 `web/package.json`，但 `web/dist/` 已提交入 git → **整体 clone 即跑，消费者零 install / 零 build**  
@@ -45,7 +45,9 @@ tools/mission-driver/
 
 **文件位置**: `{projectRoot}/missions/`（不在 tools/ 下）
 
-**优先级**: `CLI --model/--parse-model` > `mission.json` 自有字段 > `base.local.json` > `base.json`
+**优先级**: `CLI --model/--parse-model/--driver` > `MISSION_DRIVER_EXEC`/`MISSION_DRIVER_ARGS`/`MISSION_PROMPT_MODE` env > `mission.json` 自有字段 > `base.local.json` > `base.json`
+
+**driver 可选 `opencode`（默认）/ `pi`**（pi-driver 支持）：`driver=="pi"` 时 config.js 自动套用 pi 默认 `driverArgs`（`-p --model {model} --append-system-prompt @{agentFile} --tools read,write,edit,bash,grep,find,ls`）+ `promptMode:"stdin"` + 计算字段 `agentFile`（引擎相对绝对路径 `<engine>/agents/build.pi.md`，消费端经 `import.meta.url` 定位）。`runner.js` 对非 opencode driver 抑制 `--pure`/`--variant`/`--dangerously-skip-permissions`，且 `findLatestSessionId` 对 pi 跳过 `opencode session list`。详见 `README.md` §Driver selection、`docs/architecture/mission-driver-baseline.md` §Driver selection。pi 已知限制：无 session 连续性（每 step 起 fresh pi，靠 prompt 从磁盘恢复状态）。
 
 **base.json**（进 git）— 全仓库 mission 共享默认值，任何模块可通过 `extends: "base"` 继承:
 ```
