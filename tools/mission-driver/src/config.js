@@ -21,17 +21,38 @@ const PI_DEFAULTS = Object.freeze({
   agentFile: "agents/build.pi.md",
 });
 
-// Apply pi driver defaults to driverArgs/promptMode/agentFile. `driverArgs` and
+// cline driver convenience defaults: when driver=="cline" and the caller did
+// not explicitly set driverArgs/promptMode, these apply so `--driver cline`
+// switches without forcing extra config. cline's prompt is a positional arg
+// (promptMode "arg", unlike pi's stdin). The persona (-s) is NOT part of this
+// whitespace-split template because its content may contain newlines/spaces;
+// runner.js injects it as a dedicated `-s <content>` argv pair after the split.
+// Explicit args/env/mission values always win; agentFile resolves under TOOL_ROOT.
+const CLINE_DEFAULTS = Object.freeze({
+  driverArgs: "-m {model} --json --yolo --auto-approve true",
+  promptMode: "arg",
+  agentFile: "agents/build.cline.md",
+});
+
+// Apply driver defaults to driverArgs/promptMode/agentFile. `driverArgs` and
 // `promptMode` are the values after args/env/mission fallback (may be undefined).
 // promptMode is ALWAYS returned concrete (never undefined) so runner.js's
 // `config.promptMode || "stdin"` fallback never silently triggers for opencode.
-// opencode (non-pi) path is byte-for-byte unchanged (undefined→undefined, "arg").
+// opencode (non-pi/cline) path is byte-for-byte unchanged (undefined→undefined,
+// "arg"). pi→stdin; cline→arg.
 function resolveDriverFields(driver, driverArgs, promptMode) {
   const isPi = driver === "pi";
+  const isCline = driver === "cline";
   return {
-    driverArgs: driverArgs !== undefined ? driverArgs : (isPi ? PI_DEFAULTS.driverArgs : undefined),
-    promptMode: promptMode !== undefined ? promptMode : (isPi ? PI_DEFAULTS.promptMode : "arg"),
-    agentFile: isPi ? resolve(TOOL_ROOT, PI_DEFAULTS.agentFile) : undefined,
+    driverArgs: driverArgs !== undefined
+      ? driverArgs
+      : (isPi ? PI_DEFAULTS.driverArgs : (isCline ? CLINE_DEFAULTS.driverArgs : undefined)),
+    promptMode: promptMode !== undefined
+      ? promptMode
+      : (isPi ? PI_DEFAULTS.promptMode : (isCline ? CLINE_DEFAULTS.promptMode : "arg")),
+    agentFile: isPi
+      ? resolve(TOOL_ROOT, PI_DEFAULTS.agentFile)
+      : (isCline ? resolve(TOOL_ROOT, CLINE_DEFAULTS.agentFile) : undefined),
   };
 }
 
@@ -665,6 +686,14 @@ export function resolveConfig(args = {}) {
     maxRetries: Number(process.env.TRANSIENT_MAX_RETRIES) || mTransient.maxRetries || 6,
     backoffBaseMs: Number(process.env.TRANSIENT_BACKOFF_BASE_MS) || mTransient.backoffBaseMs || 5_000,
     backoffCapMs: Number(process.env.TRANSIENT_BACKOFF_CAP_MS) || mTransient.backoffCapMs || 120_000,
+    // mdr-quota — quota/usage-limit exhaustion wait policy (see engine.js):
+    // wait until the announced reset time + buffer (fallback below when the
+    // reset time is unparseable), retry indefinitely. quotaMaxWaitMs caps the
+    // TOTAL wait per step (0 = unlimited, the default — a quota condition is
+    // time-bounded by the provider and must not fail the mission).
+    quotaWaitFallbackMs: Number(process.env.TRANSIENT_QUOTA_WAIT_FALLBACK_MS) || mTransient.quotaWaitFallbackMs || 600_000,
+    quotaResetBufferMs: Number(process.env.TRANSIENT_QUOTA_RESET_BUFFER_MS) || mTransient.quotaResetBufferMs || 60_000,
+    quotaMaxWaitMs: Number(process.env.TRANSIENT_QUOTA_MAX_WAIT_MS) || mTransient.quotaMaxWaitMs || 0,
   };
 
   // mdo-3 Phase 2: Fast Run / Skip Steps (FSD §3.3.2A).

@@ -48,10 +48,18 @@ function buildDriverArgs(config, sessionId, prompt) {
 
   const args = rendered.split(/\s+/).filter(Boolean);
   // --pure / --variant are opencode-specific flags (github/main extras); skip
-  // them for non-opencode drivers (e.g. pi) that do not recognize them.
-  const ocExtras = (config.driver || "opencode") !== "pi";
+  // them for non-opencode drivers (e.g. pi, cline) that do not recognize them.
+  const ocExtras = (config.driver || "opencode") === "opencode";
   if (ocExtras && config.pure && !args.includes("--pure")) args.splice(1, 0, "--pure");
   if (ocExtras && config.variant) args.push("--variant", config.variant);
+  // cline persona: `-s <content>` must receive the WHOLE persona as ONE literal
+  // value (it may contain spaces/newlines). The template render is split on
+  // whitespace, so we inject it as a dedicated argv pair AFTER the split — a
+  // whitespace-split template could never represent multi-line content as one
+  // token. Injected before the positional prompt so cline parses `-s`+value.
+  if (config.driver === "cline" && config.agentFile) {
+    args.push("-s", readFileSync(config.agentFile, "utf8").trim());
+  }
   if (promptMode === "arg" && prompt) args.push(prompt);
 
   return {
@@ -146,9 +154,10 @@ function extractSessionId(text) {
 }
 
 export function findLatestSessionId(projectRoot, driver) {
-  // opencode-only: pi has no equivalent CLI, and if opencode is also installed
-  // this would return an unrelated session id that pollutes run-state.json.
-  if (driver === "pi") return null;
+  // opencode-only: pi/cline have no session-continuity equivalent to --session,
+  // and if opencode is also installed this would return an unrelated session id
+  // that pollutes run-state.json.
+  if (driver === "pi" || driver === "cline") return null;
   try {
     const out = execSync("opencode session list -n 1 --format json", {
       cwd: projectRoot,
