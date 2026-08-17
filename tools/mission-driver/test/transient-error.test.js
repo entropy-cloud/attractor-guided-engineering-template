@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, readFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FlowEngine, isTransientProviderError } from "../src/engine.js";
+import { FlowEngine, isTransientProviderError, isQuotaExhaustion, extractQuotaResetTime, quotaWaitMs } from "../src/engine.js";
 import { resolveConfig } from "../src/config.js";
 import { makeMockDelegates, simpleFlow } from "./helpers.js";
 
@@ -49,6 +49,52 @@ describe("isTransientProviderError — stderr-signature classification (mdr-1 Ph
   it("signature match is case-insensitive", () => {
     assert.ok(isTransientProviderError({ stderrTail: "RATE_LIMIT hit" }));
     assert.ok(isTransientProviderError({ stderrTail: "Overloaded" }));
+  });
+
+  // mdr-quota — the observed zhipu 5h-quota message must classify as transient
+  // (it was previously missed by every signature → misclassified as a genuine
+  // failure → consumed onError budget → whole mission failed).
+  it("zhipu 5h quota message (Chinese) → transient AND quota exhaustion", () => {
+    const msg = "Error: 已达到 5 小时的使用上限。您的限额将在 2026-08-15 01:12:08 重置。";
+    assert.ok(isTransientProviderError({ stderrTail: msg }), "must be classified transient");
+    assert.ok(isQuotaExhaustion(msg), "must be classified quota exhaustion");
+    assert.ok(isQuotaExhaustion("usage limit reached for this project"));
+    assert.ok(isQuotaExhaustion("daily limit exceeded"));
+    assert.equal(isQuotaExhaustion("HTTP 429 Too Many Requests"), null, "plain 429 is NOT quota exhaustion (generic rate-limit)");
+    assert.equal(isQuotaExhaustion("SyntaxError: unexpected token"), null);
+    assert.equal(isQuotaExhaustion(""), null);
+  });
+
+  // mdr-quota — reset-time extraction.
+  it("extractQuotaResetTime parses the announced reset time (local format)", () => {
+    const future = new Date(Date.now() + 3_600_000);
+    const ts = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, "0")}-${String(future.getDate()).padStart(2, "0")} ${String(future.getHours()).padStart(2, "0")}:${String(future.getMinutes()).padStart(2, "0")}:${String(future.getSeconds()).padStart(2, "0")}`;
+    const t = extractQuotaResetTime(`Error: 已达到 5 小时的使用上限。您的限额将在 ${ts} 重置。`);
+    assert.ok(Number.isFinite(t), "must extract a numeric epoch");
+    assert.ok(t > Date.now(), "must be in the future");
+  });
+
+  it("extractQuotaResetTime parses ISO reset times", () => {
+    const t = extractQuotaResetTime("usage limit reached — resets at 2099-01-01T00:00:00Z");
+    assert.ok(Number.isFinite(t) && t > Date.now(), "ISO reset must parse");
+  });
+
+  it("extractQuotaResetTime → null for past/absent/unparseable reset times", () => {
+    assert.equal(extractQuotaResetTime("Error: 已达到 5 小时的使用上限。"), null, "no reset marker/time → null");
+    assert.equal(extractQuotaResetTime("quota exhausted, no reset info"), null);
+    assert.equal(extractQuotaResetTime("resets at 01:12:08"), null, "time-of-day without a date → null");
+    assert.equal(extractQuotaResetTime(""), null);
+  });
+
+  it("quotaWaitMs: reset-aware vs fallback", () => {
+    const future = new Date(Date.now() + 10_000);
+    const ts = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, "0")}-${String(future.getDate()).padStart(2, "0")} ${String(future.getHours()).padStart(2, "0")}:${String(future.getMinutes()).padStart(2, "0")}:${String(future.getSeconds()).padStart(2, "0")}`;
+    const cfg = { quotaResetBufferMs: 5_000, quotaWaitFallbackMs: 123_456 };
+    const w = quotaWaitMs(`您的限额将在 ${ts} 重置。`, cfg);
+    assert.ok(w >= 10_000 && w < 30_000, `wait must be ~reset+buffer (got ${w})`);
+    assert.equal(quotaWaitMs("quota exhausted, no reset info", cfg), 123_456, "unparseable → fallback");
+    assert.equal(quotaWaitMs("", cfg), 123_456);
+    assert.equal(quotaWaitMs("usage limit reached", {}), 600_000, "default fallback = 10 min");
   });
 });
 
@@ -197,6 +243,9 @@ describe("FlowEngine — transient retry independence (mdr-1 Phase 3)", () => {
     assert.equal(t.maxRetries, 6);
     assert.equal(t.backoffBaseMs, 5_000);
     assert.equal(t.backoffCapMs, 120_000);
+    assert.equal(t.quotaWaitFallbackMs, 600_000, "quota fallback defaults to 10 min");
+    assert.equal(t.quotaResetBufferMs, 60_000, "quota buffer defaults to 1 min");
+    assert.equal(t.quotaMaxWaitMs, 0, "quota max wait defaults to unlimited");
   });
 
   it("(c.2) _transientConfig honors an override (incl. enabled:false and partial fields)", () => {
@@ -214,6 +263,120 @@ describe("FlowEngine — transient retry independence (mdr-1 Phase 3)", () => {
       makeMockDelegates({ config: { transient: { enabled: false } } }),
     );
     assert.equal(off._transientConfig().enabled, false, "enabled:false must propagate (disables the transient path)");
+  });
+
+  // mdr-quota — quota/usage-limit exhaustion: wait-until-reset (or fallback),
+  // unlimited retries, NO budget consumption, NO step_failed, NO visit trips.
+  describe("FlowEngine — quota exhaustion wait-and-retry (mdr-quota)", () => {
+    function fmtLocal(d) {
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
+    }
+    // zhipu-style message with the reset announced `inMs` from call time.
+    const zhipuQuotaFail = (inMs) => () => ({
+      ok: false, text: "", exitCode: 1,
+      stderrTail: `Error: 已达到 5 小时的使用上限。您的限额将在 ${fmtLocal(new Date(Date.now() + inMs))} 重置。`,
+    });
+
+    it("(q.1) quota exhaustion waits for the reset then retries — unlimited, budgets untouched", async () => {
+      const runDir = mkdtempSync(join(tmpdir(), "md-quota-a-"));
+      try {
+        let calls = 0;
+        const delegates = makeMockDelegates({
+          config: {
+            moduleName: "test-mod", shortName: "test-mod", packageFilter: "x",
+            projectRoot: runDir, runDir, missionName: "t",
+            // transient budget is ZERO — only the quota path can save us.
+            transient: { enabled: true, maxRetries: 0, backoffBaseMs: 1, backoffCapMs: 2, quotaResetBufferMs: 1, quotaWaitFallbackMs: 10 },
+          },
+          responses: {
+            START: () => { calls++; return calls === 1 ? zhipuQuotaFail(80)() : { text: "<AI_STEP_RESULT>pass</AI_STEP_RESULT>", ok: true }; },
+          },
+        });
+        const flow = simpleFlow({
+          START: {
+            type: "agent", prompt: "go", resultTag: "AI_STEP_RESULT",
+            onError: { done: "failed" },
+            transitions: { pass: { done: "completed" } },
+          },
+        });
+        const engine = new FlowEngine(flow, delegates);
+        const res = await engine.run();
+
+        assert.equal(res.status, "completed", "must wait out the quota and complete");
+        assert.equal(calls, 2, "one quota wait, then success");
+        const events = readEvents(runDir);
+        assert.equal(events.filter((e) => e.type === "quota_wait").length, 1, "one quota_wait event");
+        assert.equal(events.filter((e) => e.type === "transient_retry").length, 0, "transient budget NOT used");
+        assert.equal(events.filter((e) => e.type === "step_failed").length, 0, "no step_failed");
+        assert.equal(engine.retryCounts.get("START→START") || 0, 0, "onError budget NOT consumed");
+        assert.equal(engine.transientCounts.get("START") || 0, 0, "transient counter untouched");
+        assert.equal(engine.visitCounts.get("START"), 1, "quota waits invisible to maxCycleVisits");
+      } finally {
+        rmSync(runDir, { recursive: true, force: true });
+      }
+    });
+
+    it("(q.2) quota exhaustion without a parseable reset time falls back to the fixed wait", async () => {
+      const runDir = mkdtempSync(join(tmpdir(), "md-quota-b-"));
+      try {
+        let calls = 0;
+        const delegates = makeMockDelegates({
+          config: {
+            moduleName: "test-mod", shortName: "test-mod", packageFilter: "x",
+            projectRoot: runDir, runDir, missionName: "t",
+            transient: { enabled: true, maxRetries: 0, backoffBaseMs: 1, backoffCapMs: 2, quotaWaitFallbackMs: 15, quotaResetBufferMs: 1 },
+          },
+          responses: {
+            START: () => { calls++; return calls === 1 ? { ok: false, text: "", exitCode: 1, stderrTail: "Error: 已达到 5 小时的使用上限。" } : { text: "<AI_STEP_RESULT>pass</AI_STEP_RESULT>", ok: true }; },
+          },
+        });
+        const flow = simpleFlow({
+          START: {
+            type: "agent", prompt: "go", resultTag: "AI_STEP_RESULT",
+            onError: { done: "failed" },
+            transitions: { pass: { done: "completed" } },
+          },
+        });
+        const engine = new FlowEngine(flow, delegates);
+        const res = await engine.run();
+        assert.equal(res.status, "completed", "must recover via the fallback quota wait");
+        const events = readEvents(runDir);
+        const qw = events.filter((e) => e.type === "quota_wait");
+        assert.equal(qw.length, 1, "one quota_wait event");
+        assert.equal(qw[0].waitMs, 15, "fallback wait used when reset time unparseable");
+      } finally {
+        rmSync(runDir, { recursive: true, force: true });
+      }
+    });
+
+    it("(q.3) quotaMaxWaitMs caps total quota waiting — exceeding it degrades to a real failure", async () => {
+      const runDir = mkdtempSync(join(tmpdir(), "md-quota-c-"));
+      try {
+        const delegates = makeMockDelegates({
+          config: {
+            moduleName: "test-mod", shortName: "test-mod", packageFilter: "x",
+            projectRoot: runDir, runDir, missionName: "t",
+            transient: { enabled: true, maxRetries: 0, backoffBaseMs: 1, backoffCapMs: 2, quotaWaitFallbackMs: 10, quotaResetBufferMs: 1, quotaMaxWaitMs: 5 },
+          },
+          responses: { START: { ok: false, text: "", exitCode: 1, stderrTail: "Error: 已达到 5 小时的使用上限。" } },
+        });
+        const flow = simpleFlow({
+          START: {
+            type: "agent", prompt: "go", resultTag: "AI_STEP_RESULT",
+            onError: { done: "failed" },
+            transitions: { pass: { done: "completed" } },
+          },
+        });
+        const engine = new FlowEngine(flow, delegates);
+        const res = await engine.run();
+        assert.equal(res.status, "failed", "quota wait cap exceeded → real failure");
+        const events = readEvents(runDir);
+        assert.equal(events.filter((e) => e.type === "quota_wait").length, 0, "no quota_wait when the cap rejects the wait");
+        assert.ok(events.filter((e) => e.type === "step_failed").length >= 1, "degraded to step_failed");
+      } finally {
+        rmSync(runDir, { recursive: true, force: true });
+      }
+    });
   });
 });
 
@@ -244,6 +407,9 @@ describe("config.js — transient.* resolution (mdr-1 Phase 3)", () => {
       assert.equal(cfg.transient.maxRetries, 6);
       assert.equal(cfg.transient.backoffBaseMs, 5_000);
       assert.equal(cfg.transient.backoffCapMs, 120_000);
+      assert.equal(cfg.transient.quotaWaitFallbackMs, 600_000, "quota fallback defaults to 10 min");
+      assert.equal(cfg.transient.quotaResetBufferMs, 60_000, "quota buffer defaults to 1 min");
+      assert.equal(cfg.transient.quotaMaxWaitMs, 0, "quota max wait defaults to unlimited");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -253,12 +419,15 @@ describe("config.js — transient.* resolution (mdr-1 Phase 3)", () => {
     const root = mkdtempSync(join(tmpdir(), "md-cfg-ovr-"));
     try {
       setupMission(root, "trans-cfg-override", {
-        transient: { maxRetries: 4, backoffBaseMs: 2_000, backoffCapMs: 60_000 },
+        transient: { maxRetries: 4, backoffBaseMs: 2_000, backoffCapMs: 60_000, quotaWaitFallbackMs: 300_000, quotaResetBufferMs: 30_000, quotaMaxWaitMs: 3_600_000 },
       });
       const cfg = resolveConfig({ dir: root, mission: "trans-cfg-override" });
       assert.equal(cfg.transient.maxRetries, 4);
       assert.equal(cfg.transient.backoffBaseMs, 2_000);
       assert.equal(cfg.transient.backoffCapMs, 60_000);
+      assert.equal(cfg.transient.quotaWaitFallbackMs, 300_000);
+      assert.equal(cfg.transient.quotaResetBufferMs, 30_000);
+      assert.equal(cfg.transient.quotaMaxWaitMs, 3_600_000);
       assert.equal(cfg.transient.enabled, true, "enabled defaults true when not specified");
     } finally {
       rmSync(root, { recursive: true, force: true });

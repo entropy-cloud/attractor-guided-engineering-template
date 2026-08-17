@@ -142,6 +142,30 @@ const TRANSIENT_PROVIDER_SIGS = [
   /\bquota\b/i,
   /\boverloaded\b/i,
   /\bservice unavailable\b/i,
+  // mdr-quota — quota/usage-limit exhaustion signatures, English + Chinese.
+  // zhipu emits "已达到 5 小时的使用上限。您的限额将在 <ts> 重置。" —
+  // previously MISSED by all signatures above, so a deterministic quota
+  // exhaustion was misclassified as a genuine failure and consumed the
+  // onError retry budget (memory L010: full-mission failure on quota reset).
+  /usage[\s_-]?limit/i,
+  /\b(?:daily|hourly|monthly|weekly)\s+(?:limit|quota)\b/i,
+  /使用上限/,
+  /限额/,
+  /使用额度/,
+  /额度(?:不足|已用尽|已用完|耗尽)/,
+];
+
+// mdr-quota — signatures that narrow a transient failure to quota/limit
+// EXHAUSTION: a deterministic, time-bounded condition (the provider announces
+// the reset time). Such failures get a wait-until-reset retry that does NOT
+// consume the transient/onError budget and has NO retry cap by default.
+const QUOTA_EXHAUSTION_SIGS = [
+  /使用上限/,
+  /限额/,
+  /使用额度/,
+  /额度(?:不足|已用尽|已用完|耗尽)/,
+  /usage[\s_-]?limit/i,
+  /\b(?:daily|hourly|monthly|weekly)\s+(?:limit|quota)\b/i,
 ];
 
 /**
@@ -171,6 +195,68 @@ export function isTransientProviderError({ exitCode, stderrTail, stepDurMs, logL
     if (re.test(stderr)) return re.source;
   }
   return null;
+}
+
+/**
+ * mdr-quota — pure classifier: is this transient failure a quota/usage-limit
+ * EXHAUSTION (time-bounded, resolves at the announced reset time) rather than
+ * a generic rate-limit/overload blip? Only consulted after
+ * isTransientProviderError matched. Returns the matched signature source
+ * (truthy = quota exhaustion), or null.
+ */
+export function isQuotaExhaustion(stderrTail) {
+  const stderr = stderrTail ? String(stderrTail) : "";
+  if (!stderr) return null;
+  for (const re of QUOTA_EXHAUSTION_SIGS) {
+    if (re.test(stderr)) return re.source;
+  }
+  return null;
+}
+
+// mdr-quota — reset-time extraction from a quota message. Supported forms:
+//   "您的限额将在 2026-08-15 01:12:08 重置。"  → local time (the observed
+//   zhipu form; Date.parse("YYYY-MM-DD HH:mm:ss") is interpreted as local)
+//   "usage limit ... resets at 2026-08-15T01:12:08Z" → ISO (UTC / offset)
+// A bare time-of-day without a date is unparseable → null (caller falls back
+// to a fixed wait). The "重置"/"reset" proximity guard keeps unrelated
+// business timestamps from being mistaken for a reset time.
+const QUOTA_RESET_PROXIMITY_RE = /重置|reset/i;
+const QUOTA_RESET_LOCAL_RE = /(20\d{2}-\d{2}-\d{2})\s+(\d{2}:\d{2}(?::\d{2})?)/;
+const QUOTA_RESET_ISO_RE = /20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?/;
+
+/**
+ * mdr-quota — extract the quota reset time (epoch ms) from the provider
+ * message, or null when absent/unparseable. A reset already in the past
+ * returns null too (stale message — fall back to the fixed wait).
+ */
+export function extractQuotaResetTime(stderrTail) {
+  const stderr = stderrTail ? String(stderrTail) : "";
+  if (!stderr || !QUOTA_RESET_PROXIMITY_RE.test(stderr)) return null;
+  const now = Date.now();
+  const iso = stderr.match(QUOTA_RESET_ISO_RE);
+  if (iso) {
+    const t = Date.parse(iso[0]);
+    if (Number.isFinite(t) && t > now) return t;
+  }
+  const local = stderr.match(QUOTA_RESET_LOCAL_RE);
+  if (local) {
+    const t = Date.parse(`${local[1]} ${local[2]}` + (local[2].split(":").length === 2 ? ":00" : ""));
+    if (Number.isFinite(t) && t > now) return t;
+  }
+  return null;
+}
+
+/**
+ * mdr-quota — how long to wait before retrying a quota exhaustion: until the
+ * announced reset time + buffer, or the fixed fallback (default 10 min) when
+ * the reset time is unparseable.
+ */
+export function quotaWaitMs(stderrTail, cfg = {}, now = Date.now()) {
+  const fallbackMs = cfg.quotaWaitFallbackMs || 600_000;
+  const bufferMs = cfg.quotaResetBufferMs || 60_000;
+  const reset = extractQuotaResetTime(stderrTail);
+  if (reset != null) return reset + bufferMs - now;
+  return fallbackMs;
 }
 
 /** Strip the executor-written "# ..." header lines; return the real body text. */
@@ -230,6 +316,9 @@ export class FlowEngine {
     // (rate-limit/quota/overload). Kept separate from retryCounts so transient
     // retries do NOT consume the onError/fail transition budget (plan §Phase 3).
     this.transientCounts = new Map();
+    // mdr-quota: accumulated wait time per step for quota-exhaustion
+    // conditions, consumed against transient.quotaMaxWaitMs (0 = unlimited).
+    this.quotaWaitTotals = new Map();
     this.appendBuffers = new Map();
     this.pingPongHistory = [];
     this.pingPongViaRetry = new Set();
@@ -261,6 +350,13 @@ export class FlowEngine {
       maxRetries: Number.isFinite(t.maxRetries) ? t.maxRetries : 6,
       backoffBaseMs: Number.isFinite(t.backoffBaseMs) ? t.backoffBaseMs : 5_000,
       backoffCapMs: Number.isFinite(t.backoffCapMs) ? t.backoffCapMs : 120_000,
+      // mdr-quota — quota-exhaustion wait policy. quotaMaxWaitMs caps the
+      // TOTAL wait time per step for quota conditions (0 = unlimited: keep
+      // retrying until the quota resets — the condition is time-bounded by
+      // the provider, so the mission must not fail for retry-count reasons).
+      quotaWaitFallbackMs: Number.isFinite(t.quotaWaitFallbackMs) ? t.quotaWaitFallbackMs : 600_000,
+      quotaResetBufferMs: Number.isFinite(t.quotaResetBufferMs) ? t.quotaResetBufferMs : 60_000,
+      quotaMaxWaitMs: Number.isFinite(t.quotaMaxWaitMs) ? t.quotaMaxWaitMs : 0,
     };
   }
 
@@ -1725,6 +1821,45 @@ export class FlowEngine {
          if (transientSig) {
            const tCfg = this._transientConfig();
            if (tCfg.enabled) {
+             // mdr-quota: quota/usage-limit EXHAUSTION is a deterministic,
+             // time-bounded condition (the provider announces the reset
+             // time). Wait until reset + buffer (fallback: fixed wait) and
+             // retry WITHOUT consuming the transient budget, WITHOUT a retry
+             // cap (quotaMaxWaitMs=0 = unlimited), and without tripping
+             // visit counts — the condition resolves by itself at the reset
+             // time, so the mission must keep waiting rather than fail.
+             const stderrText = result.stderrTail || result.errorTail || "";
+             const quotaSig = isQuotaExhaustion(stderrText);
+             if (quotaSig) {
+               const waitMs = quotaWaitMs(stderrText, tCfg);
+               const spent = (this.quotaWaitTotals.get(currentStep) || 0) + waitMs;
+               if (tCfg.quotaMaxWaitMs > 0 && spent > tCfg.quotaMaxWaitMs) {
+                 this._log(`  ⚡ quota wait cap reached for ${currentStep} (${Math.round(tCfg.quotaMaxWaitMs / 60000)}min) → degrading to real failure`);
+               } else {
+                 this.quotaWaitTotals.set(currentStep, spent);
+                 this._log(`  ⏳ quota exhaustion (${quotaSig}) — waiting ${Math.round(waitMs / 1000)}s (reset-aware; budget NOT consumed, retries unlimited)`);
+                 this._wfClose(result.marker || "transient", "quota_wait", result.sessionId, { transientSig, quotaSig, waitMs, error: failedMeta.error });
+                 this._emitEvent("quota_wait", {
+                   step: currentStep,
+                   visit: visits,
+                   signature: quotaSig,
+                   waitMs,
+                   totalWaitMs: spent,
+                   maxWaitMs: tCfg.quotaMaxWaitMs,
+                 });
+                 this._emitEvent("backoff", {
+                   step: currentStep,
+                   retryStep: currentStep,
+                   durationMs: waitMs,
+                   reason: "quota_exhaustion_wait",
+                 });
+                 await sleep(waitMs);
+                 // Roll back this iteration's visit increment so quota waits
+                 // are invisible to maxCycleVisits (mirrors transient retries).
+                 this.visitCounts.set(currentStep, visits - 1);
+                 continue;
+               }
+             }
              const tCount = (this.transientCounts.get(currentStep) || 0) + 1;
              this.transientCounts.set(currentStep, tCount);
              if (tCount <= tCfg.maxRetries) {
