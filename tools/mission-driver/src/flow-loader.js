@@ -9,7 +9,11 @@ const TOOL_ROOT = resolve(__dirname, "..");
 const PLAN_STATUS_RE = /^>\s*\*{0,2}(?:[Pp]lan\s+)?[Ss]tatus\*{0,2}\s*:\s*\*{0,2}(.+?)\*{0,2}\s*$/m;
 // Canonical plan statuses: draft (initial) → active (post-review, ready to exec).
 // Legacy synonyms tolerated for backward compatibility with older plans.
+// Parenthetical annotations ("active（draft → active：…）") are noise: truncate
+// at the first ( or （ so only the status token is matched.
 function _normalizeStatus(s) {
+  const cut = s.search(/[（(]/);
+  if (cut !== -1) s = s.slice(0, cut);
   return s.toLowerCase().replace(/\s+/g, " ").trim();
 }
 const ACTIVE_STATUSES = [
@@ -89,7 +93,7 @@ function _scanOpenAuditsList(auditsDir) {
   for (const f of files) {
     const content = readFileSync(f, "utf8");
     const m = content.match(AUDIT_STATUS_RE);
-    const status = m ? m[1].trim().toLowerCase() : "";
+    const status = m ? _normalizeStatus(m[1]) : "";
     if (status === "open") {
       // WI4 (Phase 5 decision: Option A, design §5.4) — only count mission-level
       // audits so the audit-gate's openAudits() input reflects actual mission-
