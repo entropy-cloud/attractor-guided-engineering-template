@@ -20,7 +20,7 @@ Registered by `src/main.js` via `commander`. Commands and their stable options:
 
 | Command | Purpose | Key options | Owner doc |
 | --- | --- | --- | --- |
-| `run <mission>` (also the implicit main command) | Run a mission end-to-end | `--step`, `--from-step`, `--dry-run`, `--max-cycles`, `--model`, `--parse-model`, `--driver` (`opencode` default \| `pi`), `--no-monitor`, `--fast`, `--skip-steps`, `--dir`, `--missions-dir`, `--run-dir` | `mission-design.md` §6 |
+| `run <mission>` (also the implicit main command) | Run a mission end-to-end | `--step`, `--from-step`, `--dry-run`, `--max-cycles`, `--model`, `--parse-model`, `--driver` (`opencode` default \| `pi` \| `cline`), `--no-monitor`, `--fast`, `--skip-steps`, `--dir`, `--missions-dir`, `--run-dir` | `mission-design.md` §6 |
 | `draft <description>` | Two-stage brief→draft pipeline that generates `mission.json` + roadmap | `--draft-job-dir`, `--flow-hint`, `--target-file`, `--skip-brief`, `--dry-run`, `--dir`, `--missions-dir` | `draft-robustness-design.md` §1.1, `mission-design.md` §9 |
 | `list` (`ls`) | List available missions (skips configs without `roadmapPath`) | `--dir`, `--missions-dir` | `mission-design.md` |
 | `list-steps <mission>` | List single-step-executable steps for a mission | `--dir`, `--missions-dir` | `mission-design.md` |
@@ -31,7 +31,7 @@ CLI registration lives in `src/main.js` (`commander` subcommand declarations in 
 
 ### Driver selection
 
-The per-step subprocess driver is configurable, resolved in `src/config.js` with priority `CLI --driver` > `MISSION_DRIVER_EXEC` env > `mission.json`/`base.json` `driver` field > `"opencode"`. `driverArgs` (`{model}`/`{agent}`/`{session}`/`{agentFile}` tokens) and `promptMode` (`arg`|`stdin`) follow the same priority chain. When `driver=="pi"`, config.js applies pi-sensible defaults (driverArgs + `promptMode:"stdin"` + a computed `agentFile` persona path) so `--driver pi` switches without further config; explicit values always win. The persona lives at `<engine>/agents/build.pi.md` (engine-relative, resolved via `import.meta.url`, so it works for consumers referencing the engine via `MISSION_DRIVER_HOME`). `runner.js` suppresses opencode-only flags (`--pure`/`--variant`/`--dangerously-skip-permissions`) for non-opencode drivers. See `tools/mission-driver/README.md` §配置项.
+The per-step subprocess driver is configurable, resolved in `src/config.js` with priority `CLI --driver` > `MISSION_DRIVER_EXEC` env > `mission.json`/`base.json` `driver` field > `"opencode"`. Supported values: `opencode` | `pi` | `cline`. `driverArgs` (`{model}`/`{agent}`/`{session}`/`{agentFile}` tokens) and `promptMode` (`arg`|`stdin`) follow the same priority chain. When `driver=="pi"` or `driver=="cline"`, config.js applies driver-sensible defaults (pi: driverArgs + `promptMode:"stdin"` + a computed `agentFile` persona path; cline: `-m/--json/--yolo/-s` args + `promptMode:"arg"`) so the switch needs no further config; explicit values always win. The pi persona lives at `<engine>/agents/build.pi.md` (engine-relative, resolved via `import.meta.url`, so it works for consumers referencing the engine via `MISSION_DRIVER_HOME`). `runner.js` suppresses opencode-only flags (`--pure`/`--variant`/`--dangerously-skip-permissions`) for non-opencode drivers. See `tools/mission-driver/README.md` §配置项.
 
 ## Mission Config Schema (`mission.json`)
 
