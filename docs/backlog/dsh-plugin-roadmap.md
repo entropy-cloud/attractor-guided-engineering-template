@@ -26,7 +26,7 @@ Drive the implementation of the AGE Mission Control DSH plugin: package mission-
 - WI7 NativeExecutor:agents.create/resume + followup + whenIdle() 等待 + cancel→dispose 序列(handle 存活期 = 整个 run,步骤间复用,R1-A2): `todo`
 - WI8 L2 契约测试:双后端行为矩阵(marker 分类/修正重试预算/run-state 形状/EXIT_MAP 映射/flow 预算)——见 R3 §3: `todo`
 - WI9 L3 SDK 集成骨架 host-harness.mjs(先解 R3 §6 未决项:sdk server 的宿主启动组合): `todo`
-- WI10 mdcontrol.run 路由:native 形式端到端跑通 demo mission,run-state 形状与 CLI 一致: `todo`
+- WI10 mdcontrol.run 异步作业契约:启动即返回 {runId, status},引擎作为 detached 宿主任务继续;完成可选 followup 回执(先例 draft-job.mjs);native 形式端到端跑通 demo mission,run-state 形状与 CLI 一致: `todo`
 
 ### M3 — 对齐、技能与门禁强化
 
