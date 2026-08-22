@@ -8,7 +8,5 @@
   "planGuide": "docs/plans/00-plan-authoring-and-execution-guide.md",
   "auditsDir": "docs/audits/dsh-plugin",
   "contextDir": "docs/context",
-  "model": "opencode-go/deepseek-v4-pro",
-  "driverArgs": "run -m {model} --variant max --agent {agent} --dangerously-skip-permissions {session}",
   "commitFormat": "<type>(dsh-plugin): <description>"
 }
