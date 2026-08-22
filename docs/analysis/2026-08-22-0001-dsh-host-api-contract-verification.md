@@ -18,7 +18,7 @@ Authority: `packages/core/agent/src/index.ts`, `runtime-types.ts`.
   - **`whenIdle(): Promise<void>`** — resolves at whole-agent quiescence. This replaces our design's "poll/subscribe status until idle": use `whenIdle()` as the primary completion primitive.
   - `followup(message)` — queues an ordinary follow-up turn and wakes the driver (confirmed).
   - `cancel(cause, options?)` — graceful cancellation distinct from disposal; watchdog should `cancel()` first, `dispose()` only on hard timeout.
-  - `send(message, target, wakeup)` — step-boundary steering (potential future use for correction-retry without new turns).
+  - `send(message, target, wakeup)` — routes identified input to an inbox boundary with optional wake (distinct from `steer()`, the step-boundary steering primitive; potential future use for correction-retry without new turns).
 
 ## 2. Goals Family — VERIFIED, deeper than any consumer showed
 
@@ -26,7 +26,7 @@ Authority: `packages/core/agent/src/index.ts`, `runtime-types.ts`.
 
 - `goal/` — core service. Goal fold-state machine: `phase ∈ {active, paused, blocked, complete}`, plus `id`, `objective`, `revision`, `maxGoalRounds`; fold validation rejects unknown field sets per phase (`fold.ts:97-105`). Storage follows the session-event fold pattern (durable log, not project files).
 - `tool-goal/` — model tools. `update_goal` actions: `'edit' | 'pause' | 'resume' | 'complete' | 'blocked'`; phase enum `{active, paused, blocked, complete}`; prompt text actively tells the model how to respond to human continuation requests.
-- `goal-round-driver/` — **a same-session continuation loop**: when an agent is idle with an armed active goal and remaining rounds, it checkpoints pending mutations, reserves round `n+1` against `(goalId, revision)`, and queues a `<goal_round>` prompt through an `agent/pre-step` listener. This is DSH's own bounded agentic-loop driver — conceptually the closest native relative of our Flow DSL, but with fixed round semantics (no branching transitions, no script checks, no marker contracts). Comparison note for docs: `maxGoalRounds` ≈ our cycle budget; nothing native matches flow transitions or closure audits.
+- `goal-round-driver/` — **a same-session continuation loop**: when an agent is idle with an armed active goal and remaining rounds, it checkpoints pending mutations, reserves round `n+1` against `(goalId, revision)`, and queues a `<goal_round>` prompt via `GoalMessageSource`, gated by an `agent/pre-step` listener that verifies the claimed record. This is DSH's own bounded agentic-loop driver — conceptually the closest native relative of our Flow DSL, but with fixed round semantics (no branching transitions, no script checks, no marker contracts). Comparison note for docs: `maxGoalRounds` ≈ our cycle budget; nothing native matches flow transitions or closure audits.
 - `command-goal/` — `/goal` command + invariant.
 
 Deny contract used by goal-quiescence is authoritative elsewhere: `packages/core/tools/src/index.ts:590` defines `| { kind: 'deny'; reason: string }` as a listener decision type (same family as approval denials at :1696-1720). Our planned `tools/pre-execute` reinforcement gate is on solid ground.

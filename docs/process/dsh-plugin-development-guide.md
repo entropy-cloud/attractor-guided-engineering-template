@@ -8,7 +8,7 @@ The concise day-to-day procedure for developing this repository's DSH plugin (`p
 
 ## Prerequisites
 
-- Node.js ≥ 22.19; DSH host runnable (`npx @deepseek-ai/dsh web`)
+- Node.js per the DSH host requirement (`^22.19 || >=24`, official repo root); the engine itself is plain ESM Node with no engines floor; DSH host runnable via `npx @deepseek-ai/dsh web`
 - This repo cloned; engine test suite green: `npm --prefix tools/mission-driver test`
 - Read first: `docs/design/dsh-plugin-integration.md`, `docs/architecture/dsh-plugin-packaging.md`
 

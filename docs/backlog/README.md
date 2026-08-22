@@ -59,3 +59,5 @@ If the table is stale, downgrade the row or ask before implementation.
 ## Project-Specific Note
 
 For `mission-driver` engine work, per-mission roadmaps under `docs/backlog/mission-driver-*-roadmap.md` (e.g., `mission-driver-step-audit-roadmap.md`, `mission-driver-draft-robustness-roadmap.md`) are the primary work-item source — each row in those roadmaps is a work item with its own plan under `docs/plans/mission-driver-*/`. This file tracks only cross-cutting backlog that does not belong to a specific mission.
+
+For the DSH plugin effort, `docs/backlog/dsh-plugin-roadmap.md` (branch `feature/dsh-plugin`) is the primary work-item source: milestones M1–M4 drive packaging mission-driver as a DSH bundle plugin with a native in-process dispatch backend. Owner docs: `docs/design/dsh-plugin-integration.md` + `docs/architecture/dsh-plugin-packaging.md`.

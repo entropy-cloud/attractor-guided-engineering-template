@@ -1,6 +1,6 @@
 # DSH Plugin (AGE Mission Control) Roadmap
 
-> Last Updated: 2026-08-22 (initial — P1 task-level, P2–P4 milestone-level pending R1/R2/R3 findings now incorporated)
+> Last Updated: 2026-08-22 (initial — M1 task-level, M2–M4 milestone-level; R1/R2/R3 findings incorporated)
 > Source: `docs/design/dsh-plugin-integration.md`, `docs/architecture/dsh-plugin-packaging.md`, `docs/analysis/2026-08-22-0001-dsh-host-api-contract-verification.md` (R1), `-0002-npm-version-surface.md` (R2), `-0003-verification-harness-design.md` (R3)
 
 ## Purpose

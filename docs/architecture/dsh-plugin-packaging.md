@@ -76,10 +76,10 @@ The implementation follows the verified in-process pattern used by DSH-better-si
 | Resolve service | `ctx.get('agents')` | degrade to wire error if absent |
 | Create child agent | `agents.create(options)` → `{ agent, dispose() }` | `options.sessionId` = generated child id; `options.meta` carries `{ cwd: projectRoot, origin: 'subagent', delegationDepth, agentPreset }`; `options.signal` = timeout |
 | Dispatch prompt | `agent.followup(createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } }))` | text = assembled prompt template output, prefixed by a `[MISSION_DRIVER:<runId>]` boundary line; in native mode the prefix serves log/run-dir identifiability only (the orphan reaper identifies OS processes by command line, which native child agents do not have) |
-| Await completion | poll/subscribe `agent.status` until idle | replaces log-mtime heartbeat |
+| Await completion | `await agent.whenIdle()` — whole-agent quiescence promise (`runtime-types.ts:87`) | replaces log-mtime heartbeat; `agent.status` (`idle`/`running`) kept for diagnostics only |
 | Read result | final assistant message from `agent.session.events` | fed to marker extraction as `text` |
 | Continue session | `agents.resume({ resumeSessionId })` when the handle went cold between steps | native continuity; supersedes regex session scraping |
-| Release | `handle.dispose()` | deterministic cleanup after each run or abort |
+| Release | `handle.dispose()` | deterministic cleanup after each run or abort. ⚠️ `dispose()` stops the loop AND removes the session from the store — the handle must live for the whole mission run; between steps reuse the live handle, and only `resume()` can recover a persisted session after disposal |
 
 Step-agents register healthy descriptors via `snapshotSubagentDescriptor` (from `@deepseek-ai/dsh-subagent`) so the host subagent list renders them correctly instead of flagging corrupt rows.
 
@@ -91,8 +91,11 @@ Terminology glosses for reviewers unfamiliar with the DSH host: **isolate realm*
 | --- | --- | --- |
 | Permissions | `--dangerously-skip-permissions` bypass | child inherits host sandbox/approval stack; stricter by default. AGE worker preset must carry a tool catalog sufficient for execute/closure steps |
 | Model selection | `mission.model` opencode-style ids passed through | early phases ignore `model`; later phases map to DSH `ModelSelectionRef`. Documented gap, not silently dropped |
-| Watchdog | 60-min log-idle SIGTERM | hard per-step timeout via abort signal; no partial-output grace |
+| Watchdog | 60-min log-idle SIGTERM | hard per-step timeout: `agent.cancel(cause)` first, `dispose()` as last resort; no partial-output grace |
+| Native loop-driver precedent | — (n/a) | host's own `goal-round-driver` drives bounded same-session rounds via a queued prompt gated by an `agent/pre-step` listener; Flow DSL still owns sequencing because it adds branching transitions, script checks, marker contracts, and per-branch budgets beyond round counting |
 | Crash isolation | child crash contained by OS | runaway turn bounded by abort + dispose + model-side budget; correction-retry still applies |
+
+Official in-tree precedent for the whole dispatch shape: `@deepseek-ai/dsh-headless` creates one persisted Agent via `ctx.agents`, submits the task, waits for quiescence, and harvests the last non-empty assistant text (`packages/bundle/headless/README.md`) — validating NativeExecutor (in-process) and a one-shot CLI driver against host-own usage. A corresponding `dsh` ProcessExecutor driver value is a post-M2 candidate and is intentionally absent from the WI3 whitelist until then.
 
 ## Service Surface (Mission Control)
 
@@ -100,6 +103,7 @@ The cordis service mounts once in an isolate realm (preset-style mounting preced
 
 - Routes (namespace `mdcontrol.*`): `run`, `draft`, `analyze`, `status`, `list` — thin wrappers over engine orchestration, never reimplementing engine logic.
 - Skills: `mission-control-run`, `mission-control-draft`, `mission-control-analyze` — natural-language entry points that call the routes.
+- Reinforcement gate (planned): a `tools/pre-execute` listener denying plan-status `completed` edits while run-state shows no closed CLOSURE_AUDIT visit — hardens the flow contract at the host boundary; consumes `@deepseek-ai/dsh-goal`/`dsh-tools` typings when it lands.
 - One mission run at a time per project root — a NEW plugin-level guard owned by the `mdcontrol.*` routes. This is deliberately stricter than the engine (the CLI startup reaper explicitly spares concurrent active runs and supports N parallel runs, including same-root); the plugin starts conservative and may relax later. Concurrent runs across different roots remain independent engine instances.
 
 Draft jobs: `startDraftJob` detached-node concurrency is retained in plugin form initially (engine-level background work, not an AI step); moving it in-process is deferred.
@@ -108,7 +112,7 @@ Monitor: unchanged. It reads run-state files from disk; whether the engine runs 
 
 ## Dependency and Version Risk
 
-`@deepseek-ai/*` packages used by the plugin layer (`dsh-agent`, `dsh-subagent`, cordis core) are developer-preview and versioned pre-release (reference pinning practice: better-sidebar pins `@deepseek-ai/dsh-subagent@0.0.1-rc.1`). Mitigations:
+`@deepseek-ai/*` packages used by the plugin layer (`dsh-agent`, `dsh-subagent`, cordis core; `dsh-goal`/`dsh-tools` join only when the pre-execute reinforcement gate lands) are developer-preview and versioned pre-release (reference pinning practice: better-sidebar pins `@deepseek-ai/dsh-subagent@0.0.1-rc.1`). Mitigations:
 
 - The plugin touches exactly five host calls (`create`, `resume`, `followup`, `status`, `dispose`) plus descriptor registration; breakage repair is localized to `native-executor.ts`.
 - Host package versions are pinned per release; bumping is an explicit changelog event.

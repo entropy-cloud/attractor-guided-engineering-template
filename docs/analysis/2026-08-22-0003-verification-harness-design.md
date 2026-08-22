@@ -14,7 +14,7 @@ Every claim in `docs/architecture/dsh-plugin-packaging.md` must be checkable wit
 | Layer | Target | Mechanism | Gate for |
 | --- | --- | --- | --- |
 | **L1 Unit** | Engine core refactor (StepExecutor seam, orchestration entry, EXIT_MAP hoist, driver validation, embed gating) | existing `node --test` suite (533+ cases) + `prompt-check.mjs`; new unit tests inject a fake StepExecutor via the same delegates seam (`delegates.runAgent/runParseAgent/runTool`) | P1 |
-| **L2 Contract** | ProcessExecutor vs NativeExecutor behavioral equivalence | shared behavior-matrix spec run twice: once with the existing subprocess mocks (`__setSpawnerForTest`), once with a fake in-process agents service implementing `{ create, resume, get, dispose }` returning scripted `Agent` doubles (`followup` → canned final text, `whenIdle()` → resolve) | P1/P2 boundary |
+| **L2 Contract** | ProcessExecutor vs NativeExecutor behavioral equivalence | shared behavior-matrix spec run twice: once with the existing engine-path injection seam (`__setRunnerFactoryForTest` in `main.js`; note `executor.js` spawns directly with no injection point — real-spawn legs stay covered by L3/L4 rather than unit mocks), once with a fake in-process agents service implementing `{ create, resume, get, dispose }` returning scripted `Agent` doubles (`followup` → canned final text, `whenIdle()` → resolve) | P1/P2 boundary |
 | **L3 Host Integration** | Real dispatch inside a live DSH runtime | SDK-driven harness (§4): boot a runtime that serves `dsh-sdk-jsonrpc-server`, drive it over stdio NDJSON JSON-RPC, assert on streamed notifications | P2 |
 | **L4 Live Smoke** | End-user path | `demo` mission end-to-end: once via standalone CLI (`--driver opencode`), once via `mission-control-run` in a host session; diff run-state shapes | P2 exit / P3 |
 
@@ -38,7 +38,7 @@ From the verified protocol (`dsh-sdk-protocol`): newline-delimited JSON-RPC 2.0;
 const proc = spawn(runtimeCmd, profileArgs)            // runtime serving the SDK server (§6)
 const transport = new JsonRpcLineTransport(proc.stdin, proc.stdout)
 await transport.request('initialize', params)
-await transport.notify('session/prompt', { /* mission step prompt */ })
+await transport.request('session/prompt', { /* mission step prompt */ }) // returns durable enqueue receipt (SessionPromptResult.messageId)
 for await (const note of transport.notifications()) {
   if (note.method === 'subagent.finished')             // lastAssistantMessage
     assertMatchesMarker(note.params)

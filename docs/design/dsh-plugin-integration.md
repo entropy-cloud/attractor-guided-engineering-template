@@ -58,7 +58,7 @@ Rejected alternatives: "auto-loop" (generic, no mission identity), "launchpad" (
 | Missions, flows, prompts, plans | disk files under project root | identical disk files, identical semantics |
 | Monitor dashboard | bundled HTTP+SSE server (port 9300) | unchanged; reachable while a run is active |
 
-The API-level mapping behind the right-hand column is owned by `docs/architecture/dsh-plugin-packaging.md` §Native Dispatch API Chain; this doc intentionally does not restate it.
+The API-level mapping behind the right-hand column is owned by `docs/architecture/dsh-plugin-packaging.md` §Native Dispatch API Chain; this doc intentionally does not restate it. Source-verified official precedent for both backends: the host's own `@deepseek-ai/dsh-headless` bundle uses exactly this create → submit → quiescence → harvest-text shape (R1 §4).
 
 ## User Experience
 
