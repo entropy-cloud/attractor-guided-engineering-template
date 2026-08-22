@@ -116,6 +116,8 @@ Monitor: unchanged. It reads run-state files from disk; whether the engine runs 
 
 ## Phased Delivery
 
+Day-to-day development procedure (host setup, Creator-mode online loop, flow-customization checklist) lives in `docs/process/dsh-plugin-development-guide.md`.
+
 | Phase | Deliverable | Verification gate |
 | --- | --- | --- |
 | P1 | StepExecutor seam over the delegates injection points; ProcessExecutor wrapper; programmatic orchestration entry + `EXIT_MAP` hoist; driver validation; embed-mode gating of startup diagnostics; module-boundaries.md update | full engine test suite green (incl. exit-map pinning); CLI behavior unchanged (`run demo` smoke test) |
