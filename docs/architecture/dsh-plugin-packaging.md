@@ -110,6 +110,37 @@ Draft jobs: `startDraftJob` detached-node concurrency is retained in plugin form
 
 Monitor: unchanged. It reads run-state files from disk; whether the engine runs as CLI or in-host is invisible to it. A native client panel reading the same files is future scope.
 
+### Execution Model (where the long-running loop lives)
+
+In native mode the FlowEngine control loop runs **inside the DSH host process** as a cordis service. The coupling is inherent: native dispatch requires `ctx.agents`, which is reachable only in-process; an out-of-process engine would have to drive agents via SDK/headless — i.e., degenerate to ProcessExecutor-style spawning.
+
+What executes where:
+
+| Component | Location | Form |
+| --- | --- | --- |
+| FlowEngine state-machine loop | DSH host process | pure async JS coroutines — mostly `await agent.whenIdle()`; negligible CPU, does not block the event loop |
+| Agent steps | child agents (cordis scopes, same process) | not OS processes; creation cost ≈ a function call |
+| Script/tool steps (`CLOSURE_SCRIPT_CHECK`, `BUILD_VERIFY`) | short-lived OS child processes | spawned from the host (`pnpm test` etc.), exit immediately |
+
+Accepted risks and mitigations:
+
+| Risk | Mitigation |
+| --- | --- |
+| Host crash/restart mid-mission | run-state atomic per-step writes enable disk-based step resume; nothing depends on memory alone |
+| Engine defect destabilizing the host | embed-mode gating removes engine startup diagnostics (incl. the orphan reaper that kills `opencode run` processes) from the host process (M1-WI4) |
+| Resource pile-up | single-run-per-root guard at route level |
+| Coupling proves unstable in practice | degradation ladder: detached engine + headless CLI driver behind the SAME `mdcontrol.*` surface — skills/routes unchanged, backend swaps |
+
+Progress monitoring channels (all reading the same run-state files):
+
+1. Monitor dashboard (existing Vue3+SSE, port 9300) — zero-change compatibility, step timeline/markers/timing.
+2. DSH native subagents topology UI — each dispatched step-agent registers a healthy descriptor.
+3. In-chat query — `mdcontrol.status` reads run-state without dispatching any AI.
+4. Trajectory view — child-agent turns are ordinary session logs, filterable by source.
+5. Completion summary returned through the skill.
+
+Realtime leader is channel 1 (SSE pushes step-level events); an M4 RPC-direct panel would swap its data source, not its schema.
+
 ## Dependency and Version Risk
 
 `@deepseek-ai/*` packages used by the plugin layer (`dsh-agent`, `dsh-subagent`, cordis core; `dsh-goal`/`dsh-tools` join only when the pre-execute reinforcement gate lands) are developer-preview and versioned pre-release (reference pinning practice: better-sidebar pins `@deepseek-ai/dsh-subagent@0.0.1-rc.1`). Mitigations:
