@@ -1,6 +1,6 @@
 # DSH Plugin Packaging — Technical Architecture
 
-> **Status: PLANNED — implementation design, nothing landed yet.** Phase gates below define when each claim becomes supported behavior.
+> **Status: P1 DELIVERED (2026-08-23) — StepExecutor seam, ProcessExecutor, programmatic orchestration entry + EXIT_MAP hoist, driver validation, and embed-mode gating have landed (M1-WI1..WI5); P2–P4 remain planned.** Phase gates below define when each remaining claim becomes supported behavior.
 
 ## Purpose
 
@@ -10,9 +10,9 @@ This document owns: the packaging layout, the execution-backend seam refactor in
 
 ## Scope and Boundary Impact
 
-One existing architecture rule is amended by this plan:
+One existing architecture rule was amended by this plan (amendment landed with P1, 2026-08-23):
 
-- `docs/architecture/module-boundaries.md` currently states the engine core is consumed "in-process: not exported (engine runs as a process, not a library)". After Phase 1 (below), the engine becomes importable as a library behind an injected step-executor interface; CLI operation remains the default. That boundary doc must be updated in the same change that lands Phase 1.
+- `docs/architecture/module-boundaries.md` previously stated the engine core is consumed "in-process: not exported (engine runs as a process, not a library)". Since P1, the engine is importable as a library behind the injected step-executor interface; CLI operation remains the default. That boundary doc was updated in the same change that landed P1.
 
 All other boundary rules are preserved:
 
@@ -40,13 +40,13 @@ Build-time bundling copies the engine's pure modules into the plugin bundle. The
 - Flow engine path: `engine.js` → `expression.mjs`, `platform.mjs`, `sys-snapshot.mjs`, `reap-orphans.mjs` (→ `run-reconcile.mjs`), `active-run-registry.mjs`, `roadmap-check.mjs`
 - Config path: `config.js` (imports only node builtins + `mission-check.mjs`) — needed by the programmatic entry (`engine-bridge`)
 - Process backend path: `runner.js` (→ `executor.js`, `platform.mjs`) — needed by ProcessExecutor
-- Orchestration entry path: P1 extracts a programmatic run/draft/analyze module from `main.js` so CLI and plugin share one entry. It owns flow loading (`flow-loader.js` → `plan-check.mjs`; imported by `main.js` today, not by `engine.js`), the CLI-parity bootstrap (`env-loader.js` → `secret-resolver.mjs` before `resolveConfig`), the draft pipeline (`cmdDraftMission`, `extractBriefGate`, `parseDraftArtifact`), Reflexion analysis (`postmortem.mjs` → config/expression, backing `mdcontrol.analyze`), and the hoisted `EXIT_MAP` (pinned row-by-row by `test/exit-map.test.js`, which keeps the hoist honest).
+- Orchestration entry path: P1 extracts a programmatic run/draft/analyze module from `main.js` so CLI and plugin share one entry. It owns flow loading (`flow-loader.js` → `plan-check.mjs`; imported by `main.js` today, not by `engine.js`), the CLI-parity bootstrap (`env-loader.js` `loadDotenv` before `resolveConfig` — the designed "env-loader → secret-resolver" chain is dormant today: `secret-resolver.js` has zero imports under `src/`, so the live chain is dotenv only), the draft pipeline (`cmdDraftMission`, `extractBriefGate`, `parseDraftArtifact`), Reflexion analysis (`postmortem.mjs` → config/expression, backing `mdcontrol.analyze`), and the hoisted `EXIT_MAP` (pinned row-by-row by `test/exit-map.test.js`, which keeps the hoist honest).
 
 NOT bundled: monitor server (`monitor.js`), draft-job detached-process management (`draft-job.mjs` + its `spawner.mjs` seam — both remain CLI/monitor-only), CLI commander wiring. Path resolution for bundled `flows/`/`prompts/`/`agents/` uses `import.meta.url` relative to the bundle location, matching how config.js already resolves the pi persona `agentFile`.
 
 ## Execution Backend Seam (Engine Refactor)
 
-The engine already routes AI execution through injected delegates (`engine.js`: `delegates.runAgent` for agent steps, `delegates.runParseAgent` for no-marker parse fallback and marker-correction retries, `delegates.runTool` for tool steps; wired from `main.js`). The refactor formalizes this existing seam into one named interface so backends become pluggable:
+The engine historically routed AI execution through injected delegates (`engine.js`: `delegates.runAgent` for agent steps, `delegates.runParseAgent` for no-marker parse fallback and marker-correction retries, `delegates.runTool` for tool steps; wired from `main.js`). The refactor formalized this existing seam into one named interface so backends become pluggable. **Landed form (M1-WI1): the three-capability method set** — a single `delegates.executor` object exposing `executeAgent` / `executeParseAgent` / `executeTool` (1:1 with the legacy delegate trio; `src/step-executor.js` `ProcessExecutor` is the process backend). The single-method sketch below is the conceptual shape, not the landed signature:
 
 ```
 StepExecutor.execute(stepCtx) → { code: 0|1, text: string, errorTail: string, sessionId?: string|null }
@@ -56,10 +56,10 @@ StepExecutor.execute(stepCtx) → { code: 0|1, text: string, errorTail: string, 
 - **NativeExecutor** (implemented in the plugin layer, not the engine core) fulfills the same interface over the DSH agents service.
 - Engine selects the backend from resolved driver config: `"native"` maps to NativeExecutor; all other values map to ProcessExecutor.
 
-Two P1 hardening items the refactor must include:
+Two P1 hardening items the refactor included (both landed 2026-08-23, M1-WI3/WI4):
 
-1. **Driver validation.** Today no whitelist exists (`--driver <exe>` is free-form; an unknown value reaches spawn time and fails mid-mission as a SPAWN ENOENT). P1 adds resolve-time validation with supported values `opencode | pi | cline | native`; `native` is legal only when running inside the plugin host and is rejected with a clear error by the standalone CLI.
-2. **Embedded-mode gating of startup diagnostics.** `FlowEngine.run()` unconditionally performs process-level startup work for non-subflow engines: active-run registration under `~/.mission-driver/active/`, system snapshots via execSync, and orphan reaping that kills OS processes whose command line matches `opencode run` + `[MISSION_DRIVER]` tags. A plugin-hosted engine must NOT run this inside the DSH host process. P1 gates these diagnostics behind an embed flag (off when NativeExecutor is selected); active-run registration moves to the plugin's own guard (see §Service Surface).
+1. **Driver validation.** Resolve-time validation with supported values `opencode | pi | cline | native` (`SUPPORTED_DRIVERS` in `config.js`, enforced at every `resolveConfig` return point — an unknown value previously reached spawn time and failed mid-mission as a SPAWN ENOENT); `native` is legal only inside the plugin host (internal `allowNativeDriver: true` option) and is rejected with a clear error by the standalone CLI.
+2. **Embedded-mode gating of startup diagnostics.** `FlowEngine.run()` used to perform process-level startup work unconditionally for non-subflow engines: active-run registration under `~/.mission-driver/active/`, system snapshots via execSync, and orphan reaping that kills OS processes whose command line matches `opencode run` + `[MISSION_DRIVER]` tags. These are now gated behind an embed flag (`cfg.embed === true`, off when NativeExecutor is selected); active-run registration moves to the plugin's own guard (see §Service Surface).
 
 Contract preservation rules:
 
@@ -76,7 +76,7 @@ The implementation follows the verified in-process pattern used by DSH-better-si
 | Resolve service | `ctx.get('agents')` | degrade to wire error if absent |
 | Create child agent | `agents.create(options)` → `{ agent, dispose() }` | `options.sessionId` = generated child id; `options.meta` carries `{ cwd: projectRoot, origin: 'subagent', delegationDepth, agentPreset }`; `options.signal` = timeout |
 | Dispatch prompt | `agent.followup(createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } }))` | text = assembled prompt template output, prefixed by a `[MISSION_DRIVER:<runId>]` boundary line; in native mode the prefix serves log/run-dir identifiability only (the orphan reaper identifies OS processes by command line, which native child agents do not have) |
-| Await completion | `await agent.whenIdle()` — whole-agent quiescence promise (`runtime-types.ts:87`) | replaces log-mtime heartbeat; `agent.status` (`idle`/`running`) kept for diagnostics only |
+| Await completion | `await agent.whenIdle()` — whole-agent quiescence promise (host SDK `runtime-types.ts`) | replaces log-mtime heartbeat; `agent.status` (`idle`/`running`) kept for diagnostics only |
 | Read result | final assistant message from `agent.session.events` | fed to marker extraction as `text` |
 | Continue session | `agents.resume({ resumeSessionId })` when the handle went cold between steps | native continuity; supersedes regex session scraping |
 | Release | `handle.dispose()` | deterministic cleanup after each run or abort. ⚠️ `dispose()` stops the loop AND removes the session from the store — the handle must live for the whole mission run; between steps reuse the live handle, and only `resume()` can recover a persisted session after disposal |
@@ -156,7 +156,7 @@ Day-to-day development procedure (host setup, Creator-mode online loop, flow-cus
 
 | Phase | Deliverable | Verification gate |
 | --- | --- | --- |
-| P1 | StepExecutor seam over the delegates injection points; ProcessExecutor wrapper; programmatic orchestration entry + `EXIT_MAP` hoist; driver validation; embed-mode gating of startup diagnostics; module-boundaries.md update | full engine test suite green (incl. exit-map pinning); CLI behavior unchanged (`run demo` smoke test) |
+| P1 ✅ delivered 2026-08-23 | StepExecutor seam over the delegates injection points; ProcessExecutor wrapper; programmatic orchestration entry + `EXIT_MAP` hoist; driver validation; embed-mode gating of startup diagnostics; module-boundaries.md update | full engine test suite green (incl. exit-map pinning); CLI behavior unchanged (`run demo` smoke test) |
 | P2 | Plugin shell + NativeExecutor; `mdcontrol.run` executing `demo` mission end-to-end natively | demo mission completes with identical run-state shape; markers parsed; correction-retry exercised once artificially |
 | P3 | `onboarding` parity + descriptor registration + skills wired | onboarding fills copied docs identically to CLI form; subagents list healthy during run |
 | P4 | AGE preset integration (AGE mode) + Mission Control status panel decision | preset + plugin compose without realm collision |

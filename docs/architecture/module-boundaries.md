@@ -25,6 +25,6 @@ Define the main code ownership boundaries for `mission-driver`.
 
 ## Test Seams (Public)
 
-- Engine: `node --test test/*.test.js` (533+ cases as of 2026-07-22, per `docs/audits/mission-driver-draft-robustness/2026-07-22-0755-multi-audit-*.md`).
+- Engine: `node --test test/*.test.js` (653 cases as of 2026-08-23). dsh-plugin M1 added `test/step-executor.test.js` (WI1 StepExecutor seam pinning), `test/driver-whitelist.test.js` (WI3 resolve-time driver validation matrix), and `test/embed-gating.test.js` (WI4 startup-diagnostics gating; uses the `FlowEngine` `delegates.diagnosticHooks` test seam registered in `docs/architecture/mission-driver-baseline.md` §Public Exports vs Test Seams).
 - Frontend: no automated test suite; verified via `vue-tsc --noEmit && vite build` (TypeScript + build catches structure errors).
 - Install flow: Phase 3 closure-gate test (`docs/plans/2026-07-27-0000-template-realproject-split-plan.md`) — behavioral assertions on `./install-age.sh /tmp/test "Test"` output.
