@@ -1,0 +1,33 @@
+{
+  "name": "dsh-mission-control",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AGE Mission Control — mission-driver packaged as a DSH bundle plugin (M2-WI6 scaffold)",
+  "engines": {
+    "node": "^22.19 || >=24"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build-bundle.mjs",
+    "check:manifest": "node scripts/check-manifest.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/check-manifest.mjs && node --test test/*.test.mjs && tsc --noEmit && node scripts/build-bundle.mjs --check && node scripts/smoke-import.mjs"
+  },
+  "dependencies": {
+    "@deepseek-ai/cordis": "4.0.1",
+    "@deepseek-ai/dsh-agent": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-goal": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-tools": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-subagent": "0.1.1-rc.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.6.0",
+    "yaml": "^2.5.0"
+  }
+}
