@@ -151,6 +151,7 @@ Exit Criteria:
 - Why Not Blocking Closure: roadmap WI10 标签域 = `mdcontrol.run` 异步契约 + native e2e（what/order 的 owner 是 roadmap）；draft（两段式生成 + detached-node 保留）与 analyze（postmortem 编排）各有独立作业语义与验证面，并入将使本 plan 出现第二结果面，违反 plan guide 规则 4（one plan, one result surface）。`service.ts` 头注的 "routes — M2-WI10" 归属经本裁定收窄为 "run/status/list — M2-WI10"（先例：1447-1 将 M1 plan 3 的 "M2-WI6/WI10" 双归属收窄为 WI10 单一归属）。
 - Successor Required: `yes`（M3 对应 plan 必须收编 draft/analyze 路由；WI12 skills 接线依赖其存在——Phase 3 roadmap 注记将其钉为 WI12 完成前置）
 - Reopen trigger: M3 对应 plan 启动时；或 draft review 认定收窄不成立时（本裁定在 draft review 中接受独立挑战）。
+- **已收编闭环（2026-08-23，M3-WI12，plan `2026-08-23-1852-2` 执行完毕）**：reopen trigger 命中——draft 路由（异步契约 + 引擎 draft-state 词汇 + 预授权窄口 `cmdDraftMission` executor seam）与 analyze 路由（同步单轮 postmortem + 薄适配 runner，零引擎 diff）均已落地 `plugin/dsh/src/mdcontrol-routes.ts`；`service.ts` 头注台账同步收窄（draft/analyze → LANDED (M3-WI12)）；单测 28 用例 + e2e 三腿（`docs/testing/2026/08-23.md` WI12 note）；roadmap WI12 → `done`。
 
 ## Closure
 
