@@ -18,6 +18,10 @@ Every claim in `docs/architecture/dsh-plugin-packaging.md` must be checkable wit
 | **L3 Host Integration** | Real dispatch inside a live DSH runtime | SDK-driven harness (§4): boot a runtime that serves `dsh-sdk-jsonrpc-server`, drive it over stdio NDJSON JSON-RPC, assert on streamed notifications | P2 |
 | **L4 Live Smoke** | End-user path | `demo` mission end-to-end: once via standalone CLI (`--driver opencode`), once via `mission-control-run` in a host session; diff run-state shapes | P2 exit / P3 |
 
+> **L2 implementation note (landed 2026-08-23, M2-WI8)** — the L2 matrix is implemented at `plugin/dsh/test/backend-parity-matrix.test.mjs` (+ shared harness `plugin/dsh/test/helpers/matrix-harness.mjs`), runs inside the plugin test chain, and is wired merge-blocking through the root aggregate gate `verify-age.sh` + `.github/workflows/age-ci.yml` (L1+L2 must both be green). Divergence ledger (3 entries, all owner-doc-backed) is documented in the spec header.
+>
+> **Seam erratum (2026-08-23, live-verified)** — the `__setRunnerFactoryForTest` reference in the L2 row above is stale: that seam (orchestrator.js:302) is consumed only by the draft pipeline (`cmdDraftMission`), never by the mission-run path. The real mission-run injection point is `orchestrateRun({ config, executor })` (`main.js` builds the runner and injects `ProcessExecutor(runner)`), so the L2 ProcessExecutor leg correctly injects `new ProcessExecutor(duck-typed fake runner)` through the StepExecutor seam; the NativeExecutor leg uses a fake in-process agents service. Real driver spawns stay with L3/L4. Recorded by plan `2026-08-23-1447-3` (draft review B1).
+
 ## 3. Backend-Parity Matrix (L2 assertions)
 
 Both executors must produce identical observable outcomes for:

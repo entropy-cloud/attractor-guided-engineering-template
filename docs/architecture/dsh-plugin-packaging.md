@@ -1,6 +1,6 @@
 # DSH Plugin Packaging — Technical Architecture
 
-> **Status: P1 DELIVERED (2026-08-23) — StepExecutor seam, ProcessExecutor, programmatic orchestration entry + EXIT_MAP hoist, driver validation, and embed-mode gating have landed (M1-WI1..WI5). P2 PARTIALLY DELIVERED (2026-08-23, M2-WI6 + M2-WI7): the plugin shell (`plugin/dsh/` bundle manifest + isolate-realm patch + build bundling with an import-closure gate) and the NativeExecutor dispatch backend + engine-bridge backend-selection factory (fake-agents unit-tested; no real host yet) have landed; the L2 matrix (WI8), L3 harness (WI9), and `mdcontrol.*` routes (WI10) remain planned. P3–P4 remain planned.** Phase gates below define when each remaining claim becomes supported behavior.
+> **Status: P1 DELIVERED (2026-08-23) — StepExecutor seam, ProcessExecutor, programmatic orchestration entry + EXIT_MAP hoist, driver validation, and embed-mode gating have landed (M1-WI1..WI5). P2 PARTIALLY DELIVERED (2026-08-23, M2-WI6 + M2-WI7 + M2-WI8): the plugin shell (`plugin/dsh/` bundle manifest + isolate-realm patch + build bundling with an import-closure gate), the NativeExecutor dispatch backend + engine-bridge backend-selection factory (fake-agents unit-tested; no real host yet), and the L2 dual-backend parity matrix (merge-blocking via `verify-age.sh` + `age-ci.yml`) have landed; the L3 harness (WI9) and `mdcontrol.*` routes (WI10) remain planned. P3–P4 remain planned.** Phase gates below define when each remaining claim becomes supported behavior.
 
 ## Purpose
 
@@ -22,7 +22,7 @@ All other boundary rules are preserved:
 
 ## Packaging Layout
 
-New top-level directory in this repository — **landed 2026-08-23 (M2-WI6, extended M2-WI7)**, tree below is the as-built state (files marked with their owning work item):
+New top-level directory in this repository — **landed 2026-08-23 (M2-WI6, extended M2-WI7 + M2-WI8)**, tree below is the as-built state (files marked with their owning work item):
 
 ```
 plugin/dsh/
@@ -34,10 +34,13 @@ plugin/dsh/
 │   ├── build-bundle.mjs       # copy-style engine bundling + import-closure gate (+ `--check` freshness)
 │   └── smoke-import.mjs       # no-host bundle import smoke (all 5 entry modules, zero npm resolution)
 ├── test/
-│   ├── bundle-scaffold.test.mjs   # plugin local test entry (WI6) — reused by WI7/WI8
-│   ├── native-executor.test.mjs   # NativeExecutor unit branches (WI7; fake agents service)
-│   ├── engine-bridge.test.mjs     # selection factory + native config + orchestrateRun smoke (WI7)
-│   └── helpers/fake-agents.mjs    # reusable fake in-process agents service (WI7; WI8/WI9 build on it)
+│   ├── bundle-scaffold.test.mjs        # plugin local test entry (WI6) — reused by WI7/WI8
+│   ├── native-executor.test.mjs        # NativeExecutor unit branches (WI7; fake agents service)
+│   ├── engine-bridge.test.mjs          # selection factory + native config + orchestrateRun smoke (WI7)
+│   ├── backend-parity-matrix.test.mjs  # L2 dual-backend parity matrix, six assertion groups (WI8)
+│   └── helpers/
+│       ├── fake-agents.mjs             # reusable fake in-process agents service (WI7; matrix-extended WI8)
+│       └── matrix-harness.mjs          # shared L2 matrix harness: both legs + comparators (WI8)
 ├── src/
 │   ├── service.ts        # SKELETON: mount-log only; mdcontrol.* routes + guard = WI10
 │   ├── native-executor.ts# LANDED (WI7): DshNativeExecutor — full StepExecutor over ctx.agents
@@ -88,11 +91,11 @@ Two P1 hardening items the refactor included (both landed 2026-08-23, M1-WI3/WI4
 1. **Driver validation.** Resolve-time validation with supported values `opencode | pi | cline | native` (`SUPPORTED_DRIVERS` in `config.js`, enforced at every `resolveConfig` return point — an unknown value previously reached spawn time and failed mid-mission as a SPAWN ENOENT); `native` is legal only inside the plugin host (internal `allowNativeDriver: true` option) and is rejected with a clear error by the standalone CLI.
 2. **Embedded-mode gating of startup diagnostics.** `FlowEngine.run()` used to perform process-level startup work unconditionally for non-subflow engines: active-run registration under `~/.mission-driver/active/`, system snapshots via execSync, and orphan reaping that kills OS processes whose command line matches `opencode run` + `[MISSION_DRIVER]` tags. These are now gated behind an embed flag (`cfg.embed === true`, off when NativeExecutor is selected); active-run registration moves to the plugin's own guard (see §Service Surface).
 
-Contract preservation rules:
+Contract preservation rules (each machine-pinned by the L2 backend-parity matrix since M2-WI8 — `plugin/dsh/test/backend-parity-matrix.test.mjs`, merge-blocking via `verify-age.sh` + `.github/workflows/age-ci.yml`; divergence ledger in the spec header, every entry owner-doc-backed):
 
-1. **Marker contracts unchanged.** `<AI_STEP_RESULT>pass|fail</AI_STEP_RESULT>`, `<BRIEF_GATE>…</BRIEF_GATE>`, and all step-transition markers keep their definitions (`docs/architecture/mission-driver-baseline.md` §Marker Contracts). NativeExecutor returns the child agent's final assistant message text as `text`; the engine's existing extraction, correction-retry (max 2 re-prompts), and transient-fault backoff operate on it unmodified.
-2. **Run-state shape unchanged.** `_writeWorkflow` atomic writes, `steps[]` fields including `sessionId`, remain the durable surface shared with the monitor.
-3. **Exit semantics synthesized.** Where ProcessExecutor yields real exit codes and stderr tails, NativeExecutor synthesizes compatible values (`code: 0` on completed turn with parseable outcome; `code: 1` + `errorTail` on abort/error) so the hoisted `EXIT_MAP` terminal-status mapping and retry budgets behave identically.
+1. **Marker contracts unchanged.** `<AI_STEP_RESULT>pass|fail</AI_STEP_RESULT>`, `<BRIEF_GATE>…</BRIEF_GATE>`, and all step-transition markers keep their definitions (`docs/architecture/mission-driver-baseline.md` §Marker Contracts). NativeExecutor returns the child agent's final assistant message text as `text`; the engine's existing extraction, correction-retry (max 2 re-prompts), and transient-fault backoff operate on it unmodified. *(Matrix: groups 1–2 — classification, correction budget, transient classification identical across both backends.)*
+2. **Run-state shape unchanged.** `_writeWorkflow` atomic writes, `steps[]` fields including `sessionId`, remain the durable surface shared with the monitor. *(Matrix: groups 3+6 — normalized run-state shape (field sets/types/status sequences; sessionId presence/type per R3 §3, timing presence/type only) and artifact file-set existence identical; the monitor's consumption surface IS the run-state file, so shape identity is monitor identity.)*
+3. **Exit semantics synthesized.** Where ProcessExecutor yields real exit codes and stderr tails, NativeExecutor synthesizes compatible values (`code: 0` on completed turn with parseable outcome; `code: 1` + `errorTail` on abort/error) so the hoisted `EXIT_MAP` terminal-status mapping and retry budgets behave identically. *(Matrix: group 4 — synthesized exit → engine terminal status → `EXIT_MAP` lookup identical on both legs, 8/10 keys end-to-end; group 5 — `maxTotalSteps`/`maxCycleVisits`/`maxRetries` budgets fire identically.)*
 
 ## Native Dispatch API Chain
 
@@ -118,7 +121,7 @@ The dispatch chain above is implemented in `plugin/dsh/src/native-executor.ts` (
 
 - **Model selection is ignored**: both `mission.model` and `parseModel` (the cheap-parse distinction) are ignored in native mode — `executeParseAgent` and `executeAgent` collapse to the same dispatch. See §Behavioral differences below.
 - **Log artifacts are written but content shape is not byte-equivalent**: `logFile`/`promptFile` land in the engine run-dir with the same naming convention (`native-<step>-<ts>-<rand>.log` + `.prompt`), preserving monitor log viewing and post-hoc audit; the log body is the harvested assistant text plus a header/round summary, NOT a subprocess stdout transcript (file existence/readability is the compatibility contract; byte-level content shape is not).
-- **`executeTool` is the plugin layer's own minimal spawn**: `child_process` spawn + timeout + exit code + output tail, ZERO diagnostics — no `sysSnapshot`, no `~/.mission-driver/active/` touch. Reusing the engine `executor.js` tool path was rejected because its heartbeat pair is intentionally not embed-gated ("a native-mode embed host never selects this backend") — sharing it would run execSync snapshots and active-run registry touches inside the DSH host, the exact host-invasive behavior M1-WI4's embed gating prevents. Known residual drift (the process-path `runTool` currently drops the engine's `timeout` opt; the native path consumes it as milliseconds) is pinned by the WI8 L2 matrix's tool-step assertions.
+- **`executeTool` is the plugin layer's own minimal spawn**: `child_process` spawn + timeout + exit code + output tail, ZERO diagnostics — no `sysSnapshot`, no `~/.mission-driver/active/` touch. Reusing the engine `executor.js` tool path was rejected because its heartbeat pair is intentionally not embed-gated ("a native-mode embed host never selects this backend") — sharing it would run execSync snapshots and active-run registry touches inside the DSH host, the exact host-invasive behavior M1-WI4's embed gating prevents. Known residual drift (the process-path `runTool` currently drops the engine's `timeout` opt; the native path consumes it as milliseconds) is pinned by the WI8 L2 matrix's tool-step assertions (landed: scenario `tool-timeout-drift` in `plugin/dsh/test/backend-parity-matrix.test.mjs`, divergence ledger D1).
 - **No silent fallback**: missing `ctx.agents` (or a failing native create) surfaces as an explicit wire error to the caller — never an implicit ProcessExecutor downgrade.
 - **Callback contract mirrors runner.js exactly**: `onStepUpdate` is resolved at call time (`opts.onStepUpdate ?? config.onStepUpdate`, both with `typeof === "function"` guards) because `orchestrateRun` assigns `config.onStepUpdate` only after executor construction; two-point callbacks fire files-first (`{stepName, logFile, promptFile}`) then session (`{stepName, sessionId}`), so subflow wrapping and the monitor live channel behave identically in native mode.
 - **`stderrTail` is always null natively** (no subprocess stderr surface; `errorTail` carries the error text); exit codes are synthesized per contract-preservation rule 3.
@@ -195,7 +198,7 @@ Day-to-day development procedure (host setup, Creator-mode online loop, flow-cus
 | Phase | Deliverable | Verification gate |
 | --- | --- | --- |
 | P1 ✅ delivered 2026-08-23 | StepExecutor seam over the delegates injection points; ProcessExecutor wrapper; programmatic orchestration entry + `EXIT_MAP` hoist; driver validation; embed-mode gating of startup diagnostics; module-boundaries.md update | full engine test suite green (incl. exit-map pinning); CLI behavior unchanged (`run demo` smoke test) |
-| P2 ⏳ partially delivered 2026-08-23 (M2-WI6 + M2-WI7) | Plugin shell + NativeExecutor; `mdcontrol.run` executing `demo` mission end-to-end natively. **Delivered (WI6)**: `plugin/dsh/` scaffold, bundle manifest, isolate-realm patch, build bundling + import-closure gate, plugin test entry. **Delivered (WI7)**: `DshNativeExecutor` (full dispatch chain, handle lifecycle, watchdog, exit synthesis, plugin-layer minimal tool spawn) + engine-bridge selection factory/native config wiring, unit-tested over a fake in-process agents service incl. an `orchestrateRun` full-chain callback smoke. **Remaining (P2 boundary)**: L2 dual-backend matrix (WI8), L3 host harness (WI9), `mdcontrol.*` async job contract (WI10) | demo mission completes with identical run-state shape; markers parsed; correction-retry exercised once artificially (full P2 gate; WI7 verified in the fake-agents unit domain only — no real host) |
+| P2 ⏳ partially delivered 2026-08-23 (M2-WI6 + M2-WI7 + M2-WI8) | Plugin shell + NativeExecutor; `mdcontrol.run` executing `demo` mission end-to-end natively. **Delivered (WI6)**: `plugin/dsh/` scaffold, bundle manifest, isolate-realm patch, build bundling + import-closure gate, plugin test entry. **Delivered (WI7)**: `DshNativeExecutor` (full dispatch chain, handle lifecycle, watchdog, exit synthesis, plugin-layer minimal tool spawn) + engine-bridge selection factory/native config wiring, unit-tested over a fake in-process agents service incl. an `orchestrateRun` full-chain callback smoke. **Delivered (WI8)**: L2 dual-backend parity matrix (six R3 §3 assertion groups over ProcessExecutor-with-fake-runner vs NativeExecutor-with-fake-agents; 3 divergence-ledger entries all owner-doc-backed) wired merge-blocking via root `verify-age.sh` + `.github/workflows/age-ci.yml`. **Remaining (P2 boundary)**: L3 host harness (WI9), `mdcontrol.*` async job contract (WI10) | demo mission completes with identical run-state shape; markers parsed; correction-retry exercised once artificially (full P2 gate; WI7/WI8 verified in the fake-agents/mock-runner domain only — no real host) |
 | P3 | `onboarding` parity + descriptor registration + skills wired | onboarding fills copied docs identically to CLI form; subagents list healthy during run |
 | P4 | AGE preset integration (AGE mode) + Mission Control status panel decision | preset + plugin compose without realm collision |
 
