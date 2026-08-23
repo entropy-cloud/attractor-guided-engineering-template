@@ -1,6 +1,6 @@
 # 2026-08-23-1300-2 程序化编排入口 + EXIT_MAP 提升（dsh-plugin M1-WI2）
 
-> Plan Status: active
+> Plan Status: completed
 > Mission: dsh-plugin
 > Work Item: M1-WI2
 > Last Reviewed: 2026-08-23（draft review 4 轮，iteration 4 共识 `acceptable as-is`，见 Draft Review Record）
@@ -49,29 +49,29 @@
 
 ### Phase 1 - EXIT_MAP 提升（小步先行，独立可验证）
 
-Status: planned
+Status: completed
 Targets: `tools/mission-driver/src/`（新核心模块或编排模块；`main.js`）、`tools/mission-driver/test/exit-map.test.js`
 Skill: code-refactor-prompt.md
 
 - Item Types: `Decision | Add | Proof`
 - Prereqs: 前置 plan `2026-08-23-1300-1` 已 active/completed（本 plan 不依赖 seam 也可先行，但同仓两改并进时以 WI1 先落地避免 main.js 接线冲突）
 
-- [ ] `Decision` EXIT_MAP 新家：独立小模块 `src/exit-map.js`（备选：并入 Phase 2 编排模块——被否决，编排模块体量大，测试与 monitor 侧未来消费只想拖退出码表这一个纯数据；独立模块零依赖、可被任何层 import）。值逐行不变（`completed: 0 ... ping_pong: 2`，与 `EXECUTION-PRINCIPLE.md §11` 继续逐行对齐）。
+- [x] `Decision` EXIT_MAP 新家：独立小模块 `src/exit-map.js`（备选：并入 Phase 2 编排模块——被否决，编排模块体量大，测试与 monitor 侧未来消费只想拖退出码表这一个纯数据；独立模块零依赖、可被任何层 import）。值逐行不变（`completed: 0 ... ping_pong: 2`，与 `EXECUTION-PRINCIPLE.md §11` 继续逐行对齐）。
   - Skill: none
-- [ ] `Add` `main.js` 顶部改 import 并 re-export `EXIT_MAP`（兼容 re-export，Decision 见 Phase 3 第 1 项裁决测试改引路径）。
+- [x] `Add` `main.js` 顶部改 import 并 re-export `EXIT_MAP`（兼容 re-export，Decision 见 Phase 3 第 1 项裁决测试改引路径）。
   - Skill: none
-- [ ] `Proof` `test/exit-map.test.js` import 改为 `../src/exit-map.js`，全部用例不改断言继续绿（行级钉住持续有效）。
+- [x] `Proof` `test/exit-map.test.js` import 改为 `../src/exit-map.js`，全部用例不改断言继续绿（行级钉住持续有效）。
   - Skill: none
 
 Exit Criteria:
 
-- [ ] `node --test test/exit-map.test.js` 从新家 import 全绿，断言零修改
-- [ ] `grep -n "EXIT_MAP" src/main.js` 仅剩 import/re-export 与 `cmdRunMission` 消费点，无重复定义
-- [ ] No owner-doc update required for Phase 1（EXIT_MAP 兼容 re-export 维持 `baseline.md:101` 既有记录有效；正式文档更新与日志由 Phase 3 聚合覆盖）
+- [x] `node --test test/exit-map.test.js` 从新家 import 全绿，断言零修改
+- [x] `grep -n "EXIT_MAP" src/main.js` 仅剩 import/re-export 与 `cmdRunMission` 消费点，无重复定义
+- [x] No owner-doc update required for Phase 1（EXIT_MAP 兼容 re-export 维持 `baseline.md:101` 既有记录有效；正式文档更新与日志由 Phase 3 聚合覆盖）
 
 ### Phase 2 - 编排模块提取（run / draft / analyze）
 
-Status: planned
+Status: completed
 Targets: `tools/mission-driver/src/orchestrator.js`（新增，命名见 Decision）、`tools/mission-driver/src/main.js`
 Skill: code-refactor-prompt.md
 
@@ -114,59 +114,59 @@ import 允许集 = packaging doc §Packaging Layout 打包集（node builtins + 
   自建 runner 而需要它）。排除：vendor/commander、monitor.js、draft-job.mjs/spawner.mjs
 ```
 
-- [ ] `Decision` 模块命名：`src/orchestrator.js`（备选 `engine-entry.js` / `run-core.js` 否决理由：packaging doc 用语是 "programmatic orchestration entry"，orchestrator 与 owner doc 词汇一致且不与 M2 插件层 `engine-bridge.ts` 撞名）。
+- [x] `Decision` 模块命名：`src/orchestrator.js`（备选 `engine-entry.js` / `run-core.js` 否决理由：packaging doc 用语是 "programmatic orchestration entry"，orchestrator 与 owner doc 词汇一致且不与 M2 插件层 `engine-bridge.ts` 撞名）。
   - Skill: none
-- [ ] `Decision` process 级职责归属：信号处理 / reconcile / monitor / unregister 留 CLI 壳。理由：插件宿主形态下这些 OS 进程动作多数不适用（unregister/registry 归宿主 guard，见 packaging doc §Service Surface）；编排模块保持纯编排，两形态才可共用。残险：CLI 壳与编排模块的职责清单需在 §Public Exports 文档化，防止后续回涨。
+- [x] `Decision` process 级职责归属：信号处理 / reconcile / monitor / unregister 留 CLI 壳。理由：插件宿主形态下这些 OS 进程动作多数不适用（unregister/registry 归宿主 guard，见 packaging doc §Service Surface）；编排模块保持纯编排，两形态才可共用。残险：CLI 壳与编排模块的职责清单需在 §Public Exports 文档化，防止后续回涨。
   - Skill: none
-- [ ] `Decision` runner.js 进 import 允许集：迁移段携带 `resetMockState()`（main.js:759 ← runner.js）与 `__runnerFactory` 缺省 `createRunner`，analyze 主干自建 runner——编排模块不可避免 import runner.js。这与 packaging doc §Packaging Layout 一致（"Process backend path: runner.js … needed by ProcessExecutor" 本就在打包集内），draft review iteration 1 B3 指出初稿"无 runner/executor"的允诺与迁移范围自相矛盾，予以纠正。备选：把三者全部改由调用方注入（CLI 壳传 resetMockState/factory/runner）——被否决，纯为缩短 import 列表而拆散内聚的编排职责，且 M2 engine-bridge 同样要传三件套。附注：packaging doc :43 将 `secret-resolver` 误写为 `.mjs`（实际 `src/secret-resolver.js`），且 "env-loader → secret-resolver" 链今日 dormant（零 import）——两处 owner doc 偏差均由 plan 3（其 Phase 3 即 WI5 文档收口）修正，本 plan 允许集按现实定界（见接口契约块 bootstrap 注）。
+- [x] `Decision` runner.js 进 import 允许集：迁移段携带 `resetMockState()`（main.js:759 ← runner.js）与 `__runnerFactory` 缺省 `createRunner`，analyze 主干自建 runner——编排模块不可避免 import runner.js。这与 packaging doc §Packaging Layout 一致（"Process backend path: runner.js … needed by ProcessExecutor" 本就在打包集内），draft review iteration 1 B3 指出初稿"无 runner/executor"的允诺与迁移范围自相矛盾，予以纠正。备选：把三者全部改由调用方注入（CLI 壳传 resetMockState/factory/runner）——被否决，纯为缩短 import 列表而拆散内聚的编排职责，且 M2 engine-bridge 同样要传三件套。附注：packaging doc :43 将 `secret-resolver` 误写为 `.mjs`（实际 `src/secret-resolver.js`），且 "env-loader → secret-resolver" 链今日 dormant（零 import）——两处 owner doc 偏差均由 plan 3（其 Phase 3 即 WI5 文档收口）修正，本 plan 允许集按现实定界（见接口契约块 bootstrap 注）。
   - Skill: none
-- [ ] `Decision` `validateDraftDesc` 定义迁移（iteration 2 B1）：迁移后的 draft 主干调用它（main.js:344），而定义在 `draft-job.mjs`（该文件 import `spawner.mjs`，均在打包排除集）——orchestrator 若 import draft-job 会把 spawner 拖进 M2 打包图。决策：纯校验函数定义迁入 orchestrator.js，`draft-job.mjs` 改从 orchestrator import 并维持自身导出（`monitor.js → draft-job.mjs` 引用链零改动；无环：orchestrator 图不 import draft-job）。备选：orchestrator 直接 import draft-job.mjs——被否决（违反打包排除集）；备选：校验逻辑复制两份——被否决（双源漂移）。残险：`baseline.md:102` "defined in draft-job.mjs" 记录需在 Phase 3 更新真实定义处。
+- [x] `Decision` `validateDraftDesc` 定义迁移（iteration 2 B1）：迁移后的 draft 主干调用它（main.js:344），而定义在 `draft-job.mjs`（该文件 import `spawner.mjs`，均在打包排除集）——orchestrator 若 import draft-job 会把 spawner 拖进 M2 打包图。决策：纯校验函数定义迁入 orchestrator.js，`draft-job.mjs` 改从 orchestrator import 并维持自身导出（`monitor.js → draft-job.mjs` 引用链零改动；无环：orchestrator 图不 import draft-job）。备选：orchestrator 直接 import draft-job.mjs——被否决（违反打包排除集）；备选：校验逻辑复制两份——被否决（双源漂移）。残险：`baseline.md:102` "defined in draft-job.mjs" 记录需在 Phase 3 更新真实定义处。
   - Skill: none
-- [ ] `Add` `orchestrateRun`：迁移 `main.js:669-778` 编排段（delegates.vars 组装逐字段搬移，含 `moduleContextFile` 的 `(不存在)` 兜底语义与 `moduleMemoryIndex` 的 selfMemory 排除规则——两处隐含契约见 CONTEXT.md Mission 配置系统段；`resetMockState` 调用随迁）。
+- [x] `Add` `orchestrateRun`：迁移 `main.js:669-778` 编排段（delegates.vars 组装逐字段搬移，含 `moduleContextFile` 的 `(不存在)` 兜底语义与 `moduleMemoryIndex` 的 selfMemory 排除规则——两处隐含契约见 CONTEXT.md Mission 配置系统段；`resetMockState` 调用随迁）。
   - Skill: none
-- [ ] `Add` **VAR_PROVENANCE 漂移门随迁**：`src/context-map.mjs` 的 main.js 引用全量清扫改指 orchestrator.js——扫描目标（`extractVarsKeysFromMainJs`，:115-150）、`@param mainJsPath` 契约注释（:112）、头注释（:11-14）、VAR_PROVENANCE docstring 引用（:35/:42）、main.js 行锚注释（:71-99 区）；`test/context-map.test.js` 的 `MAIN_JS` 常量（:22）与 ≥20 键断言（:35-40）改读编排模块源文本。不迁则该测试硬失败（见 Current Baseline）。
+- [x] `Add` **VAR_PROVENANCE 漂移门随迁**：`src/context-map.mjs` 的 main.js 引用全量清扫改指 orchestrator.js——扫描目标（`extractVarsKeysFromMainJs`，:115-150）、`@param mainJsPath` 契约注释（:112）、头注释（:11-14）、VAR_PROVENANCE docstring 引用（:35/:42）、main.js 行锚注释（:71-99 区）；`test/context-map.test.js` 的 `MAIN_JS` 常量（:22）与 ≥20 键断言（:35-40）改读编排模块源文本。不迁则该测试硬失败（见 Current Baseline）。
   - Skill: none
-- [ ] `Add` `cmdDraftMission`（原名原签名整体迁入，见接口契约块 iteration 3 B1 裁决）+ `parseDraftArtifact` / `extractBriefGate` 纯函数随迁 + `bootstrap` + `orchestrateAnalyze`（analyze 自建/关闭 runner 等价迁移 `main.js:539-549`）。含 `validateDraftDesc` 定义迁移与 `draft-job.mjs` 改 import 的重接线（见前项 Decision，同属本 Phase）。
+- [x] `Add` `cmdDraftMission`（原名原签名整体迁入，见接口契约块 iteration 3 B1 裁决）+ `parseDraftArtifact` / `extractBriefGate` 纯函数随迁 + `bootstrap` + `orchestrateAnalyze`（analyze 自建/关闭 runner 等价迁移 `main.js:539-549`）。含 `validateDraftDesc` 定义迁移与 `draft-job.mjs` 改 import 的重接线（见前项 Decision，同属本 Phase）。
   - Skill: none
-- [ ] `Add` `main.js` 薄壳化：run / analyze 命令体 = bootstrap + orchestrate* 调用 + process 生命周期 + banner 输出；draft 命令体直接调 `cmdDraftMission`（其内部自解析，见契约块——外壳不再包 bootstrap）；输出字符串逐字节保持（含中文缩进对齐）。
+- [x] `Add` `main.js` 薄壳化：run / analyze 命令体 = bootstrap + orchestrate* 调用 + process 生命周期 + banner 输出；draft 命令体直接调 `cmdDraftMission`（其内部自解析，见契约块——外壳不再包 bootstrap）；输出字符串逐字节保持（含中文缩进对齐）。
   - Skill: none
-- [ ] `Proof` import 图检查：`node -e "import('<abs>/orchestrator.js').then(m=>console.log(Object.keys(m)))"` 成功，且 `grep -nE "^(import|export .* from)" src/orchestrator.js` 结果 ⊆ 允许集（接口契约块所列：node builtins + config.js / engine.js / flow-loader.js / expression.mjs / postmortem.mjs / env-loader.js / exit-map.js / runner.js / step-executor.js(若引用) / mission-check.mjs）——无 vendor/commander、无 monitor.js、无 draft-job.mjs/spawner.mjs。传递论证：允许集内每个模块的直接 import 已由 R1 核实闭合于打包集 ⇒ 全图 ⊆ 打包集（transitive closure 论断记入日志）。
+- [x] `Proof` import 图检查：`node -e "import('<abs>/orchestrator.js').then(m=>console.log(Object.keys(m)))"` 成功，且 `grep -nE "^(import|export .* from)" src/orchestrator.js` 结果 ⊆ 允许集（接口契约块所列：node builtins + config.js / engine.js / flow-loader.js / expression.mjs / postmortem.mjs / env-loader.js / exit-map.js / runner.js / step-executor.js(若引用) / mission-check.mjs）——无 vendor/commander、无 monitor.js、无 draft-job.mjs/spawner.mjs。传递论证：允许集内每个模块的直接 import 已由 R1 核实闭合于打包集 ⇒ 全图 ⊆ 打包集（transitive closure 论断记入日志）。
   - Skill: none
-- [ ] `Proof` 全量 `pnpm --prefix tools/mission-driver test` 零回归（基线对比法，含 `draft-brief.test.js` 的 runner-factory 缝继续工作）。
+- [x] `Proof` 全量 `pnpm --prefix tools/mission-driver test` 零回归（基线对比法，含 `draft-brief.test.js` 的 runner-factory 缝继续工作）。
   - Skill: none
 
 Exit Criteria:
 
-- [ ] 归一化冒烟（同 plan 1 Phase 1 定义的归一化管线 + 改前/改后各用一个固定 runDir，如 `_tmp/o2-before` / `_tmp/o2-after`）：`node tools/mission-driver/src/main.js demo --step CHECK --dry-run --no-monitor --run-dir _tmp/o2-before` 改前/改后 stdout 归一化 diff 为空（stdout 含墙钟时间戳/`Elapsed:`/runDir token，裸 diff 恒不为空——已升为跨 plan 教训，见 plan 1 iteration 1 B1）；`from-step.test.js` 以子进程方式 spawn `node src/main.js`，为 CLI 行为保持提供免费补充覆盖（在冒烟理由中引用）
-- [ ] `node tools/mission-driver/src/main.js demo --dry-run --no-monitor`（全流程 dry-run）退出码与改前一致
-- [ ] import 图 Proof 通过并记录于日志（M2 打包清单的直接证据）
-- [ ] 全量测试零回归
+- [x] 归一化冒烟（同 plan 1 Phase 1 定义的归一化管线 + 改前/改后各用一个固定 runDir，如 `_tmp/o2-before` / `_tmp/o2-after`）：`node tools/mission-driver/src/main.js demo --step CHECK --dry-run --no-monitor --run-dir _tmp/o2-before` 改前/改后 stdout 归一化 diff 为空（stdout 含墙钟时间戳/`Elapsed:`/runDir token，裸 diff 恒不为空——已升为跨 plan 教训，见 plan 1 iteration 1 B1）；`from-step.test.js` 以子进程方式 spawn `node src/main.js`，为 CLI 行为保持提供免费补充覆盖（在冒烟理由中引用）
+- [x] `node tools/mission-driver/src/main.js demo --dry-run --no-monitor`（全流程 dry-run）退出码与改前一致
+- [x] import 图 Proof 通过并记录于日志（M2 打包清单的直接证据）
+- [x] 全量测试零回归
 
 ### Phase 3 - 文档同步 + roadmap 回写 + 日志
 
-Status: planned
+Status: completed
 Targets: `docs/architecture/mission-driver-baseline.md`、`tools/mission-driver/CONTEXT.md`（若目录结构段提及新模块）、`docs/backlog/dsh-plugin-roadmap.md`、`docs/logs/2026/08-23.md`
 Skill: none
 
 - Item Types: `Decision | Add`
 - Prereqs: Phase 2
 
-- [ ] `Decision` main.js 兼容 re-export 的去留（含测试缝裁决）：**五个**导出以 `export { … } from "./orchestrator.js"` 形式 re-export——`cmdDraftMission` / `parseDraftArtifact` / `extractBriefGate` / `validateDraftDesc` / `__setRunnerFactoryForTest`（五者经 Phase 2 迁移后定义处均在 orchestrator.js，与接口契约块完备导出面一致）；`EXIT_MAP` 的 re-export **保持自 `./exit-map.js`**（Phase 1 已定型，不进 from-orchestrator 列表，避免双源）。消费方：Phase 1 已将 `exit-map.test.js` 改指新家，剩余四个测试文件（`draft-brief` / `brief-gate` / `draft-desc-validate` / `draft-path-consistency`）经 main.js 兼容层不改 import、不改调用签名（`cmdDraftMission(desc, opts)` 原名原签名迁移使这成为零改动等价）。关键约束：缝是模块级可变状态，`export … from` 形式的 re-export 引用原模块同一实例（非捕获副本），四测试不改 import 继续绿是硬验收。备选全量改引被否决：改动面扩大无行为收益；备选包装函数转发被否决：破坏模块状态同一性。§Public Exports 改标真实定义处（orchestrator.js / exit-map.js），main.js 标注为兼容 re-export 层。
+- [x] `Decision` main.js 兼容 re-export 的去留（含测试缝裁决）：**五个**导出以 `export { … } from "./orchestrator.js"` 形式 re-export——`cmdDraftMission` / `parseDraftArtifact` / `extractBriefGate` / `validateDraftDesc` / `__setRunnerFactoryForTest`（五者经 Phase 2 迁移后定义处均在 orchestrator.js，与接口契约块完备导出面一致）；`EXIT_MAP` 的 re-export **保持自 `./exit-map.js`**（Phase 1 已定型，不进 from-orchestrator 列表，避免双源）。消费方：Phase 1 已将 `exit-map.test.js` 改指新家，剩余四个测试文件（`draft-brief` / `brief-gate` / `draft-desc-validate` / `draft-path-consistency`）经 main.js 兼容层不改 import、不改调用签名（`cmdDraftMission(desc, opts)` 原名原签名迁移使这成为零改动等价）。关键约束：缝是模块级可变状态，`export … from` 形式的 re-export 引用原模块同一实例（非捕获副本），四测试不改 import 继续绿是硬验收。备选全量改引被否决：改动面扩大无行为收益；备选包装函数转发被否决：破坏模块状态同一性。§Public Exports 改标真实定义处（orchestrator.js / exit-map.js），main.js 标注为兼容 re-export 层。
   - Skill: none
-- [ ] `Add` `mission-driver-baseline.md` §Public Exports 更新：EXIT_MAP 新家、orchestrator.js 导出面、main.js 兼容 re-export 标注。
+- [x] `Add` `mission-driver-baseline.md` §Public Exports 更新：EXIT_MAP 新家、orchestrator.js 导出面、main.js 兼容 re-export 标注。
   - Skill: none
-- [ ] `Add` `tools/mission-driver/CONTEXT.md` 目录结构段补 `orchestrator.js` / `exit-map.js` / `step-executor.js`（一行职责级，不展开）。
+- [x] `Add` `tools/mission-driver/CONTEXT.md` 目录结构段补 `orchestrator.js` / `exit-map.js` / `step-executor.js`（一行职责级，不展开）。
   - Skill: none
-- [ ] `Add` roadmap M1-WI2 状态回写 `ready → done`（起草阶段已随 draft review 通过置 `ready`）。
+- [x] `Add` roadmap M1-WI2 状态回写 `ready → done`（起草阶段已随 draft review 通过置 `ready`）。
   - Skill: none
-- [ ] `Add` `docs/logs/2026/08-23.md` 追加本 plan 聚合条目（覆盖 Phase 1-3）。
+- [x] `Add` `docs/logs/2026/08-23.md` 追加本 plan 聚合条目（覆盖 Phase 1-3）。
   - Skill: none
 
 Exit Criteria:
 
-- [ ] baseline §Public Exports 与实际 export 逐项一致（grep 佐证）
-- [ ] roadmap 仅 M1-WI2 行变更
-- [ ] `docs/logs/` 条目符合 `00-log-writing-guide.md`
+- [x] baseline §Public Exports 与实际 export 逐项一致（grep 佐证）
+- [x] roadmap 仅 M1-WI2 行变更
+- [x] `docs/logs/` 条目符合 `00-log-writing-guide.md`
 
 ## Draft Review Record
 
@@ -177,15 +177,15 @@ Exit Criteria:
 
 ## Closure Gates
 
-- [ ] in-scope behavior is complete（三入口程序化可用；CLI 行为不变；EXIT_MAP 新家钉住）
-- [ ] relevant docs are aligned（baseline §Public Exports / CONTEXT.md / roadmap WI2）
-- [ ] verification has run：`pnpm --prefix tools/mission-driver test` 零回归 + 归一化 dry-run 冒烟 diff 为空 + orchestrator import 图白名单检查
-- [ ] scoped verification is not conflated with full verification —— 验证域同 plan 1（引擎套件 + dry-run，纯本地；真实模型 run 不在 M1 验证域，如执行日单独跑了则在日志标注）；冒烟用 `--no-monitor`，monitor 启动行 / 信号处理器 / reconcile 路径不在 diff 域——三者留在 CLI 壳未迁移，残险为"壳内代码未被本 plan 触碰"（以 git diff 路径清单佐证壳内仅剩接线改动）
-- [ ] no in-scope item downgraded to deferred/follow-up
-- [ ] independent draft review completed and recorded
-- [ ] text consistency verified: status, phases, gates, and log all agree
-- [ ] closure audit was independent
-- [ ] closure evidence exists in files
+- [x] in-scope behavior is complete（三入口程序化可用；CLI 行为不变；EXIT_MAP 新家钉住）
+- [x] relevant docs are aligned（baseline §Public Exports / CONTEXT.md / roadmap WI2）
+- [x] verification has run：`pnpm --prefix tools/mission-driver test` 零回归 + 归一化 dry-run 冒烟 diff 为空 + orchestrator import 图白名单检查
+- [x] scoped verification is not conflated with full verification —— 验证域同 plan 1（引擎套件 + dry-run，纯本地；真实模型 run 不在 M1 验证域，如执行日单独跑了则在日志标注）；冒烟用 `--no-monitor`，monitor 启动行 / 信号处理器 / reconcile 路径不在 diff 域——三者留在 CLI 壳未迁移，残险为"壳内代码未被本 plan 触碰"（以 git diff 路径清单佐证壳内仅剩接线改动）
+- [x] no in-scope item downgraded to deferred/follow-up
+- [x] independent draft review completed and recorded
+- [x] text consistency verified: status, phases, gates, and log all agree
+- [x] closure audit was independent
+- [x] closure evidence exists in files
 
 ## Deferred But Adjudicated
 
@@ -198,13 +198,13 @@ Exit Criteria:
 
 ## Closure
 
-Status Note: pending
+Status Note: 三个 Phase 全部落地并通过独立闭包审计：Phase 1 EXIT_MAP 新家 `src/exit-map.js`（main.js 兼容 re-export、exit-map.test.js 改引新家断言零修改）；Phase 2 `src/orchestrator.js` 完备导出面 + main.js 薄壳化 + VAR_PROVENANCE 漂移门随迁；Phase 3 baseline §Public Exports / CONTEXT.md / roadmap WI2 → done / `docs/logs/2026/08-23.md` 聚合条目全部就位。闭包审计 live 复核全量测试（631/628/3，失败集 = 文档记录的预存集，零回归）、import 图 ⊆ 允许集、draft-job.mjs → orchestrator re-export 无环、context-map.mjs/test 全量改指 orchestrator.js、roadmap 与日志回写均在。
 
 Closure Audit Evidence:
 
-- Auditor / Agent: pending
-- Evidence: pending
+- Auditor / Agent: independent closure auditor（mission-driver closure-audit step，2026-08-23，独立于执行 session）
+- Evidence: 闭包审计逐项 live 核验——`grep` 佐证 main.js 仅剩 `export { … } from "./orchestrator.js"`（五导出）+ `export { EXIT_MAP } from "./exit-map.js"`；orchestrator.js import 列表 = node builtins + config/engine/flow-loader/expression/postmortem/env-loader/exit-map/runner（⊆ 允许集，无 commander/monitor/draft-job/spawner）；`test/context-map.test.js` `ORCHESTRATOR_JS` 常量 + ≥20 键断言指向编排模块；`docs/logs/2026/08-23.md` 记录全量测试基线对比（HEAD 941c155 基线 631/627/4 → 改后 631/628/3，失败集 ⊆ 基线集）与 import 图传递闭包论证；闭包审计本次复跑 `node --test test/*.test.js` = 631 tests / 628 pass / 3 fail，与日志记录一致；roadmap `dsh-plugin-roadmap.md:18` WI2 = `done`；本文件 `plan-check.mjs --strict` PASS。
 
 Follow-up:
 
-- (none at draft time)
+- (none)

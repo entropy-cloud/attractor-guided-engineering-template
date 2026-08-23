@@ -88,7 +88,7 @@ Each `steps[]` entry (opened by `_wfOpen` in `src/engine.js`, closed by `_wfClos
 
 AI prompts emit structured markers that the engine parses. Two are cross-cutting:
 
-- **`<BRIEF_GATE>pass|blocked</BRIEF_GATE>`** + optional **`<BRIEF_GATE_REASON>...</BRIEF_GATE_REASON>`** — emitted by `prompts/mission-brief.md`, parsed by `extractBriefGate` (in `src/main.js`, case-insensitive `/is` regex after ANSI strip). `blocked` stops the draft pipeline before Stage 2 and marks `draft-state.json` `status: "blocked"`. `pass` or a missing marker advances to Stage 2 (backward compatible). Owner doc: `draft-robustness-design.md` §4.2 / WI2 plan.
+- **`<BRIEF_GATE>pass|blocked</BRIEF_GATE>`** + optional **`<BRIEF_GATE_REASON>...</BRIEF_GATE_REASON>`** — emitted by `prompts/mission-brief.md`, parsed by `extractBriefGate` (defined in `src/orchestrator.js` since dsh-plugin M1-WI2, case-insensitive `/is` regex after ANSI strip). `blocked` stops the draft pipeline before Stage 2 and marks `draft-state.json` `status: "blocked"`. `pass` or a missing marker advances to Stage 2 (backward compatible). Owner doc: `draft-robustness-design.md` §4.2 / WI2 plan.
 
 - **`<AI_STEP_RESULT>pass|fail</AI_STEP_RESULT>`** — step result tag enforced structurally by `src/prompt-check.mjs` (chained into `pnpm --prefix tools/mission-driver test`). Every agent-facing prompt that produces a pass/fail outcome must ship a well-formed example; the check fails the test suite otherwise.
 
@@ -98,8 +98,10 @@ Step-transition markers (e.g. `<PLAN_FILE>`, `<MISSION_FILE>`, `<DRAFT>`, `<REVI
 
 Public exports (the stable API surface other modules may import). Citations are function-name-anchored (the `export` keyword is findable; line numbers rot):
 
-- `src/main.js` — `cmdDraftMission`, `parseDraftArtifact`, `extractBriefGate`, `validateDraftDesc` (single `export { … }` statement near EOF; `validateDraftDesc` is defined in `draft-job.mjs` and re-exported here so `monitor.js` can import it without forming a `monitor → main → monitor` cycle), `EXIT_MAP` (named `export const` near the top; engine terminal-status → process exit code, the `EXECUTION-PRINCIPLE.md §11` contract table; consumed by `cmdRunMission` and pinned row-by-row by `test/exit-map.test.js`).
-- `src/draft-job.mjs` — `startDraftJob`, `readDraftJob`, `listDraftJobs`, `validateDraftDesc` (all `export function`, consumed cross-module by `monitor.js`).
+- `src/orchestrator.js` — programmatic orchestration entry (dsh-plugin M1-WI2; the one run/draft/analyze entry the CLI shell and future in-host callers share): `bootstrap` (loadDotenv → resolveConfig), `orchestrateRun` (flow creation + `delegates.vars` assembly + singleStep/entryOverride handling + FlowEngine driving + exit-code mapping; receives the WI1 `executor` seam and returns `{ status, stepCount, elapsed, marker?, history, exitCode }`), `cmdDraftMission` (original name/signature/semantics; self-bootstraps its config and builds its runner through the `__setRunnerFactoryForTest` factory), `parseDraftArtifact`, `extractBriefGate`, `validateDraftDesc` (definition moved here from `draft-job.mjs`), `orchestrateAnalyze` (wraps `runPostmortem`; builds and closes its own runner). Internal CLI-shared helpers (`getTopSteps`, `resolveProjectRoot`, `resolveMissionsDir`) are exported for the shell but are not part of the programmatic-entry surface. Import graph is confined to the packaging allowlist (`dsh-plugin-packaging.md` §Packaging Layout: node builtins + engine pure modules + `runner.js`); never `vendor/commander`, `monitor.js`, `draft-job.mjs`/`spawner.mjs`. Process-level concerns (commander wiring, monitor start/stop, SIGTERM/SIGINT handlers, `reconcileStaleRuns`, `unregisterActiveRun`, human-readable banners) stay in the `main.js` CLI shell.
+- `src/exit-map.js` — `EXIT_MAP` (dsh-plugin M1-WI2 hoist): engine terminal-status → process exit code, the `EXECUTION-PRINCIPLE.md §11` contract table. Zero dependencies so any layer can import the exit-code table alone; consumed by `orchestrateRun` and pinned row-by-row by `test/exit-map.test.js` (which imports this module directly).
+- `src/main.js` — thin CLI shell + compatibility re-export layer (dsh-plugin M1-WI2): the `draft`/`analyze`/`run` command bodies are bootstrap + orchestrate* calls plus process lifecycle; the module re-exports `cmdDraftMission`, `parseDraftArtifact`, `extractBriefGate`, `validateDraftDesc`, `__setRunnerFactoryForTest` from `orchestrator.js` and `EXIT_MAP` from `exit-map.js` (definitions no longer live here; `export … from` keeps the module-level mutable test-seam state identical).
+- `src/draft-job.mjs` — `startDraftJob`, `readDraftJob`, `listDraftJobs`, `validateDraftDesc` (re-exported from `orchestrator.js` since M1-WI2; consumed cross-module by `monitor.js` — reference chain unchanged, no cycle: the orchestrator import graph never touches `draft-job.mjs`).
 - `src/mission-check.mjs` — `validateMission`, `loadMission`.
 - `src/monitor.js` — `parseRoadmapMarkdown` (defined in `roadmap-check.mjs`, re-exported here so both the Monitor Server and the FlowEngine share one parser), `mergeSubflowChildren` (subflow live-state reader), `handleStartDraft` (async draft-job launcher), `startMonitor` (HTTP/SSE server entry).
 - `src/sys-snapshot.mjs` — `snapshot`.
@@ -107,7 +109,7 @@ Public exports (the stable API surface other modules may import). Citations are 
 
 Test seams (NOT public API; prefixed `__` and exported only for the test suite):
 
-- `src/main.js` — `__setRunnerFactoryForTest` (inject mock agent runner for draft tests).
+- `src/orchestrator.js` — `__setRunnerFactoryForTest` (inject mock agent runner for draft tests; defined in the orchestration module since dsh-plugin M1-WI2 and re-exported by `main.js` as the same live binding — module-level mutable state must stay single-instance).
 - `src/draft-job.mjs` / `src/monitor.js` — `__setSpawnerForTest` (inject mock subprocess spawner).
 - `src/flow-loader.js` — `_scanOpenAuditsList`, `_isMissionLevelAudit`, plus the `SCRIPT_REGISTRY` constant.
 

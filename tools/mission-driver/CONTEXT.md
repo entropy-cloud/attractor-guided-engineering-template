@@ -17,7 +17,10 @@
 ```
 tools/mission-driver/
 ├── src/
-│   ├── main.js            # 入口：解析 CLI → 加载 mission → 启引擎 + monitor
+│   ├── main.js            # CLI 壳：commander 解析 + process 生命周期（信号/monitor/reconcile）；编排逻辑在 orchestrator.js
+│   ├── orchestrator.js    # 程序化编排入口：bootstrap/orchestrateRun/draft 管线/orchestrateAnalyze（CLI 与插件宿主共用，M1-WI2）
+│   ├── exit-map.js        # 引擎终态 → 进程退出码表（EXECUTION-PRINCIPLE §11 逐行钉住，M1-WI2）
+│   ├── step-executor.js   # StepExecutor 命名 seam + ProcessExecutor（M1-WI1）
 │   ├── config.js          # 配置解析（CLI/env/mission.json → 运行参数）
 │   ├── engine.js          # 状态机核心，最复杂的文件
 │   ├── executor.js        # 步骤执行：spawn opencode 子进程，心跳/超时/SIGTERM
