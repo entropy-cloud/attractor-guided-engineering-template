@@ -36,6 +36,45 @@ Online-iteration rules:
 - Use Creator mode's runtime inspection to confirm the Mission Control service is mounted in the live Cordis tree before debugging routes.
 - Use in-memory plugin experiments to trial patch-line variants before writing them into `cordis.patch.yml`. Experiments are memory-only and vanish on restart — promote survivors to committed files.
 
+## AGE Mode: Installing the AGE Preset (M4-WI14, landed)
+
+The AGE session posture ships as a host-discoverable agent preset at `plugin/dsh/preset/age/` (as-built owner doc: `docs/architecture/dsh-plugin-packaging.md` §AGE Preset). Consumer installation:
+
+```bash
+# 1. Copy the preset directory into the host's user preset root (create it first):
+mkdir -p "${DSH_HOME:-$HOME/.dsh}/.agent-presets"
+cp -R /path/to/this-repo/plugin/dsh/preset/age "${DSH_HOME:-$HOME/.dsh}/.agent-presets/age"
+
+# 2. Restart the host (roster discovery reads the roots per call, but the
+#    session picker and any bundle-mount changes need the restart):
+dsh web --no-open
+
+# 3. Verify the roster sees it (Creator mode runtime inspection or the
+#    session picker): preset "age" — "AGE Mode (Mission Control)" — NOT broken.
+#    A broken row means the composition did not load; read its reason string.
+
+# 4. Select AGE mode for a session (picker), and/or select it for a PROJECT's
+#    mission children:
+#      missions/base.json: { "agent": "age", ... }
+#    (explicit per-run args / OPENCODE_AGENT env keep precedence — the native
+#    bootstrap defaults the run config's agent from base.json.)
+```
+
+Verification in the repo (no host needed):
+
+```bash
+npm --prefix plugin/dsh test                    # structural gate (age-preset.test.mjs) rides the CI chain
+npm --prefix plugin/dsh run verify:e2e:preset   # composition leg (in-process; roster + service same tree)
+```
+
+Manual real-host leg (env/manual — not automated): after install, open an AGE-mode session at a project with `missions/base.json` present, confirm the posture section is in effect and the mission-control skills are offered, run a small mission, and observe mount + run + monitor. Natural-language AGE-session quality is a watch-only residual (plan `2026-08-23-2202-1` §Deferred).
+
+Notes:
+
+- The preset carries ZERO service rows — Mission Control stays mounted exactly once (bundle patch). Never add a `dsh-mission-control` row to the preset (a second instance breaks the single active-run guard; the structural gate rejects it).
+- Preset rows that wait for a service the deployment never composes make the whole preset unmountable (observed with `dsh-command-compact` needing the `commands` registry) — keep new rows within the host-spine allowlist pinned by `test/age-preset.test.mjs`.
+- Editing a preset directory takes effect for NEW sessions after the composition file changes (standing-mount stamp generations); already-joined sessions keep their generation.
+
 ## Core Rule: Workflows Are Flow-Engine Customizations
 
 Every user-facing capability of the plugin (run / draft / analyze / any future one) MUST be defined as flow JSON + prompt templates executed by the Flow DSL state machine. The cordis service layer only resolves mission config and triggers runs — it contains no step logic. To change what a capability does, you edit its flow, not its TypeScript.

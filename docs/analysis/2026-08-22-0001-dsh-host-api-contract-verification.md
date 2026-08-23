@@ -73,6 +73,6 @@ Confirms the AGE comparison: native plan mode is a per-agent conversational post
 
 ## 7. Remaining Unknowns (handed off)
 
-- `packages/subagent/`: exact `SubagentRunEndInfo` shape and `snapshotSubagentDescriptor` requirements (consumer usage verified; host source pending) — needed before P3 descriptor work.
-- `packages/sdk/protocol/`: message catalog for driving a runtime over stdio JSON-RPC — the foundation of R3's automated integration harness.
-- Preset mounting loader (`preset.yml` consumption) — anchored-standard shows the consumer side; host loader unread. Needed only for P4 (AGE preset).
+- `packages/subagent/`: exact `SubagentRunEndInfo` shape and `snapshotSubagentDescriptor` requirements (consumer usage verified; host source pending) — needed before P3 descriptor work. *(Subsequently closed: host source read in M3-WI11 — plan `2026-08-23-1852-1` Phase 2.)*
+- `packages/sdk/protocol/`: message catalog for driving a runtime over stdio JSON-RPC — the foundation of R3's automated integration harness. *(Subsequently closed by R3/WI9 — `scripts/host-harness.mjs`.)*
+- Preset mounting loader (`preset.yml` consumption) — anchored-standard shows the consumer side; host loader unread. Needed only for P4 (AGE preset). **CLOSED (2026-08-23, M4-WI14)**: host loader verified against source in plan `docs/plans/dsh-plugin/2026-08-23-2202-1-age-preset-realm-compose.md` Phase 1 Decision Record D1 (discovery/health dialect, mount-guard rejection set incl. the root-realm leak guard, standing-mount generations, `composeFrom` single call site, copy-only authoring, and the passive-`meta.agentPreset` finding that motivated the executor-side setup mount). The AGE preset as-built lives in `docs/architecture/dsh-plugin-packaging.md` §AGE Preset.

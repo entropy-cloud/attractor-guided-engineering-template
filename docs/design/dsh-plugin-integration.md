@@ -37,15 +37,16 @@ Naming rationale:
 
 Rejected alternatives: "auto-loop" (generic, no mission identity), "launchpad" (collides with existing dev-tool naming), "sortie" (obscure).
 
-### User-visible capabilities (plugin form, all planned)
+### User-visible capabilities (plugin form)
 
-1. **Mission Control skills** — agent-invocable skills registered in DSH sessions:
+1. **AGE mode (agent preset) — as-built (M4-WI14)**: an AGE session posture selectable per session as a DSH agent preset (`age`). The preset contributes one system-prompt section (`age:mode`) — repo-as-source-of-truth working conventions, owner-docs routing, the Mission Control entry points (the three skills + the `/mdcontrol/api` HTTP face), and the async-job contract essentials — beside the standard coding toolset (shell, file read/write/edit, search, todo, skills, compaction; the host AGENTS.md digest keeps flowing via `agent-instructions`). Mission children dispatched by Mission Control join the same composition when the project selects it (`missions/base.json` `"agent": "age"`), so every execute/closure step runs with a tool catalog sufficient for the AGE loop. Installation is a directory copy (dev guide §AGE Mode); the preset deliberately carries no service of its own — Mission Control stays the single mounted service.
+2. **Mission Control skills** — agent-invocable skills registered in DSH sessions:
    - `mission-control-run <mission>` — start a mission run (demo / onboarding / custom)
    - `mission-control-draft <description>` — two-stage brief→draft mission generation
    - `mission-control-analyze [run]` — Reflexion postmortem of the most recent or named run
 
    As-built (M3-WI12): the three skills are live as runtime rows on `ctx.skills` (pure instruction bodies — the host skill form carries no executable handler). Entry chain: the model hits a skill through the session skill catalog + `skill` tool, then the loaded instructions direct the call to the matching `mdcontrol.*` route (`run`/`draft`/`analyze`) over the Mission Control HTTP API using an HTTP-capable session tool; run and draft return job handles immediately (progress via `mdcontrol.status` / the engine `draft-state.json`), analyze returns the postmortem result synchronously. Real-model natural-language invocation quality is an env/manual verification leg outside the deterministic gate.
-2. **Native dispatch execution** — every agent step of a flow runs as an in-process child agent of the host; no `opencode run` process is created. Session continuity across steps is native (no regex scraping), restoring continuity that the `pi`/`cline` process drivers lack.
+2. **Native dispatch execution** — every agent step of a flow runs as an in-process child agent of the host; no `opencode run` process is created. Session continuity across steps is native (no regex scraping), restoring continuity that the `pi`/`cline` process drivers lack. As-built (M4-WI14): native mission children compose onto the project's configured agent preset (`missions/base.json` `agent` field) when the host runs a preset roster — the AGE worker posture of packaging doc §Behavioral differences.
 3. **Subagents surface visibility** — each run registers one healthy run-level child descriptor (`Mission: <mission>`, continuable, provider `mdcontrol`) at child creation, so the run enumerates correctly instead of rendering as a corrupt row; step-level progress surfaces through the run-state/monitor channel (as-built: one child per run, reused across steps — M3-WI11 alignment).
 4. **Monitor coexistence** — the standalone monitor dashboard remains usable against run-state files. A native Web UI panel reading the same files may follow later; it is not part of the initial scope.
 
@@ -75,6 +76,8 @@ After install and host restart, DSH sessions will gain the Mission Control skill
 ### Running
 
 > As-built note (2026-08-23, M2-WI10): the route layer this section's flow rides on is live — `mdcontrol.run` starts a mission with the async job contract (immediate `{runId, status: 'started'}`, engine continues as a detached in-host task, progress via `mdcontrol.status` and the unchanged monitor dashboard, one run at a time per project root). The natural-language skill entry points below are still M3-WI12; until they land, the routes are reachable programmatically (cordis service `mdcontrol` / `POST /mdcontrol/api/<method>`). Owner doc for the route semantics: `docs/architecture/dsh-plugin-packaging.md` §Service Surface.
+>
+> As-built note (2026-08-23, M4-WI14 — AGE mode): installing the AGE preset (dev guide §AGE Mode) puts AGE mode on the session preset picker; a session on it carries the `age:mode` posture section with the Mission Control entry points. Projects select the AGE composition for mission children with `missions/base.json` `"agent": "age"` (explicit per-run args/env keep precedence). The loop steps below are unchanged by the preset — only the session posture and the child composition differ.
 
 Inside a DSH session opened at a project root that has AGE installed (`missions/base.json` present):
 
