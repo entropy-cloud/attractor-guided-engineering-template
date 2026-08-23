@@ -1,6 +1,6 @@
 # DSH Plugin Packaging — Technical Architecture
 
-> **Status: P1 DELIVERED (2026-08-23) — StepExecutor seam, ProcessExecutor, programmatic orchestration entry + EXIT_MAP hoist, driver validation, and embed-mode gating have landed (M1-WI1..WI5). P2 PARTIALLY DELIVERED (2026-08-23, M2-WI6 + M2-WI7 + M2-WI8): the plugin shell (`plugin/dsh/` bundle manifest + isolate-realm patch + build bundling with an import-closure gate), the NativeExecutor dispatch backend + engine-bridge backend-selection factory (fake-agents unit-tested; no real host yet), and the L2 dual-backend parity matrix (merge-blocking via `verify-age.sh` + `age-ci.yml`) have landed; the L3 harness (WI9) and `mdcontrol.*` routes (WI10) remain planned. P3–P4 remain planned.** Phase gates below define when each remaining claim becomes supported behavior.
+> **Status: P1 DELIVERED (2026-08-23) — StepExecutor seam, ProcessExecutor, programmatic orchestration entry + EXIT_MAP hoist, driver validation, and embed-mode gating have landed (M1-WI1..WI5). P2 PARTIALLY DELIVERED (2026-08-23, M2-WI6 + M2-WI7 + M2-WI8 + M2-WI9): the plugin shell (`plugin/dsh/` bundle manifest + isolate-realm patch + build bundling with an import-closure gate), the NativeExecutor dispatch backend + engine-bridge backend-selection factory (fake-agents unit-tested; no real host yet), the L2 dual-backend parity matrix (merge-blocking via `verify-age.sh` + `age-ci.yml`), and the L3 host-integration harness (`scripts/host-harness.mjs` — real spawned DSH runtime serving `dsh-sdk-jsonrpc-server`, driven over stdio NDJSON; env-gated `verify:native` local gate, never CI-blocking; recorded keyless green run in `docs/testing/2026/08-23.md`) have landed; `mdcontrol.*` routes (WI10) remain planned. P3–P4 remain planned.** Phase gates below define when each remaining claim becomes supported behavior.
 
 ## Purpose
 
@@ -22,22 +22,31 @@ All other boundary rules are preserved:
 
 ## Packaging Layout
 
-New top-level directory in this repository — **landed 2026-08-23 (M2-WI6, extended M2-WI7 + M2-WI8)**, tree below is the as-built state (files marked with their owning work item):
+New top-level directory in this repository — **landed 2026-08-23 (M2-WI6, extended M2-WI7 + M2-WI8 + M2-WI9)**, tree below is the as-built state (files marked with their owning work item):
 
 ```
 plugin/dsh/
 ├── package.json          # LANDED: `dsh.bundle.patch` manifest + exact-pinned @deepseek-ai/* deps
+│                         #   + WI9: 16 exact-pinned L3-composition devDeps + verify:native[:keyless] scripts
 ├── cordis.patch.yml      # LANDED: `- insert:` op → cordis:group with isolate realm → service row
 ├── tsconfig.json         # tsc --noEmit over src/*.ts (allowJs: engine bundle JS enters as inferred types)
 ├── scripts/
 │   ├── check-manifest.mjs     # structural manifest/patch validation (plain-YAML, dev-dep `yaml`)
 │   ├── build-bundle.mjs       # copy-style engine bundling + import-closure gate (+ `--check` freshness)
-│   └── smoke-import.mjs       # no-host bundle import smoke (all 5 entry modules, zero npm resolution)
+│   ├── smoke-import.mjs       # no-host bundle import smoke (all 5 entry modules, zero npm resolution)
+│   ├── host-harness.mjs       # LANDED (WI9): L3 harness — HarnessLineRpcTransport + session driver
+│   │                          #   + 4-scenario runner (--dry / --keyless / --scenario); NOT bundle content
+│   └── verify-native.mjs      # LANDED (WI9): env-gated L3 local gate (DSH_VERIFY_NATIVE + DEEPSEEK_API_KEY
+│                              #   fail-fast; keyless companion needs no flag); never CI-blocking (R3 §5)
 ├── test/
 │   ├── bundle-scaffold.test.mjs        # plugin local test entry (WI6) — reused by WI7/WI8
 │   ├── native-executor.test.mjs        # NativeExecutor unit branches (WI7; fake agents service)
 │   ├── engine-bridge.test.mjs          # selection factory + native config + orchestrateRun smoke (WI7)
 │   ├── backend-parity-matrix.test.mjs  # L2 dual-backend parity matrix, six assertion groups (WI8)
+│   ├── host-harness-transport.test.mjs # LANDED (WI9): 12 pure-logic transport cases (fake streams)
+│   ├── fixtures/
+│   │   └── harness.cordis.yml          # LANDED (WI9): L3 composition fixture — 16 rows, non-PTY base,
+│   │                                   #   deliberately distinct from cordis.patch.yml (bundle mount patch)
 │   └── helpers/
 │       ├── fake-agents.mjs             # reusable fake in-process agents service (WI7; matrix-extended WI8)
 │       └── matrix-harness.mjs          # shared L2 matrix harness: both legs + comparators (WI8)
@@ -73,6 +82,8 @@ NOT bundled: monitor server (`monitor.js`), draft-job detached-process managemen
 ### Version pins (as landed)
 
 `plugin/dsh/package.json` pins, exact (no ranges), per the P2-start survey re-run (2026-08-23, `docs/analysis/2026-08-23-0001-p2-version-survey.md` — dist-tags identical to R2, no cohort drift): `@deepseek-ai/cordis@4.0.1` + `dsh-agent`/`dsh-goal`/`dsh-tools`/`dsh-subagent` all at `0.1.1-rc.2` (goal/tools are pinned-but-unconsumed until P3+, per single-cohort consistency). Bumping any pin is an explicit changelog event.
+
+L3 harness composition devDeps (added 2026-08-23, M2-WI9 — same survey doc, Addendum section): sixteen packages at exact `0.1.1-rc.2` (bin `dsh-sdk-jsonrpc-demo`, server `dsh-sdk-jsonrpc-server`, and the 14 spine/backend rows of `test/fixtures/harness.cordis.yml`) — devDependencies only, so the shipped bundle dependency surface is unchanged. The `latest` dist-tag of these packages lags at `0.0.1-rc.x`; pins are therefore literal versions, never tags. The L3 verification surface itself (composition, transport, gate posture) is owned by R3 (`docs/analysis/2026-08-22-0003-verification-harness-design.md` §4-§6).
 
 ## Execution Backend Seam (Engine Refactor)
 
@@ -198,7 +209,7 @@ Day-to-day development procedure (host setup, Creator-mode online loop, flow-cus
 | Phase | Deliverable | Verification gate |
 | --- | --- | --- |
 | P1 ✅ delivered 2026-08-23 | StepExecutor seam over the delegates injection points; ProcessExecutor wrapper; programmatic orchestration entry + `EXIT_MAP` hoist; driver validation; embed-mode gating of startup diagnostics; module-boundaries.md update | full engine test suite green (incl. exit-map pinning); CLI behavior unchanged (`run demo` smoke test) |
-| P2 ⏳ partially delivered 2026-08-23 (M2-WI6 + M2-WI7 + M2-WI8) | Plugin shell + NativeExecutor; `mdcontrol.run` executing `demo` mission end-to-end natively. **Delivered (WI6)**: `plugin/dsh/` scaffold, bundle manifest, isolate-realm patch, build bundling + import-closure gate, plugin test entry. **Delivered (WI7)**: `DshNativeExecutor` (full dispatch chain, handle lifecycle, watchdog, exit synthesis, plugin-layer minimal tool spawn) + engine-bridge selection factory/native config wiring, unit-tested over a fake in-process agents service incl. an `orchestrateRun` full-chain callback smoke. **Delivered (WI8)**: L2 dual-backend parity matrix (six R3 §3 assertion groups over ProcessExecutor-with-fake-runner vs NativeExecutor-with-fake-agents; 3 divergence-ledger entries all owner-doc-backed) wired merge-blocking via root `verify-age.sh` + `.github/workflows/age-ci.yml`. **Remaining (P2 boundary)**: L3 host harness (WI9), `mdcontrol.*` async job contract (WI10) | demo mission completes with identical run-state shape; markers parsed; correction-retry exercised once artificially (full P2 gate; WI7/WI8 verified in the fake-agents/mock-runner domain only — no real host) |
+| P2 ⏳ partially delivered 2026-08-23 (M2-WI6 + M2-WI7 + M2-WI8 + M2-WI9) | Plugin shell + NativeExecutor; `mdcontrol.run` executing `demo` mission end-to-end natively. **Delivered (WI6)**: `plugin/dsh/` scaffold, bundle manifest, isolate-realm patch, build bundling + import-closure gate, plugin test entry. **Delivered (WI7)**: `DshNativeExecutor` (full dispatch chain, handle lifecycle, watchdog, exit synthesis, plugin-layer minimal tool spawn) + engine-bridge selection factory/native config wiring, unit-tested over a fake in-process agents service incl. an `orchestrateRun` full-chain callback smoke. **Delivered (WI8)**: L2 dual-backend parity matrix (six R3 §3 assertion groups over ProcessExecutor-with-fake-runner vs NativeExecutor-with-fake-agents; 3 divergence-ledger entries all owner-doc-backed) wired merge-blocking via root `verify-age.sh` + `.github/workflows/age-ci.yml`. **Delivered (WI9)**: L3 host-integration harness — `scripts/host-harness.mjs` boots a real spawned DSH runtime serving `dsh-sdk-jsonrpc-server` (16-row non-PTY composition fixture + exact-pinned devDeps, R3 §6 resolved) and drives it over stdio NDJSON; four-scenario green run recorded keylessly (official e2e precedent) in `docs/testing/2026/08-23.md`; env-gated `verify:native` local gate (skip without flag / fail-fast without key / never CI-blocking, R3 §5); 12 transport unit cases inside the plugin CI chain. **Remaining (P2 boundary)**: `mdcontrol.*` async job contract + native end-to-end demo run (WI10) | demo mission completes with identical run-state shape; markers parsed; correction-retry exercised once artificially (full P2 gate; WI7/WI8 verified in the fake-agents/mock-runner domain only — no real host; WI9 verified against a real spawned runtime via the keyless stub endpoint — the real-model credential leg is env-gated and wired) |
 | P3 | `onboarding` parity + descriptor registration + skills wired | onboarding fills copied docs identically to CLI form; subagents list healthy during run |
 | P4 | AGE preset integration (AGE mode) + Mission Control status panel decision | preset + plugin compose without realm collision |
 

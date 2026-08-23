@@ -30,3 +30,19 @@ Exact pins, no ranges, per packaging doc §Dependency and Version Risk:
 ```
 
 `dsh-goal` / `dsh-tools` are not consumed until P3+ (reinforcement gate), but are pinned now per the single-cohort-consistency rationale (R2 §Pinning Recommendation) — accepting an unused-dependency warning over a mixed-cohort install later. Bumping any pin remains an explicit changelog event.
+
+## Addendum: M2-WI9 L3 harness composition devDeps (2026-08-23)
+
+> Owner: plan `docs/plans/dsh-plugin/2026-08-23-1621-1-l3-host-harness-sdk-server.md` Phase 1 (Decision 1a — plugin/dsh self-hosted pinned devDeps + own minimal `cordis.yml`). Method identical to the survey above: `npm view <pkg> versions --json` per package.
+
+Sixteen composition packages added as **exact-pinned devDependencies** (`0.1.1-rc.2` each) to `plugin/dsh/package.json` — the shipped `dependencies` field is unchanged (bundle dependency surface zero-diff):
+
+`dsh-sdk-jsonrpc-demo` (the boot bin), `dsh-sdk-jsonrpc-server`, `dsh-llm-deepseek`, `dsh-agent-spine-demo`, `dsh-subprocess-local`, `dsh-bash-local`, `dsh-session-persistence-jsonl`, `dsh-session-checkpoint-policy`, `dsh-subagent-spawn-in-process`, `dsh-tool-subagent`, `dsh-tool-todo`, `dsh-fs-local`, `dsh-fs-observation-policy`, `dsh-tool-fs`, `dsh-token-meter`, `dsh-compaction-basic` (`dsh-subagent` was already a shipped dependency).
+
+Survey facts:
+
+- Every package publishes `0.1.1-rc.2` — the same cohort as the existing pins. Single-cohort consistency holds; no mixed-cohort install.
+- The `latest` dist-tag of these packages points at older `0.0.1-rc.x` releases (tag lag, not drift) — pinning must stay **exact-version**, never tag-based; recorded as the operative reason the pins use literal versions.
+- Local verification: `npm install` resolves all sixteen at `0.1.1-rc.2` exactly (`node -e require.resolve` check, 2026-08-23), and the composition boots green keylessly against the fixture (see the R3 §6 resolved note).
+
+Transport decision context: `dsh-sdk-protocol` / `dsh-sdk-client` were deliberately NOT added — the harness hand-writes a thin NDJSON transport (`HarnessLineRpcTransport`, protocol face = 3 methods + 4 notifications), keeping the new-dependency surface at the composition minimum.
