@@ -1,7 +1,9 @@
 /**
  * mdcontrol-routes.ts — Mission Control wire routes: mdcontrol.run /
  * mdcontrol.status / mdcontrol.list (dsh-plugin M2-WI10, plan
- * `2026-08-23-1621-2` Phase 1).
+ * `2026-08-23-1621-2` Phase 1) + mdcontrol.draft / mdcontrol.analyze
+ * (M3-WI12, plan `2026-08-23-1852-2` Phase 2 — collects the 1621-2
+ * §Deferred adjudication).
  *
  * ── Exposure surface (plan Phase 1 Decision 1) ──────────────────────────────
  * better-sidebar precedent shape (`src/index.ts` buildApi + `src/wire.ts`):
@@ -9,9 +11,7 @@
  * own dispatcher; missing services degrade to structured wire errors. This
  * module owns the record; `service.ts` owns mounting (cordis Service
  * publication as `mdcontrol` + optional HTTP dispatcher via ctx.webServer,
- * better-sidebar `/sidebar/api` pattern). `mdcontrol.draft` / `mdcontrol.analyze`
- * are deliberately absent — adjudicated to M3/WI12 (plan §Deferred But
- * Adjudicated; service.ts header ledger).
+ * better-sidebar `/sidebar/api` pattern).
  *
  * ── Async job contract (packaging doc §Service Surface, owner) ──────────────
  * `mdcontrol.run` NEVER blocks on mission completion: validate config →
@@ -22,6 +22,17 @@
  * decoupled: closing the chat session that started a run does not stop it
  * (the task holds no reference to the requesting session; the optional
  * terminal receipt merely fails to find a live agent afterwards).
+ * `mdcontrol.draft` takes the SAME contract shape (1852-2 Phase 1 Decision
+ * 2): immediate `{ jobId, status: 'started' }`, the two-stage brief→draft
+ * pipeline runs as a detached in-host task through the pre-authorized
+ * `cmdDraftMission` executor seam, and progress flows through the engine's
+ * own `draft-state.json` vocabulary (jobId / phase brief|draft / status
+ * running|completed|failed|blocked — the monitor + CLI consumption face is
+ * reused, never a second state machine). `mdcontrol.analyze` is
+ * SYNCHRONOUS by adjudication (1852-2 Phase 1 Decision 3): runPostmortem is
+ * exactly ONE agent dispatch, so the result carries the postmortem outcome
+ * verbatim; it does NOT occupy the run guard (read-mostly single turn over
+ * an already-terminal run).
  *
  * ── runId semantics (plan Phase 1 Decision 2) ───────────────────────────────
  * runId = basename of the engine's runDir (`<projectRoot>/_tmp/<runId>/`).
@@ -40,6 +51,10 @@
  * M1-WI4). Cleared on EVERY terminal path (success, engine failure, task
  * crash); concurrent same-root start = explicit `run-in-progress` wire
  * error. Runs across different roots stay independent engine instances.
+ * 1852-2 Phase 1 Decision 2: `mdcontrol.draft` occupies the SAME root slot —
+ * one engine activity per projectRoot (draft↔run mutual exclusion: a draft
+ * writes missions/docs while a run reads them; the conservative posture may
+ * relax later, cross-root stays independent).
  *
  * ── Terminal receipt (plan Phase 1 Decision 3) ──────────────────────────────
  * Opt-in via payload `followup: { sessionId }`. On terminal state the route
@@ -53,12 +68,21 @@
  * the doc's §Dependency and Version Risk list is amended by this plan's
  * Phase 3. When the session is no longer live (host restart, session
  * closed) the receipt is skipped with a log line — the run itself already
- * reached its terminal state on disk, so nothing is lost.
+ * reached its terminal state on disk, so nothing is lost. `mdcontrol.draft`
+ * offers the same opt-in receipt (1852-2), reporting the draft-state
+ * terminal status.
  */
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { beginNativeMission, type HostContext, type NativeRunTerminal } from './engine-bridge.ts'
+import {
+  beginNativeDraft,
+  beginNativeMission,
+  runNativeAnalyze,
+  validateDraftDescription,
+  type HostContext,
+  type NativeRunTerminal,
+} from './engine-bridge.ts'
 import { resolveAgentsService } from './native-executor.ts'
 
 // ── Wire errors (better-sidebar SidebarError pattern) ───────────────────────
@@ -135,11 +159,50 @@ export interface MdControlListResult {
   runs: MdControlListRunRow[]
 }
 
-/** The three M2-WI10 routes (draft/analyze → M3/WI12, plan §Deferred). */
+export interface MdControlDraftPayload {
+  /** Project root the draft writes into (missions/ + docs/backlog/ + _tmp/). */
+  projectRoot: string
+  /** Mission goal description (engine validateDraftDesc vocabulary). */
+  desc: string
+  /** Optional flow name the mission.json should pin (mdo-4 P2 wizard passthrough). */
+  flowHint?: string
+  /** Optional project-relative target file/dir grounding the brief. */
+  targetFile?: string
+  /** Skip Stage 1 (legacy single-stage draft; phase starts at "draft"). */
+  skipBrief?: boolean
+  /** Opt-in terminal receipt: one plain-text line posted to this session. */
+  followup?: { sessionId: string }
+}
+
+export interface MdControlDraftResult {
+  jobId: string
+  jobDir: string
+  status: 'started'
+  startedAt: string
+}
+
+export interface MdControlAnalyzePayload {
+  projectRoot: string
+  /** Target run; omitted = most recent run on disk (mdcontrol.list scan). */
+  runId?: string
+}
+
+export interface MdControlAnalyzeResult {
+  targetRunId: string
+  targetRunDir: string
+  jobDir: string
+  postmortemFile: string | null
+  memoryUpdated: string | null
+  text: string
+}
+
+/** The five routes (M2-WI10 ×3 + M3-WI12 ×2). */
 export interface MdControlRoutes {
   'mdcontrol.run'(payload: unknown): Promise<MdControlRunResult>
   'mdcontrol.status'(payload: unknown): Promise<MdControlStatusResult>
   'mdcontrol.list'(payload: unknown): Promise<MdControlListResult>
+  'mdcontrol.draft'(payload: unknown): Promise<MdControlDraftResult>
+  'mdcontrol.analyze'(payload: unknown): Promise<MdControlAnalyzeResult>
 }
 
 // ── Active-run guard (1447-1 adjudication, see file header) ─────────────────
@@ -185,6 +248,27 @@ function requireString(payload: unknown, key: string): string {
     throw new MdControlError('bad-request', `missing or invalid "${key}"`)
   }
   return value
+}
+
+function optionalString(value: unknown, key: string): string | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'string' || value === '') {
+    throw new MdControlError('bad-request', `"${key}", when set, must be a non-empty string`)
+  }
+  return value
+}
+
+/** Engine's base.json read for the desc threshold (cmdDraftMission mirror). */
+function readBaseMinDescLength(projectRoot: string): number | undefined {
+  try {
+    const base = JSON.parse(readFileSync(join(resolve(projectRoot), 'missions', 'base.json'), 'utf8')) as
+      | { draft?: { minDescLength?: unknown } }
+      | null
+    const v = base?.draft?.minDescLength
+    return typeof v === 'number' && Number.isFinite(v) ? v : undefined
+  } catch {
+    return undefined
+  }
 }
 
 function readRunState(runDir: string): Record<string, unknown> | null {
@@ -235,6 +319,15 @@ interface LiveRunRecord {
   followup: { sessionId: string } | null
 }
 
+interface LiveDraftRecord {
+  jobId: string
+  jobDir: string
+  projectRoot: string
+  startedAt: string
+  terminal: { status: string; error: Error | null } | null
+  followup: { sessionId: string } | null
+}
+
 // ── Route record factory ────────────────────────────────────────────────────
 
 export interface CreateMdControlRoutesOptions {
@@ -257,24 +350,18 @@ export function createMdControlRoutes({
   now = () => new Date().toISOString(),
 }: CreateMdControlRoutesOptions): MdControlRoutes & { guard: ActiveRunGuard } {
   const records = new Map<string, LiveRunRecord>()
+  const drafts = new Map<string, LiveDraftRecord>()
 
-  const postReceipt = (record: LiveRunRecord, terminal: NativeRunTerminal): void => {
-    if (!record.followup) return
-    const line =
-      `[mdcontrol] run ${record.runId} finished: status=${terminal.status ?? 'error'} ` +
-      `exitCode=${terminal.exitCode}` +
-      (terminal.error ? ` error=${terminal.error.message}` : '')
+  /** Post one plain-text line to a session (shared run/draft receipt face). */
+  const postLineToSession = (sessionId: string, line: string, logLabel: string): void => {
     // resolveAgentsService: real cordis contexts require ctx.get(name) for
     // services the plugin never declared in inject (property read throws).
     const agents = resolveAgentsService(ctx) as
       | { get(id: string): { followup(message: unknown): void } | undefined }
       | undefined
-    const agent = typeof agents?.get === 'function' ? agents.get(record.followup.sessionId) : undefined
+    const agent = typeof agents?.get === 'function' ? agents.get(sessionId) : undefined
     if (!agent || typeof agent.followup !== 'function') {
-      logger?.warn?.('mdcontrol.run terminal receipt skipped (requesting session no longer live)', {
-        runId: record.runId,
-        sessionId: record.followup.sessionId,
-      })
+      logger?.warn?.(`${logLabel} terminal receipt skipped (requesting session no longer live)`, { sessionId })
       return
     }
     try {
@@ -282,13 +369,21 @@ export function createMdControlRoutes({
         content: [{ type: 'text', text: line }],
         source: { kind: 'user' },
       }))
-      logger?.info?.('mdcontrol.run terminal receipt posted', { runId: record.runId })
+      logger?.info?.(`${logLabel} terminal receipt posted`)
     } catch (err) {
-      logger?.warn?.('mdcontrol.run terminal receipt failed', {
-        runId: record.runId,
+      logger?.warn?.(`${logLabel} terminal receipt failed`, {
         error: err instanceof Error ? err.message : String(err),
       })
     }
+  }
+
+  const postReceipt = (record: LiveRunRecord, terminal: NativeRunTerminal): void => {
+    if (!record.followup) return
+    const line =
+      `[mdcontrol] run ${record.runId} finished: status=${terminal.status ?? 'error'} ` +
+      `exitCode=${terminal.exitCode}` +
+      (terminal.error ? ` error=${terminal.error.message}` : '')
+    postLineToSession(record.followup.sessionId, line, 'mdcontrol.run')
   }
 
   const settle = (record: LiveRunRecord, handle: ActiveRunHandle, terminal: NativeRunTerminal): void => {
@@ -296,6 +391,22 @@ export function createMdControlRoutes({
     record.endedAt = now()
     guard.release(handle)
     postReceipt(record, terminal)
+  }
+
+  const settleDraft = (
+    record: LiveDraftRecord,
+    handle: ActiveRunHandle,
+    terminal: { status: string; error: Error | null; state: Record<string, unknown> | null },
+  ): void => {
+    record.terminal = { status: terminal.status, error: terminal.error }
+    guard.release(handle)
+    if (!record.followup) return
+    const missionName = typeof terminal.state?.missionName === 'string' ? terminal.state.missionName : null
+    const line =
+      `[mdcontrol] draft ${record.jobId} finished: status=${terminal.status}` +
+      (missionName ? ` mission=${missionName}` : '') +
+      (terminal.error ? ` error=${terminal.error.message}` : '')
+    postLineToSession(record.followup.sessionId, line, 'mdcontrol.draft')
   }
 
   const routes: MdControlRoutes = {
@@ -320,9 +431,9 @@ export function createMdControlRoutes({
         const holder = guard.current(projectRoot)
         throw new MdControlError(
           'run-in-progress',
-          `a mission run is already active for project root ${resolve(projectRoot)}` +
-            (holder?.runId ? ` (runId ${holder.runId})` : '') +
-            ' — single run per project root (mdcontrol guard); wait for its terminal state or choose another root',
+          `a mission run or draft is already active for project root ${resolve(projectRoot)}` +
+            (holder?.runId ? ` (${holder.runId})` : '') +
+            ' — single engine activity per project root (mdcontrol guard; run and draft share the slot); wait for its terminal state or choose another root',
         )
       }
 
@@ -401,6 +512,98 @@ export function createMdControlRoutes({
         })
       }
       return { projectRoot: root, runs: [...byRunId.values()] }
+    },
+
+    async 'mdcontrol.draft'(payload) {
+      const projectRoot = requireString(payload, 'projectRoot')
+      const desc = requireString(payload, 'desc')
+      const p = payload as MdControlDraftPayload | null
+      const flowHint = optionalString(p?.flowHint, 'flowHint')
+      const targetFile = optionalString(p?.targetFile, 'targetFile')
+      if (p?.skipBrief !== undefined && typeof p?.skipBrief !== 'boolean') {
+        throw new MdControlError('bad-request', '"skipBrief", when set, must be a boolean')
+      }
+      const skipBrief = p?.skipBrief === true
+      const rawFollowup = p?.followup
+      if (rawFollowup !== undefined) {
+        if (typeof rawFollowup !== 'object' || rawFollowup === null || typeof rawFollowup.sessionId !== 'string' || rawFollowup.sessionId === '') {
+          throw new MdControlError('bad-request', '"followup", when set, must be { sessionId: string }')
+        }
+      }
+
+      // Fail-fast desc validation with the ENGINE's own validator (thin
+      // wrapper; keeps the engine's exitCode-setting rejection branch
+      // unreachable in-host) — BEFORE the guard, so a junk desc never
+      // occupies the root nor creates a jobDir.
+      const v = validateDraftDescription(desc, readBaseMinDescLength(projectRoot))
+      if (!v.ok) {
+        throw new MdControlError('bad-request', `invalid "desc": ${v.reason}`)
+      }
+
+      // Draft occupies the SAME root slot as run (1852-2 Phase 1 Decision 2:
+      // one engine activity per projectRoot).
+      const handle = guard.tryAcquire(projectRoot)
+      if (handle === null) {
+        const holder = guard.current(projectRoot)
+        throw new MdControlError(
+          'run-in-progress',
+          `a mission run or draft is already active for project root ${resolve(projectRoot)}` +
+            (holder?.runId ? ` (${holder.runId})` : '') +
+            ' — single engine activity per project root (mdcontrol guard; run and draft share the slot); wait for its terminal state or choose another root',
+        )
+      }
+
+      let start
+      try {
+        start = await beginNativeDraft({ ctx, projectRoot, desc, flowHint, targetFile, skipBrief })
+      } catch (err) {
+        guard.release(handle)
+        throw err
+      }
+      handle.runId = start.jobId
+
+      const record: LiveDraftRecord = {
+        jobId: start.jobId,
+        jobDir: start.jobDir,
+        projectRoot: resolve(projectRoot),
+        startedAt: now(),
+        terminal: null,
+        followup: rawFollowup ?? null,
+      }
+      drafts.set(start.jobId, record)
+
+      // Detached in-host task: the hanging promise never rejects (the bridge
+      // captures every error), so the guard release always runs — success,
+      // pipeline failure, and task crash alike.
+      void start.promise.then((terminal) => settleDraft(record, handle, terminal))
+
+      return { jobId: start.jobId, jobDir: start.jobDir, status: 'started', startedAt: record.startedAt }
+    },
+
+    async 'mdcontrol.analyze'(payload) {
+      const projectRoot = requireString(payload, 'projectRoot')
+      const runId = optionalString((payload as MdControlAnalyzePayload | null)?.runId, 'runId')
+      const root = resolve(projectRoot)
+
+      // Target resolution reuses the mdcontrol.list disk scan (run-state.json
+      // presence = run identity; draft/analyze job dirs never match).
+      const diskRows = listDiskRuns(root)
+      let target: { runId: string; runDir: string; mtimeMs: number } | undefined
+      if (runId === undefined) {
+        if (diskRows.length === 0) {
+          throw new MdControlError('not-found', `no runs found under ${join(root, '_tmp')} — nothing to analyze`)
+        }
+        target = [...diskRows].sort((a, b) => b.mtimeMs - a.mtimeMs)[0]
+      } else {
+        target = diskRows.find((r) => r.runId === runId)
+        if (target === undefined) {
+          throw new MdControlError('not-found', `run "${runId}" not found under ${join(root, '_tmp')} (no run-state.json)`)
+        }
+      }
+
+      // Synchronous single-turn job (1852-2 Phase 1 Decision 3): the result
+      // carries the postmortem outcome verbatim; no guard occupation.
+      return runNativeAnalyze({ ctx, projectRoot: root, targetRunDir: target.runDir, targetRunId: target.runId })
     },
   }
 

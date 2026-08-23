@@ -55,8 +55,14 @@
   config:
     persona: 'You are a software engineering step executor. When a prompt states an output contract, follow it exactly.'
     workspaceContext: false
+    # WI12: skills enabled — agent-spine mounts SkillRegistry +
+    # SkillFileSystem + toolSkill (its own dependency tree, base-bundle
+    # form), giving the mdcontrol service a real ctx.skills to register the
+    # three mission-control skills against (Phase 1 Decision 1). dshHome is
+    # hermetic via the DSH_HOME env the e2e driver points at the scratch
+    # root — no host-user skill discovery leaks into the gate.
     skills:
-      enabled: false
+      enabled: true
     toolBash:
       enableRunInBackground: false
     toolJobs: false

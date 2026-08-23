@@ -1,7 +1,8 @@
 /**
  * service.ts — Mission Control cordis service: `mdcontrol.*` routes wired
- * (dsh-plugin M2-WI10, plan `2026-08-23-1621-2` Phase 1; skeleton was
- * M2-WI6).
+ * (dsh-plugin M2-WI10, plan `2026-08-23-1621-2`; skeleton was M2-WI6;
+ * draft/analyze routes + skills registration landed M3-WI12, plan
+ * `2026-08-23-1852-2`).
  *
  * Mounted by `../cordis.patch.yml` inside an entry-local isolate realm
  * (`isolate: { missionControl: true }`, anchored-standard preset
@@ -9,20 +10,23 @@
  * (dsh installation → profile directory), exactly like the
  * dsh-better-sidebar bundle precedent.
  *
- * In-code ownership ledger (kept narrow on WI10 landing, per plan
- * §Deferred But Adjudicated — the draft-stage "routes — M2-WI10" scope was
- * split: run/status/list landed here, draft/analyze follow their job
- * semantics into M3 with the WI12 skills wiring, where they are a
- * completion precondition):
+ * In-code ownership ledger (1621-2 §Deferred draft/analyze adjudication
+ * collected by M3-WI12; skills row closed by the same plan):
  *   - `mdcontrol.run` / `mdcontrol.status` / `mdcontrol.list` — LANDED (M2-WI10):
  *     async job contract ({ runId, status: 'started' } detached in-host task,
  *     run-state passthrough reads, run enumeration) + plugin-level
  *     active-run guard (single run per projectRoot; 1447-1 adjudication
  *     collected) + opt-in terminal receipt (sixth host call `agents.get`,
  *     host-source verified — see mdcontrol-routes.ts header).
- *   - `mdcontrol.draft` / `mdcontrol.analyze` — M3 (WI12 completion
- *     precondition; plan §Deferred But Adjudicated).
- *   - skills registration (mission-control-run/draft/analyze) — M3-WI12.
+ *   - `mdcontrol.draft` / `mdcontrol.analyze` — LANDED (M3-WI12, plan
+ *     `2026-08-23-1852-2`): draft = async job contract through the
+ *     pre-authorized `cmdDraftMission` executor seam (draft-state.json
+ *     vocabulary reused; shares the active-run guard root slot);
+ *     analyze = synchronous single-turn postmortem through a plugin-owned
+ *     thin runner adapter over runPostmortem (zero engine diff).
+ *   - skills registration (mission-control-run/draft/analyze) — LANDED
+ *     (M3-WI12): runtime rows on `ctx.skills` via reactive `ctx.inject`
+ *     (see ./mdcontrol-skills.ts).
  *
  * Exposure surface (plan Phase 1 Decision 1, better-sidebar precedent):
  * the wire-method record lives in `./mdcontrol-routes.ts`; this service
@@ -39,6 +43,7 @@ import {
   registerMdControlHttpDispatcher,
   type MdControlRoutes,
 } from './mdcontrol-routes.ts'
+import { registerMissionControlSkills, type SkillsRegistryFace } from './mdcontrol-skills.ts'
 
 /** Plugin config row from cordis.patch.yml (`assetsDir: ./assets` today). */
 export interface MissionControlConfig {
@@ -79,13 +84,24 @@ export function apply(ctx: Context, config: MissionControlConfig = {}): void {
   // better-sidebar form: the effect's return value IS the route disposer.
   if (disposeHttp) ctx.effect(() => disposeHttp, 'mdcontrol: /mdcontrol/api routes')
 
+  // Skills registration (M3-WI12, Phase 1 Decision 1): reactive inject —
+  // the callback fires whenever the skills service is available (now or
+  // later), unloads + re-runs when it changes, and simply never activates
+  // in compositions without skills (the absent-webServer degrade posture;
+  // never blocks this service's own startup).
+  ctx.inject(['skills'], (skillsCtx: Context) => {
+    const skills = (typeof skillsCtx.get === 'function' ? skillsCtx.get('skills') : undefined) as SkillsRegistryFace | undefined
+    return registerMissionControlSkills(skills, logger)
+  })
+
   ctx.logger(LOGGER_NAME).info('mission-control mounted', {
     scope: 'mdcontrol',
-    phase: 'M2-WI10',
+    phase: 'M3-WI12',
     assetsDir: config.assetsDir ?? './assets',
-    routes: 'run/status/list (M2-WI10); draft/analyze → M3 (WI12 precondition)',
+    routes: 'run/status/list (M2-WI10) + draft/analyze (M3-WI12)',
+    skills: 'mission-control-run/draft/analyze (M3-WI12)',
     httpDispatcher: disposeHttp ? '/mdcontrol/api' : 'absent (webServer not provided)',
-    guard: 'single-run-per-projectRoot (1447-1 adjudication)',
+    guard: 'single-engine-activity-per-projectRoot, run+draft shared slot (1447-1 + 1852-2 adjudications)',
   })
 }
 

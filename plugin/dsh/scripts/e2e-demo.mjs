@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * e2e-demo.mjs — L4 dual-leg end-to-end runs (dsh-plugin M2-WI10 + M3-WI11,
- * plans `2026-08-23-1621-2` Phase 2 / `2026-08-23-1852-1` Phase 3; P2/P3 gate
- * evidence producer).
+ * e2e-demo.mjs — L4 dual-leg end-to-end runs (dsh-plugin M2-WI10 + M3-WI11 +
+ * M3-WI12, plans `2026-08-23-1621-2` Phase 2 / `2026-08-23-1852-1` Phase 3 /
+ * `2026-08-23-1852-2` Phase 4; P2/P3 gate evidence producer).
  *
  * Leg pairs (same scratch project, same scripted model policy — e2e-policy.mjs):
  *
@@ -42,6 +42,24 @@
  *     is out of the deterministic gate (verification scope limited — a real
  *     -model leg, if ever taken, is an env-gated manual item per the
  *     verify:native posture).
+ *
+ *   WI12 legs (M3-WI12, in the native boot — skills + draft/analyze routes)
+ *     - skills: agent-spine `skills: enabled` mounts SkillRegistry +
+ *       SkillFileSystem + toolSkill (base-bundle form); the mdcontrol
+ *       service registers the three mission-control skills via reactive
+ *       ctx.inject. Gate: ctx.skills.list() carries all three names
+ *       (membership plane; true-model natural-language invocation is an
+ *       env-manual item, NOT in this deterministic gate). DSH_HOME points
+ *       at the scratch root — hermetic skill discovery.
+ *     - analyze (synchronous route): explicit-runId + latest-run legs over
+ *       the demo/onboarding runs; stub answers the postmortem turn with the
+ *       <POSTMORTEM_FILE>/<MEMORY_UPDATED> return tags; gate = verbatim tag
+ *       parse + target resolution + exactly one dispatch per call.
+ *     - draft (async route): mdcontrol.draft returns immediately; stub
+ *       answers the brief (gate pass + brief file tag) then the draft
+ *       (MISSION_FILE tag pointing at a pre-created mission — the stub
+ *       cannot write files; parse mechanism is what is gated); draft-state
+ *       terminal completed/completed with briefGate/missionName parsed.
  *
  * Assertions (gates):
  *   1. mdcontrol.run returns immediately; each run reaches terminal
@@ -90,7 +108,7 @@ import {
   CORRECTION_PHRASE,
   BROKEN_MARKER,
   ONBOARDING_PHRASES,
-  lastUserTextOfChatBody,
+  lastNonReminderUserTextOfChatBody,
   policyForPrompt,
   stubResponseText,
 } from "./e2e-policy.mjs";
@@ -257,7 +275,9 @@ function createScriptedModelServer() {
     request.setEncoding("utf8");
     request.on("data", (chunk) => { body += chunk; });
     request.on("end", () => {
-      const lastUserText = lastUserTextOfChatBody(body);
+      // WI12: skip the skills-enabled composition's appended <system-reminder>
+      // catalog message — the material to act on is the last REAL user text.
+      const lastUserText = lastNonReminderUserTextOfChatBody(body);
       const policy = policyForPrompt(lastUserText ?? "");
       if (policy === null) {
         response.writeHead(500, { "content-type": "application/json" });
@@ -292,6 +312,12 @@ async function runNativeLegs(root, report, failures) {
 
   process.env.DSH_CWD = root;
   process.env.DSH_SESSION_ROOT = sessionsDir;
+  // WI12: hermetic dsh-home for the skills filesystem (agent-spine mounts
+  // SkillRegistry + SkillFileSystem when skills are enabled) — no host-user
+  // skill discovery leaks into the gate.
+  const dshHome = join(root, "dsh-home");
+  mkdirSync(dshHome, { recursive: true });
+  process.env.DSH_HOME = dshHome;
   process.env.DEEPSEEK_API_KEY = "e2e-stub-no-call";
   process.env.DEEPSEEK_BASE_URL = `http://127.0.0.1:${port}`;
 
@@ -385,6 +411,84 @@ async function runNativeLegs(root, report, failures) {
       runStatePath: obStatePath,
       stubRequests: obRequests,
     };
+
+    /* ── WI12 legs: skills registration + analyze (sync) + draft (async) ── */
+
+    // 1. skills registration face: ctx.skills.list() shows the three
+    //    mission-control rows (reactive ctx.inject — poll until mounted).
+    const wi12SkillNames = await waitForSkills(ctx, failures);
+    report.wi12Skills = wi12SkillNames;
+
+    // 2. analyze (synchronous single dispatch) — explicit runId leg.
+    const wi12Start = stub.requests.length;
+    const anExplicit = await svc.routes["mdcontrol.analyze"]({ projectRoot: root, runId: RUNS.nativeDemo });
+    console.log(`[e2e] mdcontrol.analyze (explicit ${RUNS.nativeDemo}) → postmortemFile=${anExplicit.postmortemFile} memoryUpdated=${anExplicit.memoryUpdated}`);
+    if (anExplicit.targetRunId !== RUNS.nativeDemo) {
+      failures.push(`analyze explicit: targetRunId ${anExplicit.targetRunId} ≠ ${RUNS.nativeDemo}`);
+    }
+    if (anExplicit.postmortemFile !== "docs/postmortems/e2e-postmortem.md" || anExplicit.memoryUpdated !== "no") {
+      failures.push(`analyze explicit: return tags not parsed verbatim (${JSON.stringify({ postmortemFile: anExplicit.postmortemFile, memoryUpdated: anExplicit.memoryUpdated })})`);
+    }
+    if (!anExplicit.text.includes("<POSTMORTEM_FILE>")) {
+      failures.push("analyze explicit: result text does not carry the postmortem report");
+    }
+
+    // 3. analyze — latest-run leg (disk mtime scan reuse; nativeOnboarding
+    //    settled last, so it is deterministically the most recent run).
+    const anLatest = await svc.routes["mdcontrol.analyze"]({ projectRoot: root });
+    console.log(`[e2e] mdcontrol.analyze (latest) → targetRunId=${anLatest.targetRunId}`);
+    if (anLatest.targetRunId !== RUNS.nativeOnboarding) {
+      failures.push(`analyze latest: targetRunId ${anLatest.targetRunId} ≠ ${RUNS.nativeOnboarding} (expected most-recent by mtime)`);
+    }
+
+    // 4. draft — async two-stage job over the executor seam. The generated
+    //    mission file is pre-created as the MISSION_FILE tag target
+    //    (mechanism plane: the stub cannot write files; the engine's
+    //    parseDraftArtifact reads the tag target / falls back to the
+    //    missionsDir scan, which finds this file as the newest with a
+    //    roadmapPath).
+    writeFileSync(join(root, "missions", "e2e-generated-mission.json"), JSON.stringify({
+      name: "e2e-generated-mission",
+      description: "WI12 draft-leg generated mission (stub domain)",
+      roadmapPath: "docs/backlog/e2e-generated-roadmap.md",
+      plansDir: "docs/plans/e2e/e2e-generated-mission",
+    }, null, 2), "utf8");
+    const draftT0 = Date.now();
+    const draftStarted = await svc.routes["mdcontrol.draft"]({
+      projectRoot: root,
+      desc: "generate the e2e WI12 draft-leg mission",
+    });
+    const draftElapsedMs = Date.now() - draftT0;
+    console.log(`[e2e] mdcontrol.draft resolved in ${draftElapsedMs}ms → ${JSON.stringify(draftStarted)}`);
+    if (draftStarted.status !== "started" || !/^draft-\d{8}-\d{6}-\d{3}/.test(draftStarted.jobId)) {
+      failures.push(`mdcontrol.draft returned ${JSON.stringify(draftStarted)} — expected { jobId: 'draft-…', status: 'started' }`);
+    }
+    if (draftElapsedMs > 500) {
+      failures.push(`mdcontrol.draft took ${draftElapsedMs}ms — async contract violated`);
+    }
+    const draftStatePath = join(draftStarted.jobDir, "draft-state.json");
+    const draftState = await waitForJsonField(draftStatePath, "status", (v) => v !== "running", "draft terminal");
+    console.log(`[e2e] draft-state terminal: ${JSON.stringify(draftState)}`);
+    if (draftState.status !== "completed" || draftState.phase !== "completed") {
+      failures.push(`draft terminal ${draftState.status}/${draftState.phase} — expected completed/completed`);
+    }
+    if (draftState.briefGate !== "pass" || draftState.briefPath !== "docs/backlog/e2e-generated-brief.md") {
+      failures.push(`draft brief stage not reflected in state (${JSON.stringify({ briefGate: draftState.briefGate, briefPath: draftState.briefPath })})`);
+    }
+    if (draftState.missionName !== "e2e-generated-mission") {
+      failures.push(`draft missionName ${JSON.stringify(draftState.missionName)} — expected the pre-created tag target via parse fallback`);
+    }
+
+    // Stub sequence for the WI12 legs: analyze ×2, brief, draft.
+    const wi12Requests = stub.requests.slice(wi12Start);
+    const wi12Kinds = wi12Requests.map((r) => r.policyKind);
+    console.log(`[e2e] stub model served ${wi12Requests.length} WI12 request(s): ${wi12Kinds.join(" → ")}`);
+    const expectedW12Kinds = ["WI12-ANALYZE", "WI12-ANALYZE", "WI12-BRIEF", "WI12-DRAFT"];
+    if (wi12Kinds.join(",") !== expectedW12Kinds.join(",")) {
+      failures.push(`WI12 stub sequence ${wi12Kinds.join(",")} — expected exactly ${expectedW12Kinds.join(",")}`);
+    }
+    report.wi12Leg = { analyzeExplicit: anExplicit, analyzeLatestTarget: anLatest.targetRunId, stubRequests: wi12Requests };
+
     return { failures, demoState, obState, sessionsDir };
   } finally {
     await ctx.fiber.dispose().catch(() => {});
@@ -398,6 +502,45 @@ async function waitForTerminal(svc, root, runId) {
     const status = await svc.routes["mdcontrol.status"]({ projectRoot: root, runId });
     if (status.terminal !== null) return status;
     if (Date.now() > deadline) throw new Error(`native run ${runId} did not reach terminal within ${TERMINAL_TIMEOUT_MS}ms`);
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
+
+/**
+ * WI12: poll the driver-level ctx until ctx.skills.list() contains all three
+ * mission-control rows (registration runs in a reactive ctx.inject fiber, so
+ * it may land shortly after boot settles).
+ */
+async function waitForSkills(ctx, failures) {
+  const wanted = ["mission-control-run", "mission-control-draft", "mission-control-analyze"];
+  const deadline = Date.now() + 15_000;
+  for (;;) {
+    try {
+      const skills = ctx.get("skills");
+      if (skills && typeof skills.list === "function") {
+        const names = (await skills.list()).map((s) => s.name);
+        if (wanted.every((n) => names.includes(n))) {
+          console.log(`[e2e] ctx.skills.list() carries all three mission-control skills (${names.filter((n) => n.startsWith("mission-control")).join(", ")})`);
+          return names;
+        }
+      }
+    } catch { /* service not yet published */ }
+    if (Date.now() > deadline) {
+      failures.push(`ctx.skills did not surface the three mission-control skills within 15s (wanted ${wanted.join(", ")})`);
+      return null;
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
+
+/** WI12: poll a JSON file until one field passes a predicate (draft-state terminal). */
+async function waitForJsonField(file, field, accept, label) {
+  const deadline = Date.now() + TERMINAL_TIMEOUT_MS;
+  for (;;) {
+    let parsed = null;
+    try { parsed = JSON.parse(readFileSync(file, "utf8")); } catch { /* not written yet */ }
+    if (parsed && accept(parsed[field])) return parsed;
+    if (Date.now() > deadline) throw new Error(`waitForJsonField(${label}) timed out at ${file}`);
     await new Promise((r) => setTimeout(r, 100));
   }
 }
@@ -623,7 +766,7 @@ async function main(argv = process.argv.slice(2)) {
 
   console.log("");
   if (failures.length === 0) {
-    console.log(`[e2e] SUMMARY: PASS — demo dual-leg green (shape identity, markers parsed, correction-retry recovered once) + onboarding dual-form parity (shape identity, bounded 3-turn script, markers valid for the real flow) + descriptor rows healthy (mdcontrol/continuable) + monitor render green (stepLogs/logs/node-detail, oc- & native-)`);
+    console.log(`[e2e] SUMMARY: PASS — demo dual-leg green (shape identity, markers parsed, correction-retry recovered once) + onboarding dual-form parity (shape identity, bounded 3-turn script, markers valid for the real flow) + descriptor rows healthy (mdcontrol/continuable) + monitor render green (stepLogs/logs/node-detail, oc- & native-) + WI12 legs green (3 skills in ctx.skills.list(), analyze explicit+latest tag-parse verbatim, draft async two-stage terminal completed with briefGate/missionName parsed)`);
     console.log(`[e2e] report: ${join(root, "e2e-report.json")}`);
   } else {
     console.error(`[e2e] SUMMARY: FAIL — ${failures.length} failure(s):`);

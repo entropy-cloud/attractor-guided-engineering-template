@@ -46,6 +46,24 @@ export function __setRunnerFactoryForTest(fn) {
   return prev;
 }
 
+// Executor-backed runner adapter (dsh-plugin M3-WI12, pre-authorized narrow
+// seam): cmdDraftMission(desc, { executor }) consumes a StepExecutor instance
+// (the WI1 interface — the plugin's NativeExecutor) instead of building the
+// process runner, so a plugin host dispatches the brief/draft agent turns
+// natively. Mirrors how orchestrateRun({ config, executor }) accepts the same
+// interface. The adapter maps the runner face cmdDraftMission consumes onto
+// executeAgent 1:1; dispose (optional on the interface) backs close(). The
+// result objects are the same StepAgentResult shape both backends produce.
+function runnerFromExecutor(executor) {
+  return {
+    runAgent: (stepName, prompt, system, sessionId) =>
+      executor.executeAgent(stepName, prompt, system, sessionId ?? null, undefined, undefined),
+    async close() {
+      await executor.dispose?.();
+    },
+  };
+}
+
 // ── bootstrap ───────────────────────────────────────────────────────────────
 
 /**
@@ -299,7 +317,13 @@ async function cmdDraftMission(desc, opts) {
     skipBrief: opts.skipBrief === true,
   };
   const resolved = resolveConfig({ ...opts, ...config });
-  const runner = await __runnerFactory(resolved);
+  // M3-WI12 seam: an injected executor (StepExecutor) replaces the process
+  // runner. `executor` is NOT a resolveConfig key (unknown keys are ignored by
+  // every branch), and the CLI path passes no executor — `__runnerFactory`
+  // behavior there is byte-identical.
+  const runner = opts.executor
+    ? runnerFromExecutor(opts.executor)
+    : await __runnerFactory(resolved);
 
   // WI1 (draft-robustness-design §4.1): deterministic desc validation BEFORE
   // the running re-affirm below — rejected descriptions must never be persisted

@@ -2,7 +2,8 @@
  * engine-bridge.ts — programmatic entry wrapping engine orchestration with
  * the execution-backend selection factory (dsh-plugin M2-WI7, plan
  * `2026-08-23-1447-2` Phase 2; `mdcontrol.*` routes + the detached start
- * primitive `beginNativeMission` land with M2-WI10, plan `2026-08-23-1621-2`).
+ * primitive `beginNativeMission` land with M2-WI10, plan `2026-08-23-1621-2`;
+ * the draft/analyze variants land with M3-WI12, plan `2026-08-23-1852-2`).
  *
  * The engine already exposes the programmatic surface this bridge wraps —
  * `assets/src/orchestrator.js` (the committed bundle copy of
@@ -14,6 +15,14 @@
  *                                                 injected StepExecutor and
  *                                                 map the terminal status
  *                                                 through EXIT_MAP
+ *   cmdDraftMission(desc, { executor })         → two-stage brief→draft
+ *                                                 pipeline (executor seam =
+ *                                                 M3-WI12 pre-authorized
+ *                                                 narrow engine diff)
+ *   runPostmortem({ …, runner })                → Reflexion postmortem
+ *                                                 (analyze dispatch seam:
+ *                                                 plugin-owned thin runner
+ *                                                 adapter, zero engine diff)
  *
  * Backend selection factory (M1 plan 1 deferred item, collected here):
  *   driver === "native" → PER-RUN `new NativeExecutor({ agents, config })`
@@ -37,8 +46,16 @@
  * headless CLI driver behind the same surface) is a separate explicit
  * decision, never triggered implicitly by an exception path.
  */
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import type { AgentRegistry } from '@deepseek-ai/dsh-agent'
-import { bootstrap as engineBootstrap, orchestrateRun as engineOrchestrateRun } from '../assets/src/orchestrator.js'
+import {
+  bootstrap as engineBootstrap,
+  cmdDraftMission,
+  orchestrateRun as engineOrchestrateRun,
+  validateDraftDesc,
+} from '../assets/src/orchestrator.js'
+import { runPostmortem } from '../assets/src/postmortem.mjs'
 import { createRunner } from '../assets/src/runner.js'
 import { ProcessExecutor } from '../assets/src/step-executor.js'
 import { createNativeExecutor, type NativeExecutor, type StepAgentResult, type StepToolResult } from './native-executor.ts'
@@ -208,4 +225,222 @@ export async function beginNativeMission(
     }
   })()
   return { runId, runDir: String(config.runDir ?? ''), config, promise }
+}
+
+// ── Native draft start (async job contract) — M3-WI12 ───────────────────────
+
+/** Terminal record of one detached native draft job (promise never rejects). */
+export interface NativeDraftTerminal {
+  /** Final draft-state.json status; 'unknown' when no state file landed. */
+  status: string
+  error: Error | null
+  /** Final draft-state.json contents (best-effort read at settle time). */
+  state: Record<string, unknown> | null
+}
+
+/** Product of beginNativeDraft: job identity + the hanging draft promise. */
+export interface NativeDraftStart {
+  jobId: string
+  jobDir: string
+  promise: Promise<NativeDraftTerminal>
+}
+
+export interface BeginNativeDraftArgs {
+  ctx: HostContext
+  projectRoot: string
+  desc: string
+  flowHint?: string
+  targetFile?: string
+  skipBrief?: boolean
+  /** Stamp override for deterministic tests (jobId derives from it). */
+  now?: () => Date
+}
+
+/** `draft-<YYYYMMDD-HHmmss-sss>-mission-draft` (engine startDraftJob vocabulary). */
+function draftJobIdOf(now: () => Date): string {
+  const pad = (n: number, w = 2) => String(n).padStart(w, '0')
+  const d = now()
+  return `draft-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-` +
+    `${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}-${pad(d.getMilliseconds(), 3)}-mission-draft`
+}
+
+function readJsonSafe(file: string): Record<string, unknown> | null {
+  try {
+    return JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Light base.json read for the draft/analyze executor configs (WI12 e2e
+ * finding: a create without agentOptions fails every turn with "has no
+ * provider/model" — M2-WI10 finding, same fix). Mirrors the engine's own
+ * draft/analyze base read (loadBaseAndInjectEnv → model/agent fields)
+ * WITHOUT the env side effects — the draft pipeline's resolveConfig still
+ * performs the authoritative resolution inside the task.
+ */
+function baseAgentConfigOf(projectRoot: string): { model?: string; agent?: string } {
+  const base = readJsonSafe(resolve(projectRoot, 'missions', 'base.json'))
+  const model = typeof base?.model === 'string' && base.model !== '' ? base.model : undefined
+  const agent = typeof base?.agent === 'string' && base.agent !== '' ? base.agent : undefined
+  const out: { model?: string; agent?: string } = {}
+  if (model !== undefined) out.model = model
+  if (agent !== undefined) out.agent = agent
+  return out
+}
+
+/**
+ * Start one native two-stage draft WITHOUT waiting for its terminal state
+ * (M3-WI12 Phase 1 Decision 2: in-host detached task × native executor × the
+ * pre-authorized `cmdDraftMission` executor seam).
+ *
+ * jobDir + the initial `draft-state.json` mirror the engine's startDraftJob
+ * vocabulary EXACTLY (jobId shape, `status: "running"`, `phase: "brief" |
+ * "draft"`, flowHint/targetFile surfaced) — the monitor/CLI consumption face
+ * is reused, not re-invented. The executor is created BEFORE the task exists
+ * (missing agents service = plain exception, guard never occupied); the
+ * task's runner adapter owns the single executor dispose (cmdDraftMission
+ * calls runner.close() on every exit path — no second dispose site here).
+ */
+export async function beginNativeDraft(
+  { ctx, projectRoot, desc, flowHint, targetFile, skipBrief, now = () => new Date() }: BeginNativeDraftArgs,
+): Promise<NativeDraftStart> {
+  const root = resolve(projectRoot)
+  const jobId0 = draftJobIdOf(now)
+  let jobId = jobId0
+  let jobDir = resolve(root, '_tmp', jobId)
+  // Same-instant double-submit guard (engine startDraftJob precedent).
+  for (let guardCount = 0; existsSync(jobDir) && guardCount < 8; guardCount += 1) {
+    jobId = `${jobId0.slice(0, -'-mission-draft'.length)}-${Math.random().toString(36).slice(2, 6)}-mission-draft`
+    jobDir = resolve(root, '_tmp', jobId)
+  }
+  mkdirSync(jobDir, { recursive: true })
+  writeFileSync(resolve(jobDir, 'draft-state.json'), JSON.stringify({
+    jobId,
+    status: 'running',
+    startedAt: now().toISOString(),
+    desc,
+    phase: skipBrief === true ? 'draft' : 'brief',
+    flowHint: flowHint || null,
+    targetFile: targetFile || null,
+  }, null, 2), 'utf8')
+
+  const executor = await resolveExecutor({
+    driver: 'native',
+    ctx,
+    config: { projectRoot: root, runDir: jobDir, ...baseAgentConfigOf(root) },
+  })
+
+  const promise = (async () => {
+    try {
+      await cmdDraftMission(desc, {
+        dir: root,
+        draftJobDir: jobDir,
+        flowHint,
+        targetFile,
+        skipBrief,
+        driver: 'native',
+        allowNativeDriver: true,
+        executor,
+      })
+      const state = readJsonSafe(resolve(jobDir, 'draft-state.json'))
+      return { status: typeof state?.status === 'string' ? state.status : 'unknown', error: null, state }
+    } catch (error) {
+      const state = readJsonSafe(resolve(jobDir, 'draft-state.json'))
+      return {
+        status: typeof state?.status === 'string' ? state.status : 'unknown',
+        error: error instanceof Error ? error : new Error(String(error)),
+        state,
+      }
+    }
+  })()
+  return { jobId, jobDir, promise }
+}
+
+/**
+ * Route-side fail-fast description validation — the ENGINE's own
+ * validateDraftDesc (thin wrapper; single-sourced vocabulary). Running it
+ * before the job starts keeps the engine's `process.exitCode = 1` validation
+ * branch unreachable in-host and rejects junk descriptions as wire errors
+ * before any jobDir exists.
+ */
+export function validateDraftDescription(desc: string, minDescLength?: number): { ok: boolean; reason?: string } {
+  return validateDraftDesc(desc, minDescLength)
+}
+
+// ── Native analyze (synchronous single-turn job) — M3-WI12 ──────────────────
+
+export interface RunNativeAnalyzeArgs {
+  ctx: HostContext
+  projectRoot: string
+  targetRunDir: string
+  targetRunId: string
+  /** Stamp override for deterministic tests (jobDir derives from it). */
+  now?: () => number
+}
+
+/** Route result of mdcontrol.analyze (runPostmortem product + job identity). */
+export interface NativeAnalyzeResult {
+  targetRunId: string
+  targetRunDir: string
+  /** Scratch dir for this analyze dispatch (engine CLI `_tmp/analyze-run-<ts>` vocabulary). */
+  jobDir: string
+  postmortemFile: string | null
+  memoryUpdated: string | null
+  text: string
+}
+
+/**
+ * Run ONE Reflexion postmortem natively (M3-WI12 Phase 1 Decision 3 option
+ * (a)): the engine's runPostmortem is called directly — the whole pipeline
+ * (skeleton build, module detect, prompt resolve, return-tag parse) stays
+ * engine-owned — over a plugin-owned thin runner adapter on a per-call
+ * NativeExecutor. Lifecycle ownership (route-review N3): runPostmortem never
+ * closes the runner, so this adapter's finally arm is the SINGLE dispose
+ * site (no double-close surface; mirrors runNativeMission's finally form).
+ */
+export async function runNativeAnalyze(
+  { ctx, projectRoot, targetRunDir, targetRunId, now = Date.now }: RunNativeAnalyzeArgs,
+): Promise<NativeAnalyzeResult> {
+  const root = resolve(projectRoot)
+  let jobDir = resolve(root, '_tmp', `analyze-run-${now()}`)
+  for (let guardCount = 0; existsSync(jobDir) && guardCount < 8; guardCount += 1) {
+    jobDir = resolve(root, '_tmp', `analyze-run-${now()}-${Math.random().toString(36).slice(2, 6)}`)
+  }
+  mkdirSync(jobDir, { recursive: true })
+
+  const executor = await resolveExecutor({
+    driver: 'native',
+    ctx,
+    config: { projectRoot: root, runDir: jobDir, ...baseAgentConfigOf(root) },
+  })
+  try {
+    const runner = {
+      runAgent: (
+        stepName: string,
+        prompt: string,
+        system: string,
+        sessionId: string | null,
+      ) => executor.executeAgent(stepName, prompt, system, sessionId, undefined, undefined),
+    }
+    const res = await runPostmortem({
+      projectRoot: root,
+      missionsDir: resolve(root, 'missions'),
+      targetRunDir,
+      targetRunId,
+      runner,
+      opts: {},
+    })
+    return {
+      targetRunId,
+      targetRunDir,
+      jobDir,
+      postmortemFile: res.postmortemFile,
+      memoryUpdated: res.memoryUpdated,
+      text: res.text,
+    }
+  } finally {
+    await executor.dispose?.()
+  }
 }

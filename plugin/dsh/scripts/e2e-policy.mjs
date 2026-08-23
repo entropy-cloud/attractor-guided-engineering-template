@@ -43,6 +43,29 @@ export const ONBOARDING_PHRASES = {
   DRAFT_PLANS: "Draft 1-3 plans from the remaining roadmap items",
 };
 
+/**
+ * Draft/analyze routing (WI12): routes on the REAL engine prompt openers —
+ * mission-brief.md / mission-draft.md / run-postmortem.md. The brief answer
+ * passes the gate and names a brief file (existence not required — the
+ * engine only parses the tag); the draft answer emits a MISSION_FILE tag
+ * whose target the e2e pre-creates (mechanism-plane: tag parse → fallback
+ * scan); the analyze answer carries both return tags runPostmortem parses.
+ */
+export const WI12_PHRASES = {
+  BRIEF: "Generate a concise mission brief",
+  DRAFT: "Generate a mission config file for the mission driver",
+  ANALYZE: "Reliability Engineer",
+};
+
+export const WI12_RESPONSES = {
+  "WI12-BRIEF":
+    "<BRIEF_FILE>docs/backlog/e2e-generated-brief.md</BRIEF_FILE>\n<BRIEF_GATE>pass</BRIEF_GATE>",
+  "WI12-DRAFT":
+    "<AI_STEP_RESULT>created</AI_STEP_RESULT>\n<MISSION_FILE>missions/e2e-generated-mission.json</MISSION_FILE>",
+  "WI12-ANALYZE":
+    "<POSTMORTEM_FILE>docs/postmortems/e2e-postmortem.md</POSTMORTEM_FILE>\n<MEMORY_UPDATED>no</MEMORY_UPDATED>",
+};
+
 /** Marker the artificial REVIEW break emits (not in any transition map). */
 export const BROKEN_MARKER = "banana";
 
@@ -76,11 +99,21 @@ export function policyForPrompt(text) {
   if (text.includes(ONBOARDING_PHRASES.DRAFT_PLANS)) {
     return { kind: "ONBOARDING-DRAFT_PLANS", marker: "nothing", artificialBreak: false };
   }
+  if (text.includes(WI12_PHRASES.BRIEF)) {
+    return { kind: "WI12-BRIEF", marker: "pass", artificialBreak: false };
+  }
+  if (text.includes(WI12_PHRASES.DRAFT)) {
+    return { kind: "WI12-DRAFT", marker: "created", artificialBreak: false };
+  }
+  if (text.includes(WI12_PHRASES.ANALYZE)) {
+    return { kind: "WI12-ANALYZE", marker: "pass", artificialBreak: false };
+  }
   return null;
 }
 
 /** Stub driver output text (marker + a ses_-prefixed id for session harvest). */
 export function stubResponseText(policy) {
+  if (policy.kind in WI12_RESPONSES) return WI12_RESPONSES[policy.kind];
   return `session: ses_e2e_stub_1\n<AI_STEP_RESULT>${policy.marker}</AI_STEP_RESULT>`;
 }
 
@@ -107,6 +140,39 @@ export function lastUserTextOfChatBody(body) {
         .join("\n");
     }
     return null;
+  }
+  return null;
+}
+
+/**
+ * WI12: the skills-enabled composition appends a durable user-role
+ * `<system-reminder>` skill-catalog message AFTER the step prompt, so the
+ * plain last-user-text is the catalog block, not the material to act on.
+ * Walk user messages backwards SKIPPING system-reminder bodies and return
+ * the last real one (step prompts never start with the marker).
+ */
+export function lastNonReminderUserTextOfChatBody(body) {
+  let messages = [];
+  try {
+    const parsed = typeof body === "string" ? JSON.parse(body) : body;
+    messages = Array.isArray(parsed?.messages) ? parsed.messages : [];
+  } catch {
+    return null;
+  }
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const m = messages[i];
+    if (!m || m.role !== "user") continue;
+    let text = null;
+    if (typeof m.content === "string") text = m.content;
+    else if (Array.isArray(m.content)) {
+      text = m.content
+        .filter((b) => b && b.type === "text" && typeof b.text === "string")
+        .map((b) => b.text)
+        .join("\n");
+    }
+    if (text === null) return null;
+    if (text.trimStart().startsWith("<system-reminder>")) continue;
+    return text;
   }
   return null;
 }
