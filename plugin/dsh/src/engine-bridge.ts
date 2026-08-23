@@ -1,7 +1,8 @@
 /**
  * engine-bridge.ts — programmatic entry wrapping engine orchestration with
  * the execution-backend selection factory (dsh-plugin M2-WI7, plan
- * `2026-08-23-1447-2` Phase 2; `mdcontrol.*` routes land with M2-WI10).
+ * `2026-08-23-1447-2` Phase 2; `mdcontrol.*` routes + the detached start
+ * primitive `beginNativeMission` land with M2-WI10, plan `2026-08-23-1621-2`).
  *
  * The engine already exposes the programmatic surface this bridge wraps —
  * `assets/src/orchestrator.js` (the committed bundle copy of
@@ -150,4 +151,61 @@ export async function runNativeMission(
   } finally {
     await executor.dispose?.()
   }
+}
+
+// ── Detached (async job contract) start — M2-WI10 ───────────────────────────
+
+/** Terminal record of one detached native run (promise never rejects). */
+export interface NativeRunTerminal {
+  exitCode: number
+  status?: string
+  error: Error | null
+}
+
+/** Product of beginNativeMission: identity + the hanging run promise. */
+export interface NativeRunStart {
+  runId: string
+  runDir: string
+  config: EngineConfigHandle
+  /**
+   * The engine loop as a detached in-host task (mdcontrol.run async
+   * contract, packaging doc §Service Surface). NEVER awaited by the route —
+   * resolves at terminal state, captures every rejection (the route's
+   * terminal handler must always run: guard release + terminal record), and
+   * owns the single run-terminal executor dispose in its finally arm
+   * (identical to runNativeMission's — no second dispose site).
+   */
+  promise: Promise<NativeRunTerminal>
+}
+
+/**
+ * Start one native mission WITHOUT waiting for its terminal state — the
+ * engine orchestration entry is started as an un-awaited in-host promise
+ * (detached HOST TASK, not an OS process; precedent: the engine's own
+ * draft-job.mjs detached job + state file + monitor polling). Zero engine
+ * diff: `orchestrateRun` itself is simply not awaited by this caller.
+ *
+ * Fail-fast posture (plan Phase 1): config bootstrap and executor selection
+ * both happen BEFORE the task promise exists, so validation errors (unknown
+ * mission, unsupported driver) and a missing agents service propagate to the
+ * caller as plain exceptions — the route maps them to wire errors with the
+ * guard never occupied.
+ */
+export async function beginNativeMission(
+  { ctx, projectRoot, args }: { ctx: HostContext; projectRoot: string; args?: Record<string, unknown> },
+): Promise<NativeRunStart> {
+  const config = bootstrapNativeConfig(projectRoot, args)
+  const executor = await resolveExecutor({ driver: config.driver, ctx, config })
+  const runId = config.runDir ? String(config.runDir).split(/[\\/]/).filter(Boolean).pop() ?? '' : ''
+  const promise = (async () => {
+    try {
+      const result = await engineOrchestrateRun({ config, executor })
+      return { exitCode: result.exitCode ?? 1, status: result.status, error: null }
+    } catch (error) {
+      return { exitCode: 1, status: undefined, error: error instanceof Error ? error : new Error(String(error)) }
+    } finally {
+      await executor.dispose?.()
+    }
+  })()
+  return { runId, runDir: String(config.runDir ?? ''), config, promise }
 }

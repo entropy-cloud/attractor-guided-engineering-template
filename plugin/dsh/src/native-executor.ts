@@ -234,6 +234,12 @@ function appendSafe(file: string | null, text: string): void {
   try { appendFileSync(file, text) } catch { /* best-effort artifact write */ }
 }
 
+/** Read a non-empty string field off the engine config (call-time read). */
+function configString(config: NativeExecutorConfig, key: string): string | undefined {
+  const value = (config as Record<string, unknown>)[key]
+  return typeof value === 'string' && value !== '' ? value : undefined
+}
+
 // ── NativeExecutor implementation ───────────────────────────────────────────
 
 /**
@@ -318,6 +324,15 @@ export class DshNativeExecutor implements NativeExecutor {
    * agents.resume({ resumeSessionId }) (persisted-session continuity), falling
    * back to a fresh create when resume is impossible (e.g. the session was
    * removed from the store by a watchdog dispose).
+   *
+   * agentOptions { provider, model } follow the sdk-jsonrpc-server /
+   * dsh-headless precedents (both pass them on create for no-preset-roster
+   * compositions whose model-facing rows sit in the host plane — the L4 e2e
+   * discovered a create without them fails every turn with "has no
+   * provider/model"). Provider defaults to 'deepseek-official' (the official
+   * auto-route); model prefers the engine config value (mission `model`
+   * passthrough), then DSH_MODEL. The parseModel distinction stays ignored
+   * (documented gap — one model for every dispatch).
    */
   private async _ensureHandle(sessionIdParam: string | null): Promise<AgentHandle> {
     if (this.handle) return this.handle
@@ -332,6 +347,24 @@ export class DshNativeExecutor implements NativeExecutor {
         // rotation) — fall through to a fresh create.
       }
     }
+    const provider = configString(this.config, 'nativeProvider') ?? process.env.DSH_PROVIDER ?? 'deepseek-official'
+    const model = configString(this.config, 'nativeModel')
+      ?? configString(this.config, 'model')
+      ?? (process.env.DSH_MODEL && process.env.DSH_MODEL !== '' ? process.env.DSH_MODEL : undefined)
+    if (model === undefined) {
+      // No model resolution anywhere: create WITHOUT agentOptions and let the
+      // host's agent/request waterfall speak (unit fakes never read it).
+      this.handle = await this.agents.create({
+        sessionId: genChildId(),
+        meta: {
+          cwd: this.config.projectRoot,
+          origin: 'subagent',
+          delegationDepth: 1,
+          agentPreset: this.config.agent,
+        },
+      })
+      return this.handle
+    }
     this.handle = await this.agents.create({
       sessionId: genChildId(),
       meta: {
@@ -340,6 +373,7 @@ export class DshNativeExecutor implements NativeExecutor {
         delegationDepth: 1,
         agentPreset: this.config.agent,
       },
+      agentOptions: { provider, model },
     })
     return this.handle
   }
@@ -628,6 +662,21 @@ export function runNativeTool(
 // ── Factory ─────────────────────────────────────────────────────────────────
 
 /**
+ * Resolve the DSH agents service from a host context. On a REAL cordis
+ * context, reading a service property the plugin never declared in `inject`
+ * throws ("cannot get property … without inject"), while `ctx.get(name)`
+ * returns undefined — the documented safe accessor. Plain-object host
+ * contexts (unit fakes) have no `get` and read the property directly.
+ */
+export function resolveAgentsService(ctx: { get?(name: string): unknown } | { agents?: unknown }): unknown {
+  const maybeGet = (ctx as { get?(name: string): unknown }).get
+  if (typeof maybeGet === 'function') {
+    return maybeGet.call(ctx, 'agents') ?? (ctx as { agents?: unknown }).agents
+  }
+  return (ctx as { agents?: unknown }).agents
+}
+
+/**
  * Build a per-run NativeExecutor from a cordis context. `ctx.agents` missing
  * (service not yet up / wrong realm) is an explicit wire error — never a
  * silent ProcessExecutor fallback (the degradation ladder is a separate,
@@ -639,7 +688,7 @@ export type NativeExecutorFactory = (
 ) => NativeExecutor
 
 export const createNativeExecutor: NativeExecutorFactory = (ctx, config) => {
-  const agents = ctx?.agents
+  const agents = resolveAgentsService(ctx) as AgentRegistry | undefined
   if (!agents) {
     throw new Error(
       '[mdcontrol/native] DSH agents service unavailable on ctx — native driver requires the in-process agents service (wire error; no silent ProcessExecutor fallback)',
