@@ -44,7 +44,7 @@ Rejected alternatives: "auto-loop" (generic, no mission identity), "launchpad" (
    - `mission-control-draft <description>` — two-stage brief→draft mission generation
    - `mission-control-analyze [run]` — Reflexion postmortem of the most recent or named run
 2. **Native dispatch execution** — every agent step of a flow runs as an in-process child agent of the host; no `opencode run` process is created. Session continuity across steps is native (no regex scraping), restoring continuity that the `pi`/`cline` process drivers lack.
-3. **Subagents surface visibility** — dispatched step-agents register healthy descriptors in the host subagents list, so users see mission steps in DSH's own topology UI.
+3. **Subagents surface visibility** — each run registers one healthy run-level child descriptor (`Mission: <mission>`, continuable, provider `mdcontrol`) at child creation, so the run enumerates correctly instead of rendering as a corrupt row; step-level progress surfaces through the run-state/monitor channel (as-built: one child per run, reused across steps — M3-WI11 alignment).
 4. **Monitor coexistence** — the standalone monitor dashboard remains usable against run-state files. A native Web UI panel reading the same files may follow later; it is not part of the initial scope.
 
 ## Concept Mapping

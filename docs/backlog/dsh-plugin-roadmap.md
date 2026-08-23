@@ -1,6 +1,6 @@
 # DSH Plugin (AGE Mission Control) Roadmap
 
-> Last Updated: 2026-08-23 (M1 WI1–WI5 全部 `done`；M2 WI6–WI10 全部 `done`——**P2 里程碑收口**：WI6 plugin/dsh 脚手架〔plan `2026-08-23-1447-1`〕、WI7 NativeExecutor 派发链〔plan `2026-08-23-1447-2`〕、WI8 L2 双后端矩阵〔plan `2026-08-23-1447-3`〕、WI9 L3 宿主集成骨架〔plan `2026-08-23-1621-1`〕、WI10 mdcontrol.run 异步契约 + native e2e〔plan `2026-08-23-1621-2`，e2e 证据 `docs/testing/2026/08-23.md`〕；`mdcontrol.draft/analyze` 路由经 plan 内裁定显式归属 M3〔WI12 完成前置〕)
+> Last Updated: 2026-08-23 (M1 WI1–WI5 全部 `done`；M2 WI6–WI10 全部 `done`——**P2 里程碑收口**：WI6 plugin/dsh 脚手架〔plan `2026-08-23-1447-1`〕、WI7 NativeExecutor 派发链〔plan `2026-08-23-1447-2`〕、WI8 L2 双后端矩阵〔plan `2026-08-23-1447-3`〕、WI9 L3 宿主集成骨架〔plan `2026-08-23-1621-1`〕、WI10 mdcontrol.run 异步契约 + native e2e〔plan `2026-08-23-1621-2`，e2e 证据 `docs/testing/2026/08-23.md`〕；**M3-WI11 `done`**〔plan `2026-08-23-1852-1`——onboarding 双形式对齐 + 描述符注册 + monitor step-log 修复收编，P3 首片〕；`mdcontrol.draft/analyze` 路由经 plan 内裁定显式归属 M3〔WI12 完成前置〕；M3 剩 WI12–WI13 `ready`〔plans `2026-08-23-1852-{2,3}`〕)
 > Source: `docs/design/dsh-plugin-integration.md`, `docs/architecture/dsh-plugin-packaging.md`, `docs/analysis/2026-08-22-0001-dsh-host-api-contract-verification.md` (R1), `-0002-npm-version-surface.md` (R2), `-0003-verification-harness-design.md` (R3)
 
 ## Purpose
@@ -30,9 +30,9 @@ Drive the implementation of the AGE Mission Control DSH plugin: package mission-
 
 ### M3 — 对齐、技能与门禁强化
 
-- WI11 onboarding mission 双形式对齐(L4 冒烟 diff);subagent 描述符注册(先补读 packages/subagent 内部契约): `todo`
-- WI12 Mission Control skills(mission-control-run/draft/analyze)接线到路由: `todo`（**完成前置**：`mdcontrol.draft` / `mdcontrol.analyze` 路由——WI10 plan §Deferred But Adjudicated 裁定归属本 WI 收编，不另立 work item）
-- WI13 tools/pre-execute 强化门:plan-status → completed 编辑在 run-state 无已闭合 CLOSURE_AUDIT 访问时 deny(R1 §2 deny 契约): `todo`
+- WI11 onboarding mission 双形式对齐(L4 冒烟 diff);subagent 描述符注册(先补读 packages/subagent 内部契约): `done`（plan `docs/plans/dsh-plugin/2026-08-23-1852-1-onboarding-parity-subagent-descriptors.md` 执行完毕——① monitor step-log `oc-` 前缀引擎侧修复收编〔三站点双 label：listStepLogs/handleGetLog/handleGetNodeDetail——第三站点 :929 为 draft review it2 新发现，超出 bug 文档原枚举；引擎 656/656 + verify-age.sh exit 0 + e2e REST 观测〕，bug `docs/bugs/2026-08-23-monitor-native-log-naming.md` closed + 1447-3 deferred 台账 reopen 闭环；② 描述符注册〔host 源码补读 descriptor.ts/descriptor-seed.ts/list-children.ts；`agents.create` seed 注入 durable `subagent/descriptor`：mode continuable / provider `mdcontrol` / label `Mission: <mission>`；单测 15/15 + 插件链 76/76〕；③ onboarding 双形式对齐〔扩展 `verify:e2e`：install-shape fixture 复刻 + 有界 3 回合剧本 + 归一化 diff 空 + marker 对真实 flow 合法 + 描述符健康断言 + monitor 四 run 机器断言，三连跑全绿，证据 `docs/testing/2026/08-23.md` WI11 note——机制面断言，verification scope limited 显式标注〕）
+- WI12 Mission Control skills(mission-control-run/draft/analyze)接线到路由: `ready`（plan `docs/plans/dsh-plugin/2026-08-23-1852-2-mdcontrol-draft-analyze-routes-skills-wiring.md` 已过 3 轮独立 draft review 共识；**完成前置** `mdcontrol.draft`/`mdcontrol.analyze` 路由随本 plan 收编——WI10 plan §Deferred 裁定归属，不另立 work item）
+- WI13 tools/pre-execute 强化门:plan-status → completed 编辑在 run-state 无已闭合 CLOSURE_AUDIT 访问时 deny(R1 §2 deny 契约): `ready`（plan `docs/plans/dsh-plugin/2026-08-23-1852-3-pre-execute-plan-status-gate.md` 已过 3 轮独立 draft review 共识；review 核实字面规则对 in-run 编辑/快速路径误杀——证据规则改判 subflow 子文件查询面，语义收缩为 product-risk 级裁定项）
 
 ### M4 — AGE Preset 与面板决策
 

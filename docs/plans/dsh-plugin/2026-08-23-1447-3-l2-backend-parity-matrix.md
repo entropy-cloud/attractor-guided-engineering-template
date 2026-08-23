@@ -148,7 +148,7 @@ Exit Criteria:
 
 ### monitor 前端对双后端 run 的渲染验证深化
 
-- Classification: `watch-only residual`
+- Classification: `watch-only residual` → **reopen trigger HIT and CLOSED 2026-08-23**（WI10 L4 render check 发现渲染差异——step-log 端点 `oc-` 前缀边界，bug 立案 `docs/bugs/2026-08-23-monitor-native-log-naming.md`；收编闭环于 M3-WI11 plan `2026-08-23-1852-1`：引擎侧三站点双 label 修复 + monitor 单测双命名形用例 + `verify:e2e` 机器断言固化〔`assertMonitorRender`：四 run × stepLogs 非空 + `/logs/:step` 200 + node-detail `logTail` 非空〕，证据 `docs/testing/2026/08-23.md` WI11 note）
 - Why Not Blocking Closure: 断言 6 已收窄为文件格式同一性（组 3 超集 + 产物文件集存在性），monitor 消费面即 run-state 文件（packaging doc §Service Surface "invisible to it"），无第二格式面；前端无后端感知，无特判风险面。
 - Successor Required: `no`
 - Reopen trigger: L4 smoke 发现渲染差异时。
