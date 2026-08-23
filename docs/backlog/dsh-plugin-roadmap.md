@@ -1,6 +1,6 @@
 # DSH Plugin (AGE Mission Control) Roadmap
 
-> Last Updated: 2026-08-22 (initial — M1 task-level, M2–M4 milestone-level; R1/R2/R3 findings incorporated)
+> Last Updated: 2026-08-23 (M1 WI1–WI5 → ready via draft-reviewed plans under `docs/plans/dsh-plugin/2026-08-23-1300-{1,2,3}-*.md`; M2–M4 unchanged)
 > Source: `docs/design/dsh-plugin-integration.md`, `docs/architecture/dsh-plugin-packaging.md`, `docs/analysis/2026-08-22-0001-dsh-host-api-contract-verification.md` (R1), `-0002-npm-version-surface.md` (R2), `-0003-verification-harness-design.md` (R3)
 
 ## Purpose
@@ -14,11 +14,11 @@ Drive the implementation of the AGE Mission Control DSH plugin: package mission-
 
 ### M1 — Engine StepExecutor Seam（零 DSH 依赖，纯本地可验证）
 
-- WI1 抽取 StepExecutor 接口于 delegates 注入点(runAgent/runParseAgent/runTool),ProcessExecutor 包装现有 runner+executor,行为逐字节不变: `todo`
-- WI2 从 main.js 抽取程序化编排入口(run/draft/analyze 共享),EXIT_MAP 提升至引擎核心模块(由 test/exit-map.test.js 钉住): `todo`
-- WI3 driver 白名单校验(opencode|pi|cline|native;CLI 拒绝 native): `todo`
-- WI4 启动诊断 embed 门控(active-run 注册/sys-snapshot/reapStartupOrphans 在 native 模式关闭): `todo`
-- WI5 文档同步:module-boundaries.md "in-process: not exported" 边界修订 + baseline §Driver selection/§Public Exports 更新: `todo`
+- WI1 抽取 StepExecutor 接口于 delegates 注入点(runAgent/runParseAgent/runTool),ProcessExecutor 包装现有 runner+executor,行为逐字节不变: `done`（plan `docs/plans/dsh-plugin/2026-08-23-1300-1-stepexecutor-seam-process-executor.md` 已执行完毕，证据见该 plan 与 `docs/logs/2026/08-23.md`）
+- WI2 从 main.js 抽取程序化编排入口(run/draft/analyze 共享),EXIT_MAP 提升至引擎核心模块(由 test/exit-map.test.js 钉住): `ready`（plan `docs/plans/dsh-plugin/2026-08-23-1300-2-programmatic-entry-exitmap-hoist.md`）
+- WI3 driver 白名单校验(opencode|pi|cline|native;CLI 拒绝 native): `ready`（plan `docs/plans/dsh-plugin/2026-08-23-1300-3-driver-whitelist-embed-gating-p1-doc-sync.md`）
+- WI4 启动诊断 embed 门控(active-run 注册/sys-snapshot/reapStartupOrphans 在 native 模式关闭): `ready`（plan 同 WI3）
+- WI5 文档同步:module-boundaries.md "in-process: not exported" 边界修订 + baseline §Driver selection/§Public Exports 更新: `ready`（切片随 plan 1/2 落地，收口在 plan 同 WI3 Phase 3）
 
 ### M2 — 插件壳与原生派发后端
 

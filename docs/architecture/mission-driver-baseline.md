@@ -103,6 +103,7 @@ Public exports (the stable API surface other modules may import). Citations are 
 - `src/mission-check.mjs` — `validateMission`, `loadMission`.
 - `src/monitor.js` — `parseRoadmapMarkdown` (defined in `roadmap-check.mjs`, re-exported here so both the Monitor Server and the FlowEngine share one parser), `mergeSubflowChildren` (subflow live-state reader), `handleStartDraft` (async draft-job launcher), `startMonitor` (HTTP/SSE server entry).
 - `src/sys-snapshot.mjs` — `snapshot`.
+- `src/step-executor.js` — `ProcessExecutor` (dsh-plugin M1-WI1): the named StepExecutor seam. `FlowEngine` consumes a single `delegates.executor` object (`executeAgent` / `executeParseAgent` / `executeTool`, signatures identical to the legacy `runAgent`/`runParseAgent`/`runTool` delegates trio); `ProcessExecutor` is the process backend that forwards 1:1 to a `createRunner` product. Backend replacement (M2 NativeExecutor) injects a different object with the same three methods. Contract owner: `docs/architecture/dsh-plugin-packaging.md` §Execution Backend Seam.
 
 Test seams (NOT public API; prefixed `__` and exported only for the test suite):
 
