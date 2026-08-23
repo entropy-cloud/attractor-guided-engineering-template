@@ -34,6 +34,38 @@ const CLINE_DEFAULTS = Object.freeze({
   agentFile: "agents/build.cline.md",
 });
 
+// dsh-plugin M1-WI3: resolve-time driver whitelist. A typo like "opencod"
+// previously sailed through resolution and failed mid-run at spawn time
+// (SPAWN ENOENT); validation now fails fast at each resolveConfig return
+// point with the legal values listed. `native` is a whitelist member
+// reserved for the DSH plugin host: accepted only when the caller passes
+// the internal option `allowNativeDriver: true` (NOT a CLI flag / mission
+// field / env — M1 tests only; the M2 host engine-bridge passes it).
+export const SUPPORTED_DRIVERS = Object.freeze(["opencode", "pi", "cline", "native"]);
+
+function assertSupportedDriver(driver, source, args) {
+  if (driver === "native") {
+    if (args && args.allowNativeDriver === true) return;
+    throw new Error(
+      'ERROR: driver "native" 仅在 DSH 插件宿主内可用 (requires the DSH plugin host); standalone CLI 不支持'
+    );
+  }
+  if (!SUPPORTED_DRIVERS.includes(driver)) {
+    throw new Error(
+      `unsupported driver "${driver}" (from ${source}); supported drivers: ${SUPPORTED_DRIVERS.join(" | ")}`
+    );
+  }
+}
+
+// First-truthy-wins label for the driver provenance chain feeding the
+// unsupported-driver error message (mirrors the `||` fallback semantics).
+function firstSetSource(pairs) {
+  for (const [value, label] of pairs) {
+    if (value) return label;
+  }
+  return "the built-in default";
+}
+
 // Apply driver defaults to driverArgs/promptMode/agentFile. `driverArgs` and
 // `promptMode` are the values after args/env/mission fallback (may be undefined).
 // promptMode is ALWAYS returned concrete (never undefined) so runner.js's
@@ -556,6 +588,14 @@ export function resolveConfig(args = {}) {
     // available even when no specific mission is named (draft / analyze paths).
     const base = loadBaseAndInjectEnv(missionsDir);
     const drvDraft = args.driver || process.env.MISSION_DRIVER_EXEC || base.driver || "opencode";
+    assertSupportedDriver(
+      drvDraft,
+      firstSetSource([
+        [args.driver, "the --driver flag (or programmatic args.driver)"],
+        [process.env.MISSION_DRIVER_EXEC, "env MISSION_DRIVER_EXEC"],
+        [base.driver, "the base config (missions/base.json)"],
+      ]),
+      args);
     const drvFieldsDraft = resolveDriverFields(
       drvDraft,
       args.driverArgs || process.env.MISSION_DRIVER_ARGS || base.driverArgs,
@@ -596,6 +636,14 @@ export function resolveConfig(args = {}) {
     mkdirSync(runDir, { recursive: true });
     const baseA = loadBaseAndInjectEnv(missionsDir);
     const drvAnalyze = args.driver || process.env.MISSION_DRIVER_EXEC || baseA.driver || "opencode";
+    assertSupportedDriver(
+      drvAnalyze,
+      firstSetSource([
+        [args.driver, "the --driver flag (or programmatic args.driver)"],
+        [process.env.MISSION_DRIVER_EXEC, "env MISSION_DRIVER_EXEC"],
+        [baseA.driver, "the base config (missions/base.json)"],
+      ]),
+      args);
     const drvFieldsAnalyze = resolveDriverFields(
       drvAnalyze,
       args.driverArgs || process.env.MISSION_DRIVER_ARGS || baseA.driverArgs,
@@ -665,6 +713,14 @@ export function resolveConfig(args = {}) {
 
   // Resolve model/parseModel/variant/max* with fallback chain: CLI > env > mission base > hard default
   const resolvedDriver = driver || mission.driver || "opencode";
+  assertSupportedDriver(
+    resolvedDriver,
+    firstSetSource([
+      [args.driver, "the --driver flag (or programmatic args.driver)"],
+      [process.env.MISSION_DRIVER_EXEC, "env MISSION_DRIVER_EXEC"],
+      [mission.driver, `the mission config (missions/${missionName}.json)`],
+    ]),
+    args);
   const resolvedAutonomyMode = (autonomyMode === "ask" || mission.autonomyMode === "ask") ? "ask" : "auto";
   const resolvedModel = model || mission.model || "zhipuai-coding-plan/glm-5.2";
   const resolvedParseModel = parseModel || mission.parseModel || undefined;

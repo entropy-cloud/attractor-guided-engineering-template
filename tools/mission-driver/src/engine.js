@@ -1579,9 +1579,29 @@ export class FlowEngine {
       try { reapStartupOrphans(_runDir, process.pid, _getProcs(), { ownRunId: this.runId }); } catch {}
     };
 
+    // Startup-diagnostics dispatch table (dsh-plugin M1-WI4). Built INSIDE
+    // run() because sysMon/warnOrphans close over run()-scoped state (_runDir,
+    // _getProcs); defaults are the real production call forms. 
+    // delegates.diagnosticHooks may override the whole table — an
+    // observability/test seam following the existing delegates injection
+    // style, NOT public API (registered in mission-driver-baseline.md
+    // §Public Exports vs Test Seams).
+    this._diag = {
+      registerActiveRun,
+      sysMon: (label) => _sysMon(label),
+      warnOrphans: () => _warnOrphans(),
+      ...(this.delegates.diagnosticHooks || {}),
+    };
+
     // Subflow child engines skip startup diagnostics — the parent already did
-    // sysmon + reaper, and children inherit the same process tree.
-    if (cfg.isSubflow !== true) {
+    // sysmon + reaper, and children inherit the same process tree. Embed mode
+    // (dsh-plugin M1-WI4, cfg.embed === true, set by the DSH plugin host)
+    // skips them too: inside the host process, active-run registration under
+    // ~/.mission-driver/active/, execSync process snapshots, and OS-process
+    // reaping must not run (they would destabilize the host; the M2 plugin
+    // layer owns the replacement guard — packaging doc §Service Surface).
+    // Default (embed unset/false) → zero behavior change.
+    if (cfg.isSubflow !== true && cfg.embed !== true) {
       // Register this run in the global active-run registry so other concurrent
       // mission-driver runs' reapers can recognize our opencode children as
       // belonging to an ACTIVE run and spare them. Guarded on runId AND
@@ -1592,7 +1612,7 @@ export class FlowEngine {
       // Such runs still get the conservative _parentIsAliveDriver fallback.
       if (this.runId && this.missionName) {
         try {
-          registerActiveRun({
+          this._diag.registerActiveRun({
             runId: this.runId,
             driverPid: process.pid,
             missionName: this.missionName,
@@ -1600,8 +1620,8 @@ export class FlowEngine {
           });
         } catch { /* best-effort: reaper falls back to parent-process check */ }
       }
-      _sysMon(`START:${this.flow.name || "flow"}`);
-      _warnOrphans();
+      this._diag.sysMon(`START:${this.flow.name || "flow"}`);
+      this._diag.warnOrphans();
     }
 
     this._emitEvent("run_started", {

@@ -349,6 +349,10 @@ export function execute(config, label, cmd, args, opts = {}) {
       const remainMin = Math.max(0, Math.round((deadline - Date.now()) / 60_000));
       process.stderr.write(`  [${ts}] ${label} running ... (pid ${childPid}, timeout in ${remainMin}min)\n`);
 
+      // dsh-plugin M1-WI4 design note: this heartbeat sysSnapshot/touchActiveRun
+      // pair is intentionally NOT embed-gated (unlike FlowEngine.run()'s startup
+      // diagnostics) — it only executes on the ProcessExecutor path, and a
+      // native-mode embed host never selects this backend.
       try { sysSnapshot(config.runDir, `heartbeat:${label}`); } catch {}
 
       // Refresh this run's heartbeat in the global active-run registry so other
