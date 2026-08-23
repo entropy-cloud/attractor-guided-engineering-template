@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { Command } from "../vendor/commander/index.js";
 import { resolveConfig, buildRunSkeleton, inferModuleName, listMissionsString } from "./config.js";
 import { createRunner, resetMockState } from "./runner.js";
+import { ProcessExecutor } from "./step-executor.js";
 import { FlowEngine, stripAnsiControl } from "./engine.js";
 import { createMissionDriverFlow, loadSubFlow, createExpressionFunctions } from "./flow-loader.js";
 import { resolveTemplateVars } from "./expression.mjs";
@@ -717,9 +718,7 @@ async function cmdRunMission(mission, opts) {
             return readMemoryIndex(resolve(config.projectRoot, "docs", "memory", mn, "_index.md"));
           })(),
       },
-      runAgent: runner.runAgent,
-      runTool: runner.runTool,
-      runParseAgent: runner.runParseAgent,
+      executor: new ProcessExecutor(runner),
       logFile: config.logFile,
       loadSubFlow,
     };

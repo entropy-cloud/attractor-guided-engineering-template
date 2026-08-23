@@ -236,7 +236,7 @@ describe("draft-robustness WI5 — subflowRuns incremental persistence", () => {
     delegates.config = { projectRoot: runDir, runDir };
 
     let startCalls = 0;
-    delegates.runAgent = (stepName) => {
+    delegates.executor.executeAgent = (stepName) => {
       if (stepName === "START") {
         startCalls++;
         // First two START visits route to SUB (so SUB is entered twice);

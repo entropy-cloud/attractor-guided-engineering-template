@@ -840,7 +840,10 @@ export class FlowEngine {
     // tag). 5th arg (modelOverride) left undefined to keep the default model;
     // 6th opts is absent on legacy callers (main.js brief/draft) → defaults {}.
     const agentOpts = { timeoutMs: stepDef.timeoutMs, resultTag: stepDef.resultTag };
-    const result = await this.delegates.runAgent(stepName, prompt, stepDef.system || "", sessionId, undefined, agentOpts);
+    // dsh-plugin M1-WI1: agent steps run through the named StepExecutor seam
+    // (delegates.executor.executeAgent — signature identical to the legacy
+    // delegates.runAgent; ProcessExecutor forwards 1:1 to the runner).
+    const result = await this.delegates.executor.executeAgent(stepName, prompt, stepDef.system || "", sessionId, undefined, agentOpts);
     if (result && result.sessionId) this.lastSessionId = result.sessionId;
 
     if (!result || !result.text) {
@@ -897,7 +900,11 @@ export class FlowEngine {
       }
     }
 
-    if (!marker && this.delegates.runParseAgent) {
+    // dsh-plugin M1-WI1: existence guard migrated from `this.delegates.runParseAgent`
+    // to the executor seam. Always truthy in production (main.js always injects
+    // delegates.executor), same as the legacy guard (main.js always injected all
+    // three keys) — kept so bare-engine unit tests without an executor still skip.
+    if (!marker && this.delegates.executor) {
       const parsePrompt = [
         `No <${rTag}> tag found in output. Read the AI output below and infer the result.`,
         `Expected values: ${Object.keys(stepDef.transitions || {}).join(", ")}`,
@@ -906,7 +913,7 @@ export class FlowEngine {
         `AI output:`,
         cleanText,
       ].join("\n");
-      const retry = await this.delegates.runParseAgent(
+      const retry = await this.delegates.executor.executeParseAgent(
         `parse-${rTag}`, parsePrompt, stepDef.system || "",
       );
       // The parse agent can itself emit a typo'd / mismatched tag, and its output
@@ -971,7 +978,7 @@ export class FlowEngine {
       try {
         // OPT-3: correction is a lightweight classification task — route it
         // through runParseAgent (cheap parseModel) instead of the main runAgent.
-        const corrected = await this.delegates.runParseAgent(
+        const corrected = await this.delegates.executor.executeParseAgent(
           `correct-${i + 1}`, correctionPrompt, stepDef.system || "", sessionId,
         );
         if (corrected && corrected.text) {
@@ -995,7 +1002,7 @@ export class FlowEngine {
   async _executeToolStep(stepName, stepDef) {
     const command = this._templateVar(stepDef.command || "", this.delegates.vars || {});
     const timeout = stepDef.timeout || 0;
-    const delegateResult = await this.delegates.runTool(stepName, command, { timeout });
+    const delegateResult = await this.delegates.executor.executeTool(stepName, command, { timeout });
     return {
       marker: delegateResult.ok ? "pass" : "fail",
       ok: true,
@@ -1294,7 +1301,7 @@ export class FlowEngine {
     };
     const childEngine = new FlowEngine(flowDef, childDelegates);
 
-    // Wrap runAgent so in-flight updates (logFile/sessionId via onSpawn) route
+    // Wrap executeAgent so in-flight updates (logFile/sessionId via onSpawn) route
     // to the CHILD engine, not the parent. Without this, the runner reads
     // config.onStepUpdate (bound to the parent engine at main.js:752), which
     // searches the parent's workflow.steps for the stepName — but the
@@ -1305,15 +1312,23 @@ export class FlowEngine {
     // child engine's _onAgentStepUpdate via opts.onStepUpdate (runner.js
     // prefers opts over config), so each subflow step's live updates land in
     // the child's run-state-<subflowId>.json immediately.
-    const parentRunAgent = typeof parentDelegates.runAgent === "function"
-      ? parentDelegates.runAgent.bind(parentDelegates)
-      : null;
-    if (parentRunAgent) {
-      childDelegates.runAgent = (stepName, prompt, system, sessionId, modelOverride, opts) =>
-        parentRunAgent(stepName, prompt, system, sessionId, modelOverride, {
-          ...(opts || {}),
-          onStepUpdate: (payload) => childEngine._onAgentStepUpdate(payload),
-        });
+    // dsh-plugin M1-WI1: same wrapping migrated from the legacy parent
+    // `delegates.runAgent` key to the StepExecutor seam — only executeAgent is
+    // wrapped (the only entry whose opts carry onStepUpdate); executeParseAgent
+    // and executeTool forward to the parent executor unchanged.
+    const parentExecutor = parentDelegates.executor || null;
+    if (parentExecutor && typeof parentExecutor.executeAgent === "function") {
+      childDelegates.executor = {
+        executeAgent: (stepName, prompt, system, sessionId, modelOverride, opts) =>
+          parentExecutor.executeAgent(stepName, prompt, system, sessionId, modelOverride, {
+            ...(opts || {}),
+            onStepUpdate: (payload) => childEngine._onAgentStepUpdate(payload),
+          }),
+        executeParseAgent: (stepName, prompt, system, sessionId) =>
+          parentExecutor.executeParseAgent(stepName, prompt, system, sessionId),
+        executeTool: (stepName, command, opts) =>
+          parentExecutor.executeTool(stepName, command, opts),
+      };
     }
 
     const childResult = await childEngine.run();

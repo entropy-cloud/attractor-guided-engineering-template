@@ -1,17 +1,18 @@
 import assert from "node:assert/strict";
 
+// dsh-plugin M1-WI1: engine delegates now carry a single `executor` key
+// (StepExecutor seam) instead of the legacy runAgent/runTool/runParseAgent
+// trio. makeMockDelegates builds a mock executor; tests may still pass the
+// legacy override keys (runAgent/runParseAgent/runTool) or assign
+// delegates.executor.execute* after creation — helpers translate the former
+// onto the seam so call sites stay unchanged.
 export function makeMockDelegates(overrides = {}) {
   const responses = overrides.responses || {};
-  const hasOverrideRunAgent = !!overrides.runAgent;
+  const callLog = [];
 
-  const base = {
-    config: { moduleName: "test-mod", shortName: "test-mod", packageFilter: "@nop-chaos/test-mod", projectRoot: "/tmp/test", retryBackoffBaseMs: 0 },
-    vars: { module: "test-mod", shortName: "test-mod", packageFilter: "@nop-chaos/test-mod", projectRoot: "/tmp/test" },
-    logFile: null,
-    callLog: [],
-
-    async runAgent(stepName, prompt, system, sessionId) {
-      this.callLog.push({ type: "agent", stepName, prompt, system, sessionId });
+  const executor = {
+    async executeAgent(stepName, prompt, system, sessionId) {
+      callLog.push({ type: "agent", stepName, prompt, system, sessionId });
       if (stepName in responses) {
         const r = responses[stepName];
         if (typeof r === "function") return r(stepName, prompt);
@@ -21,8 +22,8 @@ export function makeMockDelegates(overrides = {}) {
       return { text: "##MOCK_OK", ok: true };
     },
 
-    async runTool(stepName, command, opts) {
-      this.callLog.push({ type: "tool", stepName, command, opts });
+    async executeTool(stepName, command, opts) {
+      callLog.push({ type: "tool", stepName, command, opts });
       if (stepName in responses) {
         const r = responses[stepName];
         if (typeof r === "function") return r(stepName, command);
@@ -31,11 +32,23 @@ export function makeMockDelegates(overrides = {}) {
       return { ok: true, logFile: null };
     },
 
-    async runParseAgent(stepName, prompt, system) {
-      this.callLog.push({ type: "parse", stepName, prompt });
+    async executeParseAgent(stepName, prompt, system) {
+      callLog.push({ type: "parse", stepName, prompt });
       return { text: "<MOCK_TAG>unknown</MOCK_TAG>", ok: true };
     },
+  };
 
+  // Legacy three-key overrides → seam methods (test-call-site convenience).
+  if (overrides.runAgent) executor.executeAgent = overrides.runAgent;
+  if (overrides.runTool) executor.executeTool = overrides.runTool;
+  if (overrides.runParseAgent) executor.executeParseAgent = overrides.runParseAgent;
+
+  const base = {
+    config: { moduleName: "test-mod", shortName: "test-mod", packageFilter: "@nop-chaos/test-mod", projectRoot: "/tmp/test", retryBackoffBaseMs: 0 },
+    vars: { module: "test-mod", shortName: "test-mod", packageFilter: "@nop-chaos/test-mod", projectRoot: "/tmp/test" },
+    logFile: null,
+    callLog,
+    executor,
     loadSubFlow(name) {
       const sub = overrides.subFlows?.[name];
       if (sub) return sub;
@@ -43,13 +56,8 @@ export function makeMockDelegates(overrides = {}) {
     },
   };
 
-  if (hasOverrideRunAgent) {
-    const result = { ...base, ...overrides };
-    result.callLog = base.callLog;
-    return result;
-  }
-
-  return { ...base, ...overrides };
+  const { responses: _r, runAgent: _a, runTool: _t, runParseAgent: _p, subFlows: _s, ...rest } = overrides;
+  return { ...base, ...rest };
 }
 
 export function simpleFlow(steps, entry = "START") {

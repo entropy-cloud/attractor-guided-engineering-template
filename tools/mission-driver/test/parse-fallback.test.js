@@ -119,8 +119,8 @@ describe("FlowEngine — OPT-2 tolerant extract short-circuits parse fallback", 
     const delegates = makeMockDelegates({
       responses: { START: "the agent returned no marker at all" },
     });
-    // Make runParseAgent return a recognizable strict marker so the flow resolves.
-    delegates.runParseAgent = async (stepName, prompt, system) => {
+    // Make the parse fallback return a recognizable strict marker so the flow resolves.
+    delegates.executor.executeParseAgent = async (stepName, prompt, system) => {
       delegates.callLog.push({ type: "parse", stepName });
       return { text: "<AI_STEP_RESULT>success</AI_STEP_RESULT>", ok: true };
     };
@@ -152,7 +152,7 @@ describe("FlowEngine — OPT-3 correction routes through runParseAgent", () => {
       },
     });
     const parseCalls = [];
-    delegates.runParseAgent = async (stepName, prompt, system, sessionId) => {
+    delegates.executor.executeParseAgent = async (stepName, prompt, system, sessionId) => {
       parseCalls.push({ stepName, sessionId });
       return { text: "<AI_STEP_RESULT>success</AI_STEP_RESULT>", ok: true };
     };

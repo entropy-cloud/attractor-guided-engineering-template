@@ -90,7 +90,7 @@ describe("FlowEngine — null marker soft-lands via onMaxRetries instead of hard
       },
     });
     // Make parse fallback also miss so START truly yields a null marker.
-    delegates.runParseAgent = async () => ({ text: "still nothing", ok: true });
+    delegates.executor.executeParseAgent = async () => ({ text: "still nothing", ok: true });
     const engine = new FlowEngine(flow, delegates);
     const result = await engine.run();
 
@@ -132,7 +132,7 @@ describe("FlowEngine — null marker soft-lands via onMaxRetries instead of hard
     const delegates = makeMockDelegates({
       responses: { START: { text: "no marker", ok: true, logFile: "/tmp/oc-START-123-abc.log", sessionId: "ses_x" } },
     });
-    delegates.runParseAgent = async () => ({ text: "nope", ok: true });
+    delegates.executor.executeParseAgent = async () => ({ text: "nope", ok: true });
     const engine = new FlowEngine(flow, delegates);
     const result = await engine.run();
 
@@ -176,7 +176,7 @@ describe("FlowEngine — terminal reconciliation downgrades false failure (§1.4
         vars: { projectRoot: dir, roadmapPath: "roadmap.md" },
         expressionFuncs: { activePlans: () => [], draftPlans: () => [], openAudits: () => [] },
       });
-      delegates.runParseAgent = async () => ({ text: "still nothing", ok: true });
+      delegates.executor.executeParseAgent = async () => ({ text: "still nothing", ok: true });
 
       const engine = new FlowEngine(flow, delegates);
       const result = await engine.run();
@@ -206,7 +206,7 @@ describe("FlowEngine — terminal reconciliation downgrades false failure (§1.4
         vars: { projectRoot: dir, roadmapPath: "roadmap.md" },
         expressionFuncs: { activePlans: () => ["p1.md"], draftPlans: () => [], openAudits: () => [] },
       });
-      delegates.runParseAgent = async () => ({ text: "nothing", ok: true });
+      delegates.executor.executeParseAgent = async () => ({ text: "nothing", ok: true });
       const engine = new FlowEngine(flow, delegates);
       const result = await engine.run();
       assert.equal(result.status, "failed", "must NOT mask a real failure while a plan is still active");
@@ -235,7 +235,7 @@ describe("FlowEngine — terminal reconciliation downgrades false failure (§1.4
         vars: { projectRoot: dir, roadmapPath: "roadmap.md" },
         expressionFuncs: { activePlans: () => [], draftPlans: () => [], openAudits: () => [] },
       });
-      delegates.runParseAgent = async () => ({ text: "nothing", ok: true });
+      delegates.executor.executeParseAgent = async () => ({ text: "nothing", ok: true });
       const engine = new FlowEngine(flow, delegates);
       const result = await engine.run();
       assert.equal(result.status, "failed", "subflows must keep their real failure status");

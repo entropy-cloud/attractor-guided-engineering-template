@@ -390,10 +390,10 @@ describe("monitor mergeSubflowChildren — attach child state to step.children",
 // the PARENT engine (main.js:752 config.onStepUpdate), which searches the
 // parent's workflow.steps for the stepName. Subflow step names (EXECUTE, etc.)
 // aren't in the parent's workflow, so logFile/sessionId updates from onSpawn
-// were silently dropped. Fix: _runChildSubflow wraps childDelegates.runAgent to
+// were silently dropped. Fix: _runChildSubflow wraps childDelegates.executor.executeAgent to
 // inject the child engine's _onAgentStepUpdate via opts.onStepUpdate (runner.js
 // prefers opts over config). This test verifies the wiring by providing a mock
-// runAgent that fires opts.onStepUpdate BEFORE returning — if the wiring is
+// executeAgent that fires opts.onStepUpdate BEFORE returning — if the wiring is
 // correct, the child's step record has the sessionId; if broken (pre-fix), it's
 // null because the mock returns sessionId=null in the result object.
 describe("subflow child onStepUpdate routing — live sessionId/logFile during execution", () => {
@@ -405,12 +405,12 @@ describe("subflow child onStepUpdate routing — live sessionId/logFile during e
     const delegates = makeMockDelegates({
       config: { projectRoot: runDir, runDir },
     });
-    // Custom runAgent that simulates the runner's onSpawn callback: calls
+    // Custom executeAgent that simulates the runner's onSpawn callback: calls
     // opts.onStepUpdate with logFile + sessionId BEFORE returning. The return
     // value deliberately has sessionId=null to prove the live value came from
     // onStepUpdate, not the result object.
-    delegates.runAgent = async function(stepName, prompt, system, _sid, _model, opts) {
-      this.callLog.push({ type: "agent", stepName });
+    delegates.executor.executeAgent = async function(stepName, prompt, system, _sid, _model, opts) {
+      delegates.callLog.push({ type: "agent", stepName });
       if (opts?.onStepUpdate) {
         opts.onStepUpdate({
           stepName,

@@ -99,7 +99,7 @@ describe("FlowEngine — mdr-2 Phase 2: recovered valid marker → ok=true trans
       responses: { START: { text: "no marker anywhere here", ok: false } },
     });
     // parse fallback also misses → truly null marker.
-    delegates.runParseAgent = async () => ({ text: "still nothing", ok: true });
+    delegates.executor.executeParseAgent = async () => ({ text: "still nothing", ok: true });
     const engine = new FlowEngine(flow, delegates);
 
     const stepResult = await engine._executeAgentStep("START", flow.steps.START, null);
