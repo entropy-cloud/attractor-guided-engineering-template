@@ -9,9 +9,11 @@
  *   - listMemoryStores(projectRoot): self + per-module memory store inventory.
  *
  * The VAR_PROVENANCE table is the single source of truth for which variables
- * the engine injects (main.js delegates.vars). A drift unit-test hard-gates
- * that every main.js vars key is present in the table (FSD §7.4 residual
- * risk #2). New variables added to main.js MUST be registered here too.
+ * the engine injects (orchestrator.js delegates.vars — moved out of main.js
+ * by dsh-plugin M1-WI2). A drift unit-test hard-gates that every
+ * orchestrator.js vars key is present in the table (FSD §7.4 residual
+ * risk #2). New variables added to orchestrator.js MUST be registered here
+ * too.
  *
  * Zero npm dependencies — only node:fs / node:path / node:url.
  */
@@ -32,14 +34,15 @@ const TEMPLATE_VAR_RE = /\{\{(\w+)\}\}/g;
 
 /**
  * VAR_PROVENANCE — single source of truth for every variable the engine
- * injects into prompts (main.js:519-553 delegates.vars). Each entry carries:
+ * injects into prompts (orchestrator.js delegates.vars, hoisted out of
+ * main.js by dsh-plugin M1-WI2). Each entry carries:
  *   - source: human-readable provenance (config field / file path).
  *   - runtime: true when the value is only known at execution time
  *     (forEach item, timestamp, run directory) and cannot be statically
  *     resolved by the explorer.
  *
  * EXPECTED_VARS below mirrors the exact top-level keys of delegates.vars. The
- * drift test asserts these two stay in lock-step with main.js.
+ * drift test asserts these two stay in lock-step with orchestrator.js.
  */
 export const VAR_PROVENANCE = {
   missionName:        { source: "config.missionName", runtime: false },
@@ -68,54 +71,58 @@ export const VAR_PROVENANCE = {
   PLAN_FILE:          { source: "forEach activePlans() — current plan file path (subflow flowArgs)", runtime: true },
 };
 
-// Mirror of main.js:519-553 delegates.vars top-level keys. The drift test
-// cross-checks this array against (1) VAR_PROVENANCE and (2) a live extraction
-// from main.js source, so a forgotten sync on either side turns the test red.
-// Lines reference main.js at the time of writing; update both when vars change.
+// Mirror of orchestrator.js delegates.vars top-level keys (the vars block
+// moved out of main.js by dsh-plugin M1-WI2). The drift test cross-checks
+// this array against (1) VAR_PROVENANCE and (2) a live extraction from the
+// orchestrator.js source, so a forgotten sync on either side turns the test
+// red. Lines reference orchestrator.js at the time of writing; update both
+// when vars change.
 export const EXPECTED_VARS = [
-  "missionName",        // main.js:520
-  "projectRoot",        // main.js:521
-  "missionsDir",        // main.js:522
-  "roadmapPath",        // main.js:523
-  "plansDir",           // main.js:524
-  "planGuide",          // main.js:525
-  "auditsDir",          // main.js:526
-  "contextDir",         // main.js:527
-  "moduleContextFile",  // main.js:528
-  "moduleDir",          // main.js:532
-  "testCmd",            // main.js:533
-  "buildCmd",           // main.js:534
-  "lintCmd",            // main.js:535
-  "typecheckCmd",       // main.js:536
-  "checkCmd",           // main.js:537
-  "commitFormat",       // main.js:538
-  "multiAuditPrompt",   // main.js:538
-  "openAuditPrompt",    // main.js:539
-  "sourcePaths",        // main.js:540
-  "TIMESTAMP",          // main.js:543
-  "runDir",             // main.js:544
-  "selfMemoryIndex",    // main.js:569
-  "moduleMemoryIndex",  // main.js:572
-  "PLAN_FILE",          // main.js (subflow flowArgs, main flow EXEC_PLANS.flowArgs)
+  "missionName",        // orchestrator.js:571
+  "projectRoot",        // orchestrator.js:572
+  "missionsDir",        // orchestrator.js:573
+  "roadmapPath",        // orchestrator.js:574
+  "plansDir",           // orchestrator.js:575
+  "planGuide",          // orchestrator.js:576
+  "auditsDir",          // orchestrator.js:577
+  "contextDir",         // orchestrator.js:578
+  "moduleContextFile",  // orchestrator.js:579
+  "moduleDir",          // orchestrator.js:583
+  "testCmd",            // orchestrator.js:584
+  "buildCmd",           // orchestrator.js:585
+  "lintCmd",            // orchestrator.js:586
+  "typecheckCmd",       // orchestrator.js:587
+  "checkCmd",           // orchestrator.js:588
+  "commitFormat",       // orchestrator.js:589
+  "multiAuditPrompt",   // orchestrator.js:590
+  "openAuditPrompt",    // orchestrator.js:591
+  "sourcePaths",        // orchestrator.js:592
+  "TIMESTAMP",          // orchestrator.js:595
+  "runDir",             // orchestrator.js:596
+  "selfMemoryIndex",    // orchestrator.js:597
+  "moduleMemoryIndex",  // orchestrator.js:600
+  "PLAN_FILE",          // subflow flowArgs (main flow EXEC_PLANS.flowArgs)
 ];
 
 /**
- * Extract the top-level keys of `delegates.vars` from main.js source text.
- * Used by the drift test to detect when a developer adds a var to main.js but
- * forgets to register it in EXPECTED_VARS / VAR_PROVENANCE.
+ * Extract the top-level keys of `delegates.vars` from orchestrator.js source
+ * text (the scan target moved from main.js to the orchestration module by
+ * dsh-plugin M1-WI2 — the vars block migrated with it). Used by the drift
+ * test to detect when a developer adds a var to orchestrator.js but forgets
+ * to register it in EXPECTED_VARS / VAR_PROVENANCE.
  *
  * Resilient: returns [] if the block cannot be located (the test then falls
  * back to EXPECTED_VARS-only). Uses a brace-depth scan within the `vars: {`
  * block rather than a flat regex, so nested IIFEs (moduleContextFile /
  * moduleMemoryIndex) do not break extraction.
  *
- * @param {string} mainJsPath absolute path to src/main.js
+ * @param {string} orchestratorJsPath absolute path to src/orchestrator.js
  * @returns {string[]}
  */
-export function extractVarsKeysFromMainJs(mainJsPath) {
+export function extractVarsKeysFromOrchestrator(orchestratorJsPath) {
   let src;
   try {
-    src = readFileSync(mainJsPath, "utf8");
+    src = readFileSync(orchestratorJsPath, "utf8");
   } catch {
     return [];
   }

@@ -1,4 +1,5 @@
-// O7 — `main.js` `EXIT_MAP` exit-code contract regression suite (plan
+// O7 — `exit-map.js` (hoisted from main.js by dsh-plugin M1-WI2)
+// `EXIT_MAP` exit-code contract regression suite (plan
 // 2026-07-22-1223-2). Pins `EXECUTION-PRINCIPLE.md §11` row-by-row: every
 // status the operator doc promises an exit code for must actually have one
 // in the map, mapped to the documented value.
@@ -34,7 +35,9 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { EXIT_MAP } from "../src/main.js";
+// Hoisted home (dsh-plugin M1-WI2): exit-map.js owns the table; main.js
+// re-exports it for compatibility. The pin targets the definition module.
+import { EXIT_MAP } from "../src/exit-map.js";
 
 // Single source of truth for the documented contract. Each row: status →
 // documented exit code per `EXECUTION-PRINCIPLE.md §11` (+ the

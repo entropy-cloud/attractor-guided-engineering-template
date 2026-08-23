@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import {
   VAR_PROVENANCE,
   EXPECTED_VARS,
-  extractVarsKeysFromMainJs,
+  extractVarsKeysFromOrchestrator,
   buildInjectionMap,
   listPrompts,
   listMemoryStores,
@@ -19,7 +19,9 @@ const TOOL_ROOT = resolve(__dirname, "..");
 // root, not under the tool dir. self memory resolves via an absolute constant
 // inside context-map.mjs, so it works regardless of projectRoot.
 const REPO_ROOT = resolve(TOOL_ROOT, "..", "..");
-const MAIN_JS = resolve(TOOL_ROOT, "src", "main.js");
+// delegates.vars lives in the orchestration module since dsh-plugin M1-WI2
+// (hoisted out of the main.js CLI shell); the drift gate scans its source.
+const ORCHESTRATOR_JS = resolve(TOOL_ROOT, "src", "orchestrator.js");
 
 // The Context Explorer runs against the real tool layout (flows/, prompts/,
 // memory/ live under the repo), so most assertions exercise the live files
@@ -32,11 +34,11 @@ describe("context-map — VAR_PROVENANCE drift hard-gate (FSD §7.4 residual ris
     assert.deepEqual(missing, [], `EXPECTED_VARS not in VAR_PROVENANCE: ${missing.join(", ")}`);
   });
 
-  it("every main.js delegates.vars key is registered in EXPECTED_VARS", () => {
-    const extracted = extractVarsKeysFromMainJs(MAIN_JS);
+  it("every orchestrator.js delegates.vars key is registered in EXPECTED_VARS", () => {
+    const extracted = extractVarsKeysFromOrchestrator(ORCHESTRATOR_JS);
     assert.ok(extracted.length >= 20, `extraction returned too few keys (${extracted.length}); regex may be broken`);
     const missing = extracted.filter((k) => !EXPECTED_VARS.includes(k));
-    assert.deepEqual(missing, [], `main.js vars not in EXPECTED_VARS: ${missing.join(", ")}`);
+    assert.deepEqual(missing, [], `orchestrator.js vars not in EXPECTED_VARS: ${missing.join(", ")}`);
   });
 
   it("PLAN_FILE is flagged runtime=true (forEach item, not statically resolvable)", () => {
