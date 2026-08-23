@@ -1,0 +1,45 @@
+name: age L1+L2 gate
+
+# Merge-blocking verification for the AGE engine + dsh plugin (dsh-plugin
+# M2-WI8, plan docs/plans/dsh-plugin/2026-08-23-1447-3 Phase 1 Decision 1 —
+# Option A: one aggregate command, both chains must pass). Runs the same
+# verify-age.sh developers run locally:
+#   L1 — engine suite (zero npm deps, includes prompt-check.mjs)
+#   L2 — plugin suite (L2 backend-parity matrix + WI6/WI7 unit chain)
+# Pure Node, zero network, zero model credentials (R3 §5 merge-blocking
+# posture); L3/L4 stay local-script gates behind explicit env flags and are
+# intentionally NOT part of this workflow.
+#
+# Node 24 satisfies the plugin's `^22.19 || >=24` engines requirement
+# (native TS type-stripping for src/*.ts test imports).
+
+on:
+  push:
+    paths:
+      - 'tools/mission-driver/**'
+      - 'plugin/dsh/**'
+      - '.github/workflows/age-ci.yml'
+      - 'verify-age.sh'
+  pull_request:
+    paths:
+      - 'tools/mission-driver/**'
+      - 'plugin/dsh/**'
+      - '.github/workflows/age-ci.yml'
+      - 'verify-age.sh'
+
+jobs:
+  l1-l2:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: L1+L2 aggregate gate (verify-age.sh)
+        run: ./verify-age.sh
