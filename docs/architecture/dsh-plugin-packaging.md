@@ -1,6 +1,6 @@
 # DSH Plugin Packaging — Technical Architecture
 
-> **Status: P1 DELIVERED (2026-08-23) — StepExecutor seam, ProcessExecutor, programmatic orchestration entry + EXIT_MAP hoist, driver validation, and embed-mode gating have landed (M1-WI1..WI5). P2 PARTIALLY DELIVERED (2026-08-23, M2-WI6): the plugin shell (`plugin/dsh/` bundle manifest + isolate-realm patch + build bundling with an import-closure gate) has landed; NativeExecutor (WI7), L2 matrix (WI8), L3 harness (WI9), and `mdcontrol.*` routes (WI10) remain planned. P3–P4 remain planned.** Phase gates below define when each remaining claim becomes supported behavior.
+> **Status: P1 DELIVERED (2026-08-23) — StepExecutor seam, ProcessExecutor, programmatic orchestration entry + EXIT_MAP hoist, driver validation, and embed-mode gating have landed (M1-WI1..WI5). P2 PARTIALLY DELIVERED (2026-08-23, M2-WI6 + M2-WI7): the plugin shell (`plugin/dsh/` bundle manifest + isolate-realm patch + build bundling with an import-closure gate) and the NativeExecutor dispatch backend + engine-bridge backend-selection factory (fake-agents unit-tested; no real host yet) have landed; the L2 matrix (WI8), L3 harness (WI9), and `mdcontrol.*` routes (WI10) remain planned. P3–P4 remain planned.** Phase gates below define when each remaining claim becomes supported behavior.
 
 ## Purpose
 
@@ -22,23 +22,27 @@ All other boundary rules are preserved:
 
 ## Packaging Layout
 
-New top-level directory in this repository — **landed 2026-08-23 (M2-WI6)**, tree below is the as-built state (skeleton files marked with their owning work item):
+New top-level directory in this repository — **landed 2026-08-23 (M2-WI6, extended M2-WI7)**, tree below is the as-built state (files marked with their owning work item):
 
 ```
 plugin/dsh/
 ├── package.json          # LANDED: `dsh.bundle.patch` manifest + exact-pinned @deepseek-ai/* deps
 ├── cordis.patch.yml      # LANDED: `- insert:` op → cordis:group with isolate realm → service row
-├── tsconfig.json         # tsc --noEmit over src/*.ts
+├── tsconfig.json         # tsc --noEmit over src/*.ts (allowJs: engine bundle JS enters as inferred types)
 ├── scripts/
 │   ├── check-manifest.mjs     # structural manifest/patch validation (plain-YAML, dev-dep `yaml`)
 │   ├── build-bundle.mjs       # copy-style engine bundling + import-closure gate (+ `--check` freshness)
 │   └── smoke-import.mjs       # no-host bundle import smoke (all 5 entry modules, zero npm resolution)
 ├── test/
-│   └── bundle-scaffold.test.mjs  # plugin local test entry — reused by the WI7 unit tests and WI8 matrix
+│   ├── bundle-scaffold.test.mjs   # plugin local test entry (WI6) — reused by WI7/WI8
+│   ├── native-executor.test.mjs   # NativeExecutor unit branches (WI7; fake agents service)
+│   ├── engine-bridge.test.mjs     # selection factory + native config + orchestrateRun smoke (WI7)
+│   └── helpers/fake-agents.mjs    # reusable fake in-process agents service (WI7; WI8/WI9 build on it)
 ├── src/
 │   ├── service.ts        # SKELETON: mount-log only; mdcontrol.* routes + guard = WI10
-│   ├── native-executor.ts# INTERFACE PLACEHOLDER (StepExecutor shape pinned); implementation = WI7
-│   └── engine-bridge.ts  # INTERFACE PLACEHOLDER; wiring = WI7/WI10
+│   ├── native-executor.ts# LANDED (WI7): DshNativeExecutor — full StepExecutor over ctx.agents
+│   └── engine-bridge.ts  # LANDED (WI7): resolveExecutor factory + bootstrapNativeConfig + runNativeMission;
+│                         #        mdcontrol.* route wrappers = WI10
 └── assets/               # build output — COMMITTED (web/dist precedent); freshness gated
     ├── src/              # the engine pure-module closure (19 files) — relative imports preserved
     ├── flows/            # copied from tools/mission-driver/flows/
@@ -76,8 +80,8 @@ StepExecutor.execute(stepCtx) → { code: 0|1, text: string, errorTail: string, 
 ```
 
 - **ProcessExecutor** wraps the existing runner+executor pair unchanged; selected for every current driver value (`opencode` | `pi` | `cline`). Behavior byte-for-byte identical to today.
-- **NativeExecutor** (implemented in the plugin layer, not the engine core) fulfills the same interface over the DSH agents service.
-- Engine selects the backend from resolved driver config: `"native"` maps to NativeExecutor; all other values map to ProcessExecutor.
+- **NativeExecutor** (implemented in the plugin layer — `plugin/dsh/src/native-executor.ts`, landed M2-WI7 — not in the engine core) fulfills the same interface over the DSH agents service.
+- Backend selection is a plugin-layer factory (landed M2-WI7, `plugin/dsh/src/engine-bridge.ts` `resolveExecutor({ driver, ctx, config })`): `"native"` → a PER-RUN `NativeExecutor` (handle lifetime = one run); all other values → `ProcessExecutor` over the bundle-internal runner. The engine core stays backend-blind — zero engine diff, zero `@deepseek-ai/*` import under `tools/mission-driver/src/`. A missing agents service is an explicit wire error; there is no silent ProcessExecutor fallback (the degradation ladder is a separate explicit decision, see §Dependency and Version Risk).
 
 Two P1 hardening items the refactor included (both landed 2026-08-23, M1-WI3/WI4):
 
@@ -108,12 +112,23 @@ Step-agents register healthy descriptors via `snapshotSubagentDescriptor` (from 
 
 Terminology glosses for reviewers unfamiliar with the DSH host: **isolate realm** — a cordis service scope that keeps a plugin's mounted instances private instead of process-global; **wire error** — a structured RPC error surfaced to the client UI; **`dsh.bundle.patch`** — the package.json manifest field declaring this package as a mountable DSH bundle plugin.
 
+### Implementation state and boundaries (M2-WI7, landed 2026-08-23)
+
+The dispatch chain above is implemented in `plugin/dsh/src/native-executor.ts` (`DshNativeExecutor`) and wired by `plugin/dsh/src/engine-bridge.ts` (`resolveExecutor` + `bootstrapNativeConfig` + `runNativeMission`). Verified in the fake-agents unit domain only (no real host — L3 belongs to WI9; native end-to-end belongs to WI10). Implementation boundaries, all deliberate:
+
+- **Model selection is ignored**: both `mission.model` and `parseModel` (the cheap-parse distinction) are ignored in native mode — `executeParseAgent` and `executeAgent` collapse to the same dispatch. See §Behavioral differences below.
+- **Log artifacts are written but content shape is not byte-equivalent**: `logFile`/`promptFile` land in the engine run-dir with the same naming convention (`native-<step>-<ts>-<rand>.log` + `.prompt`), preserving monitor log viewing and post-hoc audit; the log body is the harvested assistant text plus a header/round summary, NOT a subprocess stdout transcript (file existence/readability is the compatibility contract; byte-level content shape is not).
+- **`executeTool` is the plugin layer's own minimal spawn**: `child_process` spawn + timeout + exit code + output tail, ZERO diagnostics — no `sysSnapshot`, no `~/.mission-driver/active/` touch. Reusing the engine `executor.js` tool path was rejected because its heartbeat pair is intentionally not embed-gated ("a native-mode embed host never selects this backend") — sharing it would run execSync snapshots and active-run registry touches inside the DSH host, the exact host-invasive behavior M1-WI4's embed gating prevents. Known residual drift (the process-path `runTool` currently drops the engine's `timeout` opt; the native path consumes it as milliseconds) is pinned by the WI8 L2 matrix's tool-step assertions.
+- **No silent fallback**: missing `ctx.agents` (or a failing native create) surfaces as an explicit wire error to the caller — never an implicit ProcessExecutor downgrade.
+- **Callback contract mirrors runner.js exactly**: `onStepUpdate` is resolved at call time (`opts.onStepUpdate ?? config.onStepUpdate`, both with `typeof === "function"` guards) because `orchestrateRun` assigns `config.onStepUpdate` only after executor construction; two-point callbacks fire files-first (`{stepName, logFile, promptFile}`) then session (`{stepName, sessionId}`), so subflow wrapping and the monitor live channel behave identically in native mode.
+- **`stderrTail` is always null natively** (no subprocess stderr surface; `errorTail` carries the error text); exit codes are synthesized per contract-preservation rule 3.
+
 ### Behavioral differences vs ProcessExecutor (documented, accepted)
 
 | Concern | Process behavior | Native behavior |
 | --- | --- | --- |
 | Permissions | `--dangerously-skip-permissions` bypass | child inherits host sandbox/approval stack; stricter by default. AGE worker preset must carry a tool catalog sufficient for execute/closure steps |
-| Model selection | `mission.model` opencode-style ids passed through | early phases ignore `model`; later phases map to DSH `ModelSelectionRef`. Documented gap, not silently dropped |
+| Model selection | `mission.model` opencode-style ids passed through; `parseModel` routes no-marker parse fallback + marker-correction retries to the cheaper model | both `mission.model` AND `parseModel` are ignored (documented gap, not silently pretended): early phases dispatch every step — parse and correction retries included — on the same host-configured agent; later phases map both to DSH `ModelSelectionRef` |
 | Watchdog | 60-min log-idle SIGTERM | hard per-step timeout: `agent.cancel(cause)` first, `dispose()` as last resort; no partial-output grace |
 | Native loop-driver precedent | — (n/a) | host's own `goal-round-driver` drives bounded same-session rounds via a queued prompt gated by an `agent/pre-step` listener; Flow DSL still owns sequencing because it adds branching transitions, script checks, marker contracts, and per-branch budgets beyond round counting |
 | Crash isolation | child crash contained by OS | runaway turn bounded by abort + dispose + model-side budget; correction-retry still applies |
@@ -180,7 +195,7 @@ Day-to-day development procedure (host setup, Creator-mode online loop, flow-cus
 | Phase | Deliverable | Verification gate |
 | --- | --- | --- |
 | P1 ✅ delivered 2026-08-23 | StepExecutor seam over the delegates injection points; ProcessExecutor wrapper; programmatic orchestration entry + `EXIT_MAP` hoist; driver validation; embed-mode gating of startup diagnostics; module-boundaries.md update | full engine test suite green (incl. exit-map pinning); CLI behavior unchanged (`run demo` smoke test) |
-| P2 ⏳ partially delivered 2026-08-23 (M2-WI6 only) | Plugin shell + NativeExecutor; `mdcontrol.run` executing `demo` mission end-to-end natively. **Delivered (WI6)**: `plugin/dsh/` scaffold, bundle manifest, isolate-realm patch, build bundling + import-closure gate, plugin test entry. **Remaining (P2 boundary)**: NativeExecutor (WI7), L2 dual-backend matrix (WI8), L3 host harness (WI9), `mdcontrol.*` async job contract (WI10) | demo mission completes with identical run-state shape; markers parsed; correction-retry exercised once artificially (full P2 gate; WI6 verified structurally + no-host import smoke only) |
+| P2 ⏳ partially delivered 2026-08-23 (M2-WI6 + M2-WI7) | Plugin shell + NativeExecutor; `mdcontrol.run` executing `demo` mission end-to-end natively. **Delivered (WI6)**: `plugin/dsh/` scaffold, bundle manifest, isolate-realm patch, build bundling + import-closure gate, plugin test entry. **Delivered (WI7)**: `DshNativeExecutor` (full dispatch chain, handle lifecycle, watchdog, exit synthesis, plugin-layer minimal tool spawn) + engine-bridge selection factory/native config wiring, unit-tested over a fake in-process agents service incl. an `orchestrateRun` full-chain callback smoke. **Remaining (P2 boundary)**: L2 dual-backend matrix (WI8), L3 host harness (WI9), `mdcontrol.*` async job contract (WI10) | demo mission completes with identical run-state shape; markers parsed; correction-retry exercised once artificially (full P2 gate; WI7 verified in the fake-agents unit domain only — no real host) |
 | P3 | `onboarding` parity + descriptor registration + skills wired | onboarding fills copied docs identically to CLI form; subagents list healthy during run |
 | P4 | AGE preset integration (AGE mode) + Mission Control status panel decision | preset + plugin compose without realm collision |
 

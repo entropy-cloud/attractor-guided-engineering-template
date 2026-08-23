@@ -1,6 +1,6 @@
 # 2026-08-23-1447-2 NativeExecutor 原生派发后端 + backend 选择工厂（dsh-plugin M2-WI7）
 
-> Plan Status: active
+> Plan Status: completed
 > Mission: dsh-plugin
 > Work Item: M2-WI7
 > Last Reviewed: 2026-08-23（draft review 3 轮，iteration 3 共识 `acceptable as-is`，见 Draft Review Record）
@@ -58,75 +58,75 @@
 
 ### Phase 1 - NativeExecutor 实现（dispatch 序列 + handle 生命周期 + watchdog + exit 合成）
 
-Status: planned
+Status: completed
 Targets: `plugin/dsh/src/native-executor.ts`、`plugin/dsh/test/`
 Skill: none
 
 - Item Types: `Decision | Add | Proof`
 - Prereqs: `2026-08-23-1447-1` 全 Phase（脚手架 + bundle + 钉版 + `plugin/dsh` 测试入口）
 
-- [ ] `Decision` 构造形态与回调注入：`new NativeExecutor({ agents, config })` per-run 构造（engine-bridge 工厂负责，handle 生命周期与 run 绑定）；**回调经 config 引用调用期解析**——每次 `executeAgent` 调用时取 `opts.onStepUpdate ?? config.onStepUpdate`（镜像 `runner.js:204-206` 的调用期读取；opts 级服务 subflow 包装，config 级服务顶层——`orchestrator.js:644` 在 `orchestrateRun` 内部才赋值 config.onStepUpdate，构造期捕获必为 undefined 死通道；实现期若要逐字镜像 runner 的 `typeof === "function"` 守卫形式，以 runner 实现为准——引擎现只产函数值或不设该键，两种形式现行为等价）；`runDir` 统一经 config 引用读取，避免双源。备选：无状态 executor + 每方法传全部上下文——被否决，opts 参数位由引擎契约固定（`step-executor.js:22`），onStepUpdate/runDir 不在参数表内；备选：构造期捕获 `config.onStepUpdate` 值——被否决，接线时序上必然拿到 undefined（见基线"顶层回调接线时序"）。残险：双通道优先级与 runner 行为不一致会双发/漏发回调——单测断言"每步恰好两组回调、顺序正确、opts 级优先"，Phase 2 加 `orchestrateRun` 全链回调到达断言防死通道回归。
+- [x] `Decision` 构造形态与回调注入：`new NativeExecutor({ agents, config })` per-run 构造（engine-bridge 工厂负责，handle 生命周期与 run 绑定）；**回调经 config 引用调用期解析**——每次 `executeAgent` 调用时取 `opts.onStepUpdate ?? config.onStepUpdate`（镜像 `runner.js:204-206` 的调用期读取；opts 级服务 subflow 包装，config 级服务顶层——`orchestrator.js:644` 在 `orchestrateRun` 内部才赋值 config.onStepUpdate，构造期捕获必为 undefined 死通道；实现期若要逐字镜像 runner 的 `typeof === "function"` 守卫形式，以 runner 实现为准——引擎现只产函数值或不设该键，两种形式现行为等价）；`runDir` 统一经 config 引用读取，避免双源。备选：无状态 executor + 每方法传全部上下文——被否决，opts 参数位由引擎契约固定（`step-executor.js:22`），onStepUpdate/runDir 不在参数表内；备选：构造期捕获 `config.onStepUpdate` 值——被否决，接线时序上必然拿到 undefined（见基线"顶层回调接线时序"）。残险：双通道优先级与 runner 行为不一致会双发/漏发回调——单测断言"每步恰好两组回调、顺序正确、opts 级优先"，Phase 2 加 `orchestrateRun` 全链回调到达断言防死通道回归。
   - Skill: none
-- [ ] `Decision` 日志/产物落盘策略：ProcessExecutor 的 `logFile`/`promptFile` 是 run-dir 内可查看产物（monitor 与人读）。NativeExecutor 须写等价 run-dir 文件（dispatch 的 prompt 存 `promptFile`，收割 text + 轮次摘要存 `logFile`）以保持 run-state/monitor 兼容——写盘由插件层做，文件命名沿用引擎 run-dir 约定。返回 shape 其余字段合成定稿：`ok = (exitCode === 0)`；`stderrTail` native 下恒 `null`（无子进程 stderr 面，errorTail 已承载错误文本）。备选：`logFile/promptFile` 返回 null（接口允许）——被否决，monitor 日志查看与事后审计退化为无据可查。残险：native 轮次事件与子进程 stdout 格式不同，日志文件内容形状不等价（文件存在性/可读性等价，内容形状不承诺逐字节一致）。
+- [x] `Decision` 日志/产物落盘策略：ProcessExecutor 的 `logFile`/`promptFile` 是 run-dir 内可查看产物（monitor 与人读）。NativeExecutor 须写等价 run-dir 文件（dispatch 的 prompt 存 `promptFile`，收割 text + 轮次摘要存 `logFile`）以保持 run-state/monitor 兼容——写盘由插件层做，文件命名沿用引擎 run-dir 约定。返回 shape 其余字段合成定稿：`ok = (exitCode === 0)`；`stderrTail` native 下恒 `null`（无子进程 stderr 面，errorTail 已承载错误文本）。备选：`logFile/promptFile` 返回 null（接口允许）——被否决，monitor 日志查看与事后审计退化为无据可查。残险：native 轮次事件与子进程 stdout 格式不同，日志文件内容形状不等价（文件存在性/可读性等价，内容形状不承诺逐字节一致）。
   - Skill: none
-- [ ] `Decision` `executeTool` 在 native 模式的实现：**插件层自有最小 spawn 路径**——`child_process` spawn + 超时 + exit code + 输出 tail 捕获，**零诊断**（不跑 sysSnapshot、不触 `~/.mission-driver/active/`）。备选：复用 bundle 内 `executor.js` 工具路径——被否决：其内部心跳 `sysSnapshot` + `touchActiveRun`（`executor.js:352-358`）设计注记明言"native 模式永不选中该 backend"，复用即在 DSH 宿主进程内跑 execSync 快照 + active-run registry 触碰（长工具步如 BUILD_VERIFY 可跨多个心跳周期），正是 M1-WI4 embed 门控要防的宿主侵扰，且直接触发 M1 plan 1 deferred 项 2 的 reopen 条款；备选：给 `executor.js` 心跳对加 embed 门控——被否决：引擎 diff 违背零改动预期、触及 ProcessExecutor 共享路径需全量回归 CLI 行为，收益仅省约 50 行插件层 spawn 逻辑。残险：插件层 spawn 与 executor.js 行为漂移（超时语义/输出 tail 形状）——由 1447-3 L2 矩阵的 tool 步剧本断言钉住。裁定落地后 M1 deferred 项 2 正式收口（见 Deferred 段）。
+- [x] `Decision` `executeTool` 在 native 模式的实现：**插件层自有最小 spawn 路径**——`child_process` spawn + 超时 + exit code + 输出 tail 捕获，**零诊断**（不跑 sysSnapshot、不触 `~/.mission-driver/active/`）。备选：复用 bundle 内 `executor.js` 工具路径——被否决：其内部心跳 `sysSnapshot` + `touchActiveRun`（`executor.js:352-358`）设计注记明言"native 模式永不选中该 backend"，复用即在 DSH 宿主进程内跑 execSync 快照 + active-run registry 触碰（长工具步如 BUILD_VERIFY 可跨多个心跳周期），正是 M1-WI4 embed 门控要防的宿主侵扰，且直接触发 M1 plan 1 deferred 项 2 的 reopen 条款；备选：给 `executor.js` 心跳对加 embed 门控——被否决：引擎 diff 违背零改动预期、触及 ProcessExecutor 共享路径需全量回归 CLI 行为，收益仅省约 50 行插件层 spawn 逻辑。残险：插件层 spawn 与 executor.js 行为漂移（超时语义/输出 tail 形状）——由 1447-3 L2 矩阵的 tool 步剧本断言钉住。裁定落地后 M1 deferred 项 2 正式收口（见 Deferred 段）。
   - Skill: none
-- [ ] `Add` dispatch 序列：`create(options)`（`sessionId` 生成 childId、`meta { cwd, origin: 'subagent', delegationDepth, agentPreset }`、`signal` = `opts.timeoutMs` 换算的硬超时）→ prompt 组装（`[MISSION_DRIVER:<runId>]` 边界前缀 + 模板输出）经 `followup(createUserMessage(...))` → `await whenIdle()` → 从 `agent.session.events` 收割最终非空 assistant text；`onStepUpdate` 双点回调（写盘后 `{stepName, logFile, promptFile}`、create 后 `{stepName, sessionId}`，镜像 `runner.js:220-228`）；`executeParseAgent` 同链路（cheap parse model 差异按 documented gap 处理——native 下 `parseModel` 同样忽略，Phase 3 文档同步）。
+- [x] `Add` dispatch 序列：`create(options)`（`sessionId` 生成 childId、`meta { cwd, origin: 'subagent', delegationDepth, agentPreset }`、`signal` = `opts.timeoutMs` 换算的硬超时）→ prompt 组装（`[MISSION_DRIVER:<runId>]` 边界前缀 + 模板输出）经 `followup(createUserMessage(...))` → `await whenIdle()` → 从 `agent.session.events` 收割最终非空 assistant text；`onStepUpdate` 双点回调（写盘后 `{stepName, logFile, promptFile}`、create 后 `{stepName, sessionId}`，镜像 `runner.js:220-228`）；`executeParseAgent` 同链路（cheap parse model 差异按 documented gap 处理——native 下 `parseModel` 同样忽略，Phase 3 文档同步）。
   - Skill: none
-- [ ] `Add` handle 生命周期管理：per-run handle 持有（步骤间复用不 dispose）；run 终态/abort → `dispose()`；`dispose` 前置校验防双重释放；handle 冷却（`followup` 抛失效错误）→ `agents.resume({ resumeSessionId })` 重建。cancel 路径：硬超时（源 = `opts.timeoutMs`）`cancel(cause)` → 有限 grace → `dispose()`，产出 `code: 1` + `errorTail` 结果对象（`ok=false`、`stderrTail=null`）。
+- [x] `Add` handle 生命周期管理：per-run handle 持有（步骤间复用不 dispose）；run 终态/abort → `dispose()`；`dispose` 前置校验防双重释放；handle 冷却（`followup` 抛失效错误）→ `agents.resume({ resumeSessionId })` 重建。cancel 路径：硬超时（源 = `opts.timeoutMs`）`cancel(cause)` → 有限 grace → `dispose()`，产出 `code: 1` + `errorTail` 结果对象（`ok=false`、`stderrTail=null`）。
   - Skill: none
-- [ ] `Proof` 单元测试（fake agents service，`plugin/dsh` 测试入口，1447-1 建立）：正常回合（scripted text 收割 + childId 回传 + run-dir 文件写出 + 双点回调各一次且顺序正确）；**回调调用期解析**（构造后变更 `config.onStepUpdate`，回调仍到达——钉死通道风险）；opts 级优先于 config 级（subflow 形态）；无 marker 文本原样透传（marker 解析留在引擎，契约保全规则 1）；cancel/dispose 序列与双重 dispose 防护；create 失败（服务缺失 → 结构化 wire error 透传）；resume 恢复分支；`executeTool` 插件层 spawn 路径（含超时与失败 tail）。全绿。
+- [x] `Proof` 单元测试（fake agents service，`plugin/dsh` 测试入口，1447-1 建立）：正常回合（scripted text 收割 + childId 回传 + run-dir 文件写出 + 双点回调各一次且顺序正确）；**回调调用期解析**（构造后变更 `config.onStepUpdate`，回调仍到达——钉死通道风险）；opts 级优先于 config 级（subflow 形态）；无 marker 文本原样透传（marker 解析留在引擎，契约保全规则 1）；cancel/dispose 序列与双重 dispose 防护；create 失败（服务缺失 → 结构化 wire error 透传）；resume 恢复分支；`executeTool` 插件层 spawn 路径（含超时与失败 tail）。全绿。
   - Skill: none
 
 Exit Criteria:
 
-- [ ] 三方法行为分支全绿；exit 合成契约（0/1 + errorTail）与 handle 生命周期（无中途 dispose、终态必释放）有断言钉住
-- [ ] 日志落盘决策及其边界（内容形状不等价声明）在 plan/文档定稿
-- [ ] `docs/logs/` updated
+- [x] 三方法行为分支全绿；exit 合成契约（0/1 + errorTail）与 handle 生命周期（无中途 dispose、终态必释放）有断言钉住
+- [x] 日志落盘决策及其边界（内容形状不等价声明）在 plan/文档定稿
+- [x] `docs/logs/` updated
 
 ### Phase 2 - engine-bridge 选择工厂 + native config 接线
 
-Status: planned
+Status: completed
 Targets: `plugin/dsh/src/engine-bridge.ts`、`plugin/dsh/test/`
 Skill: none
 
 - Item Types: `Add | Decision | Proof`
 - Prereqs: Phase 1
 
-- [ ] `Add` 选择工厂：`resolveExecutor({ driver, ctx, config })`——`driver === "native"` → **per-run 构造** `new NativeExecutor({ agents: ctx.get('agents'), config })`（禁跨 run 单例——handle 生命周期 = 一个 run；服务缺失降级为清晰 wire error，不静默回退 ProcessExecutor）；其余 → `new ProcessExecutor(createRunner(...))`（复用 bundle 内 runner）。工厂在插件层 `engine-bridge.ts`，引擎核心不感知（M1 deferred 项收编：映射规则落地，引用 M1 接口契约与 `orchestrateRun({ config, executor })` 注入形态）。`service.ts` 本 plan 不触（路由属 WI10）。
+- [x] `Add` 选择工厂：`resolveExecutor({ driver, ctx, config })`——`driver === "native"` → **per-run 构造** `new NativeExecutor({ agents: ctx.get('agents'), config })`（禁跨 run 单例——handle 生命周期 = 一个 run；服务缺失降级为清晰 wire error，不静默回退 ProcessExecutor）；其余 → `new ProcessExecutor(createRunner(...))`（复用 bundle 内 runner）。工厂在插件层 `engine-bridge.ts`，引擎核心不感知（M1 deferred 项收编：映射规则落地，引用 M1 接口契约与 `orchestrateRun({ config, executor })` 注入形态）。`service.ts` 本 plan 不触（路由属 WI10）。
   - Skill: none
-- [ ] `Add` native config 接线：engine-bridge 以 `allowNativeDriver: true` 走 `resolveConfig`（放行 `native`）+ `embed: true`（关 startup 诊断，M1-WI4 门控消费）+ `driver: "native"` 默认；编排调用复用 bundle 内 `orchestrateRun`。CLI 路径零改动（`main.js` 不触）。
+- [x] `Add` native config 接线：engine-bridge 以 `allowNativeDriver: true` 走 `resolveConfig`（放行 `native`）+ `embed: true`（关 startup 诊断，M1-WI4 门控消费）+ `driver: "native"` 默认；编排调用复用 bundle 内 `orchestrateRun`。CLI 路径零改动（`main.js` 不触）。
   - Skill: none
-- [ ] `Decision` 不静默回退原则：`ctx.get('agents')` 缺失或 native create 失败时，错误面向调用方显式抛出（wire error），不做 ProcessExecutor 降级——降级梯（`dsh` headless CLI driver）是显式独立决策（watch-only residual），不由异常路径隐式触发。
+- [x] `Decision` 不静默回退原则：`ctx.get('agents')` 缺失或 native create 失败时，错误面向调用方显式抛出（wire error），不做 ProcessExecutor 降级——降级梯（`dsh` headless CLI driver）是显式独立决策（watch-only residual），不由异常路径隐式触发。
   - Skill: none
-- [ ] `Proof` 工厂单测：三 driver 值（opencode/pi/cline → ProcessExecutor；native → NativeExecutor）+ agents 服务缺失 → 显式错误；`resolveConfig` 在 `allowNativeDriver: true` + `embed: true` 下产出预期 config 形状（复用引擎 config 测试惯例）；**`orchestrateRun` 全链冒烟（native 腿 + fake agents service）**：顶层 agent 步的 `{stepName, logFile, promptFile}` 与 `{stepName, sessionId}` 回调经 `config.onStepUpdate` 通道到达 engine `_onAgentStepUpdate`（run-state `steps[]` 收到更新）——钉死构造期死通道类回归。CLI 侧 `native` 拒绝行为回归（M1 既有 `driver-whitelist.test.js` 复跑）。
+- [x] `Proof` 工厂单测：三 driver 值（opencode/pi/cline → ProcessExecutor；native → NativeExecutor）+ agents 服务缺失 → 显式错误；`resolveConfig` 在 `allowNativeDriver: true` + `embed: true` 下产出预期 config 形状（复用引擎 config 测试惯例）；**`orchestrateRun` 全链冒烟（native 腿 + fake agents service）**：顶层 agent 步的 `{stepName, logFile, promptFile}` 与 `{stepName, sessionId}` 回调经 `config.onStepUpdate` 通道到达 engine `_onAgentStepUpdate`（run-state `steps[]` 收到更新）——钉死构造期死通道类回归。CLI 侧 `native` 拒绝行为回归（M1 既有 `driver-whitelist.test.js` 复跑）。
   - Skill: none
 
 Exit Criteria:
 
-- [ ] 工厂映射 + config 接线落地且单测绿；CLI 行为零变化（白名单测试复跑绿）
-- [ ] 引擎目录 `git diff` 为空（或最小修有记录）；`@deepseek-ai/*` 零进入 `tools/mission-driver/src/`
-- [ ] `docs/logs/` updated
+- [x] 工厂映射 + config 接线落地且单测绿；CLI 行为零变化（白名单测试复跑绿）
+- [x] 引擎目录 `git diff` 为空（或最小修有记录）；`@deepseek-ai/*` 零进入 `tools/mission-driver/src/`
+- [x] `docs/logs/` updated
 
 ### Phase 3 - 文档同步 + roadmap 回写
 
-Status: planned
+Status: completed
 Targets: `docs/architecture/dsh-plugin-packaging.md`、`docs/backlog/dsh-plugin-roadmap.md`、（如契约有补充）`docs/architecture/mission-driver-baseline.md`
 Skill: none（文档核对方法：`document-audit-prompt.md`）
 
 - Item Types: `Proof`
 - Prereqs: Phase 1、Phase 2
 
-- [ ] `Proof` 文档收口：packaging doc §Native Dispatch API Chain 由设计转"已实现（P2 部分）"并记录实现边界（model + parseModel gap、日志内容形状边界、executeTool 插件层最小 spawn 决策、不静默回退原则）；§Behavioral differences "Model selection" gap 行扩展为显式覆盖 `mission.model` 与 `parseModel`（cheap-parse 区分 native 下同样忽略）；§Execution Backend Seam 的选择工厂句更新为已落地；roadmap WI7 `todo → done`。baseline（standalone 行为 owner）预计无需改动——显式核对并记录结论（`No owner-doc update required` 或最小更新）。
+- [x] `Proof` 文档收口：packaging doc §Native Dispatch API Chain 由设计转"已实现（P2 部分）"并记录实现边界（model + parseModel gap、日志内容形状边界、executeTool 插件层最小 spawn 决策、不静默回退原则）；§Behavioral differences "Model selection" gap 行扩展为显式覆盖 `mission.model` 与 `parseModel`（cheap-parse 区分 native 下同样忽略）；§Execution Backend Seam 的选择工厂句更新为已落地；roadmap WI7 `todo → done`。baseline（standalone 行为 owner）预计无需改动——显式核对并记录结论（`No owner-doc update required` 或最小更新）。（执行记录：§Native Dispatch 后新增 "Implementation state and boundaries (M2-WI7, landed)" 小节承载四项实现边界 + 调用期回调契约；状态标头 / §Packaging Layout as-built 树 / §Phased Delivery P2 行同步；baseline 显式核对结论 = **No owner-doc update required**——baseline 的 native 相关行均为引擎侧事实〔driver 白名单 / embed 标志 / StepExecutor seam〕且表述仍然准确，本 plan 零 standalone（CLI）行为变化、引擎目录零 diff。）
   - Skill: none
-- [ ] `Proof` 全量验证：引擎 `pnpm --prefix tools/mission-driver test` 零回归 + 插件测试入口全绿 + typecheck 绿。verification scope 显式注明：无真实宿主（L3 归 WI9），native 端到端（demo mission）归 WI10。
+- [x] `Proof` 全量验证：引擎 `pnpm --prefix tools/mission-driver test` 零回归 + 插件测试入口全绿 + typecheck 绿。verification scope 显式注明：无真实宿主（L3 归 WI9），native 端到端（demo mission）归 WI10。（执行记录：引擎 653/653 + `lint:prompts` 绿〔首跑一次 652/653——唯一失败为既有文档化 flaky `monitor.test.js` draft-listing mtime 时序，单文件 84/84 复跑绿 + 全量复跑 653/653，与 08-23 WI6 日志先例一致，零回归〕；插件 `npm test` 全链绿〔check-manifest 14 项 + 24 用例 + `tsc --noEmit` + `build-bundle.mjs --check` 36 文件新鲜度 + smoke-import 五入口〕；`web run typecheck` 绿、`web run build` 绿且 `web/src/` 零改动 → dist 还原 HEAD 0 diff（同 WI1-WI6 先例）。**verification scope limited: fake-agents 单元域，无真实宿主/无 L4**。）
   - Skill: none
 
 Exit Criteria:
 
-- [ ] packaging doc / roadmap 与实现一致；baseline 核对结论有记录
-- [ ] 全量验证绿且 scope 声明在案
-- [ ] `docs/logs/` updated（聚合条目）
+- [x] packaging doc / roadmap 与实现一致；baseline 核对结论有记录
+- [x] 全量验证绿且 scope 声明在案
+- [x] `docs/logs/` updated（聚合条目）
 
 ## Draft Review Record
 
@@ -136,15 +136,15 @@ Exit Criteria:
 
 ## Closure Gates
 
-- [ ] in-scope behavior is complete
-- [ ] relevant docs are aligned
-- [ ] verification has run（引擎全量测试零回归；插件单测 + typecheck；命令在 Phase Proof 项固化）
-- [ ] scoped verification is not conflated with full verification——"verification scope limited: fake-agents 单元域，无真实宿主/无 L4"显式标注
-- [ ] no in-scope item downgraded to deferred/follow-up
-- [ ] independent draft review completed and recorded
-- [ ] text consistency verified: status, phases, gates, and log all agree
-- [ ] closure audit was independent
-- [ ] closure evidence exists in files
+- [x] in-scope behavior is complete
+- [x] relevant docs are aligned
+- [x] verification has run（引擎全量测试零回归；插件单测 + typecheck；命令在 Phase Proof 项固化）
+- [x] scoped verification is not conflated with full verification——"verification scope limited: fake-agents 单元域，无真实宿主/无 L4"显式标注
+- [x] no in-scope item downgraded to deferred/follow-up
+- [x] independent draft review completed and recorded
+- [x] text consistency verified: status, phases, gates, and log all agree
+- [x] closure audit was independent
+- [x] closure evidence exists in files
 
 ## Deferred But Adjudicated
 
@@ -171,12 +171,12 @@ Exit Criteria:
 
 ## Closure
 
-Status Note: pending
+Status Note: completed 2026-08-23 — all 3 phases executed and ticked; roadmap WI7 `done`; independent fresh-session closure audit PASS (see evidence).
 
 Closure Audit Evidence:
 
-- Auditor / Agent: pending
-- Evidence: pending
+- Auditor / Agent: independent fresh-session subagent (cold-replay, no prior session state), 2026-08-23
+- Evidence: audit verdict **PASS** — deliverables verified present and contract-faithful (`DshNativeExecutor` dispatch chain / per-run handle lifecycle / `resume()` cold recovery / cancel→grace→dispose watchdog / exit 合成 / runner.js 调用期回调解析逐字镜像 `native-executor.ts:358-360` vs `runner.js:204-206` / 零诊断 tool spawn——`sys-snapshot`/`active-run-registry` 仅出现在否决理由注释中；engine-bridge 工厂 + native config + finally-dispose；8 字段结果契约对 `step-executor.js:22` 核对）；本会话独立复跑验证全绿：插件 24/24、引擎 653/653 + prompt-check OK（flaky monitor 用例未触发）、driver-whitelist 18/18；红线保持：引擎目录 git diff 为空、`tools/mission-driver/src/` 零 `@deepseek-ai`、web/dist 零改动；packaging doc（§Implementation state and boundaries 四项边界 + Model selection 行覆盖 model 与 parseModel）/ roadmap WI7 `done` / `docs/logs/2026/08-23.md` 三处 provisional 条目与落地状态一致；verification scope 边界（fake-agents 单元域，无真实宿主/无 L4）在 plan、packaging doc、log 三处声明。审计唯一待办 = 本节收口动作本身（gates 勾选 + 证据记录），已随本节完成。
 
 Follow-up:
 
