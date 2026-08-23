@@ -19,7 +19,8 @@
     "test": "node scripts/check-manifest.mjs && node --test test/*.test.mjs && tsc --noEmit && node scripts/build-bundle.mjs --check && node scripts/smoke-import.mjs",
     "verify:native": "node scripts/verify-native.mjs",
     "verify:native:keyless": "node scripts/verify-native.mjs --keyless",
-    "verify:e2e": "node scripts/e2e-demo.mjs"
+    "verify:e2e": "node scripts/e2e-demo.mjs",
+    "verify:e2e:gate": "node scripts/e2e-plan-gate.mjs"
   },
   "dependencies": {
     "@deepseek-ai/cordis": "4.0.1",

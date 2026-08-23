@@ -27,6 +27,9 @@
  *   - skills registration (mission-control-run/draft/analyze) — LANDED
  *     (M3-WI12): runtime rows on `ctx.skills` via reactive `ctx.inject`
  *     (see ./mdcontrol-skills.ts).
+ *   - tools/pre-execute plan-status reinforcement gate — LANDED (M3-WI13,
+ *     plan `2026-08-23-1852-3`): denies plan-status `completed` edits
+ *     without run-state closure evidence (see ./plan-status-gate.ts).
  *
  * Exposure surface (plan Phase 1 Decision 1, better-sidebar precedent):
  * the wire-method record lives in `./mdcontrol-routes.ts`; this service
@@ -44,6 +47,7 @@ import {
   type MdControlRoutes,
 } from './mdcontrol-routes.ts'
 import { registerMissionControlSkills, type SkillsRegistryFace } from './mdcontrol-skills.ts'
+import { gateMountSummary, registerPlanStatusGate } from './plan-status-gate.ts'
 
 /** Plugin config row from cordis.patch.yml (`assetsDir: ./assets` today). */
 export interface MissionControlConfig {
@@ -94,12 +98,21 @@ export function apply(ctx: Context, config: MissionControlConfig = {}): void {
     return registerMissionControlSkills(skills, logger)
   })
 
+  // M3-WI13 reinforcement gate: one tools/pre-execute listener denying
+  // plan-status `completed` edits without run-state closure evidence (plan
+  // 1852-3; semantics in ./plan-status-gate.ts header). Auto-disposed with
+  // the plugin context; the explicit effect parks the disposer for
+  // dispose-on-unload parity with the HTTP routes.
+  const disposeGate = registerPlanStatusGate(ctx, logger)
+  ctx.effect(() => disposeGate, 'mdcontrol: tools/pre-execute plan-status gate')
+
   ctx.logger(LOGGER_NAME).info('mission-control mounted', {
     scope: 'mdcontrol',
-    phase: 'M3-WI12',
+    phase: 'M3-WI13',
     assetsDir: config.assetsDir ?? './assets',
     routes: 'run/status/list (M2-WI10) + draft/analyze (M3-WI12)',
     skills: 'mission-control-run/draft/analyze (M3-WI12)',
+    planStatusGate: gateMountSummary(),
     httpDispatcher: disposeHttp ? '/mdcontrol/api' : 'absent (webServer not provided)',
     guard: 'single-engine-activity-per-projectRoot, run+draft shared slot (1447-1 + 1852-2 adjudications)',
   })
