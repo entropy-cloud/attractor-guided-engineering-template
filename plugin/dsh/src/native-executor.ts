@@ -8,6 +8,12 @@
  *   agent.session.events → synthesized exit (completed turn with harvested
  *   text → code 0; abort/error → code 1 + errorTail).
  *
+ * Descriptor registration (WI11): every create seeds one durable
+ * `subagent/descriptor` session event (mode 'continuable', provider
+ * 'mdcontrol', label `Mission: <mission>`), so the run child enumerates as a
+ * healthy row instead of a 'corrupt' diagnostic; the seed persists with the
+ * session log, so agents.resume() needs no re-seeding.
+ *
  * Handle lifecycle = the whole run (R1-A2): dispose() removes the session
  * from the store, so this executor is constructed PER RUN (engine-bridge
  * factory owns that boundary) and reuses one live handle across steps; the
@@ -55,7 +61,8 @@ import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { resolve as pathResolve } from 'node:path'
 import type { AgentCancelCause, AgentHandle, AgentRegistry } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import type { SessionId } from '@deepseek-ai/dsh-session'
+import { seedDescriptorTurn, snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
+import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 
 // ── Pinned seam shapes (from the M2-WI6 interface placeholder) ──────────────
 
@@ -173,6 +180,40 @@ function genLogFile(runDir: string | undefined, label: string): string | null {
 function genChildId(): SessionId {
   const rand = Math.random().toString(36).slice(2, 10)
   return `native-${Date.now().toString(36)}-${rand}` as SessionId
+}
+
+/** Descriptor label vocabulary: mission/run identification for enumeration. */
+function descriptorLabel(config: NativeExecutorConfig): string {
+  const missionName = configString(config, 'missionName')
+  if (missionName) return `Mission: ${missionName}`
+  const runId = config.runDir ? String(config.runDir).split(/[\\/]/).filter(Boolean).pop() : null
+  return `Mission: ${runId ?? 'mission-driver'}`
+}
+
+/**
+ * Durable subagent descriptor seed (WI11, sidebar precedent sidechat-routes
+ * :161-174): a cold child without a `subagent/descriptor` event renders as a
+ * 'corrupt' diagnostic row in the host's subagents enumeration. One durable
+ * descriptor per run child — mode 'continuable' (the handle is reused across
+ * steps and cold-resumable), provider 'mdcontrol' (plugin identity), label
+ * `Mission: <mission>`, agentProvider/agentModel mirroring the create
+ * agentOptions when a model was resolved. Staged through `seedDescriptorTurn`
+ * so seq/lossless-JSON rules match the host's own seeding path.
+ */
+function descriptorSeedOf(
+  childId: SessionId,
+  config: NativeExecutorConfig,
+  provider: string | undefined,
+  model: string | undefined,
+): readonly SessionEvent[] {
+  const descriptor = snapshotSubagentDescriptor({
+    mode: 'continuable',
+    provider: 'mdcontrol',
+    label: descriptorLabel(config),
+    ...(provider !== undefined ? { agentProvider: provider } : {}),
+    ...(model !== undefined ? { agentModel: model } : {}),
+  })
+  return seedDescriptorTurn(childId, undefined, descriptor)
 }
 
 function sleep(ms: number): Promise<boolean> {
@@ -351,29 +392,37 @@ export class DshNativeExecutor implements NativeExecutor {
     const model = configString(this.config, 'nativeModel')
       ?? configString(this.config, 'model')
       ?? (process.env.DSH_MODEL && process.env.DSH_MODEL !== '' ? process.env.DSH_MODEL : undefined)
+    const childId = genChildId()
+    const seed = descriptorSeedOf(childId, this.config, model === undefined ? undefined : provider, model)
     if (model === undefined) {
       // No model resolution anywhere: create WITHOUT agentOptions and let the
-      // host's agent/request waterfall speak (unit fakes never read it).
+      // host's agent/request waterfall speak (unit fakes never read it). The
+      // durable descriptor seed is still injected (enumeration health does
+      // not depend on model resolution).
       this.handle = await this.agents.create({
-        sessionId: genChildId(),
+        sessionId: childId,
         meta: {
           cwd: this.config.projectRoot,
           origin: 'subagent',
           delegationDepth: 1,
           agentPreset: this.config.agent,
+          seedLength: seed.length,
         },
+        seed,
       })
       return this.handle
     }
     this.handle = await this.agents.create({
-      sessionId: genChildId(),
+      sessionId: childId,
       meta: {
         cwd: this.config.projectRoot,
         origin: 'subagent',
         delegationDepth: 1,
         agentPreset: this.config.agent,
+        seedLength: seed.length,
       },
       agentOptions: { provider, model },
+      seed,
     })
     return this.handle
   }

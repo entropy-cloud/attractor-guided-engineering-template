@@ -29,6 +29,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { DshNativeExecutor, createNativeExecutor } from "../src/native-executor.ts";
 import { createFakeAgentsService } from "./helpers/fake-agents.mjs";
+import { foldSubagentDescriptor, SUBAGENT_DESCRIPTOR_VERSION } from "@deepseek-ai/dsh-subagent";
 
 function tmpRunDir() {
   return mkdtempSync(join(tmpdir(), "native-executor-"));
@@ -50,6 +51,8 @@ test("normal turn: harvest, childId, run-dir artifacts, two ordered callbacks", 
     projectRoot: "/tmp/proj",
     runDir,
     agent: "build",
+    missionName: "matrix-mission",
+    model: "test-model",
     onStepUpdate: (p) => calls.push(p),
   };
   const ex = new DshNativeExecutor({ agents: service, config });
@@ -81,16 +84,65 @@ test("normal turn: harvest, childId, run-dir artifacts, two ordered callbacks", 
   assert.ok(logOnDisk.includes("<AI_STEP_RESULT>pass</AI_STEP_RESULT>"));
   assert.ok(logOnDisk.includes("# round summary:"));
 
-  // create got the verified options shape (R1 §1)
+  // create got the verified options shape (R1 §1) + the durable descriptor
+  // seed (WI11): meta.seedLength matches, and the seed folds back through the
+  // host's own descriptor parser to a valid continuable mdcontrol descriptor.
   assert.equal(state.creates.length, 1);
   assert.ok(state.creates[0].sessionId.startsWith("native-"));
-  assert.deepEqual(state.creates[0].meta, {
-    cwd: "/tmp/proj", origin: "subagent", delegationDepth: 1, agentPreset: "build",
-  });
+  assert.equal(state.creates[0].meta.seedLength, state.creates[0].seed.length);
+  const folded = foldSubagentDescriptor(state.creates[0].seed);
+  assert.equal(folded.version, SUBAGENT_DESCRIPTOR_VERSION);
+  assert.equal(folded.mode, "continuable");
+  assert.equal(folded.provider, "mdcontrol");
+  assert.equal(folded.label, "Mission: matrix-mission");
+  assert.equal(folded.agentModel, "test-model");
+  assert.equal(folded.agentProvider, state.creates[0].agentOptions.provider);
 
   // run-terminal dispose
   await ex.dispose();
   assert.deepEqual(state.disposed, [r.sessionId]);
+  rmSync(runDir, { recursive: true, force: true });
+});
+
+test("descriptor seed: label falls back to runId; fresh create after watchdog dispose re-seeds a new child", async () => {
+  const runDir = tmpRunDir();
+  const { service, state } = createFakeAgentsService({
+    script: ["first ok", { never: true }, "recovered"],
+    onCancel: "hang",
+  });
+  // no missionName anywhere and no model resolution → label falls back to the
+  // runId basename and the descriptor omits agentProvider/agentModel
+  delete process.env.DSH_MODEL;
+  delete process.env.DSH_PROVIDER;
+  const ex = new DshNativeExecutor({
+    agents: service,
+    config: { projectRoot: "/tmp/proj", runDir },
+    watchdogGraceMs: 30,
+  });
+
+  const r1 = await ex.executeAgent("S1", "p", "", null, undefined, undefined);
+  assert.equal(r1.ok, true);
+  assert.equal(state.creates.length, 1);
+  const folded1 = foldSubagentDescriptor(state.creates[0].seed);
+  assert.equal(folded1.label, `Mission: ${runDir.split(/[\\/]/).pop()}`);
+  assert.equal(folded1.agentProvider, undefined);
+  assert.equal(folded1.agentModel, undefined);
+  assert.ok(!("agentOptions" in state.creates[0]), "model-less create carries no agentOptions");
+
+  // watchdog hang → dispose → next step (no session continuity) = a FRESH
+  // create: a new lifecycle gets a new childId + exactly one new descriptor.
+  const rt = await ex.executeAgent("S2", "p", "", null, undefined, { timeoutMs: 40 });
+  assert.equal(rt.ok, false);
+  const r2 = await ex.executeAgent("S3", "p", "", null, undefined, undefined);
+  assert.equal(r2.ok, true, r2.errorTail);
+  assert.equal(state.creates.length, 2, "fresh create after watchdog dispose re-seeds the new child");
+  assert.notEqual(state.creates[1].sessionId, state.creates[0].sessionId);
+  assert.equal(foldSubagentDescriptor(state.creates[1].seed)?.provider, "mdcontrol");
+  assert.deepEqual(
+    state.calls.filter((c) => c.op === "create").map((c) => c.seedLength),
+    [1, 1],
+  );
+  await ex.dispose();
   rmSync(runDir, { recursive: true, force: true });
 });
 
@@ -256,6 +308,9 @@ test("cold handle: followup throws → agents.resume({ resumeSessionId }) recove
   assert.equal(state.resumes.length, 1);
   assert.deepEqual(state.resumes[0], { resumeSessionId: r1.sessionId });
   assert.equal(state.creates.length, 1, "no extra create — exactly one run-scoped handle");
+  // resume path needs no re-seeding: the durable descriptor from the create
+  // seed travels with the persisted session (WI11 Decision).
+  assert.equal(foldSubagentDescriptor(state.creates[0].seed)?.mode, "continuable");
   await ex.dispose();
   rmSync(runDir, { recursive: true, force: true });
 });

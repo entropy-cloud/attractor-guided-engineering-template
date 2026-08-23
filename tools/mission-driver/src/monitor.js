@@ -448,6 +448,14 @@ function lazyReconcileRun(runDir, state, processes) {
   }
 }
 
+// Step-log artifact naming (WI11 dual-label): the process runner writes
+// `oc-<step>-<ts>-<rand>.log[.prompt]`, the native executor
+// `native-<step>-<ts>-<rand>.log[.prompt]` (same shared shape, runner-label
+// prefix only — docs/bugs/2026-08-23-monitor-native-log-naming.md).
+const STEP_LOG_LABELS = ["oc", "native"];
+const STEP_LOG_NAME_RE = /^(oc|native)-(.+)-(\d+)-([a-z0-9]+)\.log(\.prompt)?$/;
+const stepLogPrefixes = (safeStep) => STEP_LOG_LABELS.map((l) => `${l}-${safeStep}-`);
+
 function listStepLogs(runDir) {
   let files;
   try {
@@ -457,20 +465,12 @@ function listStepLogs(runDir) {
   }
   const result = [];
   for (const f of files) {
-    // Agent log: oc-<step>-<ts>-<hash>.log
-    const m = f.match(/^oc-(.+)-(\d+)-([a-z0-9]+)\.log$/);
+    const m = f.match(STEP_LOG_NAME_RE);
     if (m) {
+      const type = m[5] === ".prompt" ? "prompt" : "log";
       try {
         const stat = statSync(join(runDir, f));
-        result.push({ step: m[1], fileName: f, sizeBytes: stat.size, type: "log" });
-      } catch {}
-    }
-    // Agent prompt: oc-<step>-<ts>-<hash>.log.prompt
-    const p = f.match(/^oc-(.+)-(\d+)-([a-z0-9]+)\.log\.prompt$/);
-    if (p) {
-      try {
-        const stat = statSync(join(runDir, f));
-        result.push({ step: p[1], fileName: f, sizeBytes: stat.size, type: "prompt" });
+        result.push({ step: m[2], fileName: f, sizeBytes: stat.size, type });
       } catch {}
     }
   }
@@ -637,13 +637,13 @@ function handleGetLog(projectRoot, runId, step, query) {
     const safeFile = basename(fileParam).replace(/[^a-zA-Z0-9_\-\.]/g, "");
     const searchFile = isPrompt ? safeFile + ".prompt" : safeFile;
     const filePath = join(runDir, searchFile);
-    if (safeFile.startsWith("oc-") && safeFile.endsWith(".log") && existsSync(filePath)) {
+    if (STEP_LOG_NAME_RE.test(safeFile) && safeFile.endsWith(".log") && existsSync(filePath)) {
       return sliceFile(searchFile);
     }
     // else: fall through to prefix search below
   }
 
-  const prefix = `oc-${safeStep}-`;
+  const prefixes = stepLogPrefixes(safeStep);
   const suffix = isPrompt ? ".log.prompt" : ".log";
   let files;
   try {
@@ -652,7 +652,7 @@ function handleGetLog(projectRoot, runId, step, query) {
     return { notFound: true };
   }
   const matches = files
-    .filter((f) => f.startsWith(prefix) && f.endsWith(suffix))
+    .filter((f) => prefixes.some((p) => f.startsWith(p)) && f.endsWith(suffix))
     .map((f) => {
       try {
         return { name: f, mtime: statSync(join(runDir, f)).mtimeMs };
@@ -903,8 +903,8 @@ function handleGetScenario(flowName) {
 }
 
 // GET /api/runs/:runId/nodes/:step — aggregate a node's runtime detail from
-// run-state.json (step record) + the matching step-log file (tail). The script
-// step's `text` output lands in oc-{STEP}-*.log, so logTail surfaces the
+// run-state.json (step record) + the matching step-log file (tail). The step's
+// `text` output lands in {oc|native}-{STEP}-*.log, so logTail surfaces the
 // input/response/assertion narrative (FSD §9.2 step 4 / NFR-7).
 function handleGetNodeDetail(projectRoot, runId, step) {
   const runDir = findRunDir(projectRoot, runId);
@@ -925,8 +925,9 @@ function handleGetNodeDetail(projectRoot, runId, step) {
   let logTail = null;
   let logSizeBytes = null;
   try {
+    const nodePrefixes = stepLogPrefixes(safeStep);
     const files = readdirSync(runDir)
-      .filter((f) => f.startsWith(`oc-${safeStep}-`) && f.endsWith(".log"))
+      .filter((f) => nodePrefixes.some((p) => f.startsWith(p)) && f.endsWith(".log"))
       .map((f) => {
         try {
           return { name: f, mtime: statSync(join(runDir, f)).mtimeMs };

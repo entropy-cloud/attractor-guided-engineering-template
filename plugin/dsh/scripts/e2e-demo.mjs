@@ -1,40 +1,73 @@
 #!/usr/bin/env node
 /**
- * e2e-demo.mjs — L4 dual-leg end-to-end demo-mission run (dsh-plugin
- * M2-WI10, plan `2026-08-23-1621-2` Phase 2; P2 gate evidence producer).
+ * e2e-demo.mjs — L4 dual-leg end-to-end runs (dsh-plugin M2-WI10 + M3-WI11,
+ * plans `2026-08-23-1621-2` Phase 2 / `2026-08-23-1852-1` Phase 3; P2/P3 gate
+ * evidence producer).
  *
- * Legs (same scratch demo mission + same flow, same scripted model policy —
- * e2e-policy.mjs):
+ * Leg pairs (same scratch project, same scripted model policy — e2e-policy.mjs):
  *
- *   CLI leg    — the REAL standalone engine (`tools/mission-driver/src/main.js
- *               demo`, ProcessExecutor backend) spawned as a child process,
- *               with an executable `opencode` stub FIRST on PATH (the WI3
- *               driver whitelist pins the driver NAME, so the hermetic stub
- *               must wear it; prompt arrives as the last argv element,
- *               opencode promptMode "arg"). `opencode session list` → `[]`.
- *   native leg — a REAL cordis runtime booted IN-PROCESS
- *               (@deepseek-ai/dsh-app-boot `boot()` + the 15-row
- *               test/fixtures/e2e.cordis.yml composition incl. the real
- *               mission-control service row) over a local scripted SSE model
- *               endpoint (1621-1 keyless stub precedent); the routes are
- *               called directly through `ctx.get('mdcontrol')`:
- *               mdcontrol.run → immediate {runId, status:'started'} →
- *               mdcontrol.status polled to terminal → mdcontrol.list.
+ *   demo mission (WI10, unchanged contract)
+ *     CLI leg    — the REAL standalone engine (`tools/mission-driver/src/main.js
+ *                 demo`, ProcessExecutor backend) spawned as a child process,
+ *                 with an executable `opencode` stub FIRST on PATH (the WI3
+ *                 driver whitelist pins the driver NAME, so the hermetic stub
+ *                 must wear it; prompt arrives as the last argv element,
+ *                 opencode promptMode "arg"). `opencode session list` → `[]`.
+ *     native leg — a REAL cordis runtime booted IN-PROCESS
+ *                 (@deepseek-ai/dsh-app-boot `boot()` + the 15-row
+ *                 test/fixtures/e2e.cordis.yml composition incl. the real
+ *                 mission-control service row) over a local scripted SSE model
+ *                 endpoint (1621-1 keyless stub precedent); the routes are
+ *                 called directly through `ctx.get('mdcontrol')`.
  *
- * Assertions (P2 gate):
- *   1. mdcontrol.run returns immediately; the run reaches terminal
+ *   onboarding mission (WI11, dual-form parity — P3 gate first sentence)
+ *     Same two forms over the REAL built-in mission-driver flow
+ *     (CHECK → REVIEW_PLANS → EXEC_PLANS → DRAFT_PLANS → DEEP_AUDIT loop).
+ *     Scratch basis (Phase 3 Decision 1): a committed-fixture replica of the
+ *     minimal install SHAPE — mission files copied VERBATIM from
+ *     template/install/missions/ at runtime (coupling to the real install
+ *     artifact) + a minimal docs skeleton. install-age.sh itself is not
+ *     exercised (its copy correctness is the installer's own verification,
+ *     not the dual-FORM parity claim).
+ *     Deterministic script (Decision 2): empty plans/audits skeleton keeps
+ *     REVIEW_PLANS (forEach draftPlans()) / EXEC_PLANS (forEach activePlans())
+ *     / DEEP_AUDIT (all `when` false) at ZERO agent turns; the stub answers
+ *     CHECK → pass and DRAFT_PLANS → nothing twice; the second `nothing` hits
+ *     the audit-quota completion gate (auditRound 1 ≥ 1, no active plans, no
+ *     open audits) — bounded: exactly 3 stub turns, one loop round.
+ *     Assertion surface (Decision 3): MECHANISM plane only — step sequence,
+ *     per-step markers valid for the real flow's transitions, artifact
+ *     existence, normalized run-state shape diff (normalizeRunState). The
+ *     stub driver does not write docs: "fills copied docs" semantic quality
+ *     is out of the deterministic gate (verification scope limited — a real
+ *     -model leg, if ever taken, is an env-gated manual item per the
+ *     verify:native posture).
+ *
+ * Assertions (gates):
+ *   1. mdcontrol.run returns immediately; each run reaches terminal
  *      `completed` with exitCode 0.
- *   2. Dual-leg normalized run-state diff (matrix-harness normalizeRunState
- *      vocabulary) is EMPTY — shape identity; divergences allowed only in
- *      the type-only exemption fields (sessionId value semantics R3 §3,
- *      timing, error text, log/prompt basenames — ledger D1/D2/D3).
+ *   2. Per-mission dual-leg normalized run-state diff (matrix-harness
+ *      normalizeRunState vocabulary) is EMPTY — shape identity; divergences
+ *      allowed only in the type-only exemption fields (sessionId value
+ *      semantics R3 §3, timing, error text, log/prompt basenames — D1/D2/D3).
  *   3. markers parsed EXPLICITLY: every AI step in BOTH legs has a marker
- *      field with a value valid for that step's transitions (not implied by
- *      the shape diff).
- *   4. correction-retry exercised once artificially: the REVIEW step's first
- *      scripted response carries an invalid marker (`banana`); the engine's
- *      correction re-prompt is OBSERVED (native leg: stub request log;
- *      CLI leg: engine log line) and the run still completes (recovery).
+ *      field valid for that step's transitions (demo: inline flow; onboarding:
+ *      the real flows/mission-driver.json transitions).
+ *   4. correction-retry exercised once artificially (demo only): the REVIEW
+ *      step's first scripted response carries an invalid marker (`banana`);
+ *      the engine's correction re-prompt is OBSERVED (native leg: stub request
+ *      log; CLI leg: engine log line) and the run still completes (recovery).
+ *   5. Monitor render (WI11 Phase 1 fix machine-pinned + Phase 3 render
+ *      check): an in-process engine monitor (startMonitor) serves all four
+ *      runs — `GET /api/runs/:id` stepLogs non-empty for BOTH naming labels,
+ *      `/logs/:step` 200, node-detail `/api/runs/:id/nodes/:step` logFile +
+ *      logTail non-null.
+ *   6. Descriptor health (WI11 Phase 2): the native legs' persisted child
+ *      session logs (DSH_SESSION_ROOT) each contain a `subagent/descriptor`
+ *      event with provider 'mdcontrol', mode 'continuable', version 2, and a
+ *      `Mission: <mission>` label (child session events = the deterministic
+ *      assertion plane; the host list plane is parent-scoped and unreachable
+ *      for parentless mdcontrol children — plan Decision Record).
  *
  * Gate posture (R3 §5 form, 1621-1 verify:native precedent): explicit local
  * invocation — `npm --prefix plugin/dsh run verify:e2e`; never wired into
@@ -48,7 +81,7 @@
  */
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -56,19 +89,29 @@ import { boot } from "@deepseek-ai/dsh-app-boot";
 import {
   CORRECTION_PHRASE,
   BROKEN_MARKER,
+  ONBOARDING_PHRASES,
   lastUserTextOfChatBody,
   policyForPrompt,
   stubResponseText,
 } from "./e2e-policy.mjs";
 import { normalizeRunState } from "../test/helpers/matrix-harness.mjs";
+import { startMonitor } from "../../../tools/mission-driver/src/monitor.js";
 
 const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const REPO_ROOT = resolve(PLUGIN_ROOT, "..", "..");
 const ENGINE_MAIN = join(REPO_ROOT, "tools", "mission-driver", "src", "main.js");
 const E2E_FIXTURE = join(PLUGIN_ROOT, "test", "fixtures", "e2e.cordis.yml");
+const TEMPLATE_MISSIONS = join(REPO_ROOT, "template", "install", "missions");
 const TERMINAL_TIMEOUT_MS = 120_000;
 
-/* ── scratch demo mission ─────────────────────────────────────────────────── */
+const RUNS = {
+  cliDemo: "cli-e2e-mission-driver",
+  nativeDemo: "native-e2e-mission-driver",
+  cliOnboarding: "cli-onboarding-mission-driver",
+  nativeOnboarding: "native-onboarding-mission-driver",
+};
+
+/* ── scratch project: demo mission + onboarding install shape ─────────────── */
 
 const FLOW_STEPS = {
   CHECK: {
@@ -97,6 +140,9 @@ const FLOW_STEPS = {
   },
 };
 
+/** Real mission-driver flow transitions — onboarding marker vocabulary. */
+const MD_FLOW = JSON.parse(readFileSync(join(REPO_ROOT, "tools", "mission-driver", "flows", "mission-driver.json"), "utf8"));
+
 function prepareScratch(root) {
   mkdirSync(join(root, "missions", "flows"), { recursive: true });
   mkdirSync(join(root, "docs", "backlog"), { recursive: true });
@@ -122,14 +168,38 @@ function prepareScratch(root) {
     "",
     "- WI1 demo step chain: CHECK → REVIEW → EXEC → DONE",
   ].join("\n"), "utf8");
+  prepareOnboarding(root);
 }
 
-/** Valid marker vocabulary per step, from the flow definition. */
-function validMarkersOf(stepName) {
-  return Object.keys(FLOW_STEPS[stepName]?.transitions ?? {});
+/**
+ * Minimal install-shape replica for the onboarding mission (Phase 3 Decision
+ * 1): mission files verbatim from template/install/missions (runtime copy —
+ * the fixture tracks the real install artifact), plus the empty docs
+ * skeleton the mission's relative paths point at.
+ */
+function prepareOnboarding(root) {
+  copyFileSync(join(TEMPLATE_MISSIONS, "base.json"), join(root, "missions", "base.json"));
+  const onboarding = JSON.parse(readFileSync(join(TEMPLATE_MISSIONS, "onboarding.json"), "utf8"));
+  writeFileSync(join(root, "missions", "onboarding.json"), JSON.stringify(onboarding, null, 2), "utf8");
+  mkdirSync(join(root, onboarding.plansDir), { recursive: true });
+  mkdirSync(join(root, onboarding.auditsDir ?? "docs/audits"), { recursive: true });
+  mkdirSync(join(root, onboarding.contextDir ?? "docs/context"), { recursive: true });
+  mkdirSync(dirname(join(root, onboarding.roadmapPath)), { recursive: true });
+  // Post-onboarding-shaped roadmap: one done item — consistent with the
+  // scripted DRAFT_PLANS → nothing (no remaining work).
+  writeFileSync(join(root, onboarding.roadmapPath), [
+    "# Onboarding Roadmap (e2e scratch)",
+    "",
+    "- [x] WI1 fill the copied AGE docs with the actual stack (scripted stub domain: mechanism plane only)",
+  ].join("\n"), "utf8");
 }
 
-/* ── CLI leg ──────────────────────────────────────────────────────────────── */
+/** Valid marker vocabulary per step, from a flow definition. */
+function validMarkersOf(flowSteps, stepName) {
+  return Object.keys(flowSteps[stepName]?.transitions ?? {});
+}
+
+/* ── CLI legs ─────────────────────────────────────────────────────────────── */
 
 function writeCliStub(root) {
   const binDir = join(root, "bin");
@@ -151,13 +221,13 @@ function writeCliStub(root) {
   return binDir;
 }
 
-async function runCliLeg(root, report) {
+async function runCliMission(root, mission, runId) {
   const binDir = writeCliStub(root);
-  console.log("[e2e] CLI leg: spawning the real standalone engine (ProcessExecutor backend)…");
+  console.log(`[e2e] CLI leg (${mission}): spawning the real standalone engine (ProcessExecutor backend)…`);
   const child = spawn(process.execPath, [
-    ENGINE_MAIN, "demo",
+    ENGINE_MAIN, mission,
     "--dir", root,
-    "--run-dir", "cli-e2e-mission-driver",
+    "--run-dir", runId,
   ], {
     cwd: REPO_ROOT,
     env: { ...process.env, PATH: `${binDir}:${process.env.PATH ?? ""}` },
@@ -170,28 +240,15 @@ async function runCliLeg(root, report) {
   child.stdout.on("data", (c) => { stdout += c; });
   child.stderr.on("data", (c) => { stderr += c; });
   const exit = await new Promise((resolveExit) => child.once("exit", (code, signal) => resolveExit({ code, signal })));
-  writeFileSync(join(root, "cli-leg-stdout.log"), stdout, "utf8");
-  writeFileSync(join(root, "cli-leg-stderr.log"), stderr, "utf8");
+  writeFileSync(join(root, `${runId}-stdout.log`), stdout, "utf8");
+  writeFileSync(join(root, `${runId}-stderr.log`), stderr, "utf8");
 
-  const failures = [];
-  if (exit.code !== 0) failures.push(`CLI leg exit code ${exit.code} (signal ${exit.signal}) — expected 0`);
-  const runStatePath = join(root, "_tmp", "cli-e2e-mission-driver", "run-state.json");
-  if (!existsSync(runStatePath)) failures.push(`CLI leg wrote no run-state at ${runStatePath}`);
-  if (!stdout.includes(`correction retry 1/2`)) failures.push("CLI leg: engine correction-retry log line not observed");
-  if (!stdout.includes(`"${BROKEN_MARKER}" not in transitions`)) failures.push("CLI leg: artificial marker break not observed in engine log");
-
+  const runStatePath = join(root, "_tmp", runId, "run-state.json");
   const runState = existsSync(runStatePath) ? JSON.parse(readFileSync(runStatePath, "utf8")) : null;
-  report.cliLeg = {
-    exitCode: exit.code,
-    signal: exit.signal,
-    runStatePath,
-    correctionRetryObserved: stdout.includes("correction retry 1/2"),
-    artificialBreakObserved: stdout.includes(`"${BROKEN_MARKER}" not in transitions`),
-  };
-  return { failures, runState };
+  return { exit, runState, runStatePath, stdout };
 }
 
-/* ── scripted SSE model endpoint (native leg) ─────────────────────────────── */
+/* ── scripted SSE model endpoint (native legs) ────────────────────────────── */
 
 function createScriptedModelServer() {
   const requests = []; // { lastUserText, policyKind, marker, artificialBreak }
@@ -224,9 +281,9 @@ function createScriptedModelServer() {
   return { server, requests };
 }
 
-/* ── native leg ───────────────────────────────────────────────────────────── */
+/* ── native legs (one real cordis boot, two missions) ─────────────────────── */
 
-async function runNativeLeg(root, report) {
+async function runNativeLegs(root, report, failures) {
   const stub = createScriptedModelServer();
   await new Promise((resolveListen) => stub.server.listen(0, "127.0.0.1", resolveListen));
   const port = stub.server.address().port;
@@ -238,64 +295,97 @@ async function runNativeLeg(root, report) {
   process.env.DEEPSEEK_API_KEY = "e2e-stub-no-call";
   process.env.DEEPSEEK_BASE_URL = `http://127.0.0.1:${port}`;
 
-  console.log(`[e2e] native leg: booting the real cordis runtime (fixture e2e.cordis.yml, stub model on 127.0.0.1:${port})…`);
+  console.log(`[e2e] native legs: booting the real cordis runtime (fixture e2e.cordis.yml, stub model on 127.0.0.1:${port})…`);
   const ctx = await boot("mdcontrol-e2e", E2E_FIXTURE);
-  const failures = [];
   try {
     const svc = ctx.get("mdcontrol");
     if (!svc || typeof svc.routes?.["mdcontrol.run"] !== "function") {
       throw new Error("mdcontrol service not published at the root realm (ctx.get('mdcontrol') undefined)");
     }
 
+    /* demo mission (WI10 contract, unchanged) */
     const t0 = Date.now();
     const started = await svc.routes["mdcontrol.run"]({
       projectRoot: root,
-      args: { mission: "demo", runDir: "native-e2e-mission-driver" },
+      args: { mission: "demo", runDir: RUNS.nativeDemo },
     });
     const elapsedMs = Date.now() - t0;
-    console.log(`[e2e] mdcontrol.run resolved in ${elapsedMs}ms → ${JSON.stringify(started)}`);
-    if (started.status !== "started" || started.runId !== "native-e2e-mission-driver") {
-      failures.push(`mdcontrol.run returned ${JSON.stringify(started)} — expected { runId: 'native-e2e-mission-driver', status: 'started' }`);
+    console.log(`[e2e] mdcontrol.run (demo) resolved in ${elapsedMs}ms → ${JSON.stringify(started)}`);
+    if (started.status !== "started" || started.runId !== RUNS.nativeDemo) {
+      failures.push(`mdcontrol.run (demo) returned ${JSON.stringify(started)} — expected { runId: '${RUNS.nativeDemo}', status: 'started' }`);
     }
 
-    const immediate = await svc.routes["mdcontrol.status"]({ projectRoot: root, runId: "native-e2e-mission-driver" });
+    const immediate = await svc.routes["mdcontrol.status"]({ projectRoot: root, runId: RUNS.nativeDemo });
     if (!immediate.live || immediate.terminal !== null) {
-      failures.push(`run already terminal at resolve time — async contract violated: ${JSON.stringify({ live: immediate.live, terminal: immediate.terminal })}`);
+      failures.push(`demo run already terminal at resolve time — async contract violated: ${JSON.stringify({ live: immediate.live, terminal: immediate.terminal })}`);
     }
 
-    const terminal = await waitForTerminal(svc, root, "native-e2e-mission-driver");
-    console.log(`[e2e] mdcontrol.status terminal: ${JSON.stringify(terminal.terminal)}`);
+    const terminal = await waitForTerminal(svc, root, RUNS.nativeDemo);
+    console.log(`[e2e] mdcontrol.status (demo) terminal: ${JSON.stringify(terminal.terminal)}`);
     if (terminal.terminal.exitCode !== 0 || terminal.terminal.status !== "completed") {
-      failures.push(`native leg terminal ${JSON.stringify(terminal.terminal)} — expected exitCode 0 / completed`);
+      failures.push(`native demo terminal ${JSON.stringify(terminal.terminal)} — expected exitCode 0 / completed`);
     }
 
     const list = await svc.routes["mdcontrol.list"]({ projectRoot: root });
     const listed = new Set(list.runs.map((r) => r.runId));
-    for (const id of ["cli-e2e-mission-driver", "native-e2e-mission-driver"]) {
+    for (const id of [RUNS.cliDemo, RUNS.nativeDemo]) {
       if (!listed.has(id)) failures.push(`mdcontrol.list missing runId ${id} (got ${[...listed].join(", ")})`);
     }
 
-    const runStatePath = join(root, "_tmp", "native-e2e-mission-driver", "run-state.json");
-    const runState = existsSync(runStatePath) ? JSON.parse(readFileSync(runStatePath, "utf8")) : null;
-    if (!runState) failures.push(`native leg wrote no run-state at ${runStatePath}`);
+    const demoStatePath = join(root, "_tmp", RUNS.nativeDemo, "run-state.json");
+    const demoState = existsSync(demoStatePath) ? JSON.parse(readFileSync(demoStatePath, "utf8")) : null;
+    if (!demoState) failures.push(`native demo leg wrote no run-state at ${demoStatePath}`);
 
-    const kinds = stub.requests.map((r) => r.policyKind);
-    console.log(`[e2e] stub model served ${stub.requests.length} request(s): ${kinds.join(" → ")}`);
-    if (stub.requests.length !== 4) {
-      failures.push(`stub model served ${stub.requests.length} requests (${kinds.join(",")}) — expected exactly 4 (CHECK, REVIEW-break, correction, DONE)`);
+    const demoRequests = stub.requests.slice();
+    const kinds = demoRequests.map((r) => r.policyKind);
+    console.log(`[e2e] stub model served ${demoRequests.length} demo request(s): ${kinds.join(" → ")}`);
+    if (demoRequests.length !== 4) {
+      failures.push(`stub model served ${demoRequests.length} demo requests (${kinds.join(",")}) — expected exactly 4 (CHECK, REVIEW-break, correction, DONE)`);
     }
-    const breaks = stub.requests.filter((r) => r.artificialBreak);
-    const corrections = stub.requests.filter((r) => r.policyKind === "correction");
+    const breaks = demoRequests.filter((r) => r.artificialBreak);
+    const corrections = demoRequests.filter((r) => r.policyKind === "correction");
     if (breaks.length !== 1) failures.push(`artificial marker break fired ${breaks.length} times — expected exactly 1`);
     if (corrections.length !== 1) failures.push(`correction re-prompt observed ${corrections.length} times — expected exactly 1`);
 
     report.nativeLeg = {
       elapsedMs,
-      runStatePath,
-      stubRequests: stub.requests,
+      runStatePath: demoStatePath,
+      stubRequests: demoRequests,
       listRunIds: [...listed],
     };
-    return { failures, runState };
+
+    /* onboarding mission (WI11 dual-form parity) — same boot, same stub */
+    await new Promise((r) => setTimeout(r, 50)); // active-run guard settles after terminal
+    const obStarted = await svc.routes["mdcontrol.run"]({
+      projectRoot: root,
+      args: { mission: "onboarding", runDir: RUNS.nativeOnboarding },
+    });
+    console.log(`[e2e] mdcontrol.run (onboarding) → ${JSON.stringify(obStarted)}`);
+    if (obStarted.status !== "started" || obStarted.runId !== RUNS.nativeOnboarding) {
+      failures.push(`mdcontrol.run (onboarding) returned ${JSON.stringify(obStarted)}`);
+    }
+    const obTerminal = await waitForTerminal(svc, root, RUNS.nativeOnboarding);
+    console.log(`[e2e] mdcontrol.status (onboarding) terminal: ${JSON.stringify(obTerminal.terminal)}`);
+    if (obTerminal.terminal.exitCode !== 0 || obTerminal.terminal.status !== "completed") {
+      failures.push(`native onboarding terminal ${JSON.stringify(obTerminal.terminal)} — expected exitCode 0 / completed`);
+    }
+    const obStatePath = join(root, "_tmp", RUNS.nativeOnboarding, "run-state.json");
+    const obState = existsSync(obStatePath) ? JSON.parse(readFileSync(obStatePath, "utf8")) : null;
+    if (!obState) failures.push(`native onboarding leg wrote no run-state at ${obStatePath}`);
+
+    const obRequests = stub.requests.slice(demoRequests.length);
+    const obKinds = obRequests.map((r) => r.policyKind);
+    console.log(`[e2e] stub model served ${obRequests.length} onboarding request(s): ${obKinds.join(" → ")}`);
+    const expectedObKinds = ["ONBOARDING-CHECK", "ONBOARDING-DRAFT_PLANS", "ONBOARDING-DRAFT_PLANS"];
+    if (obKinds.join(",") !== expectedObKinds.join(",")) {
+      failures.push(`onboarding stub sequence ${obKinds.join(",")} — expected exactly ${expectedObKinds.join(",")} (bounded one-loop script)`);
+    }
+
+    report.nativeOnboardingLeg = {
+      runStatePath: obStatePath,
+      stubRequests: obRequests,
+    };
+    return { failures, demoState, obState, sessionsDir };
   } finally {
     await ctx.fiber.dispose().catch(() => {});
     await new Promise((resolveClose) => stub.server.close(() => resolveClose()));
@@ -312,12 +402,114 @@ async function waitForTerminal(svc, root, runId) {
   }
 }
 
+/* ── descriptor health (WI11 Phase 2 — child session events plane) ────────── */
+
+function scanDescriptorRows(sessionsDir) {
+  // Layout: <root>/<sanitized-cwd-namespace>/<sessionId>/session.jsonl
+  const rows = [];
+  let namespaces = [];
+  try {
+    namespaces = readdirSync(sessionsDir, { withFileTypes: true }).filter((e) => e.isDirectory());
+  } catch {
+    return rows;
+  }
+  for (const ns of namespaces) {
+    let sessions = [];
+    try {
+      sessions = readdirSync(join(sessionsDir, ns.name), { withFileTypes: true }).filter((e) => e.isDirectory());
+    } catch {
+      continue;
+    }
+    for (const sess of sessions) {
+      const f = join(sessionsDir, ns.name, sess.name, "session.jsonl");
+      if (!existsSync(f)) continue;
+      for (const line of readFileSync(f, "utf8").split("\n")) {
+        if (!line.includes("subagent/descriptor")) continue;
+        try {
+          const ev = JSON.parse(line);
+          if (ev && ev.type === "subagent/descriptor") rows.push({ session: sess.name, data: ev.data });
+        } catch { /* malformed non-descriptor line */ }
+      }
+    }
+  }
+  return rows;
+}
+
+function assertDescriptorHealth(sessionsDir, report, failures) {
+  const rows = scanDescriptorRows(sessionsDir);
+  report.descriptorRows = rows.map((r) => ({ session: r.session, ...r.data }));
+  const labels = new Set(rows.map((r) => r.data?.label));
+  for (const mission of ["demo", "onboarding"]) {
+    if (!labels.has(`Mission: ${mission}`)) {
+      failures.push(`no durable subagent/descriptor row with label "Mission: ${mission}" under ${sessionsDir} (got ${[...labels].join(", ") || "none"})`);
+    }
+  }
+  for (const row of rows) {
+    const d = row.data ?? {};
+    if (d.provider !== "mdcontrol") failures.push(`descriptor ${row.session}: provider "${d.provider}" ≠ "mdcontrol"`);
+    if (d.mode !== "continuable") failures.push(`descriptor ${row.session}: mode "${d.mode}" ≠ "continuable"`);
+    if (d.version !== 2) failures.push(`descriptor ${row.session}: version ${d.version} ≠ 2`);
+  }
+  console.log(`[e2e] descriptor rows: ${rows.length} (labels: ${[...labels].join(", ")})`);
+}
+
+/* ── monitor render assertions (WI11 Phase 1 fix + Phase 3 render check) ──── */
+
+async function assertMonitorRender(root, report, failures) {
+  mkdirSync(join(root, "web"), { recursive: true });
+  const monitor = await startMonitor({ projectRoot: root, port: 0, webDir: join(root, "web") });
+  report.monitor = { checks: [] };
+  try {
+    const base = `http://localhost:${monitor.port}`;
+    const getJson = async (path) => {
+      const res = await fetch(`${base}${path}`);
+      let body = null;
+      try { body = await res.json(); } catch { /* non-JSON */ }
+      return { status: res.status, body };
+    };
+    for (const [key, runId] of Object.entries(RUNS)) {
+      const label = key.startsWith("native") ? "native-" : "oc-";
+      const detail = await getJson(`/api/runs/${runId}`);
+      if (detail.status !== 200) {
+        failures.push(`monitor ${runId}: GET /api/runs → ${detail.status}`);
+        continue;
+      }
+      const stepLogs = detail.body.stepLogs ?? [];
+      if (stepLogs.length === 0) {
+        failures.push(`monitor ${runId}: stepLogs empty — step-log panel blind`);
+      }
+      const labeled = stepLogs.filter((s) => s.fileName.startsWith(label)).length;
+      if (labeled === 0) {
+        failures.push(`monitor ${runId}: no ${label} prefixed step-log listed`);
+      }
+      const logRes = await getJson(`/api/runs/${runId}/logs/CHECK`);
+      if (logRes.status !== 200) {
+        failures.push(`monitor ${runId}: /logs/CHECK → ${logRes.status} (expected 200)`);
+      }
+      const nodeRes = await getJson(`/api/runs/${runId}/nodes/CHECK`);
+      if (nodeRes.status !== 200 || !nodeRes.body.logFile || typeof nodeRes.body.logTail !== "string" || nodeRes.body.logTail === "") {
+        failures.push(`monitor ${runId}: node-detail CHECK logFile/logTail missing (status ${nodeRes.status}, logFile ${nodeRes.body?.logFile ?? null})`);
+      }
+      report.monitor.checks.push({
+        runId,
+        stepLogs: stepLogs.length,
+        labeled,
+        logsCheckStatus: logRes.status,
+        nodeLogTailOk: Boolean(nodeRes.body?.logFile && nodeRes.body?.logTail),
+      });
+      console.log(`[e2e] monitor ${runId}: stepLogs=${stepLogs.length} (${label}: ${labeled}), /logs/CHECK=${logRes.status}, node-detail logTail ok=${Boolean(nodeRes.body?.logTail)}`);
+    }
+  } finally {
+    await monitor.close();
+  }
+}
+
 /* ── dual-leg assertions ──────────────────────────────────────────────────── */
 
-function assertMarkersParsed(legName, runState, failures) {
+function assertMarkersParsed(legName, runState, failures, flowSteps) {
   if (!runState) return;
   for (const step of runState.steps ?? []) {
-    const valid = validMarkersOf(step.name);
+    const valid = validMarkersOf(flowSteps, step.name);
     if (step.type === "agent" || step.type === "tool") {
       if (typeof step.marker !== "string" || step.marker === "") {
         failures.push(`${legName}: step ${step.name} has no marker field — markers-parsed gate`);
@@ -327,8 +519,10 @@ function assertMarkersParsed(legName, runState, failures) {
     }
   }
   const review = (runState.steps ?? []).find((s) => s.name === "REVIEW");
-  if (!review || review.marker !== "pass") {
-    failures.push(`${legName}: REVIEW step did not recover to marker "pass" after the artificial break (got ${JSON.stringify(review?.marker)})`);
+  if (validMarkersOf(flowSteps, "REVIEW").length > 0) {
+    if (!review || review.marker !== "pass") {
+      failures.push(`${legName}: REVIEW step did not recover to marker "pass" after the artificial break (got ${JSON.stringify(review?.marker)})`);
+    }
   }
 }
 
@@ -343,6 +537,18 @@ function diffNormalized(legName, a, b, path = "", out = []) {
     diffNormalized(legName, a[key], b[key], path === "" ? key : `${path}.${key}`, out);
   }
   return out;
+}
+
+function assertDualLegShape(missionName, cliState, nativeState, failures) {
+  const normCli = normalizeRunState(cliState);
+  const normNative = normalizeRunState(nativeState);
+  const shapeDiffs = diffNormalized("run-state", normCli, normNative);
+  if (shapeDiffs.length > 0) {
+    failures.push(`[${missionName}] normalized run-state shape diff (${shapeDiffs.length} field(s)):\n    ${shapeDiffs.slice(0, 20).join("\n    ")}`);
+  } else {
+    console.log(`[e2e] [${missionName}] normalized run-state diff: EMPTY (dual-leg shape identity)`);
+  }
+  return { cli: normCli, native: normNative };
 }
 
 /* ── main ─────────────────────────────────────────────────────────────────── */
@@ -366,26 +572,50 @@ async function main(argv = process.argv.slice(2)) {
   const report = { scratchRoot: root, startedAt: new Date().toISOString() };
   const failures = [];
 
-  const cli = await runCliLeg(root, report);
-  failures.push(...cli.failures);
+  /* CLI legs (demo + onboarding) */
+  const cliDemo = await runCliMission(root, "demo", RUNS.cliDemo);
+  if (cliDemo.exit.code !== 0) failures.push(`CLI demo leg exit code ${cliDemo.exit.code} (signal ${cliDemo.exit.signal}) — expected 0`);
+  if (!cliDemo.runState) failures.push(`CLI demo leg wrote no run-state at ${cliDemo.runStatePath}`);
+  if (!cliDemo.stdout.includes(`correction retry 1/2`)) failures.push("CLI demo leg: engine correction-retry log line not observed");
+  if (!cliDemo.stdout.includes(`"${BROKEN_MARKER}" not in transitions`)) failures.push("CLI demo leg: artificial marker break not observed in engine log");
+  report.cliLeg = {
+    exitCode: cliDemo.exit.code,
+    signal: cliDemo.exit.signal,
+    runStatePath: cliDemo.runStatePath,
+    correctionRetryObserved: cliDemo.stdout.includes("correction retry 1/2"),
+    artificialBreakObserved: cliDemo.stdout.includes(`"${BROKEN_MARKER}" not in transitions`),
+  };
 
-  const native = await runNativeLeg(root, report);
-  failures.push(...native.failures);
+  const cliOb = await runCliMission(root, "onboarding", RUNS.cliOnboarding);
+  if (cliOb.exit.code !== 0) failures.push(`CLI onboarding leg exit code ${cliOb.exit.code} (signal ${cliOb.exit.signal}) — expected 0`);
+  if (!cliOb.runState) failures.push(`CLI onboarding leg wrote no run-state at ${cliOb.runStatePath}`);
+  if (cliOb.stdout.includes("correction retry")) failures.push("CLI onboarding leg: unexpected correction retry (script must stay on the happy bounded path)");
+  report.cliOnboardingLeg = {
+    exitCode: cliOb.exit.code,
+    signal: cliOb.exit.signal,
+    runStatePath: cliOb.runStatePath,
+  };
 
-  // P2 gate: markers parsed explicitly, per leg, per AI step.
-  assertMarkersParsed("cli", cli.runState, failures);
-  assertMarkersParsed("native", native.runState, failures);
+  /* native legs (one boot: demo + onboarding) */
+  const native = await runNativeLegs(root, report, failures);
 
-  // P2 gate: normalized dual-leg run-state shape identity.
-  const normCli = normalizeRunState(cli.runState);
-  const normNative = normalizeRunState(native.runState);
-  report.normalized = { cli: normCli, native: normNative };
-  const shapeDiffs = diffNormalized("run-state", normCli, normNative);
-  if (shapeDiffs.length > 0) {
-    failures.push(`normalized run-state shape diff (${shapeDiffs.length} field(s)):\n    ${shapeDiffs.slice(0, 20).join("\n    ")}`);
-  } else {
-    console.log("[e2e] normalized run-state diff: EMPTY (dual-leg shape identity)");
-  }
+  /* markers parsed explicitly, per leg, per AI step */
+  assertMarkersParsed("cli", cliDemo.runState, failures, FLOW_STEPS);
+  assertMarkersParsed("native", native.demoState, failures, FLOW_STEPS);
+  assertMarkersParsed("cli-onboarding", cliOb.runState, failures, MD_FLOW.steps);
+  assertMarkersParsed("native-onboarding", native.obState, failures, MD_FLOW.steps);
+
+  /* per-mission normalized dual-leg run-state shape identity */
+  report.normalized = {
+    demo: assertDualLegShape("demo", cliDemo.runState, native.demoState, failures),
+    onboarding: assertDualLegShape("onboarding", cliOb.runState, native.obState, failures),
+  };
+
+  /* descriptor health (native legs, child session events plane) */
+  assertDescriptorHealth(native.sessionsDir, report, failures);
+
+  /* monitor render: all four runs, both naming labels, three endpoints */
+  await assertMonitorRender(root, report, failures);
 
   report.finishedAt = new Date().toISOString();
   report.failures = failures;
@@ -393,7 +623,7 @@ async function main(argv = process.argv.slice(2)) {
 
   console.log("");
   if (failures.length === 0) {
-    console.log(`[e2e] SUMMARY: PASS — dual-leg demo mission green, shape identity, markers parsed, correction-retry observed once and recovered`);
+    console.log(`[e2e] SUMMARY: PASS — demo dual-leg green (shape identity, markers parsed, correction-retry recovered once) + onboarding dual-form parity (shape identity, bounded 3-turn script, markers valid for the real flow) + descriptor rows healthy (mdcontrol/continuable) + monitor render green (stepLogs/logs/node-detail, oc- & native-)`);
     console.log(`[e2e] report: ${join(root, "e2e-report.json")}`);
   } else {
     console.error(`[e2e] SUMMARY: FAIL — ${failures.length} failure(s):`);
@@ -401,7 +631,7 @@ async function main(argv = process.argv.slice(2)) {
     console.error(`[e2e] report: ${join(root, "e2e-report.json")}`);
   }
   if (args.keep) {
-    console.log(`[e2e] scratch kept at ${root} (manual monitor inspection: node ${ENGINE_MAIN} --monitor --dir ${root})`);
+    console.log(`[e2e] scratch kept at ${root} (manual monitor inspection: node ${ENGINE_MAIN} monitor --dir ${root})`);
   } else if (failures.length === 0) {
     rmSync(root, { recursive: true, force: true });
   }

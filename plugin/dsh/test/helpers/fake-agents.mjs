@@ -166,7 +166,7 @@ export function createFakeAgentsService({
   const service = {
     async create(options) {
       state.creates.push(options)
-      state.calls.push({ op: 'create', sessionId: options?.sessionId ?? null })
+      state.calls.push({ op: 'create', sessionId: options?.sessionId ?? null, seedLength: options?.seed?.length ?? 0 })
       if (createError) throw createError
       const id = options?.sessionId || `child-${state.agents.length + 1}`
       const agent = makeAgent(id)

@@ -690,6 +690,97 @@ describe("Monitor — REST endpoints (Phase 2)", () => {
     }
   });
 
+  it("step-log endpoints accept native- artifacts (dual-label widening, dsh-plugin WI11)", async () => {
+    const root = makeTmpProject();
+    try {
+      const runId = "2026-08-23-native-mission-driver";
+      makeRun(root, runId, {
+        state: {
+          missionName: "native-mission",
+          runId,
+          status: "completed",
+          steps: [{ name: "CHECK", status: "completed", marker: "pass" }],
+        },
+        logs: {
+          "native-CHECK-1782000000000-abc123.log": "# backend: native\nnative log line\n",
+          "native-CHECK-1782000000000-abc123.log.prompt": "[MISSION_DRIVER] native prompt\n",
+          "oc-DONE-1782000000001-zzz999.log": "# backend: process\noc log line\n",
+        },
+      });
+      const monitor = await startMonitor({ projectRoot: root, port: 0, webDir: join(root, "web") });
+      try {
+        // 1. listStepLogs: native- log + prompt listed alongside oc- (mixed run dir)
+        const detail = await fetchJson(`${baseUrl(monitor)}/api/runs/${runId}`);
+        assert.equal(detail.status, 200);
+        const byFile = new Map(detail.body.stepLogs.map((s) => [s.fileName, s]));
+        assert.ok(byFile.has("native-CHECK-1782000000000-abc123.log"), "native- log listed");
+        assert.equal(byFile.get("native-CHECK-1782000000000-abc123.log").type, "log");
+        assert.equal(byFile.get("native-CHECK-1782000000000-abc123.log").step, "CHECK");
+        assert.ok(byFile.has("native-CHECK-1782000000000-abc123.log.prompt"), "native- prompt listed");
+        assert.equal(byFile.get("native-CHECK-1782000000000-abc123.log.prompt").type, "prompt");
+        assert.ok(byFile.has("oc-DONE-1782000000001-zzz999.log"), "oc- zero regression in mixed dir");
+
+        // 2. handleGetLog prefix search: /logs/:step serves the newest native- file
+        const logRes = await fetchJson(`${baseUrl(monitor)}/api/runs/${runId}/logs/CHECK`);
+        assert.equal(logRes.status, 200);
+        assert.ok(logRes.body.fileName.startsWith("native-CHECK-"), logRes.body.fileName);
+        assert.ok(logRes.body.lines.join("\n").includes("native log line"));
+
+        // 3. handleGetLog prompt variant over the native- label
+        const promptRes = await fetchJson(`${baseUrl(monitor)}/api/runs/${runId}/logs/CHECK?type=prompt`);
+        assert.equal(promptRes.status, 200);
+        assert.ok(promptRes.body.fileName.startsWith("native-CHECK-"));
+        assert.ok(promptRes.body.lines.join("\n").includes("native prompt"));
+
+        // 4. handleGetLog ?file= fast path accepts a native- basename (and abs path)
+        const absNative = join(root, "_tmp", runId, "native-CHECK-1782000000000-abc123.log");
+        const fileRes = await fetchJson(
+          `${baseUrl(monitor)}/api/runs/${runId}/logs/CHECK?file=${encodeURIComponent(absNative)}`,
+        );
+        assert.equal(fileRes.status, 200);
+        assert.equal(fileRes.body.fileName, "native-CHECK-1782000000000-abc123.log");
+
+        // 5. handleGetNodeDetail: logFile + logTail resolve for a native- artifact
+        const nodeRes = await fetchJson(`${baseUrl(monitor)}/api/runs/${runId}/nodes/CHECK`);
+        assert.equal(nodeRes.status, 200);
+        assert.ok(nodeRes.body.logFile && nodeRes.body.logFile.startsWith("native-CHECK-"), "node-detail logFile");
+        assert.ok(typeof nodeRes.body.logTail === "string" && nodeRes.body.logTail.includes("native log line"));
+        assert.ok(nodeRes.body.logSizeBytes > 0);
+      } finally {
+        await monitor.close();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("GET /api/runs/:runId/nodes/:step serves oc- logTail (zero regression)", async () => {
+    const root = makeTmpProject();
+    try {
+      const runId = "2026-08-23-node-oc-mission-driver";
+      makeRun(root, runId, {
+        state: {
+          missionName: "oc-mission",
+          runId,
+          status: "completed",
+          steps: [{ name: "CHECK", status: "completed", marker: "pass" }],
+        },
+        logs: { "oc-CHECK-1782000000000-abc123.log": "oc tail line\n" },
+      });
+      const monitor = await startMonitor({ projectRoot: root, port: 0, webDir: join(root, "web") });
+      try {
+        const res = await fetchJson(`${baseUrl(monitor)}/api/runs/${runId}/nodes/CHECK`);
+        assert.equal(res.status, 200);
+        assert.equal(res.body.logFile, "oc-CHECK-1782000000000-abc123.log");
+        assert.ok(res.body.logTail.includes("oc tail line"));
+      } finally {
+        await monitor.close();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("GET /api/runs/:runId/logs/:step returns 404 for missing step log", async () => {
     const root = makeTmpProject();
     try {

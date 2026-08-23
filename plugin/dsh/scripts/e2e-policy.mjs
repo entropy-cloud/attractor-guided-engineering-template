@@ -31,6 +31,18 @@ export const STEP_TOKENS = {
   DONE: "STEP-TOKEN-DONE",
 };
 
+/**
+ * Onboarding-mission routing (WI11): routes on the REAL mission-driver flow
+ * prompt texts (not synthetic tokens) — the deterministic minimal script is
+ * CHECK → pass, DRAFT_PLANS → nothing ×2 (empty plans/audits skeleton keeps
+ * REVIEW_PLANS/EXEC_PLANS/DEEP_AUDIT at zero agent turns; the second
+ * DRAFT_PLANS `nothing` hits the audit-quota completion gate).
+ */
+export const ONBOARDING_PHRASES = {
+  CHECK: "deterministic-state gate check",
+  DRAFT_PLANS: "Draft 1-3 plans from the remaining roadmap items",
+};
+
 /** Marker the artificial REVIEW break emits (not in any transition map). */
 export const BROKEN_MARKER = "banana";
 
@@ -57,6 +69,12 @@ export function policyForPrompt(text) {
   }
   if (text.includes(STEP_TOKENS.DONE)) {
     return { kind: "DONE", marker: "pass", artificialBreak: false };
+  }
+  if (text.includes(ONBOARDING_PHRASES.CHECK)) {
+    return { kind: "ONBOARDING-CHECK", marker: "pass", artificialBreak: false };
+  }
+  if (text.includes(ONBOARDING_PHRASES.DRAFT_PLANS)) {
+    return { kind: "ONBOARDING-DRAFT_PLANS", marker: "nothing", artificialBreak: false };
   }
   return null;
 }
