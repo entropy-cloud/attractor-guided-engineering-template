@@ -1,6 +1,6 @@
 # DSH Plugin Packaging — Technical Architecture
 
-> **Status: P1 DELIVERED (2026-08-23) — StepExecutor seam, ProcessExecutor, programmatic orchestration entry + EXIT_MAP hoist, driver validation, and embed-mode gating have landed (M1-WI1..WI5); P2–P4 remain planned.** Phase gates below define when each remaining claim becomes supported behavior.
+> **Status: P1 DELIVERED (2026-08-23) — StepExecutor seam, ProcessExecutor, programmatic orchestration entry + EXIT_MAP hoist, driver validation, and embed-mode gating have landed (M1-WI1..WI5). P2 PARTIALLY DELIVERED (2026-08-23, M2-WI6): the plugin shell (`plugin/dsh/` bundle manifest + isolate-realm patch + build bundling with an import-closure gate) has landed; NativeExecutor (WI7), L2 matrix (WI8), L3 harness (WI9), and `mdcontrol.*` routes (WI10) remain planned. P3–P4 remain planned.** Phase gates below define when each remaining claim becomes supported behavior.
 
 ## Purpose
 
@@ -22,27 +22,50 @@ All other boundary rules are preserved:
 
 ## Packaging Layout
 
-New top-level directory in this repository:
+New top-level directory in this repository — **landed 2026-08-23 (M2-WI6)**, tree below is the as-built state (skeleton files marked with their owning work item):
 
 ```
 plugin/dsh/
-├── package.json          # dsh bundle manifest (dsh.bundle.patch field), pinned @deepseek-ai/* deps
-├── cordis.patch.yml      # mounts the Mission Control service into an isolate realm
+├── package.json          # LANDED: `dsh.bundle.patch` manifest + exact-pinned @deepseek-ai/* deps
+├── cordis.patch.yml      # LANDED: `- insert:` op → cordis:group with isolate realm → service row
+├── tsconfig.json         # tsc --noEmit over src/*.ts
+├── scripts/
+│   ├── check-manifest.mjs     # structural manifest/patch validation (plain-YAML, dev-dep `yaml`)
+│   ├── build-bundle.mjs       # copy-style engine bundling + import-closure gate (+ `--check` freshness)
+│   └── smoke-import.mjs       # no-host bundle import smoke (all 5 entry modules, zero npm resolution)
+├── test/
+│   └── bundle-scaffold.test.mjs  # plugin local test entry — reused by the WI7 unit tests and WI8 matrix
 ├── src/
-│   ├── service.ts        # cordis service: registers mdcontrol.* routes + skills
-│   ├── native-executor.ts# StepExecutor implementation over the host agents service
-│   └── engine-bridge.ts  # programmatic entry wrapping engine orchestration
-└── assets/               # bundled flows/, prompts/, agents/ copied at build time
+│   ├── service.ts        # SKELETON: mount-log only; mdcontrol.* routes + guard = WI10
+│   ├── native-executor.ts# INTERFACE PLACEHOLDER (StepExecutor shape pinned); implementation = WI7
+│   └── engine-bridge.ts  # INTERFACE PLACEHOLDER; wiring = WI7/WI10
+└── assets/               # build output — COMMITTED (web/dist precedent); freshness gated
+    ├── src/              # the engine pure-module closure (19 files) — relative imports preserved
+    ├── flows/            # copied from tools/mission-driver/flows/
+    ├── prompts/          # copied from tools/mission-driver/prompts/
+    └── agents/           # copied from tools/mission-driver/agents/
 ```
 
-Build-time bundling copies the engine's pure modules into the plugin bundle. The verified import graph dictates the list:
+### Build bundling (as landed)
+
+`scripts/build-bundle.mjs` (pure Node, copy-style — rejected esbuild/rollup single-file bundling: the engine is zero-npm-dependency and small, copying keeps source auditable and path resolution identical to engine semantics; rejected symlinks: not portable in the DSH profile install form):
+
+1. **Import-closure gate** (machine enforcement of the NOT-bundled rule): from the five entry modules (`orchestrator.js` / `config.js` / `engine.js` / `runner.js` / `step-executor.js`) it computes the transitive static-import closure and requires closure ⊆ allowed set. Importing `monitor.js` / `draft-job.mjs` / `spawner.mjs` / `main.js`, any npm package name, or anything escaping the engine `src/` root fails the build. Comment/prose strings cannot fake imports (the scanner is string- and comment-aware). Negative self-test verified all four failure classes go red.
+2. **Copy**: the 19 allowed modules land in `assets/src/` with relative imports verbatim, so `import.meta.url`-relative `TOOL_ROOT` resolution (config.js pi persona `agentFile`, flow-loader `flows/`/`prompts/`) keeps exact engine semantics with `TOOL_ROOT = assets/`; `flows/`, `prompts/`, `agents/` are copied to `assets/`.
+3. **Freshness**: artifacts are committed (clone-and-run like `web/dist`); `build-bundle.mjs --check` recomputes the copy plan and content-diffs it against the committed tree — stale or extra files fail. The `assets/` name deliberately does not fall under `.gitignore`'s `dist/` rule.
+
+The verified import graph the allowed list encodes (packaging doc baseline, now machine-checked on every build):
 
 - Flow engine path: `engine.js` → `expression.mjs`, `platform.mjs`, `sys-snapshot.mjs`, `reap-orphans.mjs` (→ `run-reconcile.mjs`), `active-run-registry.mjs`, `roadmap-check.mjs`
 - Config path: `config.js` (imports only node builtins + `mission-check.mjs`) — needed by the programmatic entry (`engine-bridge`)
 - Process backend path: `runner.js` (→ `executor.js`, `platform.mjs`) — needed by ProcessExecutor
-- Orchestration entry path: P1 extracts a programmatic run/draft/analyze module from `main.js` so CLI and plugin share one entry. It owns flow loading (`flow-loader.js` → `plan-check.mjs`; imported by `main.js` today, not by `engine.js`), the CLI-parity bootstrap (`env-loader.js` `loadDotenv` before `resolveConfig` — the designed "env-loader → secret-resolver" chain is dormant today: `secret-resolver.js` has zero imports under `src/`, so the live chain is dotenv only), the draft pipeline (`cmdDraftMission`, `extractBriefGate`, `parseDraftArtifact`), Reflexion analysis (`postmortem.mjs` → config/expression, backing `mdcontrol.analyze`), and the hoisted `EXIT_MAP` (pinned row-by-row by `test/exit-map.test.js`, which keeps the hoist honest).
+- Orchestration entry path: `orchestrator.js` and its dependencies: flow loading (`flow-loader.js` → `plan-check.mjs`), CLI-parity bootstrap (`env-loader.js` `loadDotenv` before `resolveConfig` — the designed "env-loader → secret-resolver" chain is dormant today: `secret-resolver.js` has zero imports under `src/`, so the live chain is dotenv only), the draft pipeline (`cmdDraftMission`, `extractBriefGate`, `parseDraftArtifact`), Reflexion analysis (`postmortem.mjs` → config/expression, backing `mdcontrol.analyze`), and the hoisted `EXIT_MAP` (`exit-map.js`, pinned row-by-row by `test/exit-map.test.js`).
 
-NOT bundled: monitor server (`monitor.js`), draft-job detached-process management (`draft-job.mjs` + its `spawner.mjs` seam — both remain CLI/monitor-only), CLI commander wiring. Path resolution for bundled `flows/`/`prompts/`/`agents/` uses `import.meta.url` relative to the bundle location, matching how config.js already resolves the pi persona `agentFile`.
+NOT bundled: monitor server (`monitor.js`), draft-job detached-process management (`draft-job.mjs` + its `spawner.mjs` seam — both remain CLI/monitor-only), CLI commander wiring (`main.js`).
+
+### Version pins (as landed)
+
+`plugin/dsh/package.json` pins, exact (no ranges), per the P2-start survey re-run (2026-08-23, `docs/analysis/2026-08-23-0001-p2-version-survey.md` — dist-tags identical to R2, no cohort drift): `@deepseek-ai/cordis@4.0.1` + `dsh-agent`/`dsh-goal`/`dsh-tools`/`dsh-subagent` all at `0.1.1-rc.2` (goal/tools are pinned-but-unconsumed until P3+, per single-cohort consistency). Bumping any pin is an explicit changelog event.
 
 ## Execution Backend Seam (Engine Refactor)
 
@@ -157,7 +180,7 @@ Day-to-day development procedure (host setup, Creator-mode online loop, flow-cus
 | Phase | Deliverable | Verification gate |
 | --- | --- | --- |
 | P1 ✅ delivered 2026-08-23 | StepExecutor seam over the delegates injection points; ProcessExecutor wrapper; programmatic orchestration entry + `EXIT_MAP` hoist; driver validation; embed-mode gating of startup diagnostics; module-boundaries.md update | full engine test suite green (incl. exit-map pinning); CLI behavior unchanged (`run demo` smoke test) |
-| P2 | Plugin shell + NativeExecutor; `mdcontrol.run` executing `demo` mission end-to-end natively | demo mission completes with identical run-state shape; markers parsed; correction-retry exercised once artificially |
+| P2 ⏳ partially delivered 2026-08-23 (M2-WI6 only) | Plugin shell + NativeExecutor; `mdcontrol.run` executing `demo` mission end-to-end natively. **Delivered (WI6)**: `plugin/dsh/` scaffold, bundle manifest, isolate-realm patch, build bundling + import-closure gate, plugin test entry. **Remaining (P2 boundary)**: NativeExecutor (WI7), L2 dual-backend matrix (WI8), L3 host harness (WI9), `mdcontrol.*` async job contract (WI10) | demo mission completes with identical run-state shape; markers parsed; correction-retry exercised once artificially (full P2 gate; WI6 verified structurally + no-host import smoke only) |
 | P3 | `onboarding` parity + descriptor registration + skills wired | onboarding fills copied docs identically to CLI form; subagents list healthy during run |
 | P4 | AGE preset integration (AGE mode) + Mission Control status panel decision | preset + plugin compose without realm collision |
 

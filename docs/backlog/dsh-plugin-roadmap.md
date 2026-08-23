@@ -1,6 +1,6 @@
 # DSH Plugin (AGE Mission Control) Roadmap
 
-> Last Updated: 2026-08-23 (M1 WI1–WI5 全部 `done`——M1 里程碑无遗留；M2–M4 unchanged)
+> Last Updated: 2026-08-23 (M1 WI1–WI5 全部 `done`；M2-WI6 `done`——plugin/dsh 脚手架 + manifest/patch + 构建打包闭包门禁落地，plan `2026-08-23-1447-1`；WI7–WI10 unchanged)
 > Source: `docs/design/dsh-plugin-integration.md`, `docs/architecture/dsh-plugin-packaging.md`, `docs/analysis/2026-08-22-0001-dsh-host-api-contract-verification.md` (R1), `-0002-npm-version-surface.md` (R2), `-0003-verification-harness-design.md` (R3)
 
 ## Purpose
@@ -22,7 +22,7 @@ Drive the implementation of the AGE Mission Control DSH plugin: package mission-
 
 ### M2 — 插件壳与原生派发后端
 
-- WI6 plugin/dsh 脚手架:DshBundleManifest 清单(`dsh.bundle.patch`)+ cordis.patch.yml(isolate realm 挂载)+ 构建打包(按 R1 核实的导入图捆绑引擎纯模块): `todo`
+- WI6 plugin/dsh 脚手架:DshBundleManifest 清单(`dsh.bundle.patch`)+ cordis.patch.yml(isolate realm 挂载)+ 构建打包(按 R1 核实的导入图捆绑引擎纯模块): `done`（plan `docs/plans/dsh-plugin/2026-08-23-1447-1-plugin-shell-bundle-scaffold.md` 已执行完毕——manifest/patch 结构校验 + 构建闭包断言（负例自证）+ 无宿主 import 冒烟 + 插件测试入口落地；钉版经 P2 复查无漂移（`docs/analysis/2026-08-23-0001-p2-version-survey.md`）；真实宿主挂载冒烟归 WI9/L3；证据见该 plan 与 `docs/logs/2026/08-23.md`）
 - WI7 NativeExecutor:agents.create/resume + followup + whenIdle() 等待 + cancel→dispose 序列(handle 存活期 = 整个 run,步骤间复用,R1-A2): `todo`
 - WI8 L2 契约测试:双后端行为矩阵(marker 分类/修正重试预算/run-state 形状/EXIT_MAP 映射/flow 预算)——见 R3 §3: `todo`
 - WI9 L3 SDK 集成骨架 host-harness.mjs(先解 R3 §6 未决项:sdk server 的宿主启动组合): `todo`
