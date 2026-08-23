@@ -1,5 +1,5 @@
 import { appendFileSync, existsSync, readFileSync, writeFileSync, renameSync, readdirSync, mkdirSync } from "node:fs";
-import { resolve, basename, isAbsolute, dirname } from "node:path";
+import { resolve, basename, isAbsolute, dirname, win32 } from "node:path";
 import { snapshot as sysSnapshot } from "./sys-snapshot.mjs";
 import { reapStartupOrphans } from "./reap-orphans.mjs";
 import { registerActiveRun } from "./active-run-registry.mjs";
@@ -8,6 +8,12 @@ import { evaluateExpression, isExpression, resolveTemplateVars } from "./express
 import { roadmapAllDone } from "./roadmap-check.mjs";
 /** Backoff helper for retry after short-duration failures (likely rate-limited). */
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Basename for filenames persisted into run-state.json (logFile / promptFile /
+// subflowRuns.file). win32.basename splits on BOTH "/" and "\" on every host,
+// so a Windows-authored path stored on POSIX (or vice versa) still yields the
+// bare filename — run dirs stay portable across host platforms.
+const basenameXp = (p) => win32.basename(p);
 
 function localTimeStr(d = new Date()) {
   const pad = (n) => String(n).padStart(2, "0");
@@ -577,8 +583,8 @@ export class FlowEngine {
     const steps = this.workflow.steps;
     for (let i = steps.length - 1; i >= 0; i--) {
       if (steps[i].name === stepName && steps[i].status === "running") {
-        if (logFile) steps[i].logFile = basename(logFile);
-        if (promptFile) steps[i].promptFile = basename(promptFile);
+        if (logFile) steps[i].logFile = basenameXp(logFile);
+        if (promptFile) steps[i].promptFile = basenameXp(promptFile);
         if (sessionId) steps[i].sessionId = sessionId;
         this._writeWorkflow();
         break;
@@ -1187,7 +1193,7 @@ export class FlowEngine {
           const childVars = { ...iterArgs, forEachItem: item, forEachIndex: i, forEachTotal: items.length, _subflowId: `${stepName}-${visit}-${i}` };
           const { childResult, childFlowVars, subflowFile } = await this._runChildSubflow(flowDef, childVars);
           Object.assign(aggregatedVars, childFlowVars);
-          subflowRuns.push({ forEachIndex: i, forEachItem: item, file: subflowFile ? basename(subflowFile) : null, status: childResult.status });
+          subflowRuns.push({ forEachIndex: i, forEachItem: item, file: subflowFile ? basenameXp(subflowFile) : null, status: childResult.status });
           this._wfAppendSubflowRun(stepName, visit, subflowRuns[subflowRuns.length - 1]);
           this._log(`  subflow ${stepName}: forEach item ${i + 1} → ${childResult.status}`);
           if (childResult.status === "completed") {
@@ -1218,7 +1224,7 @@ export class FlowEngine {
 
         const recordResult = (r) => {
           Object.assign(aggregatedVars, r.childFlowVars);
-          subflowRuns.push({ forEachIndex: r.i, forEachItem: r.item, file: r.subflowFile ? basename(r.subflowFile) : null, status: r.childResult.status });
+          subflowRuns.push({ forEachIndex: r.i, forEachItem: r.item, file: r.subflowFile ? basenameXp(r.subflowFile) : null, status: r.childResult.status });
           this._wfAppendSubflowRun(stepName, visit, subflowRuns[subflowRuns.length - 1]);
           this._log(`  subflow ${stepName}: forEach item ${r.i + 1} → ${r.childResult.status}`);
           if (r.childResult.status === "completed") {
@@ -1280,7 +1286,7 @@ export class FlowEngine {
     const { childResult, childFlowVars, subflowFile } = await this._runChildSubflow(flowDef, childArgs);
     const marker = childResult.status === "completed" ? "complete" : "failed";
     this._log(`  subflow ${stepName}: child ${childResult.status} → ${marker}`);
-    return { ok: true, marker, vars: childFlowVars, text: marker, subflowRuns: [{ forEachIndex: 0, forEachItem: null, file: subflowFile ? basename(subflowFile) : null, status: childResult.status }] };
+    return { ok: true, marker, vars: childFlowVars, text: marker, subflowRuns: [{ forEachIndex: 0, forEachItem: null, file: subflowFile ? basenameXp(subflowFile) : null, status: childResult.status }] };
   }
 
   _allVars() {
@@ -1811,8 +1817,8 @@ export class FlowEngine {
         // run-state.json) — not the absolute path. Logs are co-located with the
         // state file, so the directory is implied; storing basename keeps the
         // run dir portable and avoids leaking machine-specific absolute paths.
-        if (result.logFile) failedMeta.logFile = basename(result.logFile);
-        if (result.promptFile) failedMeta.promptFile = basename(result.promptFile);
+        if (result.logFile) failedMeta.logFile = basenameXp(result.logFile);
+        if (result.promptFile) failedMeta.promptFile = basenameXp(result.promptFile);
         // Build a diagnostic error reason from exit code + log tail so the
         // dashboard can show WHY the step failed (timeout, API rate limit,
         // crash, etc.) — previously only a truncated full-log dump was stored.
@@ -2042,8 +2048,8 @@ export class FlowEngine {
         // sessionId + a raw tail so the run is traceable back to the exact log
         // (previously this path returned without recording either).
         const unknownMeta = {};
-        if (result.logFile) unknownMeta.logFile = basename(result.logFile);
-        if (result.promptFile) unknownMeta.promptFile = basename(result.promptFile);
+        if (result.logFile) unknownMeta.logFile = basenameXp(result.logFile);
+        if (result.promptFile) unknownMeta.promptFile = basenameXp(result.promptFile);
         const unknownRec = this._wfClose(null, "failed", result.sessionId, unknownMeta);
         if (unknownRec) {
           this._emitEvent("step_failed", {
@@ -2070,8 +2076,8 @@ export class FlowEngine {
 
       this._log(`  marker: ${marker}`);
       const completedMeta = result.subflowRuns ? { type: "subflow", subflowRuns: result.subflowRuns } : {};
-      if (result.logFile) completedMeta.logFile = basename(result.logFile);
-      if (result.promptFile) completedMeta.promptFile = basename(result.promptFile);
+      if (result.logFile) completedMeta.logFile = basenameXp(result.logFile);
+      if (result.promptFile) completedMeta.promptFile = basenameXp(result.promptFile);
       const completedRec = this._wfClose(marker, "completed", result.sessionId, completedMeta);
       if (completedRec) {
         this._emitEvent("step_completed", {

@@ -136,15 +136,21 @@ describe("WI4 mission-check CLI — Case C: valid mission exits 0 with JSON stdo
 // ── Case D: pathToFileURL normalization anchor (platform-agnostic) ──────────
 
 describe("WI4 mission-check CLI — Case D: pathToFileURL normalization anchor", () => {
-  it("normalizes a Windows-style path to file:///C:/... on every platform", () => {
+  it("normalizes a Windows-style path to file:///C:/... on win32; keeps the three-slash prefix on every platform", () => {
     // This is the exact shape `import.meta.url` takes on Windows. If
     // pathToFileURL ever stops producing this form, the entry guard breaks
-    // silently on Windows again.
-    assert.equal(
-      pathToFileURL("C:\\Work\\foo\\mission-check.mjs").href,
-      "file:///C:/Work/foo/mission-check.mjs",
-      "Windows-style path must normalize to file:///C:/... (three slashes + drive letter)",
-    );
+    // silently on Windows again. On POSIX a backslash path is not absolute,
+    // so Node cwd-resolves it — the platform-agnostic half of the anchor is
+    // the file:/// three-slash prefix, which the old `file://${argv[1]}`
+    // concatenation (two slashes + raw drive letter) never satisfies.
+    const href = pathToFileURL("C:\\Work\\foo\\mission-check.mjs").href;
+    if (process.platform === "win32") {
+      assert.equal(href, "file:///C:/Work/foo/mission-check.mjs",
+        "Windows-style path must normalize to file:///C:/... (three slashes + drive letter)");
+    } else {
+      assert.match(href, /^file:\/\/\//,
+        "pathToFileURL must always produce the three-slash file:/// prefix");
+    }
   });
 
   it("normalizes a POSIX-style absolute path with the file:/// three-slash prefix on every platform", () => {
