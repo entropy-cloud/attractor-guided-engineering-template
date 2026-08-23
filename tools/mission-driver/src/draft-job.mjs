@@ -75,8 +75,18 @@ function tsForJobId(now = new Date()) {
  * @returns {{ jobId: string, pid: number|null, jobDir: string }}
  */
 export function startDraftJob({ projectRoot, desc, draftJobDir, flowHint, targetFile, skipBrief } = {}) {
-  const jobId = `draft-${tsForJobId()}-mission-draft`;
-  const jobDir = draftJobDir || resolve(projectRoot, "_tmp", jobId);
+  let jobId = `draft-${tsForJobId()}-mission-draft`;
+  let jobDir = draftJobDir || resolve(projectRoot, "_tmp", jobId);
+  // Same-millisecond double-submit guard: two startDraftJob calls within one ms
+  // produce identical ms-precision jobIds and the second jobDir silently
+  // overwrites the first (listDraftJobs then undercounts). Retry with a random
+  // suffix until the dir is free; calls are synchronous in-process so the
+  // check-then-mkdir window cannot interleave. Fixed draftJobDir keeps the
+  // caller-managed (test) semantics untouched.
+  while (!draftJobDir && existsSync(jobDir)) {
+    jobId = `draft-${tsForJobId()}-${Math.random().toString(36).slice(2, 6)}-mission-draft`;
+    jobDir = resolve(projectRoot, "_tmp", jobId);
+  }
   mkdirSync(jobDir, { recursive: true });
 
   const startedAt = new Date().toISOString();

@@ -94,6 +94,40 @@ describe("draft-job — startDraftJob (injectable spawner)", () => {
     }
   });
 
+  it("same-millisecond double-submit gets distinct jobDirs (collision guard)", () => {
+    const root = makeTmpProject();
+    const RealDate = Date;
+    try {
+      // Freeze the clock so both startDraftJob calls mint the exact same
+      // ms-precision timestamp — deterministically reproducing the rapid
+      // double-submit that previously made the second job overwrite the first.
+      const fixed = new RealDate(2026, 7, 23, 12, 0, 0, 500);
+      globalThis.Date = class extends RealDate {
+        constructor(...args) {
+          super(...(args.length ? args : [fixed.getTime()]));
+        }
+        static now() {
+          return fixed.getTime();
+        }
+      };
+      const a = startDraftJob({ projectRoot: root, desc: "one" });
+      const b = startDraftJob({ projectRoot: root, desc: "two" });
+      assert.notEqual(a.jobId, b.jobId, "jobIds must not collide");
+      assert.notEqual(a.jobDir, b.jobDir, "jobDirs must not collide");
+      assert.ok(a.jobId.startsWith("draft-") && a.jobId.endsWith("-mission-draft"));
+      assert.ok(b.jobId.startsWith("draft-") && b.jobId.endsWith("-mission-draft"));
+      const stateA = JSON.parse(readFileSync(join(a.jobDir, "draft-state.json"), "utf8"));
+      const stateB = JSON.parse(readFileSync(join(b.jobDir, "draft-state.json"), "utf8"));
+      assert.equal(stateA.desc, "one", "first job's state not overwritten");
+      assert.equal(stateB.desc, "two");
+      const { jobs } = listDraftJobs(root);
+      assert.equal(jobs.length, 2, "both jobs listed");
+    } finally {
+      globalThis.Date = RealDate;
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("mdo-4 P2: appends --flow-hint / --target-file to spawn argv when provided", () => {
     const root = makeTmpProject();
     try {
