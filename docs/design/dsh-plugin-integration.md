@@ -72,6 +72,8 @@ After install and host restart, DSH sessions will gain the Mission Control skill
 
 ### Running
 
+> As-built note (2026-08-23, M2-WI10): the route layer this section's flow rides on is live — `mdcontrol.run` starts a mission with the async job contract (immediate `{runId, status: 'started'}`, engine continues as a detached in-host task, progress via `mdcontrol.status` and the unchanged monitor dashboard, one run at a time per project root). The natural-language skill entry points below are still M3-WI12; until they land, the routes are reachable programmatically (cordis service `mdcontrol` / `POST /mdcontrol/api/<method>`). Owner doc for the route semantics: `docs/architecture/dsh-plugin-packaging.md` §Service Surface.
+
 Inside a DSH session opened at a project root that has AGE installed (`missions/base.json` present):
 
 1. User asks the agent to "run the onboarding mission" or invokes `mission-control-run onboarding`.

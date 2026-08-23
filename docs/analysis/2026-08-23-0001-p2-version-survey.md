@@ -46,3 +46,9 @@ Survey facts:
 - Local verification: `npm install` resolves all sixteen at `0.1.1-rc.2` exactly (`node -e require.resolve` check, 2026-08-23), and the composition boots green keylessly against the fixture (see the R3 §6 resolved note).
 
 Transport decision context: `dsh-sdk-protocol` / `dsh-sdk-client` were deliberately NOT added — the harness hand-writes a thin NDJSON transport (`HarnessLineRpcTransport`, protocol face = 3 methods + 4 notifications), keeping the new-dependency surface at the composition minimum.
+
+## Addendum 2: M2-WI10 L4 e2e boot devDep (2026-08-23)
+
+> Owner: plan `docs/plans/dsh-plugin/2026-08-23-1621-2-mdcontrol-run-async-contract-e2e.md` Phase 2 (Decision — in-process e2e entry). Same method: `npm view` + install-resolution check.
+
+One package added as an exact-pinned devDependency: `@deepseek-ai/dsh-app-boot@0.1.1-rc.2` (17th composition devDep; shipped `dependencies` unchanged). It is the shared boot glue the official bins use (`boot(binName, configPath)` — the demo bin `dsh-jsonrpc-agent` calls the same entry), which the L4 e2e driver calls in-process to boot `test/fixtures/e2e.cordis.yml` (L3 base minus the sdk server plus the real mission-control service row). Cohort: same `0.1.1-rc.2`, already physically present as a transitive install — the pin makes the direct consumption explicit. Same tag-lag rule as Addendum 1 applies (literal version, never tag).

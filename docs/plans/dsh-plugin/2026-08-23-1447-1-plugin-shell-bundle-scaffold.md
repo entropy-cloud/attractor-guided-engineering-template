@@ -144,6 +144,7 @@ Exit Criteria:
 - Why Not Blocking Closure: guard 由 `mdcontrol.*` 路由拥有（packaging doc §Service Surface），路由在 WI10 才落地；WI6 的 service 骨架无路由无 run 启动，无 guard 可挂。M1 plan 3 原归属 "M2-WI6/WI10" 中的 WI6 半边经本裁定收窄为 WI10 单一归属。
 - Successor Required: `yes`（M2-WI10 plan 必须实现：单 run 守卫 + 宿主侧注册，并引用本裁定）
 - Reopen trigger: M2-WI10 plan 启动时。
+- **已收编（2026-08-23，M2-WI10 / plan `2026-08-23-1621-2` Phase 1）**: 裁定全文（"单 run per projectRoot + 宿主侧注册；比引擎 CLI 宽松的并发语义（reaper 饶并行 run）更严格是有意为之；跨 root 独立"）实现于 `plugin/dsh/src/mdcontrol-routes.ts` `ActiveRunGuard`（in-service 注册表 keyed by resolved projectRoot；占用期并发 = 显式 `run-in-progress` wire error；成功/引擎失败/任务崩溃/启动异常四路径清册；跨 root 独立），引用原文于该文件头注；单测钉住（`plugin/dsh/test/mdcontrol-routes.test.mjs`）。packaging doc §Service Surface guard 行同步转 as-built。本台账闭环。
 
 ### `dsh` headless CLI driver 值与降级梯（自 M1 plan 2/3 移交，watch-only）
 
