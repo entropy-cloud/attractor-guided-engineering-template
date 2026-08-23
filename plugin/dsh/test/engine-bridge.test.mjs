@@ -126,6 +126,36 @@ test("bootstrapNativeConfig: allowNativeDriver + embed + native default config s
   rmSync(root, { recursive: true, force: true });
 });
 
+test("M4-WI14 bootstrapNativeConfig: base.json agent defaults the native run config (explicit args/env win)", () => {
+  const root = tmpProject();
+  setupMission(root);
+  writeFileSync(join(root, "missions", "base.json"), JSON.stringify({ model: "m1", agent: "age" }), "utf8");
+  const prevEnv = process.env.OPENCODE_AGENT;
+
+  // base.agent flows when no explicit arg/env names an agent (the engine's
+  // run path alone never consults base.json — plugin-layer defaulting).
+  const fromBase = bootstrapNativeConfig(root, { mission: "demo", runDir: "agent-from-base" });
+  assert.equal(fromBase.agent, "age");
+
+  // explicit args keep precedence over the base default
+  const fromArgs = bootstrapNativeConfig(root, { mission: "demo", runDir: "agent-from-args", agent: "standard" });
+  assert.equal(fromArgs.agent, "standard");
+
+  // explicit env keeps precedence over the base default
+  process.env.OPENCODE_AGENT = "env-agent";
+  const fromEnv = bootstrapNativeConfig(root, { mission: "demo", runDir: "agent-from-env" });
+  assert.equal(fromEnv.agent, "env-agent");
+  if (prevEnv === undefined) delete process.env.OPENCODE_AGENT; else process.env.OPENCODE_AGENT = prevEnv;
+
+  // no base.agent anywhere → engine's own "build" fallback unchanged
+  const bare = tmpProject();
+  setupMission(bare);
+  const fromDefault = bootstrapNativeConfig(bare, { mission: "demo", runDir: "agent-from-default" });
+  assert.equal(fromDefault.agent, "build");
+  rmSync(bare, { recursive: true, force: true });
+  rmSync(root, { recursive: true, force: true });
+});
+
 test("full-chain smoke (native leg): callbacks reach engine._onAgentStepUpdate; run-state steps[] updated; dispose after run", async () => {
   const root = tmpProject();
   setupMission(root);

@@ -131,17 +131,32 @@ export async function resolveExecutor({ driver, ctx, config }: ResolveExecutorAr
  * `driver: "native"` as the default, and `embed: true` (M1-WI4 startup-
  * diagnostics gate consumed by FlowEngine.run()). CLI paths are untouched —
  * `main.js` never passes allowNativeDriver.
+ *
+ * `agent` defaulting (M4-WI14): the engine's RUN path resolves
+ * `args.agent || env.OPENCODE_AGENT || "build"` and never consults
+ * `missions/base.json`'s agent (only the draft/analyze return points do —
+ * engine behavior, zero diff there). For the native posture the project
+ * level is the right knob (the same base.agent already feeds the plugin's
+ * draft/analyze executor configs via `baseAgentConfigOf`), so when no
+ * explicit arg/env names an agent, base.json's agent flows into the run
+ * config — where NativeExecutor's create setup mounts it as the mission
+ * child's preset. Explicit args/env keep precedence.
  */
 export function bootstrapNativeConfig(
   projectRoot: string,
   args: Record<string, unknown> = {},
 ): EngineConfigHandle {
+  const effectiveArgs: Record<string, unknown> = { ...args }
+  if (effectiveArgs.agent === undefined && (process.env.OPENCODE_AGENT === undefined || process.env.OPENCODE_AGENT === '')) {
+    const base = baseAgentConfigOf(projectRoot)
+    if (base.agent !== undefined) effectiveArgs.agent = base.agent
+  }
   const config = engineBootstrap({
     projectRoot,
     args: {
-      ...args,
-      dir: args.dir ?? projectRoot,
-      driver: args.driver ?? 'native',
+      ...effectiveArgs,
+      dir: effectiveArgs.dir ?? projectRoot,
+      driver: effectiveArgs.driver ?? 'native',
       allowNativeDriver: true,
     },
   }) as EngineConfigHandle

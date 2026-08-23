@@ -390,3 +390,102 @@ test("executeTool: timeout kills the child and reports [TIMEOUT]", async () => {
   await ex.dispose();
   rmSync(runDir, { recursive: true, force: true });
 });
+
+// ── M4-WI14: agent-preset composition setup (plan 2202-1 Phase 1 D1
+// Refinement 1 + D2 route-injection leg 2). The setup rides every create;
+// the fake agents service records it without invoking (host contract: the
+// factory invokes setup with the child's scoped context while unpublished).
+
+/** A fake scoped agent context resolving 'agentPresets' (or not). */
+function fakeAgentCtx(roster) {
+  return { get: (name) => (name === "agentPresets" ? roster : undefined) };
+}
+
+/** A fake preset roster recording mount calls on itself (`mounts`). */
+function fakeRoster(ids, { failOnMount = false } = {}) {
+  const roster = {
+    mounts: [],
+    async list() {
+      return ids.map((id) => ({ id }));
+    },
+    async mount(agentCtx, id) {
+      roster.mounts.push({ agentCtx, id });
+      if (failOnMount) throw new Error(`agent-presets: preset "${id}" failed to mount: broken composition`);
+      return { id };
+    },
+  };
+  return roster;
+}
+
+test("M4-WI14: create carries a preset-mount setup; roster + id on roster → mount(agentCtx, agent)", async () => {
+  const runDir = tmpRunDir();
+  const { service, state } = createFakeAgentsService({ script: ["<AI_STEP_RESULT>pass</AI_STEP_RESULT>"] });
+  const ex = makeExecutor(service, { runDir, agent: "age", model: "test-model" });
+  const r = await ex.executeAgent("PING", "go", "sys", null, undefined, undefined);
+  assert.equal(r.ok, true);
+  const options = state.creates[0];
+  assert.equal(typeof options.setup, "function", "create options carry the setup");
+
+  const roster = fakeRoster(["standard", "age"]);
+  const agentCtx = fakeAgentCtx(roster);
+  await options.setup(agentCtx);
+  assert.deepEqual(roster.mounts, [{ agentCtx, id: "age" }], "setup mounts the mission's configured preset id");
+  await ex.dispose();
+  rmSync(runDir, { recursive: true, force: true });
+});
+
+test("M4-WI14: roster absent on the context → setup no-op (roster-less compositions unchanged)", async () => {
+  const runDir = tmpRunDir();
+  const { service, state } = createFakeAgentsService({ script: [] });
+  const ex = makeExecutor(service, { runDir, agent: "age", model: "test-model" });
+  await ex.executeAgent("PING", "go", "sys", null, undefined, undefined).catch(() => {});
+  const setup = state.creates[0].setup;
+
+  await setup(fakeAgentCtx(undefined));
+  // A throwing get() (WI10 no-declared-inject finding posture) is also a no-op.
+  const throwingCtx = { get: () => { throw new Error("service read without inject"); } };
+  await setup(throwingCtx);
+  await ex.dispose();
+  rmSync(runDir, { recursive: true, force: true });
+});
+
+test("M4-WI14: preset id not on the roster → no mount (a leftover non-DSH agent value never bricks native runs)", async () => {
+  const runDir = tmpRunDir();
+  const { service, state } = createFakeAgentsService({ script: [] });
+  const ex = makeExecutor(service, { runDir, agent: "build", model: "test-model" });
+  await ex.executeAgent("PING", "go", "sys", null, undefined, undefined).catch(() => {});
+  const setup = state.creates[0].setup;
+
+  const roster = fakeRoster(["standard", "age"]);
+  await setup(fakeAgentCtx(roster));
+  assert.deepEqual(roster.mounts, [], "unknown id → no mount call");
+  await ex.dispose();
+  rmSync(runDir, { recursive: true, force: true });
+});
+
+test("M4-WI14: no agent field in config → setup no-op even with a roster composed", async () => {
+  const runDir = tmpRunDir();
+  const { service, state } = createFakeAgentsService({ script: [] });
+  const ex = makeExecutor(service, { runDir, model: "test-model" });
+  await ex.executeAgent("PING", "go", "sys", null, undefined, undefined).catch(() => {});
+  const setup = state.creates[0].setup;
+
+  const roster = fakeRoster(["standard", "age"]);
+  await setup(fakeAgentCtx(roster));
+  assert.deepEqual(roster.mounts, [], "no configured preset id → no mount");
+  await ex.dispose();
+  rmSync(runDir, { recursive: true, force: true });
+});
+
+test("M4-WI14: broken preset → setup rejects (host rolls the child creation back — fail-loud for real AGE deployments)", async () => {
+  const runDir = tmpRunDir();
+  const { service, state } = createFakeAgentsService({ script: [] });
+  const ex = makeExecutor(service, { runDir, agent: "age", model: "test-model" });
+  await ex.executeAgent("PING", "go", "sys", null, undefined, undefined).catch(() => {});
+  const setup = state.creates[0].setup;
+
+  const roster = fakeRoster(["age"], { failOnMount: true });
+  await assert.rejects(() => setup(fakeAgentCtx(roster)), /failed to mount/);
+  await ex.dispose();
+  rmSync(runDir, { recursive: true, force: true });
+});

@@ -14,6 +14,13 @@
  * healthy row instead of a 'corrupt' diagnostic; the seed persists with the
  * session log, so agents.resume() needs no re-seeding.
  *
+ * Agent-preset composition (M4-WI14, plan `2026-08-23-2202-1`): every create
+ * also passes a `setup` that mounts `meta.agentPreset` (the mission config
+ * `agent` field) through the host preset roster when one is composed and the
+ * id is on it — direct creates join no preset otherwise (host-loader fact,
+ * plan Phase 1 D1 Refinement 1). Roster absent / id unknown → no-op; broken
+ * preset → creation rolls back with the roster's explicit mount error.
+ *
  * Handle lifecycle = the whole run (R1-A2): dispose() removes the session
  * from the store, so this executor is constructed PER RUN (engine-bridge
  * factory owns that boundary) and reuses one live handle across steps; the
@@ -59,10 +66,11 @@
 import { spawn } from 'node:child_process'
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { resolve as pathResolve } from 'node:path'
-import type { AgentCancelCause, AgentHandle, AgentRegistry } from '@deepseek-ai/dsh-agent'
+import type { AgentCancelCause, AgentHandle, AgentRegistry, AgentSetup } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { seedDescriptorTurn, snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
+import type { Context } from '@deepseek-ai/cordis'
 
 // ── Pinned seam shapes (from the M2-WI6 interface placeholder) ──────────────
 
@@ -214,6 +222,66 @@ function descriptorSeedOf(
     ...(model !== undefined ? { agentModel: model } : {}),
   })
   return seedDescriptorTurn(childId, undefined, descriptor)
+}
+
+/**
+ * The preset-roster face this executor's create setup consumes (M4-WI14).
+ * Structural subset of the host's AgentPresets service — resolved per call
+ * via `agentCtx.get('agentPresets')` (the WI10 no-declared-inject finding:
+ * service reads on a cordis context go through `ctx.get`).
+ */
+interface PresetRosterFace {
+  list(): Promise<readonly { id: string }[]>
+  mount(agentCtx: Context, id?: string): Promise<unknown>
+}
+
+/**
+ * Agent-preset composition setup for freshly created mission children
+ * (M4-WI14, plan 2202-1 Phase 1 D1 Refinement 1 + D2 route-injection leg 2).
+ *
+ * Host-loader fact (D1): `meta.agentPreset` is passive metadata — no host
+ * code mounts it for direct `agents.create` calls; only a caller-supplied
+ * `setup` composes the child (the subagent-tool path does it via
+ * `composeFrom`). In an agent-plane deployment (roster composed, global
+ * layer carrying no model-facing rows) a child that joins no preset reaches
+ * the model with an empty tool registry — so this executor mounts the
+ * mission's configured agent preset (`missions/base.json` `agent` field →
+ * `meta.agentPreset`) itself:
+ *
+ *   - roster absent on the host composition → no-op (unit/e2e/L3 legs and
+ *     host-plane tool deployments keep today's behavior exactly; the roster
+ *     service itself logs its own "published without joining" advisory when
+ *     composed, so the no-op path needs no duplicate warn here);
+ *   - preset id not on the roster → no-op (an `agent` value left over from a
+ *     non-DSH driver must not brick native runs — the roster's own unjoined
+ *     advisory covers observability);
+ *   - preset present → `mount(agentCtx, id)`; a broken composition rejects
+ *     here and rolls the child creation back (fail-loud for real AGE
+ *     deployments — the explicit wire error the caller needs).
+ *
+ * `agents.resume` needs no setup: the resumed session keeps the composition
+ * it was created under (durable scope parentage).
+ */
+function presetSetupOf(config: NativeExecutorConfig): AgentSetup {
+  return async (agentCtx: Context) => {
+    const presetId = configString(config, 'agent')
+    if (presetId === undefined) return
+    let roster: PresetRosterFace | undefined
+    try {
+      roster = (typeof agentCtx.get === 'function' ? agentCtx.get('agentPresets') : undefined) as PresetRosterFace | undefined
+    } catch {
+      roster = undefined
+    }
+    if (roster === undefined || typeof roster.list !== 'function' || typeof roster.mount !== 'function') return
+    let onRoster = false
+    try {
+      onRoster = (await roster.list()).some((preset) => preset && preset.id === presetId)
+    } catch {
+      return
+    }
+    if (!onRoster) return
+    await roster.mount(agentCtx, presetId)
+  }
 }
 
 function sleep(ms: number): Promise<boolean> {
@@ -409,6 +477,7 @@ export class DshNativeExecutor implements NativeExecutor {
           seedLength: seed.length,
         },
         seed,
+        setup: presetSetupOf(this.config),
       })
       return this.handle
     }
@@ -423,6 +492,7 @@ export class DshNativeExecutor implements NativeExecutor {
       },
       agentOptions: { provider, model },
       seed,
+      setup: presetSetupOf(this.config),
     })
     return this.handle
   }
