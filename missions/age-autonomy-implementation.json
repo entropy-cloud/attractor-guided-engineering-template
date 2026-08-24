@@ -1,0 +1,41 @@
+{
+  "extends": "base",
+  "name": "age-autonomy-implementation",
+  "description": "把 docs/design/age-autonomy/ 候选最终版（Ledger · Law · Supervisor · Efficiency）落进 mission-driver 引擎 + dsh 插件：frontmatter 账本、声明式门禁族、Supervisor 守夜人、agent 池与 prompt 组装、连续模式与机械验证机械化。Roadmap 见 docs/backlog/age-autonomy-implementation-roadmap.md。零引擎 diff 为底线（plugin/dsh 侧沉淀）；每个 milestone 配以机械验证门（CI merge-blocking），不允许口头/聊天式 close。",
+  "flowName": "mission-driver",
+  "roadmapPath": "docs/backlog/age-autonomy-implementation-roadmap.md",
+  "plansDir": "docs/plans/age-autonomy",
+  "planGuide": "docs/plans/00-plan-authoring-and-execution-guide.md",
+  "auditsDir": "docs/audits/age-autonomy",
+  "contextDir": "docs/context",
+  "autonomyPolicy": "missions/autonomy.policy.yml",
+  "audits": {
+    "multi": "docs/skills/multi-dimensional-audit-prompt.md",
+    "open": "docs/skills/open-ended-audit-prompt.md",
+    "closure": "docs/skills/closure-audit-prompt.md"
+  },
+  "prompts": {
+    "draftFromRoadmap": "tools/mission-driver/prompts/draft-from-roadmap.md",
+    "planReview": "tools/mission-driver/prompts/plan-review.md",
+    "execute": "tools/mission-driver/prompts/execute.md",
+    "healthCheck": "tools/mission-driver/prompts/health-check.md",
+    "buildVerify": "tools/mission-driver/prompts/build-verify.md",
+    "closureAudit": "tools/mission-driver/prompts/closure-audit.md",
+    "multiAudit": "tools/mission-driver/prompts/multi-audit.md",
+    "openAudit": "tools/mission-driver/prompts/open-audit.md",
+    "postmortem": "tools/mission-driver/prompts/run-postmortem.md"
+  },
+  "commands": {
+    "test": "pnpm --prefix tools/mission-driver test",
+    "build": "pnpm --prefix tools/mission-driver/web run build",
+    "lint": "pnpm --prefix tools/mission-driver run lint:prompts",
+    "typecheck": "pnpm --prefix tools/mission-driver/web run typecheck",
+    "plan-check": "node tools/mission-driver/src/plan-check.mjs",
+    "mission-check": "node tools/mission-driver/src/mission-check.mjs",
+    "gates": "node tools/mission-driver/src/gate-check.mjs",
+    "verify-age": "./verify-age.sh",
+    "verify-e2e": "pnpm --prefix plugin/dsh run verify:e2e"
+  },
+  "moduleDir": "tools/mission-driver",
+  "commitFormat": "<type>(age-autonomy): <description>"
+}
