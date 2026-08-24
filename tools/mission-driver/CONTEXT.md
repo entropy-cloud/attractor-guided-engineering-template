@@ -69,6 +69,8 @@ sourcePaths（依赖模块源码路径，不同同事路径不同）
 **CHECK 为可配置确定性状态门**（mdr-fix-3）：主流程 entry `CHECK`（`prompts/health-check.md`）按 `commands.check`（base.json 默认 `""` = 未配置）决定行为——配置时运行 `{{checkCmd}}`，失败且可自动修复则诊断+修复+重跑并 emit `needs_fix`（engine 经 `needs_fix → {retry:"CHECK",maxRetries:2}` 重试，耗尽则 `onMaxRetries:{done:"failed"}` 终止），不可修复或 `commands.test` 类问题 emit `fail`（`fail → {done:"failed"}` 终态，无重试）；未配置时回退 git 冲突标记检测（clean/dirty → `pass`，未解决冲突标记 → `fail`）。`needs_fix` 是新增 transition key（非 markerAlias），与 OPT-4 既有契约兼容——未配置 mission 的 `fail`/`onError`/`onMaxRetries` 仍一次性终止（`check-lightweight.test.js` 守护，无 repair death-loop）。CHECK 不跑 `commands.test`（那是 BUILD_VERIFY 的职责）。`checkCmd` 经 `main.js delegates.vars` 注入，已在 `context-map.mjs` VAR_PROVENANCE/EXPECTED_VARS 登记（drift gate）。
 
 
+**frontmatter 账本库**（age-autonomy M1-WI1/WI2）：`src/ledger-frontmatter.mjs`——零 import 纯函数模块（`parseFrontmatter`/`validatePlanFrontmatter`/`validateRoadmapFrontmatter` + 字段表常量，契约 `docs/design/age-autonomy/01-file-ledger.md` §2/§3.1/§4.1）；插件形态经 `plugin/dsh/scripts/build-bundle.mjs` ALLOWED_MODULES 的 engine→assets 复制通道共享（模块进入 import 闭包后副本自动物化）。
+
 ## Monitor Dashboard 前端
 
 **技术栈**: Vue 3 + Naive UI 2 + TypeScript + Vite + xterm.js + Pinia（资源监控用 Naive UI 表格，ECharts 已移除）

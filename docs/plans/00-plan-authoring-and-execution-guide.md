@@ -68,6 +68,45 @@ The following words are forbidden for in-scope items: `optional`, `if time permi
 
 A `Follow-up` item must name the trigger condition that would promote it into scope (e.g., "when user count exceeds 10K"). A `Deferred But Adjudicated` item must name the event or decision that would reopen it (e.g., "if the new API is adopted, this work may become redundant").
 
+## Plan Frontmatter Field Table (M1 Additive Format)
+
+> Status: additive (age-autonomy M1, 2026-08-25). New and old formats coexist during the transition period — legacy `> Plan Status:` / `> Review Hold:` lines remain valid until the full switch (retirement of rules 11/12/13 mapping and template replacement is planned follow-up work, not done here). Contract owner: `docs/design/age-autonomy/01-file-ledger.md` §4.1; machine implementation: `tools/mission-driver/src/ledger-frontmatter.mjs` (the `PLAN_FRONTMATTER_FIELDS` constant is the single source for this field list).
+
+Format subset (hard boundary, 01 §2): flat scalar keys plus single-level flow arrays only; strings written as single-line quoted strings or bare single words; block scalars (`|` / `>`), nested objects, anchors, aliases, and duplicate keys are rejected by the parser — no tolerant fallback.
+
+| Field | Type | Writer | Conditional rules |
+| --- | --- | --- | --- |
+| `status` | enum string: `draft \| active \| held \| cancelled \| superseded \| deferred` | per transition table (01 §5.1) | required; `completed` is a derived status and must never be written |
+| `mission` | non-empty string | drafter at plan creation | required |
+| `work-item` | non-empty string | drafter at plan creation | required; must hit a registered roadmap work item (cross-file check lands with M2) |
+| `group` | non-empty string | drafter | optional batch tag; falls back to the filename timestamp prefix when absent |
+| `failures` | non-negative integer | supervisor (failure attribution) | optional; reset to 0 in the same write that moves held to active |
+| `verify` | single-level array of command keys | drafter | optional; defaults to the mission default when absent |
+| `agent` | agent-name string | drafter / supervisor routing | optional; may only reference an agents-list name from `autonomy.policy.yml` (cross-file check lands with M2) |
+| `hold` | non-empty string | reviewer / supervisor | required while `status: held`; forbidden in any other status |
+| `claim` | string `attempt-<runId>-<holderSessionId>-<nonce8>` | supervisor only | only while `status: active`; must appear paired with `claim-expires` |
+| `claim-expires` | ISO-8601 timestamp string | supervisor only | only while `status: active`; must appear paired with `claim` |
+
+Example (minimal valid set):
+
+```yaml
+---
+status: active
+mission: age-autonomy-implementation
+work-item: M1-WI3
+group: "2026-08-25-0635"
+failures: 0
+verify: [test]
+---
+```
+
+Migration mapping for legacy header lines (codemod contract, planned follow-up):
+
+| Legacy line | New frontmatter |
+| --- | --- |
+| `> Plan Status: <v>` | `status: <v>` |
+| `> Review Hold: <reason>` | `status: held` + `hold: "<reason>"` |
+
 ## When Executing
 
 1. Before implementation, revise the plan directly until independent draft review finds no blocking issue, then record the draft-review evidence durably in the plan by default.
@@ -200,3 +239,7 @@ Follow-up:
 
 - <non-blocking follow-up items only; confirmed defects must not appear here>
 ```
+
+## Changelog
+
+- 2026-08-25 — Added `## Plan Frontmatter Field Table (M1 Additive Format)` (age-autonomy 01-file-ledger §4.1/§7): new plan frontmatter field set `status/mission/work-item/group/failures/verify/agent/hold/claim/claim-expires` with parser-subset hard boundary and legacy-line migration mapping. Additive only: legacy `> Plan Status:` format stays valid during the transition; rules 11/12/13 retirement and template replacement are planned follow-up work.

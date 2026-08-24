@@ -63,6 +63,7 @@ These are mission-driver-specific protected areas (in addition to AGENTS.md glob
 | `install-age.manifest` membership | `ask-first` | Adding/removing entries changes what consumers receive. Test with `./install-age.sh /tmp/test "Test"` after any change. |
 | Exit-code map (`main.js` `exitMap`) | `ask-first` | Documented in `EXECUTION-PRINCIPLE.md §11`. Status↔code mapping is a public contract for mission-driver consumers. |
 | Flow JSON contract (`flows/*.json` step types, transition schema) | `ask-first` | Documented in `tools/mission-driver/design/mission-design.md`. Changes affect all consumer missions. |
+| AGE 执法层（law 实现 `plugin/dsh/src/law/**`、策略数据 `missions/autonomy.policy.yml`、执法 CLI `tools/mission-driver/src/{plan-check,gate-check}.mjs`） | `ask-first` | 执法者自护（`docs/discussions/2026-08-24-age-autonomy-design-independent-grill.md` A2）：被执法 AI 不得改写执法者自身；变更需 plan + human 批准。本行为加严（A1/A2 裁定于 2026-08-24 经 human 委托选择落地）。 |
 
 ## Source-of-Truth Precedence
 
