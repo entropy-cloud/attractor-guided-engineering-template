@@ -107,6 +107,56 @@ Migration mapping for legacy header lines (codemod contract, planned follow-up):
 | `> Plan Status: <v>` | `status: <v>` |
 | `> Review Hold: <reason>` | `status: held` + `hold: "<reason>"` |
 
+## Plan Body Sections (M1 Additive Format)
+
+> Status: additive (age-autonomy M1, 2026-08-25). New-format body structure per `docs/design/age-autonomy/01-file-ledger.md` §4.2/§4.4; machine implementation: `tools/mission-driver/src/ledger-sections.mjs` (`scanPlanLedger` / `computeBasisHash` / `deriveCompleted`, pinned by `tools/mission-driver/test/ledger-sections.test.js` + `test/ledger-derivation.test.js`). Legacy `### Phase N` (h3) plans remain valid during the transition; normalization codemod and dual-read wiring are planned follow-up work.
+
+New-format body blocks, in document order. `## Phase <n>` is an h2 heading that may carry a trailing name (`## Phase 1 — <name>` or `## Phase 1 - <name>`); the section runs until the next h2:
+
+```md
+# <title>
+
+## Current Baseline
+## Goals
+## Non-Goals
+## Phase 1 — <name>
+- [ ] 实施项（含 Proof：测试命令）
+## Phase 2
+- [ ] ...
+## Draft Review Record
+- dispatch review #review-2026-08-25-063133-mission-driver-2026-08-25-0900-demo-plan-1-9f8e7d6c to ses_reviewer_1
+- 2026-08-25：iteration 1，共识 acceptable-as-is #review-2026-08-25-063133-mission-driver-2026-08-25-0900-demo-plan-1-9f8e7d6c
+## Closure Findings
+## Verification
+- pass test 2026-08-25-063133-mission-driver basisHash=3f2a9c1b8e7d4f60a5c2e1b9d8f7a3c6e5b4d2f1a9c8e7b6d5f4a3c2e1b9d8f7 exit=0
+## Closure
+- dispatch audit #audit-2026-08-25-063133-mission-driver-2026-08-25-0900-demo-plan-1-a1b2c3d4 to ses_auditor_1
+- accepted #audit-2026-08-25-063133-mission-driver-2026-08-25-0900-demo-plan-1-a1b2c3d4：审计结论与证据
+```
+
+The example above is fixture-isomorphic: it parses green under `scanPlanLedger` (concrete id/hash shapes; `<title>` and `<name>` are free prose). Block roles: `## Draft Review Record` / `## Verification` / `## Closure` are append-only (conclusion lines are only appended after the dispatch line; see rules below); `## Closure Findings` is optional and is a counting domain (rework items appended by an audit rejection); `## Phase <n>` sections are the execution checklist.
+
+### Three conclusion-line forms (must not be mixed)
+
+| Context | Line form | Notes |
+| --- | --- | --- |
+| plan `## Closure` | `- accepted #<id>：结论与证据` | NO `findings=` lexeme |
+| roadmap `## Deep Audit Record` | `- accepted #<id> findings=none\|items：结论` | `findings=` required |
+| plan `## Draft Review Record` | `- <date>：iteration <n>，共识 <verdict> #<id>` | pairs with the review dispatch, not with accepted lines |
+
+- Dispatch lines: `- dispatch (review|audit) #<id> to <sessionId>`, written by the supervisor/engine before dispatch; reviewers/auditors may only append conclusion lines after it.
+- ids: `#review-<runId>-<plan>-<iter>-<nonce8>` / `#audit-<runId>-<plan>-<round>-<nonce8>`; `<plan>` is the filename stem (without `.md`); `<nonce8>` is 8 hex chars (prevents pre-forged receipts). Parsed tail-anchored, so hyphen-rich stems are safe.
+- pass lines: `- pass <commandKey> <runId> basisHash=<sha256hex> exit=<code>`; a pass line satisfies mechanical verification only when `exit=0` and its `basisHash` equals the plan's current basis hash.
+- A dispatch line without a same-id conclusion line is a derived-state fact (feeds `awaitingClosure` / the completion formula), not a syntax error.
+
+### Counting-domain and append-only rules
+
+- Checkboxes are counted only at **column 0** inside `## Phase <n>` sections and `## Closure Findings`. Indented lines (e.g. indented gate-command sub-items) are outside the machine face.
+- A column-0 checkbox anywhere else is a structural error (counting-domain discipline; legacy `## Closure Gates` content must merge into the last Phase during migration).
+- Lines inside code fences never participate in counting or syntax matching — template examples written in fences do not pollute.
+- `## Draft Review Record` / `## Verification` / `## Closure` are append-only regions: lines hitting a known prefix (`dispatch` / `accepted` / `pass` / the date-iteration form) must match the pinned grammar strictly; unknown lines are tolerated as prose (legacy migration corpus keeps old notes). Write-time interception is M2 law.
+- Bounded inline review (01 §5.3): a normal review round records 2–3 consensus lines; when a dispute history exceeds ~20 lines, keep the conclusion inline and move the process to a discussion draft.
+
 ## When Executing
 
 1. Before implementation, revise the plan directly until independent draft review finds no blocking issue, then record the draft-review evidence durably in the plan by default.
@@ -242,4 +292,5 @@ Follow-up:
 
 ## Changelog
 
+- 2026-08-25 — Added `## Plan Body Sections (M1 Additive Format)` (age-autonomy 01-file-ledger §4.2/§4.4, plan `2026-08-25-0635-2` M1-WI3/WI5/WI6): canonical new-format body-block example (Phase / Draft Review Record / Closure Findings / Verification / Closure), the three pinned conclusion-line forms (plan accepted without findings / roadmap accepted with `findings=none|items` / review date-iteration line), id + pass-line grammars, counting-domain rules (column-0 discipline, fence skipping), append-only shape policy, and bounded inline review. Machine face: `tools/mission-driver/src/ledger-sections.mjs`. Additive only; examples live inside code fences so counting stays unpolluted.
 - 2026-08-25 — Added `## Plan Frontmatter Field Table (M1 Additive Format)` (age-autonomy 01-file-ledger §4.1/§7): new plan frontmatter field set `status/mission/work-item/group/failures/verify/agent/hold/claim/claim-expires` with parser-subset hard boundary and legacy-line migration mapping. Additive only: legacy `> Plan Status:` format stays valid during the transition; rules 11/12/13 retirement and template replacement are planned follow-up work.

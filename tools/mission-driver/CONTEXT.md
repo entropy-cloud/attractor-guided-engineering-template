@@ -71,6 +71,8 @@ sourcePaths（依赖模块源码路径，不同同事路径不同）
 
 **frontmatter 账本库**（age-autonomy M1-WI1/WI2）：`src/ledger-frontmatter.mjs`——零 import 纯函数模块（`parseFrontmatter`/`validatePlanFrontmatter`/`validateRoadmapFrontmatter` + 字段表常量，契约 `docs/design/age-autonomy/01-file-ledger.md` §2/§3.1/§4.1）；插件形态经 `plugin/dsh/scripts/build-bundle.mjs` ALLOWED_MODULES 的 engine→assets 复制通道共享（模块进入 import 闭包后副本自动物化）。
 
+**账本区块/派生库**（age-autonomy M1-WI3/WI5/WI6）：`src/ledger-sections.mjs`——计数域扫描（plan Phase/Closure Findings 区块 + roadmap Work Item 块，仅列 0 checkbox，代码围栏跳过）+ 内联审计区结构校验（dispatch/accepted/pass/评审结论行语法、尾部锚定 id 解析、`findings=none|items` 词法、append-only 已知前缀严格/未知行容忍）+ `computeBasisHash`/`deriveCompleted`（§5.2 五合取完成公式，reasons 逐项可解释）+ 扫描谓词族 `draftPlans/activePlans/heldPlans/closedPlans/openPlans/awaitingClosure`（可注入 `defaultVerifyKeys`）；契约 `docs/design/age-autonomy/01-file-ledger.md` §3.2/§3.3/§4.2/§4.4/§5.2，build-bundle 同通道登记（0635-3 接线前 unreachable-allowed 属预期）。
+
 ## Monitor Dashboard 前端
 
 **技术栈**: Vue 3 + Naive UI 2 + TypeScript + Vite + xterm.js + Pinia（资源监控用 Naive UI 表格，ECharts 已移除）

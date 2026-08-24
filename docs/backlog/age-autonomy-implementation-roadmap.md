@@ -26,10 +26,10 @@
 
 - [x] WI1 frontmatter 解析器：30 行内置解析；扁平标量 + 单层流式数组；块标量/嵌套对象禁用（依据 01 §2）（证据：`tools/mission-driver/src/ledger-frontmatter.mjs` + `tools/mission-driver/test/ledger-frontmatter.test.js`，plan `docs/plans/age-autonomy/2026-08-25-0635-1-m1-frontmatter-ledger-core.md`）: `done`
 - [x] WI2 plan frontmatter 最小集实现 + guide 同步（status/mission/work-item/group/failures/verify/hold/claim/claim-expires）（证据：同上 plan；guide 增补 `docs/plans/00-plan-authoring-and-execution-guide.md` § Plan Frontmatter Field Table）: `done`
-- [ ] WI3 状态格 + 完成派生公式 + 计数域 grep 共享实现（Phase + Closure Findings）: `ready`
+- [x] WI3 状态格 + 完成派生公式 + 计数域 grep 共享实现（Phase + Closure Findings）（证据：`tools/mission-driver/src/ledger-sections.mjs` + `tools/mission-driver/test/ledger-derivation.test.js`，plan `docs/plans/age-autonomy/2026-08-25-0635-2-m1-ledger-sections-derivation.md`）: `done`
 - [ ] WI4 Closure Gates 消解（codemod；可执行项并入最后 Phase；独立性/验证/一致性由公式派生）: `ready`
-- [ ] WI5 评审/审计内联区格式 + Draft Review / Closure Findings / Verification / Closure 示例与结构校验: `ready`
-- [ ] WI6 Deep Audit Record 格式 + accepted findings=none|items 机器可读: `ready`
+- [x] WI5 评审/审计内联区格式 + Draft Review / Closure Findings / Verification / Closure 示例与结构校验（证据：`tools/mission-driver/src/ledger-sections.mjs` `scanPlanLedger` + `tools/mission-driver/test/ledger-sections.test.js` + 00-guide § Plan Body Sections 示例，plan 同 WI3）: `done`
+- [x] WI6 Deep Audit Record 格式 + accepted findings=none|items 机器可读（证据：`scanRoadmapLedger` Deep Audit Record 解析 + 00-roadmap-guide § Roadmap Frontmatter And Audit Record 示例，plan 同 WI3）: `done`
 - [ ] WI7 存量 plan / roadmap codemod + 双读过渡（plan-check.mjs 同时识别旧 `> Plan Status:` / `> Review Hold:` 与新 frontmatter，env 切换）: `ready`
 - [ ] WI8 `> Last Reviewed` / `> Source Audits` / 外部 `docs/audits/` 跨文件生命周期消解（迁移并归一）: `ready`
 - [ ] WI9 plan-guide/roadmap-guide 同步新格式（rules 11/12/13 退役；count 域 grep；frontmatter 字段表）: `ready`

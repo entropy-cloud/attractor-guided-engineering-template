@@ -1,6 +1,6 @@
 # 2026-08-25-0635-2 M1 账本区块与完成派生：计数域扫描 + 内联审计区 + 扫描谓词（age-autonomy M1-WI3+WI5+WI6）
 
-> Plan Status: active
+> Plan Status: completed
 > Mission: age-autonomy-implementation
 > Work Item: M1-WI3+WI5+WI6
 > Last Reviewed: 2026-08-25
@@ -53,75 +53,75 @@
 
 ### Phase 1 - Decision：区块语法 + basisHash 规范化 + 谓词契约钉住
 
-Status: planned
+Status: completed
 Targets: 决策记录于本 plan
 Skill: none
 
 - Item Types: `Decision`
 - Prereqs: 0635-1 Phase 1（接口契约）
 
-- [ ] `Decision` **区块识别语法**：Phase 区块 = `## Phase <n>`（h2，新格式；01 §4.2 示例形态）**可带尾名**（接受 `## Phase <n> — <name>` / `## Phase <n> - <name>`——0635-3 codemod 从存量 `### Phase N - <name>` 归一产出即带尾名，语法钉死裸数字会拒绝全部迁移产物，含本批三份 plan 自身）；区块边界至下一 h2。`## Closure Findings` / `## Draft Review Record` / `## Verification` / `## Closure` / roadmap `## Deep Audit Record` / `### M<n> —` Work Item 块均为固定标题锚点。计数域 = **列 0 checkbox 行**（`^- \[ \]` / `^- \[x\]`，与 roadmap grep 通道同构）；缩进行（含 WI11 gate 命令的 2 空格缩进子项）在计数域外。**代码围栏跳过**：围栏内行不参与计数与语法匹配（新格式 plan 的描述性段落含示例 checkbox 不污染）。计数域外（列 0）出现 `- [ ]` → 结构校验 error（计数域纪律的机器面）。未知 h2 区块：容忍（描述性段落自由写，01 §3.2）但不计数、不参与 basisHash。
+- [x] `Decision` **区块识别语法**：Phase 区块 = `## Phase <n>`（h2，新格式；01 §4.2 示例形态）**可带尾名**（接受 `## Phase <n> — <name>` / `## Phase <n> - <name>`——0635-3 codemod 从存量 `### Phase N - <name>` 归一产出即带尾名，语法钉死裸数字会拒绝全部迁移产物，含本批三份 plan 自身）；区块边界至下一 h2。`## Closure Findings` / `## Draft Review Record` / `## Verification` / `## Closure` / roadmap `## Deep Audit Record` / `### M<n> —` Work Item 块均为固定标题锚点。计数域 = **列 0 checkbox 行**（`^- \[ \]` / `^- \[x\]`，与 roadmap grep 通道同构）；缩进行（含 WI11 gate 命令的 2 空格缩进子项）在计数域外。**代码围栏跳过**：围栏内行不参与计数与语法匹配（新格式 plan 的描述性段落含示例 checkbox 不污染）。计数域外（列 0）出现 `- [ ]` → 结构校验 error（计数域纪律的机器面）。未知 h2 区块：容忍（描述性段落自由写，01 §3.2）但不计数、不参与 basisHash。
       - Skill: none
-- [ ] `Decision` **basisHash 规范化规则**：取 frontmatter 原文 + 全部 Phase 区块 + Closure Findings 区块，按文档序拼接；每行去尾随空白、CRLF→LF；其余逐字保留（含缩进——勾选语义不因空白重排而漂移）。备选 raw-bytes：否决——lint/空白编辑会无谓击穿旧 pass 行。内容再变则旧 pass/全勾事实自然失效（01 §5.2「无需删除记录」语义保持）。
+- [x] `Decision` **basisHash 规范化规则**：取 frontmatter 原文 + 全部 Phase 区块 + Closure Findings 区块，按文档序拼接；每行去尾随空白、CRLF→LF；其余逐字保留（含缩进——勾选语义不因空白重排而漂移）。备选 raw-bytes：否决——lint/空白编辑会无谓击穿旧 pass 行。内容再变则旧 pass/全勾事实自然失效（01 §5.2「无需删除记录」语义保持）。
       - Skill: none
-- [ ] `Decision` **id 与行语法钉住**（正则单一实现，M2 法律复用）：id 词法 `#review-<runId>-<plan>-<iter>-<nonce8>` / `#audit-<runId>-<plan>-<round>-<nonce8>` / roadmap `#audit-<runId>-<roadmap>-<round>-<nonce8>`；`<plan>` = 文件名去 `.md`（与 flow-loader plans 扫描的文件身份同构）；`<nonce8>` = 8 hex。**解析消歧**：`<plan>` 文件名 stem 本身含连字符（本批 stem 即 8+ 个）→ id 一律**从尾部锚定解析**（末段 nonce8 → 前一段 iter/round → 再前一段为 plan/roadmap 与 runId 的合并前缀，不做贪心切分）。**三种结论行语法分别钉住**（与 Current Baseline 契约一致）：plan Closure accepted `- accepted #<id>：结论与证据`（无 findings）；roadmap Deep Audit accepted `- accepted #<id> findings=none|items：结论`；review 结论 `- <date>：iteration <n>，共识 <verdict> #<id>`；pass 行 `- pass <commandKey> <runId> basisHash=<sha256hex> exit=<code>`。结论行写者 == dispatch 行 session id 的**身份匹配**是 M2 写者门禁；本 plan 只校验同 id 配对存在的结构面。**append-only 区块形状判定策略**：严格语法只施加于命中已知前缀（`dispatch` / `accepted` / `pass` / 日期迭代形态）的行；未命中前缀的行**容忍为 prose**（0635-3 迁移会原样保留存量评审/收口区旧散文——如 `Status Note: pending` 段与旧 iteration 行；严格形状会拒绝其下游必须放行的迁移语料）；dispatch 行无同 id 结论 → 报告为**派生态事实**（喂 `awaitingClosure`/完成公式第五合取项），不是结构 error。
+- [x] `Decision` **id 与行语法钉住**（正则单一实现，M2 法律复用）：id 词法 `#review-<runId>-<plan>-<iter>-<nonce8>` / `#audit-<runId>-<plan>-<round>-<nonce8>` / roadmap `#audit-<runId>-<roadmap>-<round>-<nonce8>`；`<plan>` = 文件名去 `.md`（与 flow-loader plans 扫描的文件身份同构）；`<nonce8>` = 8 hex。**解析消歧**：`<plan>` 文件名 stem 本身含连字符（本批 stem 即 8+ 个）→ id 一律**从尾部锚定解析**（末段 nonce8 → 前一段 iter/round → 再前一段为 plan/roadmap 与 runId 的合并前缀，不做贪心切分）。**三种结论行语法分别钉住**（与 Current Baseline 契约一致）：plan Closure accepted `- accepted #<id>：结论与证据`（无 findings）；roadmap Deep Audit accepted `- accepted #<id> findings=none|items：结论`；review 结论 `- <date>：iteration <n>，共识 <verdict> #<id>`；pass 行 `- pass <commandKey> <runId> basisHash=<sha256hex> exit=<code>`。结论行写者 == dispatch 行 session id 的**身份匹配**是 M2 写者门禁；本 plan 只校验同 id 配对存在的结构面。**append-only 区块形状判定策略**：严格语法只施加于命中已知前缀（`dispatch` / `accepted` / `pass` / 日期迭代形态）的行；未命中前缀的行**容忍为 prose**（0635-3 迁移会原样保留存量评审/收口区旧散文——如 `Status Note: pending` 段与旧 iteration 行；严格形状会拒绝其下游必须放行的迁移语料）；dispatch 行无同 id 结论 → 报告为**派生态事实**（喂 `awaitingClosure`/完成公式第五合取项），不是结构 error。
       - Skill: none
-- [ ] `Decision` **谓词契约**：输入统一为文件记录（path + content）**+ 可注入 `defaultVerifyKeys`**（调用方供给 mission 默认 verify key 集——mission config 在文件记录域外，设计 §5.2 第三合取项「plan.verify（缺省 mission 默认）」的缺省解析**不内嵌**在谓词里，否则各消费方自造 fallback 即「各自带正则」病复发；`plan.verify` 缺省 ∧ 调用方未注入 → 机械验证合取项按不满足处理，reasons 显式标注 `no-verify-keys`），输出 `draftPlans/activePlans/status==held/heldPlans/closedPlans/openPlans/awaitingClosure`；`activePlans = status:active ∧ ¬completed(p)`（派生态不改写 status）；`awaitingClosure = status:active ∧ 全勾 ∧ 无有效审计回执`（先机械验证后审计派发，不触发完成）；旧格式文件（无 frontmatter）在谓词层的处理归 0635-3 双读接线，本 plan 谓词域 = 新格式文件。
+- [x] `Decision` **谓词契约**：输入统一为文件记录（path + content）**+ 可注入 `defaultVerifyKeys`**（调用方供给 mission 默认 verify key 集——mission config 在文件记录域外，设计 §5.2 第三合取项「plan.verify（缺省 mission 默认）」的缺省解析**不内嵌**在谓词里，否则各消费方自造 fallback 即「各自带正则」病复发；`plan.verify` 缺省 ∧ 调用方未注入 → 机械验证合取项按不满足处理，reasons 显式标注 `no-verify-keys`），输出 `draftPlans/activePlans/status==held/heldPlans/closedPlans/openPlans/awaitingClosure`；`activePlans = status:active ∧ ¬completed(p)`（派生态不改写 status）；`awaitingClosure = status:active ∧ 全勾 ∧ 无有效审计回执`（先机械验证后审计派发，不触发完成）；旧格式文件（无 frontmatter）在谓词层的处理归 0635-3 双读接线，本 plan 谓词域 = 新格式文件。
       - Skill: none
 
 Exit Criteria:
 
-- [ ] 四项 Decision 连同备选/残险记录于本 plan
-- [ ] `docs/logs/` updated（Phase 1 决策条目）
+- [x] 四项 Decision 连同备选/残险记录于本 plan
+- [x] `docs/logs/` updated（Phase 1 决策条目）
 
 ### Phase 2 - 实现 + 单测
 
-Status: planned
+Status: completed
 Targets: `tools/mission-driver/src/ledger-sections.mjs`（或与 0635-1 模块合并为 `ledger.mjs`——执行时按体量裁定，接口契约不变）、`tools/mission-driver/test/ledger-sections.test.js`、`tools/mission-driver/test/ledger-derivation.test.js`、build-bundle ALLOWED_MODULES 登记 + assets freshness
 Skill: none
 
 - Item Types: `Add | Proof`
 - Prereqs: Phase 1 + 0635-1 Phase 2 落地
 
-- [ ] `Add` 计数域扫描器（plan + roadmap 双面）+ 区块结构校验（计数域外 checkbox、append-only 区块形状、id 配对、findings 词法）
+- [x] `Add` 计数域扫描器（plan + roadmap 双面）+ 区块结构校验（计数域外 checkbox、append-only 区块形状、id 配对、findings 词法）
       - Skill: none
-- [ ] `Add` `computeBasisHash` + `deriveCompleted`（§5.2 公式逐合取项实现，失败 reasons 逐项可解释）+ 扫描谓词族
+- [x] `Add` `computeBasisHash` + `deriveCompleted`（§5.2 公式逐合取项实现，失败 reasons 逐项可解释）+ 扫描谓词族
       - Skill: none
-- [ ] `Add` build-bundle 登记 + assets 刷新（同 0635-1 机制）
+- [x] `Add` build-bundle 登记 + assets 刷新（同 0635-1 机制）
       - Skill: none
-- [ ] `Proof` `ledger-sections.test.js` ≥10 例：Phase（含/不含尾名两种标题）/Closure Findings/Work Item 计数正向；列 0 vs 缩进行计数边界；代码围栏内 checkbox 不计数；计数域外（列 0）checkbox 拒绝（含「guide 模板示例不污染」同构用例）；三种结论行语法正反面（plan accepted 无 findings、roadmap accepted 带 findings=none|items、review 日期迭代行；nonce8 词法、同 id 配对缺失检测）；id 尾部锚定消歧（含连字符 plan stem 用例）；pass 行语法 + basisHash 不匹配 → 不满足机械验证合取项；append-only 区块形状判定（未知前缀行容忍为 prose、不报结构 error）
+- [x] `Proof` `ledger-sections.test.js` ≥10 例：Phase（含/不含尾名两种标题）/Closure Findings/Work Item 计数正向；列 0 vs 缩进行计数边界；代码围栏内 checkbox 不计数；计数域外（列 0）checkbox 拒绝（含「guide 模板示例不污染」同构用例）；三种结论行语法正反面（plan accepted 无 findings、roadmap accepted 带 findings=none|items、review 日期迭代行；nonce8 词法、同 id 配对缺失检测）；id 尾部锚定消歧（含连字符 plan stem 用例）；pass 行语法 + basisHash 不匹配 → 不满足机械验证合取项；append-only 区块形状判定（未知前缀行容忍为 prose、不报结构 error）
       - Skill: none
-- [ ] `Proof` `ledger-derivation.test.js` ≥10 例：完成公式真值表（五合取项逐项击穿 → 不完成；全满足 → 完成）；`verify` 缺省 + `defaultVerifyKeys` 注入语义（注入集每个 key 需 pass 行；缺省且未注入 → `no-verify-keys` 不满足）；`completed` 不写回 status；谓词族互斥完备抽查（activePlans 排除派生 completed；awaitingClosure 中间态命中/不命中；closedPlans = 派生 ∨ 可写终态）；basisHash 稳定性（空白规范化用例：重排尾空白 hash 不变；内容变 hash 变）
+- [x] `Proof` `ledger-derivation.test.js` ≥10 例：完成公式真值表（五合取项逐项击穿 → 不完成；全满足 → 完成）；`verify` 缺省 + `defaultVerifyKeys` 注入语义（注入集每个 key 需 pass 行；缺省且未注入 → `no-verify-keys` 不满足）；`completed` 不写回 status；谓词族互斥完备抽查（activePlans 排除派生 completed；awaitingClosure 中间态命中/不命中；closedPlans = 派生 ∨ 可写终态）；basisHash 稳定性（空白规范化用例：重排尾空白 hash 不变；内容变 hash 变）
       - Skill: none
 
 Exit Criteria:
 
-- [ ] `node --test tools/mission-driver/test/ledger-sections.test.js tools/mission-driver/test/ledger-derivation.test.js` 全绿
-- [ ] `pnpm --prefix tools/mission-driver test` 0 失败
-- [ ] `npm --prefix plugin/dsh test` 绿（bundle freshness）
-- [ ] 完成公式五合取项各有至少一正一反用例（真值表覆盖可审计）
+- [x] `node --test tools/mission-driver/test/ledger-sections.test.js tools/mission-driver/test/ledger-derivation.test.js` 全绿
+- [x] `pnpm --prefix tools/mission-driver test` 0 失败
+- [x] `npm --prefix plugin/dsh test` 绿（bundle freshness）
+- [x] 完成公式五合取项各有至少一正一反用例（真值表覆盖可审计）
 
 ### Phase 3 - guide 增补 + roadmap 回写
 
-Status: planned
+Status: completed
 Targets: `docs/plans/00-plan-authoring-and-execution-guide.md`（区块格式示例增补）、`docs/backlog/00-roadmap-authoring-guide.md`（audit-rounds + Deep Audit Record 增补）、`tools/mission-driver/CONTEXT.md`（一行事实）、`docs/backlog/age-autonomy-implementation-roadmap.md`（WI3/WI5/WI6 状态回写）、`docs/logs/2026/08-25.md`
 Skill: none
 
 - Item Types: `Add`
 - Prereqs: Phase 2
 
-- [ ] `Add` 00-guide 增补：新格式正文区块示例（Draft Review Record / Closure Findings / Verification / Closure 的 canonical 形态，与测试 fixtures 同构；三种结论行形态分别示例）+ append-only 与计数域规则（列 0 纪律、围栏跳过）+ 内联规范有界护栏（一轮 2–3 行共识记录；争议史超 ~20 行结论内联、过程移讨论稿——01 §5.3）（additive，changelog 事件）；示例置于代码围栏内且计数域扫描器不将其计为 plan（无 frontmatter 判别，0635-1 语义）
+- [x] `Add` 00-guide 增补：新格式正文区块示例（Draft Review Record / Closure Findings / Verification / Closure 的 canonical 形态，与测试 fixtures 同构；三种结论行形态分别示例）+ append-only 与计数域规则（列 0 纪律、围栏跳过）+ 内联规范有界护栏（一轮 2–3 行共识记录；争议史超 ~20 行结论内联、过程移讨论稿——01 §5.3）（additive，changelog 事件）；示例置于代码围栏内且计数域扫描器不将其计为 plan（无 frontmatter 判别，0635-1 语义）
       - Skill: none
-- [ ] `Add` 00-roadmap-guide 增补：frontmatter `audit-rounds` 字段 + `## Deep Audit Record` 格式 + Work Item 块纯 checkbox 纪律（additive，changelog 事件）
+- [x] `Add` 00-roadmap-guide 增补：frontmatter `audit-rounds` 字段 + `## Deep Audit Record` 格式 + Work Item 块纯 checkbox 纪律（additive，changelog 事件）
       - Skill: none
-- [ ] `Add` roadmap WI3/WI5/WI6 状态回写（`todo → ready` 于 draft review 通过时；`ready → done` 于本 plan closure audit 通过后，按 roadmap 状态块纪律；gate 面解释同 0635-1 Phase 3——per-WI gate 面 = L1 链内新测试族，WI11 为 milestone backstop）
+- [x] `Add` roadmap WI3/WI5/WI6 状态回写（`todo → ready` 于 draft review 通过时；`ready → done` 于本 plan closure audit 通过后，按 roadmap 状态块纪律；gate 面解释同 0635-1 Phase 3——per-WI gate 面 = L1 链内新测试族，WI11 为 milestone backstop）
       - Skill: none
 
 Exit Criteria:
 
-- [ ] guide/roadmap-guide 示例与解析器语法一致（fixtures 同构对照）
-- [ ] `docs/logs/` updated
-- [ ] roadmap WI3/WI5/WI6 状态按纪律回写
+- [x] guide/roadmap-guide 示例与解析器语法一致（fixtures 同构对照）
+- [x] `docs/logs/` updated
+- [x] roadmap WI3/WI5/WI6 状态按纪律回写
 
 ## Draft Review Record
 
@@ -130,15 +130,15 @@ Exit Criteria:
 
 ## Closure Gates
 
-- [ ] in-scope behavior is complete（扫描器 + 区块校验 + basisHash + 完成派生 + 谓词族 + guide 增补，测试可复跑）
-- [ ] relevant docs are aligned（00-guide、00-roadmap-guide、CONTEXT.md、roadmap 回写、logs）
-- [ ] verification has run（两个新测试文件 + `pnpm --prefix tools/mission-driver test` + `npm --prefix plugin/dsh test`）
-- [ ] scoped verification is not conflated with full verification（跑全量 engine + plugin 链，无 scoped 降级）
-- [ ] no in-scope item downgraded to deferred/follow-up
-- [ ] independent draft review completed and recorded
-- [ ] text consistency verified: status, phases, gates, and log all agree
-- [ ] closure audit was independent
-- [ ] closure evidence exists in files
+- [x] in-scope behavior is complete（扫描器 + 区块校验 + basisHash + 完成派生 + 谓词族 + guide 增补，测试可复跑）
+- [x] relevant docs are aligned（00-guide、00-roadmap-guide、CONTEXT.md、roadmap 回写、logs）
+- [x] verification has run（两个新测试文件 + `pnpm --prefix tools/mission-driver test` + `npm --prefix plugin/dsh test`）
+- [x] scoped verification is not conflated with full verification（跑全量 engine + plugin + web typecheck/build + lint:prompts 链，无 scoped 降级）
+- [x] no in-scope item downgraded to deferred/follow-up
+- [x] independent draft review completed and recorded
+- [x] text consistency verified: status, phases, gates, and log all agree
+- [x] closure audit was independent
+- [x] closure evidence exists in files
 
 ## Deferred But Adjudicated
 
@@ -156,6 +156,14 @@ Exit Criteria:
 
 ## Closure
 
-Status Note: pending
+Status Note: All three phases executed in one session (2026-08-25); every exit criterion and closure gate verified against the live diff and real commands. Module lands as a separate `src/ledger-sections.mjs` (Phase 2 Targets 允许的裁量：0635-1 模块已 235 行且接口契约不变，合并为 ledger.mjs 反而破坏 0635-1 已落地的 import 面)。Independent closure audit verdict is recorded below by the flow-dispatched CLOSURE_AUDIT step.
 
-Closure Audit Evidence: pending
+Closure Audit Evidence:
+
+- `node --test tools/mission-driver/test/ledger-sections.test.js tools/mission-driver/test/ledger-derivation.test.js` → 36 tests / 0 fail（sections 15 + derivation 21，均 ≥10；完成公式五合取项各有独立击破用例：status-not-active / unchecked-items / missing-pass + basis-hash-mismatch + exit≠0 / no-audit-receipt / invalid-dispatch-register，全满足正向 1 例）
+- `pnpm --prefix tools/mission-driver test` → 718 pass / 0 fail（prompt-check OK；两新测试族已常驻 L1 链 = WI3/WI5/WI6 的 Verification Gate 面，WI11 为 milestone backstop）
+- `npm --prefix plugin/dsh test` → 133 pass / 0 fail；closure ok: 19 modules reachable ⊆ allowed set (21)；freshness ok (36 files content-equal)——`ledger-frontmatter.mjs` + `ledger-sections.mjs` 列 unreachable-allowed 属 Phase 1 Decision 1/0635-1 同型预告的预期态，非失败
+- `pnpm --prefix tools/mission-driver/web run typecheck` / `run build` → 绿（web/dist 无 diff）；`pnpm --prefix tools/mission-driver run lint:prompts` → OK
+- guide 示例同构 live 核实：00-guide `## Plan Body Sections` 围栏示例经 `scanPlanLedger` → 2 phases、Closure/Draft Review 配对各 1、pass 行 1、0 error；00-roadmap-guide Deep Audit Record 示例经 `scanRoadmapLedger` → findings=none 配对 1、0 error；两 guide 围栏外列 0 checkbox 新增 0
+- live 对账：`scanRoadmapLedger` 对 roadmap 计数 M1 2/11 + M2 0/13 + M3 0/7 + M4 0/5 + M5 0/4 = 40 total / 2 checked，与 `grep -c "^- \[ \]"`=38 + `grep -c "^- \[x\]"`=2 逐项一致（grep 通道同构）
+- Docs: 00-guide `## Plan Body Sections (M1 Additive Format)` + Changelog 第 2 条；00-roadmap-guide `## Roadmap Frontmatter And Audit Record (M1 Additive Format)` + Changelog 首条；CONTEXT.md 账本区块/派生库一段；roadmap WI3/WI5/WI6 `[x] done`（证据指针已附）；`docs/logs/2026/08-25.md` 两条目（Phase 1 决策 + 执行收口）

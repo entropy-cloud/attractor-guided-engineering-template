@@ -67,6 +67,38 @@ Status transitions:
 - After independent draft review passes: `todo` -> `ready`
 - After independent closure audit passes: `ready` -> `done`. Do NOT mark `done` before closure audit passes.
 
+## Roadmap Frontmatter And Audit Record (M1 Additive Format)
+
+> Status: additive (age-autonomy M1, 2026-08-25). Format contract: `docs/design/age-autonomy/01-file-ledger.md` §3.1/§3.2/§3.3; machine implementation: `tools/mission-driver/src/ledger-sections.mjs` (`scanRoadmapLedger` + `validateRoadmapFrontmatter` in `ledger-frontmatter.mjs`). Roadmaps without frontmatter remain valid during the transition; migration codemod is planned follow-up work.
+
+### frontmatter `audit-rounds`
+
+```yaml
+---
+audit-rounds: 2          # 已消耗的 mission 级 Deep Audit 轮次（跨 run 跨 session 累计）
+---
+```
+
+- `audit-rounds` counts only **mission-level Deep Audit rounds** (dispatches recorded under `## Deep Audit Record`), accumulated across runs; plan-level Closure Audits do not consume it. The limit (`maxAuditRounds`) stays in flow/mission config — only the counter lives in the ledger. Non-negative integer; the only allowed roadmap frontmatter field.
+
+### `## Deep Audit Record` (optional; append-only)
+
+```md
+## Deep Audit Record
+- dispatch audit #audit-2026-08-25-063133-mission-driver-age-roadmap-1-1a2b3c4d to ses_auditor_1
+- accepted #audit-2026-08-25-063133-mission-driver-age-roadmap-1-1a2b3c4d findings=none：结论（该 auditorSessionId 写入）
+```
+
+The example above is fixture-isomorphic: it parses green under `scanRoadmapLedger` (concrete id shape).
+
+- The accepted line MUST carry `findings=none|items` after the id (machine-readable verdict; distinct from the plan-Closure accepted form, which has no findings lexeme). Findings land as unchecked roadmap work items (or plan Closure Findings); closing them = ticking the checkbox.
+- Same dispatch/conclusion pairing, session-id, and append-only rules as plan-level records (see `docs/plans/00-plan-authoring-and-execution-guide.md` § Plan Body Sections).
+
+### Work Item block pure-checkbox discipline
+
+- Work Item status lines live only inside `### M<n> — <title>` milestone blocks, as column-0 checkboxes (`- [ ]` / `- [x]`), optionally with a trailing ``: `todo|ready|done` `` status suffix. todo/done counting, reconciliation, and UI rendering share this single grep channel (`grep -c "^- \[ \]"`).
+- Indented lines (e.g. verification-gate command sub-items) are outside the machine face and are not counted. Column-0 checkboxes outside milestone blocks are structural errors. Examples inside code fences never count.
+
 ## Structure
 
 A roadmap usually contains, in order:
@@ -120,3 +152,7 @@ When multiple roadmaps exist, list all of them in `docs/backlog/README.md` with 
 - AI re-arbitrating priority or inventing work items instead of executing the human-set order
 - Tracking "active work / current blocker / AI autonomy" as fields in `project-context.md` — these are high-churn and go stale; read work-in-progress from active work items instead
 - Calling a roadmap unit a "phase"
+
+## Changelog
+
+- 2026-08-25 — Added `## Roadmap Frontmatter And Audit Record (M1 Additive Format)` (age-autonomy 01-file-ledger §3.1/§3.2/§3.3, plan `2026-08-25-0635-2` M1-WI6): roadmap frontmatter `audit-rounds` semantics, `## Deep Audit Record` dispatch/accepted format with required `findings=none|items`, and the Work Item block pure-checkbox counting discipline. Additive only; examples live inside code fences so counting stays unpolluted.
