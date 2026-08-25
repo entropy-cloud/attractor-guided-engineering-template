@@ -14,9 +14,10 @@
  * observation to the observation-log face (`_tmp/law-observations.jsonl`,
  * one JSON line per matched gate) + a logger one-liner.
  *
- * Posture: the current policy registers only observe-mode gates — records,
- * never blocks. The enforce-deny return path exists so later plans can flip
- * per-gate modes without touching this adapter (02 §6 rolling discipline).
+ * Posture: gate modes come from the policy (observe | enforce — the kernel
+ * records observe would-denies without blocking; the 0815-2/3 + WI21 batches
+ * register enforce faces). The enforce-deny return path rides the policy, not
+ * this adapter (02 §6 rolling discipline).
  * Any internal failure fails OPEN (allow + warn, plan-status-gate D1
  * lineage): a gate crash must never break the host tool pipeline.
  *
@@ -29,6 +30,7 @@ import { appendFileSync, mkdirSync, readFileSync, readdirSync, realpathSync, sta
 import { dirname, join, resolve } from 'node:path'
 import { evaluateGates } from '../../assets/src/law-core.mjs'
 import { loadPolicyFile, policyAgentNames, resolveMaxAuditRounds } from '../../assets/src/law-policy.mjs'
+import { isLawProtectedPath } from '../../assets/src/law-rules.mjs'
 import type { Context } from '@deepseek-ai/cordis'
 import type { PreToolDecision, ToolExecution } from '@deepseek-ai/dsh-tools'
 
@@ -223,22 +225,41 @@ export function discoverLawContext(targetPath: string, io: LawGateIo, cache = ne
 function loadLawContextAt(ancestor: string, io: LawGateIo): MissionLawContext | null {
   const missions = io.listDirEntries(join(ancestor, 'missions'))
   if (missions === null) return null
+  const parsed: Array<{ file: string; mission: {
+    autonomyPolicy?: unknown
+    plansDir?: unknown
+    roadmapPath?: unknown
+    name?: unknown
+    commands?: unknown
+    flow?: unknown
+  } }> = []
   for (const entry of missions) {
     if (!entry.endsWith('.json')) continue
     const text = io.readTextFile(join(ancestor, 'missions', entry))
     if (text === null) continue
-    let mission: {
-      autonomyPolicy?: unknown
-      plansDir?: unknown
-      roadmapPath?: unknown
-      commands?: unknown
-      flow?: unknown
-    }
     try {
-      mission = JSON.parse(text) as typeof mission
+      parsed.push({ file: entry, mission: JSON.parse(text) })
     } catch {
       continue
     }
+  }
+  // one-mission-one-roadmap boundary (01-file-ledger boundary clause,
+  // M2-WI21): a roadmap declared by two missions makes the mission set
+  // ambiguous — this ancestor contributes no law context at all (fail-fast
+  // load face; the engine mission-check CLI surfaces the structured error
+  // naming the conflicting missions).
+  const roadmapClaims = new Map<string, string[]>()
+  for (const { file, mission } of parsed) {
+    if (typeof mission.roadmapPath === 'string' && mission.roadmapPath !== '') {
+      const abs = toPosix(resolve(ancestor, mission.roadmapPath))
+      if (!roadmapClaims.has(abs)) roadmapClaims.set(abs, [])
+      roadmapClaims.get(abs)!.push(typeof mission.name === 'string' && mission.name !== '' ? mission.name : file)
+    }
+  }
+  for (const names of roadmapClaims.values()) {
+    if (names.length > 1) return null
+  }
+  for (const { mission } of parsed) {
     if (typeof mission.autonomyPolicy !== 'string' || mission.autonomyPolicy === '') continue
     const policyFile = resolve(ancestor, mission.autonomyPolicy)
     const loaded = (() => {
@@ -271,6 +292,76 @@ function loadLawContextAt(ancestor: string, io: LawGateIo): MissionLawContext | 
     }
   }
   return null
+}
+
+// ── plans-roots passive scan (M2-WI21 path-guardrail domain face) ───────────
+
+/**
+ * Known plans roots at one ancestor: default docs/plans + missions/*.json
+ * plansDir values (plan-status-gate knownPlansRootsAt precedent; malformed
+ * mission configs contribute zero roots; extends deliberately UNRESOLVED —
+ * light parse).
+ */
+function knownPlansRootsAt(ancestor: string, io: LawGateIo): string[] {
+  const roots = [toPosix(join(ancestor, 'docs', 'plans'))]
+  const missions = io.listDirEntries(join(ancestor, 'missions'))
+  if (missions !== null) {
+    for (const entry of missions) {
+      if (!entry.endsWith('.json')) continue
+      const text = io.readTextFile(join(ancestor, 'missions', entry))
+      if (text === null) continue
+      try {
+        const mission = JSON.parse(text) as { plansDir?: unknown }
+        if (typeof mission.plansDir === 'string' && mission.plansDir !== '') {
+          roots.push(toPosix(resolve(ancestor, mission.plansDir)))
+        }
+      } catch {
+        // malformed mission config contributes no plans root
+      }
+    }
+  }
+  return roots
+}
+
+/**
+ * Plans roots across EVERY ancestor of the target (the path-guardrail legal
+ * domain union — 02 §4.7 via the passive-scan precedent). Per-ancestor
+ * results cached like law contexts.
+ */
+export function discoverPlansRoots(targetPath: string, io: LawGateIo, cache = new Map<string, string[]>()): string[] {
+  const roots: string[] = []
+  for (const ancestor of ancestorsOf(targetPath)) {
+    if (!cache.has(ancestor)) cache.set(ancestor, knownPlansRootsAt(ancestor, io))
+    roots.push(...cache.get(ancestor)!)
+  }
+  return roots
+}
+
+/**
+ * Plan records under the governing mission's plansDir (recursively, capped) —
+ * the approved-project exception corpus for the P8 face. Read fresh per
+ * protected-path evaluation (plans change during runs; protected writes are
+ * rare enough that the walk is cheap).
+ */
+export function readPlanRecordsUnder(dir: string, io: LawGateIo, cap = 200): Array<{ text: string, path: string }> {
+  const records: Array<{ text: string, path: string }> = []
+  const walk = (d: string, depth: number): void => {
+    if (records.length >= cap || depth > 4) return
+    const entries = io.listDirEntries(d)
+    if (entries === null) return
+    for (const name of entries) {
+      const p = join(d, name)
+      if (io.isDirectory(p)) {
+        walk(p, depth + 1)
+      } else if (name.endsWith('.md')) {
+        const text = io.readTextFile(p)
+        if (text !== null) records.push({ text, path: toPosix(p) })
+        if (records.length >= cap) return
+      }
+    }
+  }
+  walk(dir, 0)
+  return records
 }
 
 // ── observation sink ────────────────────────────────────────────────────────
@@ -307,6 +398,7 @@ export function evaluateLawCall(
   actor: { actor?: LawActorFace },
   io: LawGateIo,
   cache = new Map<string, MissionLawContext | null>(),
+  rootsCache = new Map<string, string[]>(),
 ): { decision: 'allow' | 'deny'; reason: string | null; records: LawObservationRecord[]; lawCtx: MissionLawContext | null } {
   const extracted = extractLawAction(call, io)
   if (extracted === null) return { decision: 'allow', reason: null, records: [], lawCtx: null }
@@ -314,6 +406,20 @@ export function evaluateLawCall(
 
   const lawCtx = discoverLawContext(resolve(targetPath), io, cache)
   if (lawCtx === null) return { decision: 'allow', reason: null, records: [], lawCtx: null }
+
+  // Roadmap registry for the work-item registration face (M2-WI21): read
+  // fresh per evaluation — a cached copy could deny/admit against a stale
+  // registry once gates run enforce.
+  const roadmapText = lawCtx.roadmapPath !== '' ? io.readTextFile(lawCtx.roadmapPath) : null
+
+  // P8 face (M2-WI21 law-self-protection): protected-path writes need the
+  // approved-project corpus to evaluate the active-plan exception — inject
+  // the governing mission's plan records (absent corpus = fail-closed deny
+  // inside the rule, the adversarial posture).
+  const protectedPlans =
+    lawCtx.plansDir !== '' && isLawProtectedPath(resolve(targetPath), lawCtx.projectRoot)
+      ? readPlanRecordsUnder(lawCtx.plansDir, io)
+      : null
 
   const out = evaluateGates(
     {
@@ -333,6 +439,10 @@ export function evaluateLawCall(
         agentNames: lawCtx.agentNames,
         commands: lawCtx.commands,
         maxAuditRounds: lawCtx.maxAuditRounds,
+        projectRoot: lawCtx.projectRoot,
+        plansRoots: discoverPlansRoots(resolve(targetPath), io, rootsCache),
+        ...(roadmapText !== null ? { roadmapText } : {}),
+        ...(protectedPlans !== null ? { plans: protectedPlans } : {}),
       },
     },
   )
@@ -370,10 +480,11 @@ export interface LawGateLogger {
  */
 export function registerLawGate(ctx: Context, logger?: LawGateLogger, io: LawGateIo = fsLawGateIo): () => void {
   const cache = new Map<string, MissionLawContext | null>()
+  const rootsCache = new Map<string, string[]>()
   const listener = async (exec: ToolExecution, next: () => Promise<PreToolDecision>): Promise<PreToolDecision> => {
     let result: ReturnType<typeof evaluateLawCall>
     try {
-      result = evaluateLawCall({ name: exec.name, arguments: exec.arguments }, resolveLawActor(exec), io, cache)
+      result = evaluateLawCall({ name: exec.name, arguments: exec.arguments }, resolveLawActor(exec), io, cache, rootsCache)
     } catch (err) {
       // Fail-open (D1 lineage): a gate crash must never break the host pipeline.
       logger?.warn?.(`${LAW_TAG} internal error — failing open`, {
@@ -416,5 +527,5 @@ export function registerLawGate(ctx: Context, logger?: LawGateLogger, io: LawGat
 
 /** Re-exported for the service mount log. */
 export function lawGateMountSummary(): string {
-  return 'tools/pre-execute law gate (M2-WI12): policy-driven evaluate over write/edit/str_replace_editor via the bundled law kernel; actor=exec.agent.id (role not inferable — structural-subset posture); observe-only recording to _tmp/law-observations.jsonl; per-rule and whole-face fail-open (plan 0815-1)'
+  return 'tools/pre-execute law gate (M2-WI12 + WI21): policy-driven evaluate over write/edit/str_replace_editor via the bundled law kernel; actor=exec.agent.id (role not inferable — structural-subset posture); ctx carries plansDir/roadmapPath/agentNames/commands/maxAuditRounds + WI21 faces (projectRoot, passive-scan plansRoots, fresh roadmapText for work-item registration, mission plan records for protected-path P8 evaluations); one-mission-one-roadmap conflicts contribute no law context; per-rule and whole-face fail-open (plans 0815-1/0950-1)'
 }

@@ -145,6 +145,51 @@ export function discoverOwningMission(planAbs) {
   }
 }
 
+/**
+ * One-mission-one-roadmap boundary check (01-file-ledger boundary clause,
+ * M2-WI21): scan every missions/*.json in one directory and verify no
+ * roadmapPath is declared by two missions (mission config → roadmap must be a
+ * unique reverse mapping). Malformed configs contribute no claim (the
+ * passive-scan zero-root precedent). fail-fast load face, not a write-time
+ * interception.
+ * @param {string} missionsDir absolute path to a missions/ directory
+ * @returns {{ ok: boolean, conflicts: Array<{ roadmapPath: string, missions: string[] }>, errors: string[] }}
+ */
+export function checkRoadmapUniqueness(missionsDir) {
+  const claims = new Map();
+  let entries = [];
+  try {
+    entries = readdirSync(missionsDir);
+  } catch {
+    return { ok: true, conflicts: [], errors: [] };
+  }
+  for (const entry of entries) {
+    if (!entry.endsWith(".json")) continue;
+    try {
+      const raw = JSON.parse(readFileSync(join(missionsDir, entry), "utf8"));
+      if (raw !== null && typeof raw === "object" && typeof raw.roadmapPath === "string" && raw.roadmapPath !== "") {
+        const resolved = toPosix(resolve(missionsDir, "..", raw.roadmapPath));
+        if (!claims.has(resolved)) claims.set(resolved, []);
+        claims.get(resolved).push(String(raw.name ?? entry.replace(/\.json$/, "")));
+      }
+    } catch {
+      // malformed mission config contributes no roadmap claim
+    }
+  }
+  const conflicts = [...claims.entries()]
+    .filter(([, names]) => names.length > 1)
+    .map(([roadmapPath, missions]) => ({ roadmapPath, missions }));
+  const errors = conflicts.map(
+    (c) =>
+      `one-mission-one-roadmap violated: roadmap ${c.roadmapPath} is declared by multiple missions (${c.missions.join(", ")}) — a roadmap belongs to exactly one mission (01-file-ledger boundary)`,
+  );
+  return { ok: errors.length === 0, conflicts, errors };
+}
+
+function toPosix(p) {
+  return String(p).split("\\").join("/");
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [file, root] = process.argv.slice(2);
   if (!file) {
@@ -153,6 +198,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   }
   try {
     const mission = loadMission(file, root);
+    // Sibling boundary check (M2-WI21): one mission per roadmap across the
+    // whole missions/ directory — a load-face error, exit 1.
+    const uniqueness = checkRoadmapUniqueness(dirname(resolve(file)));
+    if (!uniqueness.ok) {
+      console.error(uniqueness.errors.join("\n"));
+      process.exit(1);
+    }
     console.log(JSON.stringify({ valid: true, name: mission.name, file }, null, 2));
   } catch (e) {
     console.error(e.message);

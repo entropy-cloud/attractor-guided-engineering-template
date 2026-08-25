@@ -1,7 +1,9 @@
 # AGE autonomy policy — the single declarative law file (02-rule-law §3).
 # Mission: age-autonomy-implementation (paths resolve per mission context:
-# {{plansDir}} / {{roadmapPath}}; this file is law data — changes only through
-# a plan's Add item, never ad-hoc edits; P8 self-protection is WI21 scope).
+# {{plansDir}} / {{roadmapPath}} / {{projectRoot}}; this file is law data —
+# changes only through a plan's Add item, never ad-hoc edits; P8
+# self-protection denies AI writes here except human / CI / approved-project
+# — the WI21 plan itself is the active approved-project reference).
 #
 # limits precedence: policy is authoritative, mission config (engine
 # flow.maxAuditRounds) is the fallback — one authority + one fallback per
@@ -13,12 +15,18 @@ limits:
   maxAuditRounds: 3
   maxFailures: 3
 gates:
-  # Seed structural rule only (0815-1); the frontmatter-tightening enforce
-  # flip belongs to the M2 path-guard plan (WI21) — stays observe.
+  # Seed structural rule (0815-1) + the M2-WI21 increments: the work-item
+  # registration face (composite-label grammar denies from the label alone;
+  # registry reconciliation runs when ctx.roadmapText is injected — absent →
+  # note, never a deny, 02 §2 unobservable-facts discipline) and the
+  # frontmatter-tightening enforce flip this plan owns per the 0815-1
+  # comment hand-off. Posture: enforce — narrow decidable facts (field-set
+  # legality / counting-domain / label grammar), same ①②③ reasoning as the
+  # 0815-3 Phase 1 ruling; corpus compatibility pinned by the truth table.
   - id: plan-structure
     match: "{{plansDir}}/**/*.md"
     rule: plan-structure
-    mode: observe
+    mode: enforce
   # Three hard gates — direct enforce authorization (02 §6 exception clause:
   # post-P0 hard gates skip the observe ramp; P0 = the M1 ledger migration
   # closed with roadmap WI1–WI11 all ticked and 807 tests green). Decision
@@ -75,6 +83,39 @@ gates:
   - id: append-only-records-roadmap
     match: "{{roadmapPath}}"
     rule: record-append-only
+    mode: enforce
+  # Path & structure guardrails + P8 self-protection (M2-WI21, plan
+  # docs/plans/age-autonomy/2026-08-25-0950-1). Posture: enforce — every deny
+  # face is a narrow decidable fact (plansDir domain membership / registered-
+  # line write-back shape / protected-path membership), no matcher ambiguity,
+  # same reasoning as the 0815-3 Phase 1 ruling; the observe ramp guards
+  # against judgment-call false kills these faces do not have.
+  # law-self-protection is P8 — the ONLY unconditional adversarial face
+  # (02 §2/§4.7): observe-mode would let the enforced rewrite the enforcer
+  # during the ramp itself, so it registers enforce directly.
+  - id: path-guardrail
+    match: "action:write"                # plan-shaped .md writes, any location (02 §4.7)
+    rule: path-guardrail
+    mode: enforce
+  - id: roadmap-write-guard
+    match: "{{roadmapPath}}"
+    rule: roadmap-write-guard
+    mode: enforce
+  - id: law-self-protection-law
+    match: "{{projectRoot}}/plugin/dsh/src/law/**"
+    rule: law-self-protection
+    mode: enforce
+  - id: law-self-protection-policy
+    match: "{{projectRoot}}/missions/autonomy.policy.yml"
+    rule: law-self-protection
+    mode: enforce
+  - id: law-self-protection-plan-check
+    match: "{{projectRoot}}/tools/mission-driver/src/plan-check.mjs"
+    rule: law-self-protection
+    mode: enforce
+  - id: law-self-protection-gate-check
+    match: "{{projectRoot}}/tools/mission-driver/src/gate-check.mjs"
+    rule: law-self-protection
     mode: enforce
 triggers:
   # Execution semantics belong to M3/WI26 — schema-pinned syntax only.

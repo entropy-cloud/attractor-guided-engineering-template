@@ -561,8 +561,12 @@ function matchPatternError(pattern) {
     }
     return null;
   }
-  if (!pattern.startsWith("{{plansDir}}") && !pattern.startsWith("{{roadmapPath}}")) {
-    return `path match must start with {{plansDir}} or {{roadmapPath}} (got "${pattern}")`;
+  if (
+    !pattern.startsWith("{{plansDir}}") &&
+    !pattern.startsWith("{{roadmapPath}}") &&
+    !pattern.startsWith("{{projectRoot}}")
+  ) {
+    return `path match must start with {{plansDir}}, {{roadmapPath}}, or {{projectRoot}} (got "${pattern}")`;
   }
   return null;
 }
@@ -805,14 +809,16 @@ export function loadPolicyFile(file) {
 }
 
 /**
- * Resolve {{plansDir}} / {{roadmapPath}} in any policy string against the
- * mission context (02 §3: one project policy, paths follow the mission).
- * Single-brace tokens (poolKey's {projectRoot}) are deliberately untouched.
+ * Resolve {{plansDir}} / {{roadmapPath}} / {{projectRoot}} in any policy
+ * string against the mission context (02 §3: one project policy, paths follow
+ * the mission). Single-brace tokens (poolKey's {projectRoot}) are deliberately
+ * untouched.
  */
 export function resolvePolicyPlaceholders(text, ctx = {}) {
   let out = String(text);
   if (typeof ctx.plansDir === "string" && ctx.plansDir !== "") out = out.split("{{plansDir}}").join(ctx.plansDir);
   if (typeof ctx.roadmapPath === "string" && ctx.roadmapPath !== "") out = out.split("{{roadmapPath}}").join(ctx.roadmapPath);
+  if (typeof ctx.projectRoot === "string" && ctx.projectRoot !== "") out = out.split("{{projectRoot}}").join(ctx.projectRoot);
   return out;
 }
 

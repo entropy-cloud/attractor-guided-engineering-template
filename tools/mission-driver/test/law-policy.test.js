@@ -56,7 +56,9 @@ describe("real instance", () => {
     assert.equal(r.policy.version, 1);
     assert.deepEqual(r.policy.limits, { maxAuditRounds: 3, maxFailures: 3 });
     assert.deepEqual(r.policy.gates, [
-      { id: "plan-structure", match: "{{plansDir}}/**/*.md", rule: "plan-structure", mode: "observe" },
+      // WI21: the frontmatter-tightening enforce flip this plan owns
+      // (0815-1 comment hand-off) + the work-item registration increment.
+      { id: "plan-structure", match: "{{plansDir}}/**/*.md", rule: "plan-structure", mode: "enforce" },
       { id: "closure-audit-binding", match: "{{plansDir}}/**/*.md", rule: "closure-audit-binding", mode: "enforce" },
       { id: "roadmap-audit-binding", match: "{{roadmapPath}}", rule: "roadmap-audit-binding", mode: "enforce" },
       { id: "writer-identity", match: "{{plansDir}}/**/*.md", rule: "writer-identity", mode: "enforce" },
@@ -70,6 +72,16 @@ describe("real instance", () => {
       { id: "meter-guard", match: "{{roadmapPath}}", rule: "audit-rounds-overflow", mode: "enforce" },
       { id: "append-only-records", match: "{{plansDir}}/**/*.md", rule: "record-append-only", mode: "enforce" },
       { id: "append-only-records-roadmap", match: "{{roadmapPath}}", rule: "record-append-only", mode: "enforce" },
+      // path & structure guardrails + P8 self-protection (0950-1 / M2-WI21):
+      // path-guardrail self-domains on plan-shaped .md writes registered
+      // through the action face; law-self-protection covers the 02 §4.7
+      // literal protected families via four {{projectRoot}} match entries.
+      { id: "path-guardrail", match: "action:write", rule: "path-guardrail", mode: "enforce" },
+      { id: "roadmap-write-guard", match: "{{roadmapPath}}", rule: "roadmap-write-guard", mode: "enforce" },
+      { id: "law-self-protection-law", match: "{{projectRoot}}/plugin/dsh/src/law/**", rule: "law-self-protection", mode: "enforce" },
+      { id: "law-self-protection-policy", match: "{{projectRoot}}/missions/autonomy.policy.yml", rule: "law-self-protection", mode: "enforce" },
+      { id: "law-self-protection-plan-check", match: "{{projectRoot}}/tools/mission-driver/src/plan-check.mjs", rule: "law-self-protection", mode: "enforce" },
+      { id: "law-self-protection-gate-check", match: "{{projectRoot}}/tools/mission-driver/src/gate-check.mjs", rule: "law-self-protection", mode: "enforce" },
     ]);
     assert.deepEqual(policyAgentNames(r.policy), ["drafter", "reviewer", "auditor", "executor"]);
     assert.equal(r.policy.triggers.length, 7);

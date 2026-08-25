@@ -25,7 +25,7 @@
 
 import { createHash } from "node:crypto";
 import { validatePlanFrontmatter } from "./ledger-frontmatter.mjs";
-import { scanPlanLedger } from "./ledger-sections.mjs";
+import { scanPlanLedger, scanRoadmapLedger } from "./ledger-sections.mjs";
 import { readPlanStatus } from "./ledger-dualread.mjs";
 
 export const PROPOSED_ACTION_TYPES = [
@@ -108,7 +108,8 @@ export function parseProposedAction(input) {
  * ctx: { plansDir?: string, roadmapPath?: string, agentNames?: string[],
  *         commands?: Record<string,string>, maxAuditRounds?: number,
  *         plans?: Array<{text: string, path?: string}>, now?: number | string,
- *         defaultVerifyKeys?: string[] }
+ *         defaultVerifyKeys?: string[], roadmapText?: string,
+ *         projectRoot?: string, plansRoots?: string[] }
  */
 const RULES = new Map();
 
@@ -133,7 +134,7 @@ export function getRule(id) {
 
 // ── gate matching ───────────────────────────────────────────────────────────
 
-export const POLICY_PLACEHOLDERS = ["{{plansDir}}", "{{roadmapPath}}"];
+export const POLICY_PLACEHOLDERS = ["{{plansDir}}", "{{roadmapPath}}", "{{projectRoot}}"];
 
 function globToRegExp(glob) {
   let out = "";
@@ -170,9 +171,10 @@ function toPosix(p) {
  * Does one gate `match` pattern apply to this action under the mission ctx?
  *   - "action:<type>" matches the action type (terminal claims are actions,
  *     not file paths — 02 §3).
- *   - "{{plansDir}}/…"/"{{roadmapPath}}" path globs resolve placeholders from
- *     ctx, then glob-match the action path (posix-normalized). Unresolvable
- *     placeholders never match (gate flagged via notes at evaluate level).
+ *   - "{{plansDir}}/…"/"{{roadmapPath}}"/"{{projectRoot}}/…" path globs
+ *     resolve placeholders from ctx, then glob-match the action path
+ *     (posix-normalized). Unresolvable placeholders never match (gate flagged
+ *     via notes at evaluate level).
  */
 export function matchGate(pattern, action, ctx = {}) {
   if (typeof pattern !== "string" || pattern === "") return false;
@@ -184,7 +186,7 @@ export function matchGate(pattern, action, ctx = {}) {
   let unresolved = false;
   for (const ph of POLICY_PLACEHOLDERS) {
     if (!resolved.includes(ph)) continue;
-    const key = ph === "{{plansDir}}" ? "plansDir" : "roadmapPath";
+    const key = ph === "{{plansDir}}" ? "plansDir" : ph === "{{roadmapPath}}" ? "roadmapPath" : "projectRoot";
     const val = ctx[key];
     if (typeof val !== "string" || val === "") {
       unresolved = true;
@@ -194,6 +196,116 @@ export function matchGate(pattern, action, ctx = {}) {
   }
   if (unresolved) return false;
   return globToRegExp(toPosix(resolved)).test(toPosix(action.path));
+}
+
+// ── work-item composite label grammar + registration predicate (M2-WI21) ────
+//
+// Composite-label grammar ruling (0815-3 Non-Goal hand-off, adjudicated here):
+// legal = `M<n>-WI<a>` single, or `M<n>-WI<a>+WI<b>+…` composite where the
+// FIRST token carries the milestone prefix and subsequent bare `WI<m>` tokens
+// inherit it; subsequent tokens that explicitly repeat an `M<n>-` prefix are
+// ACCEPTED as the equivalent expansion (corpus-divergence tolerance). Each
+// expanded `M<n>-WI<m>` pair must hit the scanRoadmapLedger registry at
+// exactly that milestone — a wrong-but-existing milestone number (e.g.
+// M3-WI21) misses the (milestone, id) pair and denies.
+
+const WI_FIRST_TOKEN_RE = /^M(\d+)-WI(\d+)$/;
+const WI_BARE_TOKEN_RE = /^WI(\d+)$/;
+
+/**
+ * Expand one work-item label into (milestone, id) pairs.
+ * @returns {{ ok: true, items: Array<{ milestone: number, wi: string }> } |
+ *           { ok: false, error: string }}
+ */
+export function expandWorkItemLabel(label) {
+  if (typeof label !== "string" || label.trim() === "") {
+    return { ok: false, error: "work-item label is empty — legal shapes are M<n>-WI<m> or M<n>-WI<a>+WI<b>+… (bare WI<m> tokens inherit the first token's milestone)" };
+  }
+  const tokens = label.split("+");
+  const items = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const tok = tokens[i];
+    if (tok === "") {
+      const where = i === 0 ? "leading" : i === tokens.length - 1 ? "trailing" : "consecutive";
+      return {
+        ok: false,
+        error: `malformed separator in work-item label ${JSON.stringify(label)} — ${where} "+" produces an empty token`,
+      };
+    }
+    if (i === 0) {
+      const m = tok.match(WI_FIRST_TOKEN_RE);
+      if (!m) {
+        return {
+          ok: false,
+          error: `first work-item token ${JSON.stringify(tok)} must carry the milestone prefix — legal shapes are M<n>-WI<m> or M<n>-WI<a>+WI<b>+… (subsequent tokens may stay bare WI<m> and inherit the milestone)`,
+        };
+      }
+      items.push({ milestone: Number(m[1]), wi: `WI${m[2]}` });
+      continue;
+    }
+    const bare = tok.match(WI_BARE_TOKEN_RE);
+    if (bare) {
+      items.push({ milestone: items[0].milestone, wi: `WI${bare[1]}` });
+      continue;
+    }
+    const prefixed = tok.match(WI_FIRST_TOKEN_RE);
+    if (prefixed) {
+      items.push({ milestone: Number(prefixed[1]), wi: `WI${prefixed[2]}` });
+      continue;
+    }
+    return {
+      ok: false,
+      error: `work-item token ${JSON.stringify(tok)} matches neither WI<m> nor M<n>-WI<m> (label ${JSON.stringify(label)})`,
+    };
+  }
+  return { ok: true, items };
+}
+
+/**
+ * Registration predicate (02 §4.7): every expanded (milestone, WI id) pair
+ * must hit the roadmap ledger registry at that milestone.
+ * @param {string} label plan frontmatter work-item value
+ * @param {object} roadmapScan a scanRoadmapLedger() result (empty/absent
+ *   registry = every token misses — fail, never vacuous pass)
+ * @returns {{ ok: true, items: Array<object>, hits: string[] } |
+ *           { ok: false, items: Array<object>, error: string, misses?: string[] }}
+ */
+export function workItemRegistered(label, roadmapScan) {
+  const expanded = expandWorkItemLabel(label);
+  if (!expanded.ok) return { ok: false, items: [], error: expanded.error };
+  const milestones = roadmapScan && Array.isArray(roadmapScan.milestones) ? roadmapScan.milestones : [];
+  const idsByMilestone = new Map();
+  for (const ms of milestones) {
+    if (!idsByMilestone.has(ms.number)) idsByMilestone.set(ms.number, []);
+    for (const wi of ms.workItems ?? []) {
+      if (typeof wi.id === "string" && wi.id !== "") idsByMilestone.get(ms.number).push(wi.id);
+    }
+  }
+  if (idsByMilestone.size === 0) {
+    return {
+      ok: false,
+      items: expanded.items,
+      error: "work-item registration not verifiable against an empty roadmap registry — no ### M<n> milestone block with work-item lines was found; labels may only reference roadmap-registered items (02 §4.7)",
+    };
+  }
+  const misses = [];
+  for (const { milestone, wi } of expanded.items) {
+    const ids = idsByMilestone.get(milestone);
+    if (ids === undefined) {
+      misses.push(`M${milestone}-${wi}: roadmap has no milestone M${milestone} (registered milestones: ${[...idsByMilestone.keys()].map((n) => `M${n}`).join(", ")})`);
+    } else if (!ids.includes(wi)) {
+      misses.push(`M${milestone}-${wi}: milestone M${milestone} has no ${wi} (registered: ${ids.join(", ")})`);
+    }
+  }
+  if (misses.length > 0) {
+    return {
+      ok: false,
+      items: expanded.items,
+      misses,
+      error: `unregistered work-item token(s) — ${misses.join("; ")}; work-item labels may only reference roadmap-registered items (02 §4.7)`,
+    };
+  }
+  return { ok: true, items: expanded.items, hits: expanded.items.map((i) => `M${i.milestone}-${i.wi}`) };
 }
 
 // ── seed rule: plan-structure (02 §4.7 structural face + 01 §2/§5.2) ────────
@@ -206,8 +318,9 @@ export function matchGate(pattern, action, ctx = {}) {
  * Dual-read domain guard (false-kill discipline, 02 §6 WI13 lesson): files
  * that are not frontmatter-format plans (legacy corpus during the dual-read
  * transition, non-plan markdown) are OUT of this rule's domain — allow with a
- * note. The frontmatter-tightening deny switch belongs to the M2 enforce
- * stage, not the seed.
+ * format note. The M2 enforce flip + the work-item registration increment
+ * (WI21) landed with docs/plans/age-autonomy/2026-08-25-0950-1: grammar denies
+ * from the label alone, registry reconciliation via ctx.roadmapText.
  */
 function planStructureRule(action, currentFileState, ctx = {}) {
   const scan = scanPlanLedger(action.proposedContent);
@@ -232,11 +345,30 @@ function planStructureRule(action, currentFileState, ctx = {}) {
   const v = validatePlanFrontmatter(scan.fm, { agentNames: ctx.agentNames });
   problems.push(...v.errors);
   for (const e of scan.errors) problems.push(`line ${e.line}: ${e.code}: ${e.message}`);
+  // work-item registration face (M2-WI21): the composite-label grammar is
+  // decidable from the label alone (deny on syntax regardless of roadmap);
+  // registry hits additionally need the roadmap scan injected as
+  // ctx.roadmapText — absent, the registry fact is unobservable → note,
+  // never a deny (02 §2 structural-subset discipline).
+  let registrationNote = null;
+  if (typeof scan.fm["work-item"] === "string") {
+    if (typeof ctx.roadmapText === "string" && ctx.roadmapText !== "") {
+      const reg = workItemRegistered(scan.fm["work-item"], scanRoadmapLedger(ctx.roadmapText));
+      if (!reg.ok) problems.push(reg.error);
+    } else {
+      const expanded = expandWorkItemLabel(scan.fm["work-item"]);
+      if (!expanded.ok) problems.push(expanded.error);
+      else registrationNote = "work-item registration not verifiable — roadmap not injected on this face (02 §2: never deny on unobservable facts)";
+    }
+  }
   if (problems.length > 0) {
     return {
       verdict: "deny",
       reason: `plan-structure: proposed content is not a legal plan ledger — ${problems.join("; ")}`,
     };
+  }
+  if (registrationNote !== null) {
+    return { verdict: "allow", reason: `plan-structure: ${registrationNote}` };
   }
   return { verdict: "allow" };
 }
@@ -252,7 +384,7 @@ registerRule("plan-structure", planStructureRule, { structural: true });
  * @param {object} [opts]
  * @param {object} [opts.policy] parsed policy ({ gates: [...] }); absent → no gates
  * @param {{ text?: string, hash?: string }} [opts.currentFileState]
- * @param {{ plansDir?: string, roadmapPath?: string, agentNames?: string[], commands?: Record<string,string>, maxAuditRounds?: number, plans?: Array<{text: string, path?: string}>, now?: number | string, defaultVerifyKeys?: string[] }} [opts.ctx]
+ * @param {{ plansDir?: string, roadmapPath?: string, agentNames?: string[], commands?: Record<string,string>, maxAuditRounds?: number, plans?: Array<{text: string, path?: string}>, now?: number | string, defaultVerifyKeys?: string[], roadmapText?: string, projectRoot?: string, plansRoots?: string[] }} [opts.ctx]
  * @returns {{
  *   decision: "allow" | "deny",
  *   reason: string | null,

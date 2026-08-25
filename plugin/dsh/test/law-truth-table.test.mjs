@@ -20,18 +20,20 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { Context } from "@deepseek-ai/cordis";
 import {
   evaluateGates,
+  expandWorkItemLabel,
   getRule,
   registerRule,
+  workItemRegistered,
 } from "../assets/src/law-core.mjs";
 import { parsePolicy, policyAgentNames, checkDistinctModelSatisfiability, resolveMaxAuditRounds } from "../assets/src/law-policy.mjs";
-import { scanPlanLedger, computeBasisHash, deriveCompleted, draftPlans, activePlans } from "../assets/src/ledger-sections.mjs";
+import { scanPlanLedger, scanRoadmapLedger, computeBasisHash, deriveCompleted, draftPlans, activePlans } from "../assets/src/ledger-sections.mjs";
 import { defaultVerifyKeys, passLineFor, resolveVerifyPlan, runVerifyCommands } from "../assets/src/verify-runner.mjs";
 import {
   evaluateLawCall,
@@ -981,9 +983,10 @@ test("gate3-freeze: cancelled (writable terminal) plan rejects any basis change 
 
 /* ── 10. corpus semantics pinned by file class (real repo files) ──────────── */
 
-test("corpus: new-format awaitingClosure plans (0635-3, 0815-1) evaluate to allow with the awaitingClosure note — not completed", () => {
+// 0635-3 landed its closure receipts (run 2026-08-26-072439) — corpus pins
+// track the live derived state, so it moved to the completed class below.
+test("corpus: new-format awaitingClosure plan (0815-1) evaluates to allow with the awaitingClosure note — not completed", () => {
   for (const name of [
-    "2026-08-25-0635-3-m1-corpus-migration-dual-read-guides-ci.md",
     "2026-08-25-0815-1-m2-law-seam-policy-schema.md",
   ]) {
     const file = join(REPO_ROOT, "docs", "plans", "age-autonomy", name);
@@ -1006,6 +1009,29 @@ test("corpus: new-format awaitingClosure plans (0635-3, 0815-1) evaluate to allo
     const pc = out.observations.find((o) => o.rule === "plan-completed");
     assert.match(pc.reason, /awaitingClosure/, name);
   }
+});
+
+test("corpus: closed plan (0635-3, receipts bound) derives completed and allows same-content writes", () => {
+  const name = "2026-08-25-0635-3-m1-corpus-migration-dual-read-guides-ci.md";
+  const file = join(REPO_ROOT, "docs", "plans", "age-autonomy", name);
+  const text = readFileSync(file, "utf8");
+  assert.equal(deriveCompleted(text).completed, true, name);
+  const out = evaluateGates(
+    { type: "write", path: file, proposedContent: text },
+    {
+      policy: {
+        gates: [
+          { id: "closure-audit-binding", match: "{{plansDir}}/**/*.md", rule: "closure-audit-binding", mode: "enforce" },
+          { id: "writer-identity", match: "{{plansDir}}/**/*.md", rule: "writer-identity", mode: "enforce" },
+          { id: "plan-completed", match: "{{plansDir}}/**/*.md", rule: "plan-completed", mode: "enforce" },
+        ],
+      },
+      ctx: { plansDir: join(REPO_ROOT, "docs", "plans", "age-autonomy") },
+    },
+  );
+  assert.equal(out.decision, "allow", `${name}: ${out.reason}`);
+  const pc = out.observations.find((o) => o.rule === "plan-completed");
+  assert.match(pc.reason, /completion formula satisfied/, name);
 });
 
 test("corpus: legacy-format plans (0635-1/2) are outside every hard gate's domain — dual-read skip, no false kill", () => {
@@ -1667,14 +1693,15 @@ test("corpus: new-format plans (0635-3, 0815-1, 0815-2) pass every registered ga
   const real = parsePolicy(readFileSync(REAL_POLICY_FILE, "utf8"));
   assert.equal(real.ok, true);
   const plansDir = join(REPO_ROOT, "docs", "plans", "age-autonomy");
-  for (const name of [
-    "2026-08-25-0635-3-m1-corpus-migration-dual-read-guides-ci.md",
-    "2026-08-25-0815-1-m2-law-seam-policy-schema.md",
-    "2026-08-25-0815-2-m2-three-hard-gates.md",
-  ]) {
+  const corpus = [
+    { name: "2026-08-25-0635-3-m1-corpus-migration-dual-read-guides-ci.md", completed: true },
+    { name: "2026-08-25-0815-1-m2-law-seam-policy-schema.md", completed: false },
+    { name: "2026-08-25-0815-2-m2-three-hard-gates.md", completed: false },
+  ];
+  for (const { name, completed } of corpus) {
     const file = join(plansDir, name);
     const text = readFileSync(file, "utf8");
-    assert.equal(deriveCompleted(text).completed, false, name);
+    assert.equal(deriveCompleted(text).completed, completed, name);
     const out = evaluateGates(
       { type: "write", path: file, proposedContent: text },
       { policy: real.policy, ctx: { plansDir, roadmapPath: join(REPO_ROOT, "docs", "backlog", "age-autonomy-implementation-roadmap.md") } },
@@ -1687,7 +1714,7 @@ test("corpus: new-format plans (0635-3, 0815-1, 0815-2) pass every registered ga
       assert.equal(obs.verdict, "allow", `${name}: ${rule} → ${obs.reason}`);
     }
     const pc = out.observations.find((o) => o.rule === "plan-completed");
-    assert.match(pc.reason, /awaitingClosure/, name);
+    assert.match(pc.reason, completed ? /completion formula satisfied/ : /awaitingClosure/, name);
   }
 });
 
@@ -1709,4 +1736,545 @@ test("corpus: legacy plans (0635-1/2) stay outside every supporting gate's domai
       assert.match(o.reason, /domain \(dual-read transition\)/, `${name}: ${o.rule} → ${o.reason}`);
     }
   }
+});
+
+/* ── 17. work-item registration face (M2-WI21, plan 2026-08-25-0950-1) ────── */
+
+const REAL_ROADMAP_FILE = join(REPO_ROOT, "docs", "backlog", "age-autonomy-implementation-roadmap.md");
+const REAL_ROADMAP_TEXT = readFileSync(REAL_ROADMAP_FILE, "utf8");
+const REAL_ROADMAP_SCAN = scanRoadmapLedger(REAL_ROADMAP_TEXT);
+
+// The 10-plan frontmatter corpus (Current Baseline list, incl. the WI21 plan
+// itself) — the composite-label grammar inputs that must keep passing.
+const FRONTMATTER_CORPUS = [
+  "2026-08-25-0635-3-m1-corpus-migration-dual-read-guides-ci.md",
+  "2026-08-25-0815-1-m2-law-seam-policy-schema.md",
+  "2026-08-25-0815-2-m2-three-hard-gates.md",
+  "2026-08-25-0815-3-m2-supporting-gates.md",
+  "2026-08-25-0925-1-m2-wi41-closure-routing-deadlock.md",
+  "2026-08-25-0925-2-m2-wi42-wi44-validator-wiring-verify-vacuity.md",
+  "2026-08-25-0925-3-m2-wi43-arch-ownerdoc-contract-sync.md",
+  "2026-08-25-0950-1-m2-wi21-path-structure-guardrails-p8.md",
+  "2026-08-25-0950-2-m2-wi22-evidence-face-rebuild.md",
+  "2026-08-25-0950-3-m2-wi23-wi24-ci-wiring-m2-verification-gate.md",
+];
+
+test("wi-grammar: single / composite / explicit repeated prefix expand; misses carry the registry hint", () => {
+  assert.deepEqual(expandWorkItemLabel("M2-WI21").items, [{ milestone: 2, wi: "WI21" }]);
+  assert.deepEqual(expandWorkItemLabel("M2-WI21+WI23+WI24").items, [
+    { milestone: 2, wi: "WI21" },
+    { milestone: 2, wi: "WI23" },
+    { milestone: 2, wi: "WI24" },
+  ]);
+  // explicit repeated prefixes are the equivalent expansion (accepted)
+  assert.deepEqual(expandWorkItemLabel("M2-WI21+M2-WI23").items, expandWorkItemLabel("M2-WI21+WI23").items);
+  // per-token explicit milestone is well-defined (each token reconciles at its own milestone)
+  assert.deepEqual(expandWorkItemLabel("M1-WI1+M2-WI22").items, [
+    { milestone: 1, wi: "WI1" },
+    { milestone: 2, wi: "WI22" },
+  ]);
+  for (const [bad, re] of [
+    ["", /work-item label is empty/],
+    ["WI12", /first work-item token "WI12" must carry the milestone prefix/],
+    ["M2-WI21+", /trailing "\+" produces an empty token/],
+    ["+WI12", /leading "\+" produces an empty token/],
+    ["M2-WI21++WI22", /consecutive "\+" produces an empty token/],
+    ["M2-WI21+WI", /token "WI" matches neither WI<m> nor M<n>-WI<m>/],
+    ["M2-WI21+x1", /token "x1" matches neither/],
+  ]) {
+    const out = expandWorkItemLabel(bad);
+    assert.equal(out.ok, false, JSON.stringify(bad));
+    assert.match(out.error, re, JSON.stringify(bad));
+  }
+  // unknown WI number / cross-milestone misfile deny naming the registry
+  const unknown = workItemRegistered("M2-WI99", REAL_ROADMAP_SCAN);
+  assert.equal(unknown.ok, false);
+  assert.match(unknown.error, /M2-WI99: milestone M2 has no WI99 \(registered: WI12, WI13/);
+  const misfiled = workItemRegistered("M1-WI21", REAL_ROADMAP_SCAN);
+  assert.equal(misfiled.ok, false);
+  assert.match(misfiled.error, /M1-WI21: milestone M1 has no WI21 \(registered: WI1, WI2/);
+  const wrongMilestone = workItemRegistered("M9-WI21", REAL_ROADMAP_SCAN);
+  assert.equal(wrongMilestone.ok, false);
+  assert.match(wrongMilestone.error, /M9-WI21: roadmap has no milestone M9 \(registered milestones: M1, M2/);
+});
+
+test("wi-registry: injected-scan counterexamples — empty registry and missing milestone fail (never vacuous pass)", () => {
+  const empty = workItemRegistered("M2-WI21", { milestones: [] });
+  assert.equal(empty.ok, false);
+  assert.match(empty.error, /empty roadmap registry/);
+  const noScan = workItemRegistered("M2-WI21", null);
+  assert.equal(noScan.ok, false);
+  assert.match(noScan.error, /empty roadmap registry/);
+  const bare = workItemRegistered("M2-WI21", scanRoadmapLedger("# Roadmap\n\n## Notes\n\nprose only\n"));
+  assert.equal(bare.ok, false);
+  assert.match(bare.error, /empty roadmap registry/);
+});
+
+test("wi-corpus: the 10-plan frontmatter corpus reconciles against the REAL roadmap — live all-pass", () => {
+  for (const name of FRONTMATTER_CORPUS) {
+    const file = join(REPO_ROOT, "docs", "plans", "age-autonomy", name);
+    const text = readFileSync(file, "utf8");
+    const label = scanPlanLedger(text).fm["work-item"];
+    const reg = workItemRegistered(label, REAL_ROADMAP_SCAN);
+    assert.equal(reg.ok, true, `${name}: ${reg.error}`);
+  }
+  // legacy header-form corpus (> Work Item:) is syntax-shape input only —
+  // those files carry no frontmatter and stay out of the registration face
+  for (const name of ["2026-08-25-0635-1-m1-frontmatter-ledger-core.md", "2026-08-25-0635-2-m1-ledger-sections-derivation.md"]) {
+    const file = join(REPO_ROOT, "docs", "plans", "age-autonomy", name);
+    assert.equal(scanPlanLedger(readFileSync(file, "utf8")).hasFrontmatter, false, name);
+  }
+});
+
+test("wi-plan-structure: registry reconciliation rides the seed rule — deny with roadmap, note without", () => {
+  const ps = (label, ctx = {}) =>
+    evaluateGates(
+      {
+        type: "write",
+        path: "/p/x.md",
+        proposedContent: LEGAL_PLAN.replace("work-item: M1-WI1", `work-item: ${label}`),
+      },
+      {
+        policy: { gates: [{ id: "g", match: "{{plansDir}}/**/*.md", rule: "plan-structure", mode: "enforce" }] },
+        ctx: { plansDir: "/p", ...ctx },
+      },
+    );
+  // registered label with the roadmap injected → allow
+  assert.equal(ps("M2-WI21+WI23", { roadmapText: REAL_ROADMAP_TEXT }).decision, "allow");
+  // unregistered label with the roadmap injected → deny pointing at the registry
+  const deny = ps("M2-WI21+WI99", { roadmapText: REAL_ROADMAP_TEXT });
+  assert.equal(deny.decision, "deny");
+  assert.match(deny.reason, /unregistered work-item token\(s\).*M2-WI99: milestone M2 has no WI99/);
+  assert.match(deny.reason, /roadmap-registered items \(02 §4.7\)/);
+  // grammar denies even without the roadmap (decidable from the label alone)
+  const grammar = ps("M2-WI21+");
+  assert.equal(grammar.decision, "deny");
+  assert.match(grammar.reason, /malformed separator/);
+  // registry fact unobservable without the roadmap → allow + note, never a deny
+  const note = ps("M2-WI21");
+  assert.equal(note.decision, "allow");
+  assert.match(note.observations[0].reason, /work-item registration not verifiable — roadmap not injected on this face/);
+});
+
+/* ── 18. path-guardrail (M2-WI21, 02 §4.7 plansDir domain) ────────────────── */
+
+const PG_ROOTS = ["/r/docs/plans", "/r/docs/plans/demo"];
+
+function pg(path, content, ctx = {}) {
+  return evaluateGates(
+    { type: "write", path, proposedContent: content },
+    {
+      policy: { gates: [{ id: "path-guardrail", match: "action:write", rule: "path-guardrail", mode: "enforce" }] },
+      ctx: { plansRoots: PG_ROOTS, ...ctx },
+    },
+  );
+}
+
+test("path-guardrail: in-domain plan-shaped writes allow (create and rewrite intercepted identically)", () => {
+  const fresh = pg("/r/docs/plans/demo/x.md", LEGAL_PLAN);
+  assert.equal(fresh.decision, "allow");
+  assert.match(fresh.observations[0].reason, /plan-shaped write inside registered plans root \/r\/docs\/plans/);
+  // rewrite face: same proposedContent judgment with prior state present
+  const rewrite = pg("/r/docs/plans/demo/x.md", LEGAL_PLAN.replace("- [x] only item", "- [ ] only item"), {
+    // currentFileState passes through opts, not ctx — evaluate directly below
+  });
+  assert.equal(rewrite.decision, "allow");
+  const withCurrent = evaluateGates(
+    { type: "write", path: "/r/docs/plans/demo/x.md", proposedContent: LEGAL_PLAN },
+    {
+      policy: { gates: [{ id: "path-guardrail", match: "action:write", rule: "path-guardrail", mode: "enforce" }] },
+      currentFileState: { text: LEGAL_PLAN.replace("- [x] only item", "- [ ] only item") },
+      ctx: { plansRoots: PG_ROOTS },
+    },
+  );
+  assert.equal(withCurrent.decision, "allow");
+});
+
+test("path-guardrail: out-of-domain plan-shaped .md denies listing the registered roots", () => {
+  const out = pg("/r/docs/notes/x.md", LEGAL_PLAN);
+  assert.equal(out.decision, "deny");
+  assert.match(out.reason, /plan-shaped \.md write outside every registered plans root/);
+  assert.match(out.reason, /registered roots here: \/r\/docs\/plans, \/r\/docs\/plans\/demo/);
+  assert.match(out.reason, /write plans there, not at \/r\/docs\/notes\/x\.md \(02 §4\.7\)/);
+});
+
+test("path-guardrail: out-of-domain NON-plan .md and incomplete key sets stay out of domain", () => {
+  // two keys only → not plan-shaped
+  const twoKeys = pg("/r/docs/notes/x.md", LEGAL_PLAN.replace("work-item: M1-WI1\n", ""));
+  assert.equal(twoKeys.decision, "allow");
+  assert.match(twoKeys.observations[0].reason, /not plan-shaped \(frontmatter status\+mission\+work-item not all present\)/);
+  // plain markdown with frontmatter-less body
+  const plain = pg("/r/docs/notes/x.md", "# Notes\n\nplain doc\n");
+  assert.equal(plain.decision, "allow");
+  // legacy-format plan (no frontmatter block) → shape test cannot fire
+  const legacy = pg("/r/docs/notes/x.md", "# Plan\n\n> Plan Status: active\n");
+  assert.equal(legacy.decision, "allow");
+  // plan-shaped content at a non-.md path
+  const yml = pg("/r/missions/x.yml", LEGAL_PLAN);
+  assert.equal(yml.decision, "allow");
+  assert.match(yml.observations[0].reason, /not a \.md write — outside domain/);
+  // roots not injected → fail-open note (02 §6)
+  const noRoots = evaluateGates(
+    { type: "write", path: "/r/docs/notes/x.md", proposedContent: LEGAL_PLAN },
+    {
+      policy: { gates: [{ id: "path-guardrail", match: "action:write", rule: "path-guardrail", mode: "enforce" }] },
+      ctx: {},
+    },
+  );
+  assert.equal(noRoots.decision, "allow");
+  assert.match(noRoots.observations[0].reason, /plans roots not injected on this face .* fail-open/);
+});
+
+/* ── 19. one-mission-one-roadmap boundary (01-file-ledger :30, M2-WI21) ───── */
+
+import { checkRoadmapUniqueness } from "../assets/src/mission-check.mjs";
+
+test("boundary: compliant mission set passes; conflict fails naming both missions (fail-fast load face)", () => {
+  const root = tmpProject();
+  try {
+    mkdirSync(join(root, "missions"), { recursive: true });
+    writeFileSync(
+      join(root, "missions", "alpha.json"),
+      JSON.stringify({ name: "alpha", roadmapPath: "docs/backlog/one.md", plansDir: "docs/plans/alpha" }),
+      "utf8",
+    );
+    writeFileSync(
+      join(root, "missions", "beta.json"),
+      JSON.stringify({ name: "beta", roadmapPath: "docs/backlog/two.md", plansDir: "docs/plans/beta" }),
+      "utf8",
+    );
+    // base-style + malformed configs contribute zero claims
+    writeFileSync(join(root, "missions", "base.json"), JSON.stringify({ model: "m" }), "utf8");
+    writeFileSync(join(root, "missions", "broken.json"), "{ not json", "utf8");
+    const ok = checkRoadmapUniqueness(join(root, "missions"));
+    assert.equal(ok.ok, true);
+    assert.deepEqual(ok.conflicts, []);
+
+    writeFileSync(
+      join(root, "missions", "gamma.json"),
+      JSON.stringify({ name: "gamma", roadmapPath: "./docs/backlog/one.md", plansDir: "docs/plans/gamma" }),
+      "utf8",
+    );
+    const conflict = checkRoadmapUniqueness(join(root, "missions"));
+    assert.equal(conflict.ok, false);
+    assert.equal(conflict.conflicts.length, 1);
+    assert.deepEqual(conflict.conflicts[0].missions.sort(), ["alpha", "gamma"]);
+    assert.match(conflict.errors[0], /one-mission-one-roadmap violated: roadmap .* is declared by multiple missions \(alpha, gamma\)/);
+    // the repo's live mission set is compliant
+    const live = checkRoadmapUniqueness(join(REPO_ROOT, "missions"));
+    assert.equal(live.ok, true, live.errors?.join("; "));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("boundary: adapter face — conflicting roadmap claims make the ancestor contribute no law context (inert passthrough)", () => {
+  const root = tmpProject();
+  try {
+    writeMission(root);
+    writePolicy(root, POLICY_BODY("enforce"));
+    mkdirSync(join(root, "missions"), { recursive: true });
+    writeFileSync(
+      join(root, "missions", "clone.json"),
+      JSON.stringify({
+        name: "clone",
+        roadmapPath: "docs/backlog/demo-roadmap.md",
+        plansDir: "docs/plans-clone",
+        autonomyPolicy: "missions/autonomy.policy.yml",
+      }),
+      "utf8",
+    );
+    const plan = writePlan(root, "docs/plans/demo/x.md");
+    const out = evaluateLawCall({ name: "write", arguments: { file_path: plan, content: LEGAL_PLAN } }, {}, fsLawGateIo);
+    assert.equal(out.decision, "allow");
+    assert.equal(out.records.length, 0);
+    assert.equal(out.lawCtx, null);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+/* ── 20. roadmap-write-guard (M2-WI21, 02 §4.7 registered-line write-back) ── */
+
+function guardRoadmap({ m1 = "- [x] WI1 thing\n- [ ] WI2 other\n", m2 = "- [ ] WI3 third\n", fm = "audit-rounds: 1\n" } = {}) {
+  return `---\n${fm}---\n# Roadmap\n\n### M1 — First\n\n${m1}\n### M2 — Second\n\n${m2}\n## Deep Audit Record\n`;
+}
+
+function rwg(proposed, { current, actor, plans, projectRoot = "/r" } = {}) {
+  return evaluateGates(
+    {
+      type: "write",
+      path: "/r/docs/backlog/roadmap.md",
+      proposedContent: proposed,
+      ...(actor ? { actor } : {}),
+    },
+    {
+      policy: { gates: [{ id: "roadmap-write-guard", match: "{{roadmapPath}}", rule: "roadmap-write-guard", mode: "enforce" }] },
+      currentFileState: current !== undefined ? { text: current } : undefined,
+      ctx: {
+        roadmapPath: "/r/docs/backlog/roadmap.md",
+        projectRoot,
+        ...(plans !== undefined ? { plans } : {}),
+      },
+    },
+  );
+}
+
+test("rwg: checkbox flips and in-line evidence appends allow (the M1 write-back practice)", () => {
+  const flip = rwg(guardRoadmap({ m2: "- [x] WI3 third\n" }), { current: guardRoadmap() });
+  assert.equal(flip.decision, "allow");
+  assert.match(flip.observations[0].reason, /WI structure unchanged — registered-line checkbox flips and in-line tail appends only/);
+  const append = rwg(guardRoadmap({ m1: "- [x] WI1 thing\n- [ ] WI2 other（证据：plan p1 收口）\n" }), { current: guardRoadmap() });
+  assert.equal(append.decision, "allow");
+  const both = rwg(guardRoadmap({ m1: "- [x] WI1 thing\n- [x] WI2 other（证据：plan p1）\n", m2: "- [x] WI3 third\n" }), { current: guardRoadmap() });
+  assert.equal(both.decision, "allow");
+});
+
+test("rwg: structural faces deny — delete line, rewrite id, rewrite line text, uncheck, reorder, milestone edits", () => {
+  const cur = guardRoadmap({ m1: "- [x] WI1 thing\n- [ ] WI2 other\n- [ ] WI2b extra\n" });
+  const deleted = rwg(guardRoadmap({ m1: "- [x] WI1 thing\n- [ ] WI2 other\n" }), { current: cur });
+  assert.equal(deleted.decision, "deny");
+  assert.match(deleted.reason, /M1: work-item line count changed \(3 → 2\) — add\/delete of WI lines is a structural change/);
+  const idRewritten = rwg(guardRoadmap({ m1: "- [x] WI1 thing\n- [ ] WI9 other\n- [ ] WI2b extra\n" }), { current: cur });
+  assert.equal(idRewritten.decision, "deny");
+  assert.match(idRewritten.reason, /work-item id rewritten or lines reordered \(WI2 → WI9\)/);
+  const textRewritten = rwg(guardRoadmap({ m1: "- [x] WI1 thing\n- [ ] WI2 renamed\n- [ ] WI2b extra\n" }), { current: cur });
+  assert.equal(textRewritten.decision, "deny");
+  assert.match(textRewritten.reason, /work-item line rewritten — only tail appends of evidence notes are legal/);
+  const unchecked = rwg(guardRoadmap({ m1: "- [ ] WI1 thing\n- [ ] WI2 other\n- [ ] WI2b extra\n" }), { current: cur });
+  assert.equal(unchecked.decision, "deny");
+  assert.match(unchecked.reason, /checkbox flipped \[x\]→\[ \] — only \[ \]→\[x\] flips are legal write-backs/);
+  const reordered = rwg(guardRoadmap({ m1: "- [x] WI1 thing\n- [ ] WI2b extra\n- [ ] WI2 other\n" }), { current: cur });
+  assert.equal(reordered.decision, "deny");
+  assert.match(reordered.reason, /id rewritten or lines reordered/);
+  const headingRewritten = rwg(guardRoadmap({ m2: "- [ ] WI3 third\n" }), {
+    current: guardRoadmap().replace("### M2 — Second", "### M2 — Midpoint"),
+  });
+  assert.equal(headingRewritten.decision, "deny");
+  assert.match(headingRewritten.reason, /milestone heading 2 rewritten/);
+  const milestoneAdded = rwg(guardRoadmap() + "\n### M3 — Later\n\n- [ ] WI4 next\n", { current: guardRoadmap() });
+  assert.equal(milestoneAdded.decision, "deny");
+  assert.match(milestoneAdded.reason, /milestone structure changed \(current 2 ### M<n> blocks, proposed 3\)/);
+});
+
+test("rwg: structural-change exceptions — engine role allows, drafter denies, id-only denies with the unverified-writer note, approved-project allows", () => {
+  const cur = guardRoadmap();
+  const withNewLine = guardRoadmap({ m2: "- [ ] WI3 third\n- [ ] WI4 landed-by-deep-audit\n" });
+  const engine = rwg(withNewLine, { current: cur, actor: { id: "ses-flow-1", role: "engine" } });
+  assert.equal(engine.decision, "allow");
+  assert.match(engine.observations[0].reason, /structural change by actor role engine \(the deep-audit findings → DRAFT WI-landing path/);
+  const drafter = rwg(withNewLine, { current: cur, actor: { id: "ses-draft-1", role: "drafter" } });
+  assert.equal(drafter.decision, "deny");
+  assert.match(drafter.reason, /add\/delete of WI lines is a structural change/);
+  const idOnly = rwg(withNewLine, { current: cur, actor: { id: "ses-flow-1" } });
+  assert.equal(idOnly.decision, "deny");
+  assert.match(idOnly.reason, /actor role not verifiable on this face \(id-only\/absent actor — unverified-writer posture, the engine\/supervisor exception cannot be claimed here\)/);
+  // approved-project: an active plan whose body names the roadmap (relative form)
+  const activePlan = `---\nstatus: active\nmission: demo\nwork-item: M1-WI1\nverify: [test]\n---\n# Plan\n\n## Phase 1 — Roadmap landing\n\nTargets: docs/backlog/roadmap.md 回写\n\n- [ ] item\n`;
+  const approved = rwg(withNewLine, { current: cur, plans: [{ text: activePlan, path: "/r/docs/plans/demo/p.md" }] });
+  assert.equal(approved.decision, "allow");
+  assert.match(approved.observations[0].reason, /approved-project exception — active plan \/r\/docs\/plans\/demo\/p.md line 11 declares this roadmap as a target/);
+  // a completed-derived or draft plan does NOT carry the exception
+  const draftPlan = activePlan.replace("status: active", "status: draft");
+  const unapproved = rwg(withNewLine, { current: cur, plans: [{ text: draftPlan, path: "/r/docs/plans/demo/p.md" }] });
+  assert.equal(unapproved.decision, "deny");
+});
+
+test("rwg: inert faces — non-roadmap target, no currentFileState, legacy roadmap", () => {
+  const elsewhere = evaluateGates(
+    { type: "write", path: "/r/docs/plans/demo/x.md", proposedContent: guardRoadmap() },
+    {
+      policy: { gates: [{ id: "roadmap-write-guard", match: "action:write", rule: "roadmap-write-guard", mode: "enforce" }] },
+      currentFileState: { text: guardRoadmap() },
+      ctx: { roadmapPath: "/r/docs/backlog/roadmap.md", projectRoot: "/r" },
+    },
+  );
+  assert.equal(elsewhere.decision, "allow");
+  assert.match(elsewhere.observations[0].reason, /target is not the mission roadmap — outside domain/);
+  const noCurrent = rwg(guardRoadmap());
+  assert.equal(noCurrent.decision, "allow");
+  assert.match(noCurrent.observations[0].reason, /no currentFileState — WI-line set transition not observable/);
+  const legacy = rwg("# Roadmap\n\n### M1 — First\n\n- [ ] WI1 x\n", { current: "# Roadmap\n\n### M1 — First\n\n- [x] WI1 x\n" });
+  assert.equal(legacy.decision, "allow");
+  assert.match(legacy.observations[0].reason, /not a frontmatter roadmap \(legacy\/dual-read\) — WI structure not comparable/);
+});
+
+test("rwg: REAL roadmap corpus smoke — an unchecked WI's checkbox flip and evidence append both allow (constructed, no file write)", () => {
+  const wiLine = REAL_ROADMAP_TEXT.split("\n").find((l) => /^- \[ \] WI\d+\b/.test(l));
+  assert.ok(wiLine, "an unchecked WI line present in the real roadmap");
+  const flipped = REAL_ROADMAP_TEXT.replace(wiLine, wiLine.replace("- [ ]", "- [x]"));
+  const appended = REAL_ROADMAP_TEXT.replace(wiLine, `${wiLine.replace("- [ ]", "- [x]")}（证据：抽验注记）`);
+  for (const proposed of [flipped, appended]) {
+    const out = evaluateGates(
+      { type: "write", path: REAL_ROADMAP_FILE, proposedContent: proposed },
+      {
+        policy: { gates: [{ id: "roadmap-write-guard", match: "{{roadmapPath}}", rule: "roadmap-write-guard", mode: "enforce" }] },
+        currentFileState: { text: REAL_ROADMAP_TEXT },
+        ctx: { roadmapPath: REAL_ROADMAP_FILE, projectRoot: REPO_ROOT },
+      },
+    );
+    assert.equal(out.decision, "allow", out.reason);
+  }
+});
+
+/* ── 21. P8 law-self-protection (M2-WI21, 02 §4.7/§2) ─────────────────────── */
+
+import { isLawProtectedPath } from "../assets/src/law-rules.mjs";
+
+const P8_POLICY = {
+  gates: [
+    { id: "law-self-protection-law", match: "{{projectRoot}}/plugin/dsh/src/law/**", rule: "law-self-protection", mode: "enforce" },
+    { id: "law-self-protection-policy", match: "{{projectRoot}}/missions/autonomy.policy.yml", rule: "law-self-protection", mode: "enforce" },
+    { id: "law-self-protection-plan-check", match: "{{projectRoot}}/tools/mission-driver/src/plan-check.mjs", rule: "law-self-protection", mode: "enforce" },
+    { id: "law-self-protection-gate-check", match: "{{projectRoot}}/tools/mission-driver/src/gate-check.mjs", rule: "law-self-protection", mode: "enforce" },
+  ],
+};
+
+const P8_CORPUS = [{ text: LEGAL_PLAN, path: "/r/docs/plans/demo/x.md" }];
+
+function p8(path, { actor, plans = P8_CORPUS, projectRoot = "/r" } = {}) {
+  return evaluateGates(
+    { type: "write", path, proposedContent: "edited", ...(actor ? { actor } : {}) },
+    {
+      policy: P8_POLICY,
+      ctx: { projectRoot, ...(plans !== undefined ? { plans } : {}) },
+    },
+  );
+}
+
+test("p8: the four protected families deny AI writes with the exception channels listed", () => {
+  for (const path of [
+    "/r/plugin/dsh/src/law/host-adapter.ts",
+    "/r/plugin/dsh/src/law/deep/nested/rule.ts",
+    "/r/missions/autonomy.policy.yml",
+    "/r/tools/mission-driver/src/plan-check.mjs",
+    "/r/tools/mission-driver/src/gate-check.mjs",
+  ]) {
+    for (const actor of [{ id: "ses-exec-1", role: "executor" }, { id: "ses-draft-1", role: "drafter" }, { id: "ses-flow-1", role: "engine" }]) {
+      const out = p8(path, { actor });
+      assert.equal(out.decision, "deny", `${path} ${actor.role}`);
+      assert.match(out.reason, /law-self-protection: .* is a protected law face .* AI writes deny \(02 §4\.7 P8: the enforced may not rewrite the enforcer\)/, `${path} ${actor.role}`);
+      assert.match(out.reason, /Legal channels: human actor \(role=human\), CI \(writes outside the pre-execute pipeline\), or an approved project/, path);
+    }
+  }
+  // engine is NOT in the exception set — the literal reverse case
+  const engine = p8("/r/missions/autonomy.policy.yml", { actor: { id: "ses-flow-1", role: "engine" } });
+  assert.equal(engine.decision, "deny");
+  assert.match(engine.reason, /actor role engine is not in the exception set — the literal exceptions are human \/ CI \/ approved project/);
+  assert.ok(isLawProtectedPath("/r/plugin/dsh/src/law/host-adapter.ts", "/r"));
+  assert.equal(isLawProtectedPath("/r/plugin/dsh/src/engine-bridge.ts", "/r"), false);
+  assert.equal(isLawProtectedPath("/r/missions/other.yml", "/r"), false);
+  assert.equal(isLawProtectedPath("/outside/r/missions/autonomy.policy.yml", "/r"), false);
+});
+
+test("p8: human actor allows; active-plan reference allows with file+line; draft plans and missing corpora do not", () => {
+  const human = p8("/r/missions/autonomy.policy.yml", { actor: { id: "ses-human-1", role: "human" } });
+  assert.equal(human.decision, "allow");
+  assert.match(human.observations[0].reason, /protected-path write by a human actor .*02 §4\.7 literal exception ①/);
+  // approved-project: active plan whose body names the target (relative form)
+  const activePlan = `---\nstatus: active\nmission: demo\nwork-item: M1-WI1\nverify: [test]\n---\n# Plan\n\n## Phase 1 — Gates\n\nTargets: missions/autonomy.policy.yml gate 注册\n\n- [ ] item\n`;
+  const approved = p8("/r/missions/autonomy.policy.yml", { plans: [{ text: activePlan, path: "/r/docs/plans/demo/wi21.md" }] });
+  assert.equal(approved.decision, "allow");
+  assert.match(approved.observations[0].reason, /approved-project exception — active plan \/r\/docs\/plans\/demo\/wi21.md line 11 names this target \(02 §4\.7 literal exception ③\)/);
+  // a draft plan naming the path does not carry the exception
+  const draft = p8("/r/missions/autonomy.policy.yml", { plans: [{ text: activePlan.replace("status: active", "status: draft"), path: "/r/docs/plans/demo/wi21.md" }] });
+  assert.equal(draft.decision, "deny");
+  // corpus not injected → fail-closed (the adversarial face never opens on unobservable facts)
+  const noCorpus = evaluateGates(
+    { type: "write", path: "/r/missions/autonomy.policy.yml", proposedContent: "x" },
+    { policy: P8_POLICY, ctx: { projectRoot: "/r" } },
+  );
+  assert.equal(noCorpus.decision, "deny");
+  assert.match(noCorpus.reason, /plan corpus is not injected on this face — the approved-project exception cannot be evaluated; P8 is the unconditional adversarial face and fails closed/);
+  // id-only actor: the human leg degrades to the unverified-writer note, structural legs still deny
+  const idOnly = p8("/r/missions/autonomy.policy.yml", { actor: { id: "ses-anyone" } });
+  assert.equal(idOnly.decision, "deny");
+  assert.match(idOnly.reason, /actor role not verifiable on this face \(id-only\/absent actor — unverified-writer posture, the human exception cannot be claimed\)/);
+});
+
+test("p8: out-of-domain faces — non-protected path and missing projectRoot note, never deny", () => {
+  const plain = evaluateGates(
+    { type: "write", path: "/r/docs/plans/demo/x.md", proposedContent: "x" },
+    {
+      policy: { gates: [{ id: "sp", match: "action:write", rule: "law-self-protection", mode: "enforce" }] },
+      ctx: { projectRoot: "/r", plans: P8_CORPUS },
+    },
+  );
+  assert.equal(plain.decision, "allow");
+  assert.match(plain.observations[0].reason, /target is not a protected law face — outside domain/);
+  const noRoot = evaluateGates(
+    { type: "write", path: "/r/missions/autonomy.policy.yml", proposedContent: "x" },
+    {
+      policy: { gates: [{ id: "sp", match: "action:write", rule: "law-self-protection", mode: "enforce" }] },
+      ctx: {},
+    },
+  );
+  assert.equal(noRoot.decision, "allow");
+  assert.match(noRoot.observations[0].reason, /projectRoot not injected on this face — protected-path membership not decidable, outside domain/);
+});
+
+test("p8: self-referential consistency — the rule's own landing rides the approved-project leg (live corpus)", () => {
+  // the real corpus: every plan under docs/plans/age-autonomy; the WI21 plan
+  // itself is status: active and names missions/autonomy.policy.yml in its
+  // body — evaluating a policy-file write against the real corpus ALLOWS via
+  // exception ③ (the first legal consumer of the rule is its own host plan).
+  const plansDir = join(REPO_ROOT, "docs", "plans", "age-autonomy");
+  const records = readdirSync(plansDir)
+    .filter((f) => f.endsWith(".md"))
+    .map((f) => ({ text: readFileSync(join(plansDir, f), "utf8"), path: join(plansDir, f) }));
+  const out = evaluateGates(
+    { type: "write", path: REAL_POLICY_FILE, proposedContent: readFileSync(REAL_POLICY_FILE, "utf8") },
+    { policy: P8_POLICY, ctx: { projectRoot: REPO_ROOT, plans: records } },
+  );
+  assert.equal(out.decision, "allow", out.reason);
+  assert.match(out.observations[0].reason, /approved-project exception — active plan .* names this target/);
+  // and the host plan ITSELF carries the leg (records narrowed to 0950-1 only)
+  const hostOnly = evaluateGates(
+    { type: "write", path: REAL_POLICY_FILE, proposedContent: readFileSync(REAL_POLICY_FILE, "utf8") },
+    {
+      policy: P8_POLICY,
+      ctx: { projectRoot: REPO_ROOT, plans: records.filter((r) => basename(r.path).includes("0950-1")) },
+    },
+  );
+  assert.equal(hostOnly.decision, "allow", hostOnly.reason);
+  assert.match(hostOnly.observations[0].reason, /approved-project exception — active plan .*2026-08-25-0950-1.* names this target/);
+});
+
+test("p8-corpus: the 10-plan frontmatter corpus + 00-guide pass the REAL 17-gate enforce policy with the full ctx — no false kills", () => {
+  const real = parsePolicy(readFileSync(REAL_POLICY_FILE, "utf8"));
+  assert.equal(real.ok, true);
+  const plansDir = join(REPO_ROOT, "docs", "plans", "age-autonomy");
+  const ctx = {
+    plansDir,
+    roadmapPath: REAL_ROADMAP_FILE,
+    roadmapText: REAL_ROADMAP_TEXT,
+    projectRoot: REPO_ROOT,
+    plansRoots: [join(REPO_ROOT, "docs", "plans"), plansDir],
+  };
+  for (const name of [...FRONTMATTER_CORPUS, "../../../docs/plans/00-plan-authoring-and-execution-guide.md"]) {
+    const file = resolve(plansDir, name);
+    const text = readFileSync(file, "utf8");
+    const out = evaluateGates(
+      { type: "write", path: file, proposedContent: text },
+      { policy: real.policy, ctx },
+    );
+    assert.equal(out.decision, "allow", `${name}: ${out.reason}`);
+    // the WI21 faces ran and did not false-kill
+    const pgObs = out.observations.find((o) => o.rule === "path-guardrail");
+    assert.ok(pgObs, `${name}: path-guardrail observation present`);
+    if (name.endsWith("00-plan-authoring-and-execution-guide.md")) {
+      assert.match(pgObs.reason, /no frontmatter block — not plan-shaped/, `${name}: ${pgObs.reason}`);
+    } else {
+      assert.match(pgObs.reason, /inside registered plans root/, `${name}: ${pgObs.reason}`);
+    }
+  }
+  // 00-guide has no plan frontmatter — work-item face not applicable
+  const guideOut = evaluateGates(
+    { type: "write", path: resolve(plansDir, "../../../docs/plans/00-plan-authoring-and-execution-guide.md"), proposedContent: readFileSync(resolve(plansDir, "../../../docs/plans/00-plan-authoring-and-execution-guide.md"), "utf8") },
+    { policy: real.policy, ctx },
+  );
+  assert.equal(guideOut.decision, "allow");
+  // outside {{plansDir}} the plan-structure gate does not match at all; the
+  // action-face guardrails still ran through the loop assertions above
+  assert.equal(guideOut.observations.find((o) => o.rule === "plan-structure"), undefined);
 });

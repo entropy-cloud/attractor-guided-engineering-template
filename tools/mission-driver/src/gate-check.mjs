@@ -45,13 +45,15 @@
  * assets copy, not this CLI.
  */
 
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { evaluateGates, structuralRuleIds } from "./law-core.mjs";
+import { evaluateGates, expandWorkItemLabel, structuralRuleIds, workItemRegistered } from "./law-core.mjs";
 import { loadPolicyFile, policyAgentNames } from "./law-policy.mjs";
 import { discoverOwningMission } from "./mission-check.mjs";
+import { isLawProtectedPath } from "./law-rules.mjs";
 import { resolveVerifyPlan, runVerifyCommands } from "./verify-runner.mjs";
+import { scanPlanLedger, scanRoadmapLedger } from "./ledger-sections.mjs";
 
 function usage() {
   console.error("Usage:");
@@ -94,6 +96,122 @@ function runPolicyMode(file) {
   process.exit(0);
 }
 
+// ── mission-context helpers (M2-WI21: roadmap injection + plans roots) ──────
+
+function toPosix(p) {
+  return String(p).split("\\").join("/");
+}
+
+/** First ancestor of the file carrying a missions/ directory (null at fs root). */
+function discoverProjectRoot(abs) {
+  let dir = dirname(abs);
+  for (;;) {
+    if (existsSync(join(dir, "missions"))) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+/**
+ * Known plans roots for one file, ancestor-walk style (passive-scan precedent
+ * = plugin plan-status-gate knownPlansRootsAt): every ancestor contributes its
+ * default docs/plans root plus the plansDir of every parseable missions/*.json
+ * (extends UNRESOLVED — light parse, malformed missions contribute zero roots).
+ */
+function knownPlansRoots(absStart) {
+  const roots = [];
+  let dir = dirname(absStart);
+  for (;;) {
+    roots.push(toPosix(join(dir, "docs", "plans")));
+    const missionsDir = join(dir, "missions");
+    if (existsSync(missionsDir)) {
+      for (const entry of readdirSync(missionsDir)) {
+        if (!entry.endsWith(".json")) continue;
+        try {
+          const mission = JSON.parse(readFileSync(join(missionsDir, entry), "utf8"));
+          if (typeof mission.plansDir === "string" && mission.plansDir !== "") {
+            roots.push(toPosix(resolve(dir, mission.plansDir)));
+          }
+        } catch {
+          // malformed mission config contributes no plans root
+        }
+      }
+    }
+    const parent = dirname(dir);
+    if (parent === dir) return roots;
+    dir = parent;
+  }
+}
+
+/** Work-item reconciliation summary for the single-file face (M2-WI21 Phase 1). */
+function workItemSummary(text, roadmapScan, roadmapFile) {
+  const scan = scanPlanLedger(text);
+  if (scan.fmError) {
+    return { applicable: false, note: `frontmatter unreadable — plan-structure owns that deny face (${scan.fmError})` };
+  }
+  if (!scan.hasFrontmatter) {
+    return { applicable: false, note: "no plan frontmatter — work-item reconciliation not applicable (legacy/dual-read or non-plan file)" };
+  }
+  const label = scan.fm["work-item"];
+  if (typeof label !== "string") {
+    return { applicable: false, note: "work-item field absent or not a string — plan-structure owns that deny face" };
+  }
+  const expanded = expandWorkItemLabel(label);
+  if (!expanded.ok) return { applicable: true, label, ok: false, error: expanded.error };
+  const pairs = expanded.items.map((i) => `M${i.milestone}-${i.wi}`);
+  if (roadmapScan === null) {
+    return {
+      applicable: true,
+      label,
+      expanded: pairs,
+      registered: [],
+      missing: pairs,
+      roadmap: null,
+      note: "owning mission roadmap not found/readable — registry reconciliation not run (grammar verified only)",
+    };
+  }
+  const reg = workItemRegistered(label, roadmapScan);
+  return {
+    applicable: true,
+    label,
+    ok: reg.ok,
+    expanded: pairs,
+    registered: reg.ok ? reg.hits : pairs.filter((p) => !reg.misses.some((m) => m.startsWith(`${p}:`))),
+    missing: reg.ok ? [] : reg.misses,
+    roadmap: roadmapFile,
+  };
+}
+
+/** Plan records under the plans roots (recursive, capped) — P8 approved-project corpus. */
+function readPlanRecords(plansRoots, cap = 200) {
+  const records = [];
+  const walk = (dir, depth) => {
+    if (records.length >= cap || depth > 4) return;
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) {
+        walk(p, depth + 1);
+      } else if (e.isFile() && e.name.endsWith(".md")) {
+        try {
+          records.push({ text: readFileSync(p, "utf8"), path: toPosix(p) });
+        } catch {
+          // unreadable plan file skipped
+        }
+        if (records.length >= cap) return;
+      }
+    }
+  };
+  for (const root of new Set(plansRoots)) walk(root, 0);
+  return records;
+}
+
 function runSingleFileMode(file) {
   const abs = resolve(file);
   let text;
@@ -103,6 +221,29 @@ function runSingleFileMode(file) {
     console.log(JSON.stringify({ file: abs, decision: "deny", error: e instanceof Error ? e.message : String(e) }, null, 2));
     process.exit(1);
   }
+  // Mission context (M2-WI21): owning mission for the roadmap registry +
+  // passive-scan plans roots for the path domain + projectRoot for the
+  // {{projectRoot}} placeholder face.
+  const owned = discoverOwningMission(abs);
+  const projectRoot = owned !== null ? owned.projectRoot : discoverProjectRoot(abs);
+  const plansRoots = knownPlansRoots(abs);
+  let roadmapText = null;
+  let roadmapFile = null;
+  if (owned !== null && typeof owned.mission.roadmapPath === "string" && owned.mission.roadmapPath !== "") {
+    roadmapFile = resolve(owned.projectRoot, owned.mission.roadmapPath);
+    try {
+      roadmapText = readFileSync(roadmapFile, "utf8");
+    } catch {
+      roadmapText = null;
+    }
+  }
+  const roadmapScan = roadmapText !== null ? scanRoadmapLedger(roadmapText) : null;
+  // P8 face (M2-WI21): protected-path evaluations need the approved-project
+  // corpus to evaluate the active-plan exception (absent corpus = fail-closed
+  // deny inside the rule — the adversarial posture).
+  const protectedPlans = projectRoot !== null && isLawProtectedPath(abs, projectRoot)
+    ? readPlanRecords(plansRoots)
+    : null;
   // Structural subset: a synthetic write-shaped action with no actor; the
   // policy match domain is bypassed by addressing structural rules directly
   // (their domain logic — frontmatter vs legacy — lives inside the rules).
@@ -110,7 +251,14 @@ function runSingleFileMode(file) {
     { type: "write", path: abs, proposedContent: text },
     {
       policy: { gates: structuralRuleIds().map((rule, i) => ({ id: `structural-${i + 1}`, match: "{{plansDir}}/**/*.md", rule, mode: "enforce" })) },
-      ctx: { plansDir: resolve(abs, "..") },
+      ctx: {
+        plansDir: resolve(abs, ".."),
+        plansRoots,
+        ...(projectRoot !== null ? { projectRoot: toPosix(projectRoot) } : {}),
+        ...(roadmapFile !== null ? { roadmapPath: toPosix(roadmapFile) } : {}),
+        ...(roadmapText !== null ? { roadmapText } : {}),
+        ...(protectedPlans !== null ? { plans: protectedPlans } : {}),
+      },
     },
   );
   console.log(
@@ -119,6 +267,9 @@ function runSingleFileMode(file) {
         file: abs,
         face: "structural-subset",
         actor: "absent (unverified-writer posture)",
+        mission: owned !== null ? owned.mission.name : null,
+        projectRoot,
+        workItem: workItemSummary(text, roadmapScan, roadmapFile),
         decision: out.decision,
         reason: out.reason,
         observations: out.observations,

@@ -1059,3 +1059,319 @@ function recordAppendOnlyRule(action, currentFileState, ctx = {}) {
 }
 
 registerRule("record-append-only", recordAppendOnlyRule);
+
+// ── supporting gate: path-guardrail (02 §4.7, M2-WI21) ──────────────────────
+//
+// Interception target = writes of PLAN-SHAPED .md files: proposedContent
+// parses as frontmatter carrying the three-key feature set
+// status+mission+work-item (looser than the full field set — non-plan
+// documents never coincidentally carry all three). Legal domain = the
+// passive-scan plans roots injected as ctx.plansRoots (every ancestor's
+// default docs/plans + missions/*.json plansDir values — the plan-status-gate
+// knownPlansRootsAt precedent; malformed missions contribute zero roots; the
+// caller computes them, rules stay pure). Out-of-domain plan-shaped writes
+// deny listing the registered roots; create and rewrite are intercepted
+// identically (the shape test reads proposedContent either way).
+// Adjudicated weakening (watch-only residual, plan 0950-1 Deferred): the
+// domain is the UNION across missions, not per-mission — a plan-shaped write
+// into another mission's plansDir is not caught here; CI structural face and
+// the M3 supervisor own the per-mission tightening.
+
+const PLAN_SHAPED_KEYS = ["status", "mission", "work-item"];
+
+function toPosixPath(p) {
+  return String(p).split("\\").join("/");
+}
+
+function isUnderRoot(path, root) {
+  const p = toPosixPath(path);
+  const r = toPosixPath(root);
+  return p === r || p.startsWith(r.endsWith("/") ? r : r + "/");
+}
+
+function planShapedScanOf(text) {
+  const scan = scanPlanLedger(text);
+  if (scan.fmError || !scan.hasFrontmatter) return null;
+  for (const key of PLAN_SHAPED_KEYS) {
+    if (scan.fm[key] === undefined) return null;
+  }
+  return scan;
+}
+
+function notPlanShapedReason(text) {
+  const scan = scanPlanLedger(text);
+  if (scan.fmError) {
+    return "path-guardrail: proposed content has broken frontmatter — plan-structure owns that deny face";
+  }
+  if (!scan.hasFrontmatter) {
+    return "path-guardrail: proposed content has no frontmatter block — not plan-shaped, outside domain (dual-read transition)";
+  }
+  return "path-guardrail: proposed content is not plan-shaped (frontmatter status+mission+work-item not all present) — outside domain";
+}
+
+function pathGuardrailRule(action, currentFileState, ctx = {}) {
+  if (!toPosixPath(action.path).endsWith(".md")) {
+    return { verdict: "allow", reason: "path-guardrail: not a .md write — outside domain" };
+  }
+  const shaped = planShapedScanOf(action.proposedContent);
+  if (shaped === null) {
+    // broken-frontmatter .md: plan-structure owns that deny face; anything
+    // without the three-key feature set is not a plan-shaped file.
+    return { verdict: "allow", reason: notPlanShapedReason(action.proposedContent) };
+  }
+  const roots = Array.isArray(ctx.plansRoots) ? ctx.plansRoots.filter((r) => typeof r === "string" && r !== "") : null;
+  if (roots === null || roots.length === 0) {
+    return {
+      verdict: "allow",
+      reason: "path-guardrail: plans roots not injected on this face — domain membership not verifiable, fail-open (02 §6; the DSH adapter and gate-check CLI inject ctx.plansRoots)",
+    };
+  }
+  for (const root of roots) {
+    if (isUnderRoot(action.path, root)) {
+      return { verdict: "allow", reason: `path-guardrail: plan-shaped write inside registered plans root ${toPosixPath(root)}` };
+    }
+  }
+  return {
+    verdict: "deny",
+    reason: `path-guardrail: plan-shaped .md write outside every registered plans root — plan files live inside the mission plansDir domain (registered roots here: ${roots.map(toPosixPath).join(", ")}); write plans there, not at ${toPosixPath(action.path)} (02 §4.7)`,
+  };
+}
+
+registerRule("path-guardrail", pathGuardrailRule, { structural: true });
+
+// ── approved-project exception probe (02 §4.7 third leg, M2-WI21) ───────────
+//
+// Structural approximation (the only zero-new-mechanism decidable face
+// without the M3 supervisor): an `status: active` plan in the injected corpus
+// (ctx.plans records) whose body explicitly contains the target path string
+// (Phase Targets or body — first version is plain containment; a per-item
+// Targets parse is a future tightening). The hit records file + line so the
+// exception stays auditable from the allow reason.
+
+export function activePlanReferencing(targetPath, ctx = {}) {
+  const records = Array.isArray(ctx.plans) ? ctx.plans : null;
+  if (records === null || typeof targetPath !== "string" || targetPath === "") return null;
+  const target = toPosixPath(targetPath);
+  const candidates = [target];
+  const root = typeof ctx.projectRoot === "string" && ctx.projectRoot !== "" ? toPosixPath(ctx.projectRoot) : null;
+  if (root !== null && target.startsWith(root + "/")) candidates.push(target.slice(root.length + 1));
+  for (const rec of records) {
+    const text = rec && typeof rec.text === "string" ? rec.text : null;
+    if (text === null) continue;
+    const scan = scanPlanLedger(text);
+    if (scan.fmError || !scan.hasFrontmatter || scan.fm.status !== "active") continue;
+    const lines = text.split("\n");
+    for (const c of candidates) {
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].includes(c)) return { plan: rec.path ?? "<record without path>", line: i + 1, matched: c };
+      }
+    }
+  }
+  return null;
+}
+
+// ── supporting gate: roadmap-write-guard (02 §4.7, M2-WI21) ─────────────────
+//
+// Semantics ruling (literal-vs-practice adjudication, plan 0950-1 Phase 2):
+// ALLOW = checkbox flips of registered WI lines ([ ]→[x] only) + in-line tail
+// appends on those lines (the M1-established evidence-pointer write-back
+// practice — the settled reading of roadmap guide :66). DENY = WI-line
+// add/delete/reorder, WI id rewrite, milestone heading add/delete/rewrite —
+// UNLESS the actor role ∈ {engine, supervisor} (the deep-audit findings=items
+// → DRAFT WI-landing path; on id-only actor faces the role exception
+// degrades to an unverified-writer note inside the deny reason, 0815-1
+// Phase 1 actor ruling) or the approved-project exception (active plan
+// referencing the roadmap path). Adjudicated residual: in-line rewrites of
+// non-note WI text (description edits) are not caught here — CI structural
+// checks + git attribution own that face (02 §2 A1 documented miss).
+
+const ROADMAP_STRUCTURAL_ROLES = ["engine", "supervisor"];
+const WI_LINE_RE = /^- \[([ x])\] (.*)$/;
+
+function roadmapWiStructure(text) {
+  const scan = scanRoadmapLedger(text);
+  if (scan.fmError || !scan.hasFrontmatter) return null;
+  return scan.milestones.map((ms) => ({
+    number: ms.number,
+    title: ms.title,
+    entries: ms.workItems.map((w) => {
+      const m = w.text.match(WI_LINE_RE);
+      return { id: w.id, checked: w.checked, rest: m ? m[2] : w.text, line: w.line };
+    }),
+  }));
+}
+
+function roadmapWriteGuardRule(action, currentFileState, ctx = {}) {
+  // self-domain: this rule only judges writes to the mission roadmap
+  if (typeof ctx.roadmapPath !== "string" || ctx.roadmapPath === "" || toPosixPath(action.path) !== toPosixPath(ctx.roadmapPath)) {
+    return { verdict: "allow", reason: "roadmap-write-guard: target is not the mission roadmap — outside domain" };
+  }
+  const currentText = currentTextOf(currentFileState);
+  if (currentText === null) {
+    return {
+      verdict: "allow",
+      reason: "roadmap-write-guard: no currentFileState — WI-line set transition not observable on this face (unverified-writer posture)",
+    };
+  }
+  const current = roadmapWiStructure(currentText);
+  const proposed = roadmapWiStructure(action.proposedContent);
+  if (current === null || proposed === null) {
+    return {
+      verdict: "allow",
+      reason: "roadmap-write-guard: current or proposed state is not a frontmatter roadmap (legacy/dual-read) — WI structure not comparable",
+    };
+  }
+
+  const violations = [];
+  if (proposed.length !== current.length) {
+    violations.push(`milestone structure changed (current ${current.length} ### M<n> blocks, proposed ${proposed.length}) — add/delete of milestone headings is a structural change`);
+  }
+  for (let i = 0; i < current.length && i < proposed.length; i++) {
+    const c = current[i];
+    const p = proposed[i];
+    if (c.number !== p.number || (c.title ?? "") !== (p.title ?? "")) {
+      violations.push(`milestone heading ${i + 1} rewritten (current "M${c.number}${c.title ? ` — ${c.title}` : ""}" → proposed "M${p.number}${p.title ? ` — ${p.title}` : ""}")`);
+    }
+  }
+  const pairs = Math.min(current.length, proposed.length);
+  for (let i = 0; i < pairs; i++) {
+    const c = current[i];
+    const p = proposed[i];
+    if (c.number !== p.number) continue; // heading violation already recorded
+    if (c.entries.length !== p.entries.length) {
+      violations.push(`M${c.number}: work-item line count changed (${c.entries.length} → ${p.entries.length}) — add/delete of WI lines is a structural change`);
+      continue;
+    }
+    for (let j = 0; j < c.entries.length; j++) {
+      const ce = c.entries[j];
+      const pe = p.entries[j];
+      if ((ce.id ?? `#${j}`) !== (pe.id ?? `#${j}`)) {
+        violations.push(`M${c.number} line ${pe.line}: work-item id rewritten or lines reordered (${ce.id ?? "<no id>"} → ${pe.id ?? "<no id>"})`);
+        continue;
+      }
+      if (ce.checked && !pe.checked) {
+        violations.push(`M${c.number} line ${pe.line}: checkbox flipped [x]→[ ] — only [ ]→[x] flips are legal write-backs`);
+      }
+      if (!rTrim(pe.rest).startsWith(rTrim(ce.rest))) {
+        violations.push(`M${c.number} line ${pe.line}: work-item line rewritten — only tail appends of evidence notes are legal (02 §4.7 registered-line write-back)`);
+      }
+    }
+  }
+
+  if (violations.length === 0) {
+    return {
+      verdict: "allow",
+      reason: "roadmap-write-guard: WI structure unchanged — registered-line checkbox flips and in-line tail appends only",
+    };
+  }
+
+  const actor = action.actor;
+  const actorRole = actor && typeof actor.role === "string" ? actor.role : null;
+  if (actorRole !== null && ROADMAP_STRUCTURAL_ROLES.includes(actorRole)) {
+    return {
+      verdict: "allow",
+      reason: `roadmap-write-guard: structural change by actor role ${actorRole} (the deep-audit findings → DRAFT WI-landing path, 02 §2 role enum) — ${violations[0]}`,
+    };
+  }
+  const reference = activePlanReferencing(ctx.roadmapPath, ctx);
+  if (reference !== null) {
+    return {
+      verdict: "allow",
+      reason: `roadmap-write-guard: structural change covered by the approved-project exception — active plan ${reference.plan} line ${reference.line} declares this roadmap as a target — ${violations[0]}`,
+    };
+  }
+  return {
+    verdict: "deny",
+    reason: `roadmap-write-guard: ${violations.slice(0, 3).join("; ")}${violations.length > 3 ? ` (+${violations.length - 3} more)` : ""} — legal write-backs are checkbox flips of registered WI lines and in-line evidence-note appends only; structural changes (new/deleted/reordered WI lines, id rewrites, milestone heading edits) need the engine/supervisor dispatch path or an approved project (an active plan declaring this roadmap as its target, 02 §4.7)${actorRole === null ? "; actor role not verifiable on this face (id-only/absent actor — unverified-writer posture, the engine/supervisor exception cannot be claimed here)" : ""}`,
+  };
+}
+
+registerRule("roadmap-write-guard", roadmapWriteGuardRule, { structural: true });
+
+// ── P8: law-self-protection (02 §4.7/§2, M2-WI21) ───────────────────────────
+//
+// The ONLY unconditional adversarial face (02 §2 trust model — no guardrail-
+// strength downgrade, no observe ramp: during observe the enforced could
+// rewrite the enforcer, so the ramp itself would be the vulnerability
+// window). Protected path set = the 02 §4.7 literal list, resolved against
+// ctx.projectRoot:
+//   - plugin/dsh/src/law/**            (law host-adapter implementation)
+//   - missions/autonomy.policy.yml     (law data)
+//   - tools/mission-driver/src/plan-check.mjs / gate-check.mjs (enforcement CLI)
+// Exception set = the 02 §4.7 literal three legs, `engine` deliberately NOT
+// among them (no contract basis; every legal write face of this batch is
+// covered by the approved-project leg):
+//   ① human — actor role = human;
+//   ② CI — no actor shape at all; its legality rides the deployment face
+//      (CI runner writes never cross the pre-execute pipeline; the same
+//      boundary symmetrically covers human git-commit writes — 02 §2 A1
+//      documented miss, not unique to this rule);
+//   ③ approved project — an `status: active` plan whose body names the
+//      target path (structural approximation via activePlanReferencing; the
+//      rule's own landing writes ride this leg — the first legal consumer of
+//      the rule is its own host plan).
+// Structural-subset decomposition: the identity-dependent leg (human)
+// degrades to an unverified-writer note and never denies by itself; the
+// actor-independent legs stay decidable — protected path ∧ no active-plan
+// reference denies on the structural face too. Plan corpus NOT injected →
+// fail-closed deny (the approved-project leg cannot be evaluated; callers
+// that evaluate this rule must inject ctx.plans — the DSH adapter and
+// gate-check CLI do).
+
+export const LAW_PROTECTED_FAMILIES = [
+  { prefix: "plugin/dsh/src/law/" },
+  { path: "missions/autonomy.policy.yml" },
+  { path: "tools/mission-driver/src/plan-check.mjs" },
+  { path: "tools/mission-driver/src/gate-check.mjs" },
+];
+
+/** Is one absolute path inside a protected law family of this project root? */
+export function isLawProtectedPath(absPath, projectRoot) {
+  if (typeof absPath !== "string" || typeof projectRoot !== "string" || projectRoot === "") return false;
+  const root = toPosixPath(projectRoot);
+  const path = toPosixPath(absPath);
+  if (!path.startsWith(root + "/")) return false;
+  const rel = path.slice(root.length + 1);
+  return LAW_PROTECTED_FAMILIES.some((f) => (f.prefix !== undefined ? rel.startsWith(f.prefix) : rel === f.path));
+}
+
+function lawSelfProtectionRule(action, currentFileState, ctx = {}) {
+  if (typeof ctx.projectRoot !== "string" || ctx.projectRoot === "") {
+    return {
+      verdict: "allow",
+      reason:
+        "law-self-protection: projectRoot not injected on this face — protected-path membership not decidable, outside domain (the DSH adapter and gate-check CLI inject ctx.projectRoot)",
+    };
+  }
+  if (!isLawProtectedPath(action.path, ctx.projectRoot)) {
+    return { verdict: "allow", reason: "law-self-protection: target is not a protected law face — outside domain" };
+  }
+  const actor = action.actor;
+  const actorRole = actor && typeof actor.role === "string" ? actor.role : null;
+  const path = toPosixPath(action.path);
+  if (actorRole === "human") {
+    return {
+      verdict: "allow",
+      reason: `law-self-protection: protected-path write by a human actor on ${path} (02 §4.7 literal exception ① — human)`,
+    };
+  }
+  const reference = activePlanReferencing(action.path, ctx);
+  if (reference !== null) {
+    return {
+      verdict: "allow",
+      reason: `law-self-protection: protected-path write covered by the approved-project exception — active plan ${reference.plan} line ${reference.line} names this target (02 §4.7 literal exception ③)`,
+    };
+  }
+  if (!Array.isArray(ctx.plans)) {
+    return {
+      verdict: "deny",
+      reason: `law-self-protection: ${path} is a protected law face (law implementation / policy data / enforcement CLI, 02 §4.7 P8) and the plan corpus is not injected on this face — the approved-project exception cannot be evaluated; P8 is the unconditional adversarial face and fails closed. Legal channels: human actor (role=human), CI (writes outside the pre-execute pipeline), or an approved project (an active plan declaring this path as a target — inject ctx.plans)`,
+    };
+  }
+  return {
+    verdict: "deny",
+    reason: `law-self-protection: ${path} is a protected law face (law implementation / policy data / enforcement CLI) — AI writes deny (02 §4.7 P8: the enforced may not rewrite the enforcer). Legal channels: human actor (role=human), CI (writes outside the pre-execute pipeline), or an approved project (an active plan whose body declares this path as a target)${actorRole === null ? "; actor role not verifiable on this face (id-only/absent actor — unverified-writer posture, the human exception cannot be claimed)" : ` (actor role ${actorRole} is not in the exception set — the literal exceptions are human / CI / approved project)`}`,
+  };
+}
+
+registerRule("law-self-protection", lawSelfProtectionRule, { structural: true });
