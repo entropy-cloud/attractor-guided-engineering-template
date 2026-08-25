@@ -41,6 +41,41 @@ gates:
     match: "{{plansDir}}/**/*.md"
     rule: plan-completed
     mode: enforce
+  # Supporting gates (0815-3, M2-WI17..WI20) — direct-enforce posture ruling:
+  # all four deny faces are narrow decidable facts (action-record content /
+  # budget integer comparison / claim field writer & holder / verify key
+  # enumeration) with no matcher ambiguity, so the 02 §6 observe-first ramp
+  # (which guards against false-killing legitimate in-run edits) does not
+  # apply; observe-mode would also be unequipped in M2 (the observation-loop
+  # consumer is the M3 supervisor). Decision + rollback trigger recorded in
+  # docs/plans/age-autonomy/2026-08-25-0815-3 Phase 1.
+  - id: nothing-claim
+    match: "action:terminal-claim"     # terminal claims are actions, not file paths (02 §3)
+    rule: nothing-claim-guard
+    mode: enforce
+  - id: claim-taken
+    match: "{{plansDir}}/**/*.md"
+    rule: claim-validity
+    mode: enforce
+  - id: verify-keys
+    match: "{{plansDir}}/**/*.md"
+    rule: verify-keys
+    mode: enforce
+  - id: meter-guard
+    match: "{{roadmapPath}}"           # roadmap frontmatter budget meter (02 §4.6)
+    rule: audit-rounds-overflow
+    mode: enforce
+  # append-only: direct enforce per the 02 §6 exception clause (net-regression
+  # guards; same authorization reference as the three hard gates, 0815-2
+  # Phase 3). One rule, two match domains (plans + roadmap DAR section).
+  - id: append-only-records
+    match: "{{plansDir}}/**/*.md"
+    rule: record-append-only
+    mode: enforce
+  - id: append-only-records-roadmap
+    match: "{{roadmapPath}}"
+    rule: record-append-only
+    mode: enforce
 triggers:
   # Execution semantics belong to M3/WI26 — schema-pinned syntax only.
   - when: "plan.full-tick and mechanical-verification-missing"

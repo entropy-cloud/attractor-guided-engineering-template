@@ -105,7 +105,10 @@ export function parseProposedAction(input) {
  * rule fn: (action, currentFileState, ctx) →
  *   { verdict: "allow" | "deny" | "observe", reason?: string }
  * currentFileState: { text?: string, hash?: string } | null
- * ctx: { plansDir?: string, roadmapPath?: string, agentNames?: string[] }
+ * ctx: { plansDir?: string, roadmapPath?: string, agentNames?: string[],
+ *         commands?: Record<string,string>, maxAuditRounds?: number,
+ *         plans?: Array<{text: string, path?: string}>, now?: number | string,
+ *         defaultVerifyKeys?: string[] }
  */
 const RULES = new Map();
 
@@ -249,7 +252,7 @@ registerRule("plan-structure", planStructureRule, { structural: true });
  * @param {object} [opts]
  * @param {object} [opts.policy] parsed policy ({ gates: [...] }); absent → no gates
  * @param {{ text?: string, hash?: string }} [opts.currentFileState]
- * @param {{ plansDir?: string, roadmapPath?: string, agentNames?: string[] }} [opts.ctx]
+ * @param {{ plansDir?: string, roadmapPath?: string, agentNames?: string[], commands?: Record<string,string>, maxAuditRounds?: number, plans?: Array<{text: string, path?: string}>, now?: number | string, defaultVerifyKeys?: string[] }} [opts.ctx]
  * @returns {{
  *   decision: "allow" | "deny",
  *   reason: string | null,

@@ -35,8 +35,10 @@ const ALLOWED_MODULES = [
   "ledger-frontmatter.mjs", "ledger-sections.mjs", "ledger-dualread.mjs",
   // shared law kernel (age-autonomy M2-WI12; law-policy reachable via
   // config.js autonomyPolicy load, law-core via law-policy, law-rules
-  // (M2-WI14..16 hard gates) via law-policy's registration import)
-  "law-core.mjs", "law-policy.mjs", "law-rules.mjs",
+  // (M2-WI14..16 hard gates + M2-WI17..20 supporting gates) via law-policy's
+  // registration import; verify-runner (M2-WI19 commands runner) is
+  // unreachable-allowed until the M3 supervisor wiring — 0815-3)
+  "law-core.mjs", "law-policy.mjs", "law-rules.mjs", "verify-runner.mjs",
 ];
 
 test("package.json declares the verbatim dsh bundle manifest shape (R1 §5)", () => {

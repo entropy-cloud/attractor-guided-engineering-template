@@ -1,8 +1,10 @@
 /**
  * gate-check.mjs — law deployment face 3: pure-structure CLI (02 §6).
  *
- * Two modes (age-autonomy M2-WI12, plan
- * docs/plans/age-autonomy/2026-08-25-0815-1 Phase 3):
+ * Three modes (age-autonomy M2-WI12 plan
+ * docs/plans/age-autonomy/2026-08-25-0815-1 Phase 3; `--verify` =
+ * M2-WI19 mechanical-verification execution face, plan
+ * docs/plans/age-autonomy/2026-08-25-0815-3 Phase 3):
  *
  *   --policy <autonomy.policy.yml>   Validate one policy file against the
  *                                    schema (structured JSON output, exit 0/1).
@@ -19,6 +21,23 @@
  *                                    files are out of the structural domain
  *                                    (dual-read transition, allow + note).
  *
+ *   <plan.md> --verify               Mechanical-verification execution face
+ *                                    (02 §5): resolve the plan's `verify`
+ *                                    keys (mission defaults when absent) —
+ *                                    never Proof text — against the owning
+ *                                    mission's `commands.*`, run the
+ *                                    verify-keys gate, then EXECUTE the
+ *                                    commands via verify-runner.mjs and emit
+ *                                    per-key `{exitCode, passLine}` data
+ *                                    (basisHash = computeBasisHash of the
+ *                                    plan content; 01 §4.2 grammar). stdout
+ *                                    JSON only — the pass line is NOT
+ *                                    written into the plan file (the writer
+ *                                    stays the supervisor / engine
+ *                                    BUILD_VERIFY face; M3/WI26 takes over
+ *                                    dispatch). exit 0 iff every key maps to
+ *                                    a non-empty command with exit code 0.
+ *
  * Bare invocation prints usage and exits 1.
  *
  * Deliberately NOT a build-bundle module (main.js CLI family, same as
@@ -26,16 +45,19 @@
  * assets copy, not this CLI.
  */
 
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { evaluateGates, structuralRuleIds } from "./law-core.mjs";
 import { loadPolicyFile, policyAgentNames } from "./law-policy.mjs";
+import { loadMission } from "./mission-check.mjs";
+import { resolveVerifyPlan, runVerifyCommands } from "./verify-runner.mjs";
 
 function usage() {
   console.error("Usage:");
   console.error("  gate-check.mjs --policy <autonomy.policy.yml>    validate policy schema (exit 0/1)");
   console.error("  gate-check.mjs <plan.md>                         single-file structural-face evaluation");
+  console.error("  gate-check.mjs <plan.md> --verify                run the plan's verify keys via the mission commands runner");
 }
 
 function runPolicyMode(file) {
@@ -109,7 +131,132 @@ function runSingleFileMode(file) {
   process.exit(out.decision === "allow" ? 0 : 1);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// ── <plan.md> --verify: mechanical-verification execution face (02 §5) ──────
+
+/**
+ * Ancestor walk from the plan file: the first missions/*.json whose resolved
+ * plansDir CONTAINS the plan is the owning mission (plansDir is the
+ * discriminator — several missions may share a project root). Full extends
+ * resolution via mission-check's loadMission; unvalidatable files skip.
+ */
+function discoverOwningMission(planAbs) {
+  let dir = dirname(planAbs);
+  for (;;) {
+    const missionsDir = join(dir, "missions");
+    if (existsSync(missionsDir)) {
+      for (const entry of readdirSync(missionsDir)) {
+        if (!entry.endsWith(".json")) continue;
+        const missionFile = join(missionsDir, entry);
+        try {
+          const mission = loadMission(missionFile, dir);
+          if (typeof mission.plansDir === "string" && mission.plansDir !== "") {
+            const plansAbs = resolve(dir, mission.plansDir);
+            if (planAbs === plansAbs || planAbs.startsWith(plansAbs + "/") || planAbs.startsWith(plansAbs + "\\")) {
+              return { mission, projectRoot: dir, missionFile };
+            }
+          }
+        } catch {
+          // base configs / invalid missions do not own plan dirs
+        }
+      }
+    }
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+async function runVerifyMode(file) {
+  const abs = resolve(file);
+  let text;
+  try {
+    text = readFileSync(abs, "utf8");
+  } catch (e) {
+    console.log(JSON.stringify({ file: abs, decision: "deny", error: e instanceof Error ? e.message : String(e) }, null, 2));
+    process.exit(1);
+  }
+  const owned = discoverOwningMission(abs);
+  if (owned === null) {
+    console.log(
+      JSON.stringify(
+        {
+          file: abs,
+          decision: "deny",
+          reason: "no owning mission found — walk ancestors for missions/*.json whose plansDir contains this plan (verify keys resolve against that mission's commands.*)",
+        },
+        null,
+        2,
+      ),
+    );
+    process.exit(1);
+  }
+  const { mission, projectRoot, missionFile } = owned;
+  const commands = mission.commands && typeof mission.commands === "object" ? mission.commands : {};
+  const verifyField = (() => {
+    // local frontmatter read (scanPlanLedger import would pull the whole
+    // scanner for one field; the runner already owns the key resolution)
+    const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+    if (!m) return undefined;
+    const line = m[1].split(/\r?\n/).find((l) => /^verify:/.test(l));
+    if (!line) return undefined;
+    const raw = line.slice("verify:".length).trim();
+    if (raw.startsWith("[") && raw.endsWith("]")) {
+      return raw.slice(1, -1).split(",").map((s) => s.trim().replace(/^["']|["']$/g, "")).filter((s) => s !== "");
+    }
+    return [raw.replace(/^["']|["']$/g, "")];
+  })();
+
+  const resolved = resolveVerifyPlan({ verify: verifyField, commands });
+  const gateOut = evaluateGates(
+    { type: "write", path: abs, proposedContent: text },
+    {
+      policy: { gates: [{ id: "verify-keys", match: "{{plansDir}}/**/*.md", rule: "verify-keys", mode: "enforce" }] },
+      ctx: { plansDir: dirname(abs), commands },
+    },
+  );
+  const runId = process.env.MISSION_DRIVER_RUN_ID ?? `gate-check-${new Date().toISOString().replace(/[-:]/g, "").split(".")[0]}`;
+  const { basisHash, results } = await runVerifyCommands({
+    keys: resolved.keys,
+    commands,
+    projectRoot,
+    planText: text,
+    runId,
+  });
+  const allGreen = resolved.ok && gateOut.decision === "allow" && results.length > 0 && results.every((r) => r.exitCode === 0);
+  console.log(
+    JSON.stringify(
+      {
+        file: abs,
+        face: "verify-runner",
+        mission: mission.name,
+        missionFile,
+        projectRoot,
+        runId,
+        verifyKeys: resolved.keys,
+        usedDefaultKeys: resolved.usedDefault,
+        keyResolution: resolved.ok ? "ok" : { problems: resolved.problems },
+        gateCheck: { decision: gateOut.decision, reason: gateOut.reason, observations: gateOut.observations },
+        basisHash,
+        results: results.map(({ key, command, exitCode, timedOut, durationMs, passLine, output }) => ({
+          key,
+          command,
+          exitCode,
+          timedOut,
+          durationMs,
+          passLine,
+          output,
+        })),
+        decision: allGreen ? "allow" : "deny",
+        note: "pass-line data only — the plan file is not written by this CLI (writer = supervisor / engine BUILD_VERIFY face, M3/WI26 takes over dispatch)",
+      },
+      null,
+      2,
+    ),
+  );
+  process.exit(allGreen ? 0 : 1);
+}
+
+async function main() {
   const argv = process.argv.slice(2);
   if (argv.length === 0) {
     usage();
@@ -122,14 +269,23 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       process.exit(1);
     }
     runPolicyMode(file);
-  } else if (argv[0].startsWith("--")) {
+    return;
+  }
+  if (argv[0].startsWith("--")) {
     usage();
     process.exit(1);
-  } else {
-    if (argv.length > 1) {
-      usage();
-      process.exit(1);
-    }
-    runSingleFileMode(argv[0]);
   }
+  if (argv.length === 2 && argv[1] === "--verify") {
+    await runVerifyMode(argv[0]);
+    return;
+  }
+  if (argv.length > 1) {
+    usage();
+    process.exit(1);
+  }
+  runSingleFileMode(argv[0]);
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await main();
 }

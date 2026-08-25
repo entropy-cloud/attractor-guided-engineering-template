@@ -467,8 +467,32 @@ function checkPredicateVocabulary(node) {
   return null;
 }
 
-// ── requireDistinctModel static satisfiability (02 §4.9, check-policy face) ─
+// ── limits precedence (0815-1 Phase 2 Decision; consumer switch = 0815-3) ───
 
+/**
+ * Resolve the effective maxAuditRounds: policy `limits.maxAuditRounds` is
+ * authoritative, mission config (`flow.maxAuditRounds`, the engine's
+ * existing channel in flows JSON / mission-level flow overrides) is the
+ * fallback — one authority + one fallback per constraint. Both absent → 0
+ * (= no audit concept; the audit-rounds-overflow gate then denies every new
+ * deep-audit dispatch, mirroring the engine posture that never enters audit
+ * rounds with max=0). Callers (host adapter, gate-check CLI, the M3
+ * supervisor) resolve once and inject `ctx.maxAuditRounds` — rules never
+ * import this module (import-cycle boundary, see law-rules.mjs header).
+ */
+export function resolveMaxAuditRounds(policy, missionConfig) {
+  const limits = policy && isPlainObject(policy.limits) ? policy.limits : null;
+  if (limits !== null && typeof limits.maxAuditRounds === "number" && Number.isInteger(limits.maxAuditRounds) && limits.maxAuditRounds >= 0) {
+    return limits.maxAuditRounds;
+  }
+  const flow = missionConfig && isPlainObject(missionConfig.flow) ? missionConfig.flow : null;
+  if (flow !== null && typeof flow.maxAuditRounds === "number" && Number.isInteger(flow.maxAuditRounds) && flow.maxAuditRounds >= 0) {
+    return flow.maxAuditRounds;
+  }
+  return 0;
+}
+
+// ── requireDistinctModel static satisfiability (02 §4.9, check-policy face) ─
 /**
  * Static satisfiability check for `requireDistinctModel: true` agents
  * (age-autonomy M2-WI14): resolve the dispatch mapping

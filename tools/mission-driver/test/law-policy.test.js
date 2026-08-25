@@ -61,6 +61,15 @@ describe("real instance", () => {
       { id: "roadmap-audit-binding", match: "{{roadmapPath}}", rule: "roadmap-audit-binding", mode: "enforce" },
       { id: "writer-identity", match: "{{plansDir}}/**/*.md", rule: "writer-identity", mode: "enforce" },
       { id: "plan-completed", match: "{{plansDir}}/**/*.md", rule: "plan-completed", mode: "enforce" },
+      // supporting gates (0815-3): registered per-phase as the rules land —
+      // nothing-claim-guard + audit-rounds-overflow (Phase 1),
+      // claim-validity (Phase 2), verify-keys + record-append-only (Phase 3).
+      { id: "nothing-claim", match: "action:terminal-claim", rule: "nothing-claim-guard", mode: "enforce" },
+      { id: "claim-taken", match: "{{plansDir}}/**/*.md", rule: "claim-validity", mode: "enforce" },
+      { id: "verify-keys", match: "{{plansDir}}/**/*.md", rule: "verify-keys", mode: "enforce" },
+      { id: "meter-guard", match: "{{roadmapPath}}", rule: "audit-rounds-overflow", mode: "enforce" },
+      { id: "append-only-records", match: "{{plansDir}}/**/*.md", rule: "record-append-only", mode: "enforce" },
+      { id: "append-only-records-roadmap", match: "{{roadmapPath}}", rule: "record-append-only", mode: "enforce" },
     ]);
     assert.deepEqual(policyAgentNames(r.policy), ["drafter", "reviewer", "auditor", "executor"]);
     assert.equal(r.policy.triggers.length, 7);

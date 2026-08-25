@@ -58,11 +58,16 @@ const ALLOWED_MODULES = [
   // shared law kernel (age-autonomy M2-WI12; 0815-1 ruling extends the 0635-1
   // engine-side placement to law): law-policy.mjs is reachable via config.js
   // (autonomyPolicy fail-fast load), law-core.mjs via law-policy (rule-name
-  // cross-validation). law-rules.mjs (M2-WI14..16 hard gates, 0815-2) is
-  // reachable via law-policy's side-effect rule registration import.
+  // cross-validation). law-rules.mjs (M2-WI14..16 hard gates, 0815-2, +
+  // supporting gates M2-WI17..20, 0815-3) is reachable via law-policy's
+  // side-effect rule registration import. verify-runner.mjs (M2-WI19
+  // mechanical-verification commands runner, 0815-3) is unreachable-allowed
+  // for now — its M2 consumer is the engine-side gate-check CLI; the M3
+  // supervisor (WI26) consumes this assets copy (same posture as the ledger
+  // modules before their 0635-3 wiring).
   // gate-check.mjs is deliberately NOT here — it is an engine-side CLI
   // (main.js family), not a bundled library face.
-  "law-core.mjs", "law-policy.mjs", "law-rules.mjs",
+  "law-core.mjs", "law-policy.mjs", "law-rules.mjs", "verify-runner.mjs",
 ];
 
 // NOT bundled (packaging doc): monitor server, draft-job detached-process
@@ -209,10 +214,15 @@ function listFiles(dir, prefix) {
   return out;
 }
 
-/** Build the copy plan: dest path (relative to assets/) → Buffer. */
-function buildPlan(closure) {
+/** Build the copy plan: dest path (relative to assets/) → Buffer.
+ * Copies EVERY allowed module (not just the import closure): unreachable
+ * allowed modules land as inert pre-wiring copies so assets/src == ALLOWED
+ * exactly (bundle-scaffold mirror) and future consumers (e.g. the M3
+ * supervisor over verify-runner.mjs, 0815-3) import an already-materialized
+ * copy instead of churning the build semantics at wiring time. */
+function buildPlan() {
   const plan = new Map();
-  for (const name of closure) {
+  for (const name of ALLOWED_MODULES) {
     plan.set(`src/${name}`, readFileSync(join(ENGINE_SRC, name)));
   }
   for (const dir of ASSET_DIRS) {
@@ -256,7 +266,7 @@ const allowed = new Set(ALLOWED_MODULES);
 const unreachable = [...allowed].filter((m) => !closure.has(m));
 console.log(`closure ok: ${closure.size} modules reachable from entries ⊆ allowed set (${ALLOWED_MODULES.length})`);
 
-const plan = buildPlan(closure);
+const plan = buildPlan();
 if (checkMode) {
   checkPlan(plan);
   console.log(`freshness ok: assets/ matches the build plan (${plan.size} files, content-equal)`);

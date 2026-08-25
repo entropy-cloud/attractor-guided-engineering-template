@@ -28,7 +28,7 @@
 import { appendFileSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { evaluateGates } from '../../assets/src/law-core.mjs'
-import { loadPolicyFile, policyAgentNames } from '../../assets/src/law-policy.mjs'
+import { loadPolicyFile, policyAgentNames, resolveMaxAuditRounds } from '../../assets/src/law-policy.mjs'
 import type { Context } from '@deepseek-ai/cordis'
 import type { PreToolDecision, ToolExecution } from '@deepseek-ai/dsh-tools'
 
@@ -182,6 +182,10 @@ export interface MissionLawContext {
   plansDir: string
   roadmapPath: string
   agentNames: string[]
+  /** mission commands.* map — injected as gate ctx for verify-keys (0815-3). */
+  commands: Record<string, string>
+  /** policy-limits-first / mission-flow-fallback budget (0815-1 ruling). */
+  maxAuditRounds: number
 }
 
 function toPosix(p: string): string {
@@ -223,7 +227,13 @@ function loadLawContextAt(ancestor: string, io: LawGateIo): MissionLawContext | 
     if (!entry.endsWith('.json')) continue
     const text = io.readTextFile(join(ancestor, 'missions', entry))
     if (text === null) continue
-    let mission: { autonomyPolicy?: unknown; plansDir?: unknown; roadmapPath?: unknown }
+    let mission: {
+      autonomyPolicy?: unknown
+      plansDir?: unknown
+      roadmapPath?: unknown
+      commands?: unknown
+      flow?: unknown
+    }
     try {
       mission = JSON.parse(text) as typeof mission
     } catch {
@@ -239,12 +249,25 @@ function loadLawContextAt(ancestor: string, io: LawGateIo): MissionLawContext | 
       }
     })()
     if (loaded === null || !loaded.ok) continue
+    const commands: Record<string, string> = {}
+    if (mission.commands !== null && typeof mission.commands === 'object' && !Array.isArray(mission.commands)) {
+      for (const [k, v] of Object.entries(mission.commands as Record<string, unknown>)) {
+        if (typeof v === 'string') commands[k] = v
+      }
+    }
+    // Budget resolution (0815-1 ruling; consumer switch = 0815-3): policy
+    // limits are authoritative, the mission-level `flow.maxAuditRounds`
+    // override is the fallback. The engine flows JSON fallback channel stays
+    // engine-side — the M3 supervisor resolves it at its dispatch point.
+    const maxAuditRounds = resolveMaxAuditRounds(loaded.policy, mission)
     return {
       projectRoot: ancestor,
       policy: loaded.policy as MissionLawContext['policy'],
       plansDir: typeof mission.plansDir === 'string' && mission.plansDir !== '' ? toPosix(resolve(ancestor, mission.plansDir)) : '',
       roadmapPath: typeof mission.roadmapPath === 'string' && mission.roadmapPath !== '' ? toPosix(resolve(ancestor, mission.roadmapPath)) : '',
       agentNames: policyAgentNames(loaded.policy),
+      commands,
+      maxAuditRounds,
     }
   }
   return null
@@ -304,7 +327,13 @@ export function evaluateLawCall(
     {
       policy: lawCtx.policy,
       currentFileState: disk === null ? undefined : { text: disk },
-      ctx: { plansDir: lawCtx.plansDir, roadmapPath: lawCtx.roadmapPath, agentNames: lawCtx.agentNames },
+      ctx: {
+        plansDir: lawCtx.plansDir,
+        roadmapPath: lawCtx.roadmapPath,
+        agentNames: lawCtx.agentNames,
+        commands: lawCtx.commands,
+        maxAuditRounds: lawCtx.maxAuditRounds,
+      },
     },
   )
 

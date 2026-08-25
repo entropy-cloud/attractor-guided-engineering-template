@@ -21,16 +21,18 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { Context } from "@deepseek-ai/cordis";
 import {
   evaluateGates,
+  getRule,
   registerRule,
 } from "../assets/src/law-core.mjs";
-import { parsePolicy, policyAgentNames, checkDistinctModelSatisfiability } from "../assets/src/law-policy.mjs";
-import { scanPlanLedger, computeBasisHash, deriveCompleted } from "../assets/src/ledger-sections.mjs";
+import { parsePolicy, policyAgentNames, checkDistinctModelSatisfiability, resolveMaxAuditRounds } from "../assets/src/law-policy.mjs";
+import { scanPlanLedger, computeBasisHash, deriveCompleted, draftPlans, activePlans } from "../assets/src/ledger-sections.mjs";
+import { defaultVerifyKeys, passLineFor, resolveVerifyPlan, runVerifyCommands } from "../assets/src/verify-runner.mjs";
 import {
   evaluateLawCall,
   extractLawAction,
@@ -1046,4 +1048,665 @@ test("corpus: the repo's REAL enforce policy denies a full-tick unauthorized wri
   assert.match(out.reason, /gate plan-completed \(plan-completed\) denied: .*without an audit receipt and without a valid claim in the prior state/);
   const enforcedObs = out.observations.find((o) => o.rule === "plan-completed");
   assert.equal(enforcedObs.mode, "enforce");
+});
+
+/* ── 11. supporting gates: nothing-claim-guard + audit-rounds-overflow ────── */
+/* (M2-WI17 meter faces, plan 2026-08-25-0815-3 Phase 1)                      */
+
+const NOTHING_POLICY = {
+  gates: [{ id: "nothing-claim", match: "action:terminal-claim", rule: "nothing-claim-guard", mode: "enforce" }],
+};
+
+function terminalClaim(content, { plans, actor } = {}) {
+  return evaluateGates(
+    {
+      type: "terminal-claim",
+      path: "_tmp/run-1/terminal-claim.json",
+      proposedContent: typeof content === "string" ? content : JSON.stringify(content),
+      ...(actor ? { actor } : {}),
+    },
+    { policy: NOTHING_POLICY, ctx: { ...(plans !== undefined ? { plans } : {}) } },
+  );
+}
+
+// A REAL plansDir fixture (files on disk, read into records — not mocks):
+// draft, active-with-unfinished-work, and derived-completed plans.
+function fixturePlans(root) {
+  const dir = join(root, "docs", "plans", "demo");
+  mkdirSync(dir, { recursive: true });
+  const draftFile = join(dir, "draft-one.md");
+  writeFileSync(draftFile, LEGAL_PLAN.replace("status: active", "status: draft"), "utf8");
+  const activeFile = join(dir, "active-one.md");
+  writeFileSync(activeFile, LEGAL_PLAN.replace("- [x] only item", "- [ ] only item"), "utf8");
+  const doneFile = join(dir, "done-one.md");
+  const doneBase = fullTickPlan({});
+  writeFileSync(
+    doneFile,
+    fullTickPlan({
+      closureBody: `- dispatch audit ${AUDIT_ID} to ses_auditor_1\n- accepted ${AUDIT_ID}：审计通过\n`,
+      verificationBody: `\n- pass test run-1 basisHash=${computeBasisHash(doneBase)} exit=0\n`,
+    }),
+    "utf8",
+  );
+  return [draftFile, activeFile, doneFile].map((p) => ({ text: readFileSync(p, "utf8"), path: p }));
+}
+
+test("gate-nothing: real plansDir fixture — predicate injection face verified on disk records", () => {
+  const root = tmpProject();
+  try {
+    const records = fixturePlans(root);
+    assert.deepEqual(draftPlans(records).map((p) => basename(p)), ["draft-one.md"]);
+    assert.deepEqual(activePlans(records).map((p) => basename(p)), ["active-one.md"]);
+    // derived-completed plans exit activePlans() — the nothing claim only
+    // weighs visible unfinished work.
+    const doneOnly = records.filter((r) => basename(r.path) === "done-one.md");
+    assert.equal(deriveCompleted(doneOnly[0].text).completed, true);
+    assert.deepEqual(activePlans(doneOnly), []);
+    assert.deepEqual(draftPlans(doneOnly), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("gate-nothing: nothing-to-draft with draft/active work remaining denies pointing at the plans", () => {
+  const root = tmpProject();
+  try {
+    const records = fixturePlans(root);
+    const out = terminalClaim({ kind: "nothing-to-draft" }, { plans: records });
+    assert.equal(out.decision, "deny");
+    assert.match(out.reason, /nothing-claim-guard: nothing-to-draft claim denied — visible unfinished work remains/);
+    assert.match(out.reason, /draftPlans=1 \(draft-one\.md\)/);
+    assert.match(out.reason, /activePlans=1 \(active-one\.md\)/);
+    // only-draft vs only-active columns of the truth table
+    const onlyDraft = terminalClaim({ kind: "nothing-to-draft" }, { plans: records.filter((r) => !basename(r.path).startsWith("active")) });
+    assert.equal(onlyDraft.decision, "deny");
+    assert.match(onlyDraft.reason, /draftPlans=1/);
+    const onlyActive = terminalClaim({ kind: "nothing-to-draft" }, { plans: records.filter((r) => !basename(r.path).startsWith("draft")) });
+    assert.equal(onlyActive.decision, "deny");
+    assert.match(onlyActive.reason, /activePlans=1/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("gate-nothing: draftPlans()==0 ∧ activePlans()==0 allows and emits the Deep Audit trigger signal shape", () => {
+  const root = tmpProject();
+  try {
+    const records = fixturePlans(root).filter((r) => basename(r.path) === "done-one.md");
+    const out = terminalClaim({ kind: "nothing-to-draft", reason: "roadmap 无未勾且无 open plans" }, { plans: records });
+    assert.equal(out.decision, "allow");
+    assert.match(out.observations[0].reason, /nothing-to-draft claim verified \(draftPlans\(\)==0 ∧ activePlans\(\)==0\)/);
+    // trigger signal data shape (consumed by the M3/WI26 supervisor; pinned
+    // here at the rule level — evaluateGates surfaces verdict/reason only)
+    const rule = getRule("nothing-claim-guard");
+    const verdict = rule.fn(
+      { type: "terminal-claim", path: "_tmp/run-1/terminal-claim.json", proposedContent: JSON.stringify({ kind: "nothing-to-draft" }) },
+      null,
+      { plans: records },
+    );
+    assert.deepEqual(verdict.trigger, {
+      dispatch: "deep-audit",
+      when: "terminal-claim=nothing-to-draft ∧ draftPlans()==0 ∧ activePlans()==0",
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("gate-nothing: kind lexeme / non-JSON / missing records columns", () => {
+  const root = tmpProject();
+  try {
+    const records = fixturePlans(root);
+    // kind lexeme: only the exact nothing-to-draft lexeme enters the deny face
+    const typo = terminalClaim({ kind: "nothing-to-drafter" }, { plans: records });
+    assert.equal(typo.decision, "allow");
+    assert.match(typo.observations[0].reason, /kind="nothing-to-drafter" is not "nothing-to-draft" — outside this gate's deny face/);
+    const otherKind = terminalClaim({ kind: "blocked" }, { plans: records });
+    assert.equal(otherKind.decision, "allow");
+    // non-JSON action record = decidable malformed fact → deny
+    const badJson = terminalClaim("nothing to draft, trust me", { plans: [] });
+    assert.equal(badJson.decision, "deny");
+    assert.match(badJson.reason, /not parseable JSON/);
+    // records not injected (structural subset / non-supervisor face): the
+    // predicates are unobservable — allow + note, never a silent deny
+    const noRecords = terminalClaim({ kind: "nothing-to-draft" });
+    assert.equal(noRecords.decision, "allow");
+    assert.match(noRecords.observations[0].reason, /plan records not injected on this face/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+function roadmapBudget({ rounds = 0, dar = "", extraFm = "" } = {}) {
+  return `---
+audit-rounds: ${rounds}
+${extraFm}---
+# Roadmap
+
+### M1 — First
+
+- [x] WI1 thing
+
+## Deep Audit Record
+
+${dar}`;
+}
+
+const NEW_DISPATCH = `- dispatch audit #audit-2026-08-25-205251-mission-driver-roadmap-3-9c31d0e2 to ses_auditor_9\n`;
+const OLD_DISPATCH = `- dispatch audit ${AUDIT_ID} to ses_auditor_1\n`;
+
+function meter(proposed, { current, maxAuditRounds } = {}) {
+  return evaluateGates(
+    { type: "write", path: "/r/roadmap.md", proposedContent: proposed },
+    {
+      policy: { gates: [{ id: "meter-guard", match: "{{roadmapPath}}", rule: "audit-rounds-overflow", mode: "enforce" }] },
+      currentFileState: current !== undefined ? { text: current } : undefined,
+      ctx: { roadmapPath: "/r/roadmap.md", ...(maxAuditRounds !== undefined ? { maxAuditRounds } : {}) },
+    },
+  );
+}
+
+test("gate-meter: audit-rounds < max with a NEW dispatch line allows (budget available)", () => {
+  const current = roadmapBudget({ rounds: 2, dar: OLD_DISPATCH });
+  const proposed = roadmapBudget({ rounds: 2, dar: `${OLD_DISPATCH}${NEW_DISPATCH}` });
+  const out = meter(proposed, { current, maxAuditRounds: 3 });
+  assert.equal(out.decision, "allow");
+  assert.match(out.observations[0].reason, /budget available \(audit-rounds=2 < maxAuditRounds=3\) for 1 new dispatch audit line\(s\)/);
+});
+
+test("gate-meter: audit-rounds = max denies the new round; unconfigured (both sources = 0) denies too", () => {
+  const atMax = meter(roadmapBudget({ rounds: 3, dar: OLD_DISPATCH + NEW_DISPATCH }), {
+    current: roadmapBudget({ rounds: 3, dar: OLD_DISPATCH }),
+    maxAuditRounds: 3,
+  });
+  assert.equal(atMax.decision, "deny");
+  assert.match(atMax.reason, /budget exhausted \(audit-rounds=3 ≥ maxAuditRounds=3\) — deny new dispatch/);
+  assert.match(atMax.reason, /raise the budget \(policy limits\.maxAuditRounds, mission flow fallback\) or close the mission via R1/);
+  // unconfigured on both sources (=0 semantics): no audit concept → every
+  // new dispatch line is out of budget (0 ≥ 0), mirroring the engine
+  // posture that never enters audit rounds with max=0.
+  const unconfigured = meter(roadmapBudget({ rounds: 0, dar: NEW_DISPATCH }), {
+    current: roadmapBudget({ rounds: 0, dar: "" }),
+  });
+  assert.equal(unconfigured.decision, "deny");
+  assert.match(unconfigured.reason, /audit-rounds=0 ≥ maxAuditRounds=0/);
+});
+
+test("gate-meter: existing dispatch lines only / no prior state / no DAR / legacy stay inert", () => {
+  // existing lines untouched (accepted line landing on an old dispatch)
+  const landing = meter(roadmapBudget({ rounds: 2, dar: `${OLD_DISPATCH}- accepted ${AUDIT_ID} findings=none：结论\n` }), {
+    current: roadmapBudget({ rounds: 2, dar: OLD_DISPATCH }),
+    maxAuditRounds: 2,
+  });
+  assert.equal(landing.decision, "allow");
+  assert.match(landing.observations[0].reason, /no new dispatch audit lines — budget face inert/);
+  // no currentFileState: new-ness unobservable → allow + note (02 §2)
+  const noCurrent = meter(roadmapBudget({ rounds: 5, dar: NEW_DISPATCH }), { maxAuditRounds: 1 });
+  assert.equal(noCurrent.decision, "allow");
+  assert.match(noCurrent.observations[0].reason, /no currentFileState — new dispatch audit lines not observable/);
+  // no DAR section at all → outside domain
+  const noDar = meter(roadmapBudget({ rounds: 9 }).replace("\n## Deep Audit Record\n\n", ""), {
+    current: roadmapBudget({ rounds: 9 }),
+    maxAuditRounds: 1,
+  });
+  assert.equal(noDar.decision, "allow");
+  assert.match(noDar.observations[0].reason, /no ## Deep Audit Record section — outside domain/);
+  // legacy (no frontmatter) roadmap → dual-read skip
+  const legacy = meter("# Roadmap\n\n## Deep Audit Record\n\n" + NEW_DISPATCH, { current: "# Roadmap\n", maxAuditRounds: 0 });
+  assert.equal(legacy.decision, "allow");
+  assert.match(legacy.observations[0].reason, /outside domain \(dual-read transition\)/);
+});
+
+test("gate-meter: limits precedence — policy authoritative, mission config fallback, else 0 (0815-1 ruling, consumer switch here)", () => {
+  assert.equal(resolveMaxAuditRounds({ limits: { maxAuditRounds: 3 } }, { flow: { maxAuditRounds: 5 } }), 3);
+  assert.equal(resolveMaxAuditRounds({}, { flow: { maxAuditRounds: 5 } }), 5);
+  assert.equal(resolveMaxAuditRounds({ limits: {} }, { flow: { maxAuditRounds: 5 } }), 5);
+  assert.equal(resolveMaxAuditRounds({ limits: { maxAuditRounds: 3 } }, {}), 3);
+  assert.equal(resolveMaxAuditRounds({}, {}), 0);
+  assert.equal(resolveMaxAuditRounds(null, null), 0);
+  // invalid shapes never win: fall through to the fallback / 0
+  assert.equal(resolveMaxAuditRounds({ limits: { maxAuditRounds: -1 } }, { flow: { maxAuditRounds: 5 } }), 5);
+  assert.equal(resolveMaxAuditRounds({ limits: { maxAuditRounds: "3" } }, {}), 0);
+});
+
+/* ── 12. supporting gate: claim-validity (M2-WI18, 02 §4.5) ───────────────── */
+
+const CLAIM_TOKEN = "attempt-2026-08-25-205251-mission-driver-ses_exec_1-1a2b3c4d";
+const OTHER_CLAIM_TOKEN = "attempt-2026-08-25-205251-mission-driver-ses_exec_2-9f8e7d6c";
+const CLAIM_FM = `claim: ${CLAIM_TOKEN}\nclaim-expires: "2099-01-01T00:00:00Z"\n`;
+
+function claimGate(proposed, { current, actor, now, type = "write" } = {}) {
+  return evaluateGates(
+    { type, path: "/p/x.md", proposedContent: proposed, ...(actor ? { actor } : {}) },
+    {
+      policy: { gates: [{ id: "claim-taken", match: "{{plansDir}}/**/*.md", rule: "claim-validity", mode: "enforce" }] },
+      currentFileState: current !== undefined ? { text: current } : undefined,
+      ctx: { plansDir: "/p", ...(now !== undefined ? { now } : {}) },
+    },
+  );
+}
+
+test("gate-claim①: claim writes — dispatcher roles allow, executing roles deny, id-only notes (transition posture)", () => {
+  const current = transitionPlan({ status: "active", drr: PAIRED_DRR, ticked: false });
+  const proposed = transitionPlan({ status: "active", drr: PAIRED_DRR, ticked: false, fmExtra: CLAIM_FM });
+  for (const role of ["executor", "drafter", "reviewer", "auditor"]) {
+    const out = claimGate(proposed, { current, actor: { id: `ses_${role}_1`, role } });
+    assert.equal(out.decision, "deny", role);
+    assert.match(out.reason, /claim fields are written by the dispatcher \(engine \| supervisor\), never by the executing agent/);
+    assert.match(out.reason, new RegExp(`actor role ${role} cannot write claim/claim-expires`));
+  }
+  assert.equal(claimGate(proposed, { current, actor: { id: "ses-flow-1", role: "engine" } }).decision, "allow");
+  assert.equal(claimGate(proposed, { current, actor: { id: "ses-sup-1", role: "supervisor" } }).decision, "allow");
+  // transition-period posture (0815-1 Explore: role not inferable on the DSH
+  // face) — id-only/absent actors note, never deny; M3 swaps the writer.
+  const idOnly = claimGate(proposed, { current, actor: { id: "ses-flow-1" } });
+  assert.equal(idOnly.decision, "allow");
+  assert.match(idOnly.observations[0].reason, /claim writer role not verifiable on this face \(id-only\/absent actor/);
+  const noActor = claimGate(proposed, { current });
+  assert.equal(noActor.decision, "allow");
+  assert.match(noActor.observations[0].reason, /claim writer role not verifiable/);
+});
+
+test("gate-claim①: written claims must carry a future ISO-8601 TTL", () => {
+  const current = transitionPlan({ status: "active", drr: PAIRED_DRR, ticked: false });
+  const unparseable = claimGate(
+    transitionPlan({ status: "active", drr: PAIRED_DRR, ticked: false, fmExtra: `claim: ${CLAIM_TOKEN}\nclaim-expires: "next tuesday"\n` }),
+    { current, actor: { id: "ses-sup-1", role: "supervisor" } },
+  );
+  assert.equal(unparseable.decision, "deny");
+  assert.match(unparseable.reason, /claim write must carry a valid ISO-8601 claim-expires/);
+  const alreadyExpired = claimGate(
+    transitionPlan({ status: "active", drr: PAIRED_DRR, ticked: false, fmExtra: `claim: ${CLAIM_TOKEN}\nclaim-expires: "2026-01-01T00:00:00Z"\n` }),
+    { current, actor: { id: "ses-sup-1", role: "supervisor" }, now: "2026-08-25T00:00:00Z" },
+  );
+  assert.equal(alreadyExpired.decision, "deny");
+  assert.match(alreadyExpired.reason, /already-expired claim-expires .* the TTL must be in the future at write time/);
+});
+
+// Two-item plan pair for ② tick tests: ticking one item must NOT be the
+// full-tick transition (that transition's claim handling belongs to ④ and
+// plan-completed ②) — mid-plan execution ticks keep a second unchecked item.
+function twoItemTickPair(fm) {
+  const unticked = transitionPlan({ status: "active", drr: PAIRED_DRR, ticked: false, fmExtra: fm }).replace(
+    "- [ ] only item",
+    "- [ ] only item\n- [ ] second item",
+  );
+  const tickedFirst = unticked.replace("- [ ] only item", "- [x] only item");
+  return { unticked, tickedFirst };
+}
+
+test("gate-claim②: ticks under a live claim — holder allows, mismatch denies, no-actor degrades to exists ∧ unexpired", () => {
+  const { unticked, tickedFirst } = twoItemTickPair(CLAIM_FM);
+  const holder = claimGate(tickedFirst, { current: unticked, actor: { id: "ses_exec_1" } });
+  assert.equal(holder.decision, "allow");
+  assert.match(holder.observations[0].reason, /claim fields legal on this write/);
+  const mismatch = claimGate(tickedFirst, { current: unticked, actor: { id: "ses-other" } });
+  assert.equal(mismatch.decision, "deny");
+  assert.match(mismatch.reason, /checkbox ticks under a claim are reserved for its holder — actor ses-other does not match the holderSessionId encoded in/);
+  const structural = claimGate(tickedFirst, { current: unticked });
+  assert.equal(structural.decision, "allow");
+  assert.match(structural.observations[0].reason, /holder face degraded to claim-exists ∧ unexpired \(unverified-writer posture\)/);
+});
+
+test("gate-claim②: expiry boundary pinned with the injectable clock (<, =, >)", () => {
+  const { unticked, tickedFirst } = twoItemTickPair(`claim: ${CLAIM_TOKEN}\nclaim-expires: "2026-08-25T12:00:00Z"\n`);
+  const before = claimGate(tickedFirst, { current: unticked, actor: { id: "ses_exec_1" }, now: "2026-08-25T11:00:00Z" });
+  assert.equal(before.decision, "allow");
+  const atBoundary = claimGate(tickedFirst, { current: unticked, actor: { id: "ses_exec_1" }, now: "2026-08-25T12:00:00Z" });
+  assert.equal(atBoundary.decision, "deny");
+  assert.match(atBoundary.reason, /tick under an expired claim/);
+  const after = claimGate(tickedFirst, { current: unticked, actor: { id: "ses_exec_1" }, now: "2026-08-25T13:00:00Z" });
+  assert.equal(after.decision, "deny");
+  assert.match(after.reason, /tick under an expired claim/);
+});
+
+test("gate-claim③: claim action on a live different claim denies (transition face; parse face = duplicate-key rejection)", () => {
+  const current = transitionPlan({ status: "active", drr: PAIRED_DRR, ticked: false, fmExtra: CLAIM_FM });
+  const take = (token, opts = {}) =>
+    claimGate(typeof token === "string" ? token : JSON.stringify(token), { ...opts, type: "claim" });
+  // double-active transition face: one write would leave two live claims.
+  // (The parse face — two `claim:` keys in ONE frontmatter — is rejected by
+  // the M1 parser's duplicate-key denial; that boundary is ledger-frontmatter
+  // territory, not re-tested here.)
+  const second = take({ claim: OTHER_CLAIM_TOKEN }, { current, actor: { id: "ses_exec_2", role: "executor" } });
+  assert.equal(second.decision, "deny");
+  assert.match(second.reason, /single active claim per plan .*already holds the unexpired claim/);
+  const idempotent = take({ claim: CLAIM_TOKEN }, { current, actor: { id: "ses_exec_1" } });
+  assert.equal(idempotent.decision, "allow");
+  assert.match(idempotent.observations[0].reason, /the same \(idempotent\)/);
+  const unclaimed = take({ claim: CLAIM_TOKEN }, { current: transitionPlan({ status: "active", drr: PAIRED_DRR, ticked: false }) });
+  assert.equal(unclaimed.decision, "allow");
+  assert.match(unclaimed.observations[0].reason, /no live.*claim/);
+  const malformed = take("", { current });
+  assert.equal(malformed.decision, "deny");
+  assert.match(malformed.reason, /malformed claim action/);
+  const noCurrent = take({ claim: CLAIM_TOKEN });
+  assert.equal(noCurrent.decision, "allow");
+  assert.match(noCurrent.observations[0].reason, /existing claim not observable on this face/);
+});
+
+test("gate-claim④⑤: full-tick residual claim and out-of-active carrying each deny with the legal path", () => {
+  // ④ entering awaitingClosure must clear the claim in the same write
+  const residual = claimGate(fullTickPlan({ fmExtra: CLAIM_FM }), {
+    current: fullTickPlan({ fmExtra: CLAIM_FM }).replace("- [x] only item", "- [ ] only item"),
+    actor: { id: "ses_exec_1" },
+  });
+  assert.equal(residual.decision, "deny");
+  assert.match(residual.reason, /full-tick without an audit receipt \(entering awaitingClosure\) and still carries a claim — the write must clear the claim fields/);
+  // ⑤ leaving active while keeping the claim
+  const toHeld = claimGate(
+    transitionPlan({ status: "held", drr: PAIRED_DRR, ticked: true, fmExtra: `hold: "x"\n${CLAIM_FM}` }),
+    { current: transitionPlan({ status: "active", drr: PAIRED_DRR, ticked: true, fmExtra: CLAIM_FM }) },
+  );
+  assert.equal(toHeld.decision, "deny");
+  assert.match(toHeld.reason, /claims exist only while status is "active" .* clear the claim in the same write that leaves active/);
+  // claim introduction on a draft plan also hits ⑤ (claims are execution-time)
+  const onDraft = claimGate(transitionPlan({ status: "draft", drr: "", fmExtra: CLAIM_FM }), {
+    current: transitionPlan({ status: "draft", drr: "" }),
+    actor: { id: "ses-sup-1", role: "supervisor" },
+  });
+  assert.equal(onDraft.decision, "deny");
+  assert.match(onDraft.reason, /claims exist only while status is "active"/);
+});
+
+test("gate-claim: clearing — the holder or the dispatcher may clear; a third session denies; inert faces stay inert", () => {
+  const current = transitionPlan({ status: "active", drr: PAIRED_DRR, ticked: true, fmExtra: CLAIM_FM });
+  const clearedNow = transitionPlan({ status: "active", drr: PAIRED_DRR, ticked: true });
+  const byHolder = claimGate(clearedNow, { current, actor: { id: "ses_exec_1" } });
+  assert.equal(byHolder.decision, "allow");
+  const bySupervisor = claimGate(clearedNow, { current, actor: { id: "ses-sup-1", role: "supervisor" } });
+  assert.equal(bySupervisor.decision, "allow");
+  const byThird = claimGate(clearedNow, { current, actor: { id: "ses-third" } });
+  assert.equal(byThird.decision, "deny");
+  assert.match(byThird.reason, /only the claim holder or the dispatcher \(engine \| supervisor\) may clear a claim — actor ses-third is neither/);
+  const idOnlyHolder = claimGate(clearedNow, { current, actor: { id: "ses_exec_1" } });
+  assert.equal(idOnlyHolder.decision, "allow");
+  const idOnlyThird = claimGate(clearedNow, { current, actor: { id: "ses-flow-1" } });
+  assert.equal(idOnlyThird.decision, "deny");
+  assert.match(idOnlyThird.reason, /only the claim holder or the dispatcher/);
+  const noActorClear = claimGate(clearedNow, { current });
+  assert.equal(noActorClear.decision, "allow");
+  assert.match(noActorClear.observations[0].reason, /claim clear writer not verifiable on this face/);
+  // no claim fields in play anywhere → inert
+  const inert = claimGate(transitionPlan({ status: "active", drr: PAIRED_DRR, ticked: true }), {
+    current: transitionPlan({ status: "active", drr: PAIRED_DRR, ticked: false }),
+    actor: { id: "ses_exec_1" },
+  });
+  assert.equal(inert.decision, "allow");
+  assert.match(inert.observations[0].reason, /no claim fields in play — inert/);
+  // legacy-format plan stays out of domain
+  const legacy = claimGate("# Plan\n\n> Plan Status: active\n", { current: "# Plan\n\n> Plan Status: active\n" });
+  assert.equal(legacy.decision, "allow");
+  assert.match(legacy.observations[0].reason, /outside domain \(dual-read transition\)/);
+});
+
+/* ── 13. supporting gate: verify-keys (M2-WI19, 02 §5 command source) ─────── */
+
+const MISSION_COMMANDS = {
+  test: "pnpm --prefix tools/mission-driver test",
+  build: "pnpm --prefix tools/mission-driver/web run build",
+  lint: "pnpm --prefix tools/mission-driver run lint:prompts",
+  "typecheck": "pnpm --prefix tools/mission-driver/web run typecheck",
+  broken: "", // present but EMPTY — enum face must reject, not just membership
+};
+
+function verifyKeysGate(content, ctx = {}) {
+  return evaluateGates(
+    { type: "write", path: "/p/x.md", proposedContent: content },
+    {
+      policy: { gates: [{ id: "verify-keys", match: "{{plansDir}}/**/*.md", rule: "verify-keys", mode: "enforce" }] },
+      ctx: { plansDir: "/p", ...ctx },
+    },
+  );
+}
+
+test("gate-verify-keys: declared keys enumerating non-empty commands allow; unknown/empty mappings deny", () => {
+  const ok = verifyKeysGate(LEGAL_PLAN.replace("verify: [test]", "verify: [test, build]"), { commands: MISSION_COMMANDS });
+  assert.equal(ok.decision, "allow");
+  assert.match(ok.observations[0].reason, /all verify keys enumerate non-empty mission commands \(test, build\)/);
+  const unknown = verifyKeysGate(LEGAL_PLAN.replace("verify: [test]", "verify: [test, deploy]"), { commands: MISSION_COMMANDS });
+  assert.equal(unknown.decision, "deny");
+  assert.match(unknown.reason, /"deploy" is not a mission commands\.\* key/);
+  assert.match(unknown.reason, /\(known here: test, build, lint, typecheck\)/);
+  assert.match(unknown.reason, /plan Proof text is never a command source/);
+  const empty = verifyKeysGate(LEGAL_PLAN.replace("verify: [test]", "verify: [broken]"), { commands: MISSION_COMMANDS });
+  assert.equal(empty.decision, "deny");
+  assert.match(empty.reason, /"broken" maps to an empty command/);
+});
+
+test("gate-verify-keys: missing ctx.commands fails open; absent verify field defers to the derivation face; legacy skips", () => {
+  const noCommands = verifyKeysGate(LEGAL_PLAN);
+  assert.equal(noCommands.decision, "allow");
+  assert.match(noCommands.observations[0].reason, /mission commands not injected on this face .* fail-open/);
+  const noVerify = verifyKeysGate(LEGAL_PLAN.replace("verify: [test]\n", ""), { commands: MISSION_COMMANDS });
+  assert.equal(noVerify.decision, "allow");
+  assert.match(noVerify.observations[0].reason, /no verify field — default-key resolution is the derivation face's concern/);
+  const legacy = verifyKeysGate("# Plan\n\n> Plan Status: active\n", { commands: MISSION_COMMANDS });
+  assert.equal(legacy.decision, "allow");
+  assert.match(legacy.observations[0].reason, /outside domain \(dual-read transition\)/);
+});
+
+/* ── 14. supporting gate: record-append-only (M2-WI20, 02 §4.8) ───────────── */
+
+function appendOnlyGate(proposed, { current } = {}) {
+  return evaluateGates(
+    { type: "write", path: "/p/x.md", proposedContent: proposed },
+    {
+      policy: { gates: [{ id: "append-only-records", match: "{{plansDir}}/**/*.md", rule: "record-append-only", mode: "enforce" }] },
+      currentFileState: current !== undefined ? { text: current } : undefined,
+      ctx: { plansDir: "/p" },
+    },
+  );
+}
+
+function planWithVerification(body) {
+  return `---
+status: active
+mission: demo
+work-item: M1-WI1
+verify: [test]
+---
+# Plan
+
+## Phase 1 — Work
+
+- [ ] only item
+
+## Draft Review Record
+
+- dispatch review ${REVIEW_ID} to ses_reviewer_2
+
+## Verification
+${body}
+## Closure
+`;
+}
+
+const PASS_BODY = `\n- pass test run-1 basisHash=${"a".repeat(64)} exit=0\n`;
+
+test("gate-append-only: tail appends allow; delete / rewrite / reorder / section removal / prose deletion deny naming the first violating line", () => {
+  const current = planWithVerification(PASS_BODY);
+  const appended = planWithVerification(`${PASS_BODY}- pass build run-1 basisHash=${"b".repeat(64)} exit=0\n`);
+  const ok = appendOnlyGate(appended, { current });
+  assert.equal(ok.decision, "allow");
+  assert.match(ok.observations[0].reason, /all append-only sections .* prefix-preserved/);
+
+  const deleted = planWithVerification(`\n- pass build run-1 basisHash=${"b".repeat(64)} exit=0\n`);
+  const del = appendOnlyGate(deleted, { current });
+  assert.equal(del.decision, "deny");
+  assert.match(del.reason, /## Verification line \d+ was deleted or rewritten \("- pass test run-1/);
+
+  const rewritten = planWithVerification(PASS_BODY.replace("exit=0", "exit=0 (reposted)"));
+  const rw = appendOnlyGate(rewritten, { current });
+  assert.equal(rw.decision, "deny");
+  assert.match(rw.reason, /was deleted or rewritten/);
+
+  const reordered = planWithVerification(`${PASS_BODY}- pass build run-1 basisHash=${"b".repeat(64)} exit=0\n`)
+    .replace(`${PASS_BODY}- pass build`, `- pass build run-1 basisHash=${"b".repeat(64)} exit=0\n${PASS_BODY.trim()}\n`);
+  const ro = appendOnlyGate(reordered, { current });
+  assert.equal(ro.decision, "deny");
+
+  const sectionGone = appended.replace("## Verification\n", "## Verification Log\n");
+  const gone = appendOnlyGate(sectionGone, { current });
+  assert.equal(gone.decision, "deny");
+  assert.match(gone.reason, /## Verification section removed/);
+
+  // prose lines are protected too (02 §4.8 as adjudicated in 0815-3: whole-
+  // section prefix preservation, prose included — the M1 tolerance is about
+  // grammar matching, not deletability)
+  const proseCurrent = planWithVerification(`${PASS_BODY}- 执行期复核：证据见日志\n`);
+  const proseDeleted = planWithVerification(PASS_BODY);
+  const pd = appendOnlyGate(proseDeleted, { current: proseCurrent });
+  assert.equal(pd.decision, "deny");
+  assert.match(pd.reason, /was deleted or rewritten \("- 执行期复核：证据见日志"\)/);
+});
+
+test("gate-append-only: trailing blank-run trim tolerated; unchanged file inert; no currentFileState / legacy / roadmap DAR face", () => {
+  const current = planWithVerification(PASS_BODY);
+  const trimmed = current.replace(`${PASS_BODY}## Closure`, `${PASS_BODY.trim()}\n\n## Closure`);
+  const ok = appendOnlyGate(trimmed, { current });
+  assert.equal(ok.decision, "allow");
+  const unchanged = appendOnlyGate(current, { current });
+  assert.equal(unchanged.decision, "allow");
+  const noCurrent = appendOnlyGate(current);
+  assert.equal(noCurrent.decision, "allow");
+  assert.match(noCurrent.observations[0].reason, /no currentFileState — existing lines not observable/);
+  const legacy = appendOnlyGate("# Plan\n\n> Plan Status: active\n", { current: "# Plan\n\n> Plan Status: active\n" });
+  assert.equal(legacy.decision, "allow");
+  assert.match(legacy.observations[0].reason, /proposed state is not a frontmatter ledger; outside domain \(dual-read transition\)/);
+  // roadmap DAR face: deleting an accepted conclusion line denies
+  const roadmapGate = (proposed, cur) =>
+    evaluateGates(
+      { type: "write", path: "/r/roadmap.md", proposedContent: proposed },
+      {
+        policy: { gates: [{ id: "append-only-records-roadmap", match: "{{roadmapPath}}", rule: "record-append-only", mode: "enforce" }] },
+        currentFileState: { text: cur },
+        ctx: { roadmapPath: "/r/roadmap.md" },
+      },
+    );
+  const darCur = roadmapWith(`- dispatch audit ${AUDIT_ID} to ses_auditor_1\n- accepted ${AUDIT_ID} findings=none：结论\n`);
+  const darDeleted = roadmapWith(`- dispatch audit ${AUDIT_ID} to ses_auditor_1\n`);
+  const dd = roadmapGate(darDeleted, darCur);
+  assert.equal(dd.decision, "deny");
+  assert.match(dd.reason, /## Deep Audit Record line \d+ was deleted or rewritten/);
+  const darAppended = roadmapWith(`- dispatch audit ${AUDIT_ID} to ses_auditor_1\n- accepted ${AUDIT_ID} findings=none：结论\n- dispatch audit ${OTHER_AUDIT_ID} to ses_auditor_2\n`);
+  assert.equal(roadmapGate(darAppended, darCur).decision, "allow");
+});
+
+/* ── 15. commands runner (M2-WI19 util, bundled copy) ─────────────────────── */
+
+test("runner: resolveVerifyPlan — declared keys, mission defaults, and problem enumeration", () => {
+  const declared = resolveVerifyPlan({ verify: ["test", "build"], commands: MISSION_COMMANDS });
+  assert.deepEqual(declared, { ok: true, keys: ["test", "build"], problems: [], usedDefault: false });
+  const defaults = resolveVerifyPlan({ verify: undefined, commands: MISSION_COMMANDS });
+  assert.deepEqual(defaults.keys, ["test", "build", "lint", "typecheck"]);
+  assert.equal(defaults.usedDefault, true);
+  assert.deepEqual(defaultVerifyKeys(MISSION_COMMANDS), ["test", "build", "lint", "typecheck"]);
+  assert.deepEqual(defaultVerifyKeys({ test: "true" }), ["test"]);
+  const bad = resolveVerifyPlan({ verify: ["test", "deploy"], commands: MISSION_COMMANDS });
+  assert.equal(bad.ok, false);
+  assert.match(bad.problems.join("; "), /"deploy" is not a mission commands\.\* key/);
+  const malformed = resolveVerifyPlan({ verify: "test", commands: MISSION_COMMANDS });
+  assert.equal(malformed.ok, false);
+  assert.match(malformed.problems.join("; "), /verify field must be an array of command keys/);
+});
+
+test("runner: passLineFor grammar + basisHash binding over the plan text (01 §4.2)", () => {
+  const basisHash = computeBasisHash(LEGAL_PLAN);
+  const line = passLineFor({ key: "test", runId: "run-1", basisHash, exitCode: 0 });
+  assert.equal(line, `- pass test run-1 basisHash=${basisHash} exit=0`);
+  const nullExit = passLineFor({ key: "test", runId: "run-1", basisHash, exitCode: null });
+  assert.match(nullExit, /exit=null$/);
+  const scan = scanPlanLedger(LEGAL_PLAN.replace("## Verification\n", `## Verification\n\n${line}\n`));
+  // the emitted line parses back through the M1 pass-line grammar
+  const verification = scan.verification ?? { passes: [] };
+  assert.equal(verification.passes.length, 1);
+  assert.equal(verification.passes[0].key, "test");
+  assert.equal(verification.passes[0].basisHash, basisHash);
+});
+
+test("runner: runVerifyCommands executes commands.* only — exit codes, timeout, and empty-mapping faces", async () => {
+  const root = tmpProject();
+  try {
+    const planText = LEGAL_PLAN;
+    const commands = {
+      ok: 'node -e "process.exit(0)"',
+      fail: 'node -e "process.exit(3)"',
+      slow: 'node -e "setTimeout(() => process.exit(0), 5000)"',
+      empty: "",
+    };
+    const { basisHash, results } = await runVerifyCommands({
+      keys: ["ok", "fail", "slow", "empty"],
+      commands,
+      projectRoot: root,
+      planText,
+      runId: "run-e2e",
+      timeoutMs: 150,
+    });
+    assert.equal(basisHash, computeBasisHash(planText));
+    const byKey = Object.fromEntries(results.map((r) => [r.key, r]));
+    assert.equal(byKey.ok.exitCode, 0);
+    assert.match(byKey.ok.passLine, /^- pass ok run-e2e basisHash=[0-9a-f]{64} exit=0$/);
+    assert.equal(byKey.fail.exitCode, 3);
+    assert.match(byKey.fail.passLine, /exit=3$/);
+    assert.equal(byKey.slow.timedOut, true);
+    assert.equal(byKey.slow.exitCode, null);
+    assert.match(byKey.slow.passLine, /exit=null$/);
+    assert.match(byKey.slow.output, /chars clipped|$/);
+    assert.equal(byKey.empty.exitCode, null);
+    assert.match(byKey.empty.output, /no non-empty command mapped to "empty"/);
+    assert.ok(results.every((r) => r.durationMs >= 0));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+/* ── 16. corpus by file class over the REAL extended policy (0815-3) ──────── */
+
+test("corpus: new-format plans (0635-3, 0815-1, 0815-2) pass every registered gate of the real policy — no false kills", () => {
+  const real = parsePolicy(readFileSync(REAL_POLICY_FILE, "utf8"));
+  assert.equal(real.ok, true);
+  const plansDir = join(REPO_ROOT, "docs", "plans", "age-autonomy");
+  for (const name of [
+    "2026-08-25-0635-3-m1-corpus-migration-dual-read-guides-ci.md",
+    "2026-08-25-0815-1-m2-law-seam-policy-schema.md",
+    "2026-08-25-0815-2-m2-three-hard-gates.md",
+  ]) {
+    const file = join(plansDir, name);
+    const text = readFileSync(file, "utf8");
+    assert.equal(deriveCompleted(text).completed, false, name);
+    const out = evaluateGates(
+      { type: "write", path: file, proposedContent: text },
+      { policy: real.policy, ctx: { plansDir, roadmapPath: join(REPO_ROOT, "docs", "backlog", "age-autonomy-implementation-roadmap.md") } },
+    );
+    assert.equal(out.decision, "allow", `${name}: ${out.reason}`);
+    // the four supporting gates all ran and none false-killed
+    for (const rule of ["claim-validity", "verify-keys", "record-append-only"]) {
+      const obs = out.observations.find((o) => o.rule === rule);
+      assert.ok(obs, `${name}: ${rule} observation present`);
+      assert.equal(obs.verdict, "allow", `${name}: ${rule} → ${obs.reason}`);
+    }
+    const pc = out.observations.find((o) => o.rule === "plan-completed");
+    assert.match(pc.reason, /awaitingClosure/, name);
+  }
+});
+
+test("corpus: legacy plans (0635-1/2) stay outside every supporting gate's domain under the real policy", () => {
+  const real = parsePolicy(readFileSync(REAL_POLICY_FILE, "utf8"));
+  const plansDir = join(REPO_ROOT, "docs", "plans", "age-autonomy");
+  for (const name of [
+    "2026-08-25-0635-1-m1-frontmatter-ledger-core.md",
+    "2026-08-25-0635-2-m1-ledger-sections-derivation.md",
+  ]) {
+    const file = join(plansDir, name);
+    const text = readFileSync(file, "utf8");
+    const out = evaluateGates(
+      { type: "write", path: file, proposedContent: text },
+      { policy: real.policy, ctx: { plansDir } },
+    );
+    assert.equal(out.decision, "allow", name);
+    for (const o of out.observations) {
+      assert.match(o.reason, /domain \(dual-read transition\)/, `${name}: ${o.rule} → ${o.reason}`);
+    }
+  }
 });
