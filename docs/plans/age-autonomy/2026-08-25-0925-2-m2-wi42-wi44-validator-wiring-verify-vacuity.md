@@ -58,22 +58,22 @@ Skill: none
 - Item Types: `Decision | Add | Proof`
 - Prereqs: 0925-1 落地（同文件族先后序；`completionReasons` 输出面已就位则本 plan 的读面改动不与其冲突）
 
-- [ ] `Decision` **接线 seam 裁定**：`validatePlanFrontmatter` 挂 `readPlanStatus` frontmatter 分支（fieldErrors 进返回值、随 `planLedgerState` 透传）——plan-check/flow-loader/monitor 三个引擎消费面一次改动全覆盖；`validateRoadmapFrontmatter` 挂 roadmap-check `parseRoadmapMarkdown` 的 `hasFm` 判定点（`split.fm` 已在手，monitor `handleGetRoadmap` 经同一函数获得覆盖）。备选：各消费面自行调用校验器——否决：四处重复调用 + 未来漂移面，与 01 §5.2 单实现纪律相悖（0635-3 Phase 1 Decision 5 同款推理）。
-- [ ] `Decision` **读面后果矩阵**：① plan-check——fieldErrors 并入 details（`field:` 前缀标来源）→ failed → exit 1（结构错误不分 strict 档，与既有 structuralErrors 同判先例）；② flow-loader——队列成员资格仍按可解析 status 判定（liveness：字段 typo 不应使 plan 静默饿死执行队列——那是 WI42 要消灭的「静默退出」病的镜像），fieldErrors 经扫描日志 warn（kill silence 而非 kill queue）；③ monitor——plans 列表条目暴露 fieldErrors 数组（API 增量字段，前端展示不强求）。残险：field-invalid 但 status 可解析的 plan 仍会被 EXECUTE 消费——写时 deny 已由 0815-1 `plan-structure` 立项，读面沉默消除即 WI42 收口判据（roadmap 文字：「校验器零生产接线」+「第二真相通道」）。手写 `status: completed` 特例：normalized 矛盾态随 fieldErrors 暴露而不再静默——该文件本就不在任何队列（现状），拦截面在 plan-check exit 1 与 monitor 标注。
-- [ ] `Add` 读 seam 实现：`readPlanStatus`/`planLedgerState` frontmatter 分支调用 `validatePlanFrontmatter(fm)`，返回值增 `fieldErrors`（数组）与 `fieldsValid`（布尔）；不改变 format 分类与 rejected 语义（frontmatter 收紧模式的既有行为不变）。
-- [ ] `Add` plan-check 消费：`analyzeFrontmatter` 把 fieldErrors 并入 structuralErrors（`field:` 前缀）；CLI 输出与 exit 语义随之（合法语料零变化）。
-- [ ] `Add` roadmap-check 消费：`hasFm` 时跑 `validateRoadmapFrontmatter(split.fm)`，违规进其错误输出与非零 exit（按其现有 CLI 输出约定增量）。
-- [ ] `Add` monitor 暴露：plans 列表条目透传 fieldErrors（`planLedgerState` 返回值已有，纯透传）。
-- [ ] `Add` flow-loader warn 消费（Decision ②的交付 item）：`_scanPlansByStatus` 扫描面对 `fieldErrors` 非空的 plan 输出告警——经 `console.warn`（执行时若引擎扫描面已有更贴切的日志通道则用既有通道，成文于实现），每文件每扫描至多一次，内容含文件相对路径 + fieldErrors 摘要（kill silence 的引擎面落点；队列成员资格不变）。
-- [ ] `Proof` live 探针反向钉住：①手写 `status: completed` fixture → `plan-check --strict` exit 1 且 details 含 derived-status 禁写字样；②未知字段 / `verfy` typo fixture → exit 1 且指名未知键；③roadmap 缺 `audit-rounds` / 负数 fixture → roadmap-check 非 0；④存量合法语料（0635-3、0815 批次三份、00-guide 示例面、全部 frontmatter 化 corpus）plan-check 全 exit 0 + corpus 回归全绿并断言 `fieldsValid === true`（fixture 预期若翻转逐个改钉并注明理由）；⑤flow-loader warn 行为断言（fieldErrors fixture 触发、合法 fixture 零告警——console 可注入 spy）。命令：`pnpm --prefix tools/mission-driver test` + fixtures 的 CLI exit 断言（测试内 spawn 或直接函数断言）。
+- [x] `Decision` **接线 seam 裁定**：`validatePlanFrontmatter` 挂 `readPlanStatus` frontmatter 分支（fieldErrors 进返回值、随 `planLedgerState` 透传）——plan-check/flow-loader/monitor 三个引擎消费面一次改动全覆盖；`validateRoadmapFrontmatter` 挂 roadmap-check `parseRoadmapMarkdown` 的 `hasFm` 判定点（`split.fm` 已在手，monitor `handleGetRoadmap` 经同一函数获得覆盖）。备选：各消费面自行调用校验器——否决：四处重复调用 + 未来漂移面，与 01 §5.2 单实现纪律相悖（0635-3 Phase 1 Decision 5 同款推理）。
+- [x] `Decision` **读面后果矩阵**：① plan-check——fieldErrors 并入 details（`field:` 前缀标来源）→ failed → exit 1（结构错误不分 strict 档，与既有 structuralErrors 同判先例）；② flow-loader——队列成员资格仍按可解析 status 判定（liveness：字段 typo 不应使 plan 静默饿死执行队列——那是 WI42 要消灭的「静默退出」病的镜像），fieldErrors 经扫描日志 warn（kill silence 而非 kill queue）；③ monitor——plans 列表条目暴露 fieldErrors 数组（API 增量字段，前端展示不强求）。残险：field-invalid 但 status 可解析的 plan 仍会被 EXECUTE 消费——写时 deny 已由 0815-1 `plan-structure` 立项，读面沉默消除即 WI42 收口判据（roadmap 文字：「校验器零生产接线」+「第二真相通道」）。手写 `status: completed` 特例：normalized 矛盾态随 fieldErrors 暴露而不再静默——该文件本就不在任何队列（现状），拦截面在 plan-check exit 1 与 monitor 标注。
+- [x] `Add` 读 seam 实现：`readPlanStatus`/`planLedgerState` frontmatter 分支调用 `validatePlanFrontmatter(fm)`，返回值增 `fieldErrors`（数组）与 `fieldsValid`（布尔）；不改变 format 分类与 rejected 语义（frontmatter 收紧模式的既有行为不变）。
+- [x] `Add` plan-check 消费：`analyzeFrontmatter` 把 fieldErrors 并入 structuralErrors（`field:` 前缀）；CLI 输出与 exit 语义随之（合法语料零变化）。
+- [x] `Add` roadmap-check 消费：`hasFm` 时跑 `validateRoadmapFrontmatter(split.fm)`，违规进其错误输出与非零 exit（按其现有 CLI 输出约定增量）。
+- [x] `Add` monitor 暴露：plans 列表条目透传 fieldErrors（`planLedgerState` 返回值已有，纯透传）。
+- [x] `Add` flow-loader warn 消费（Decision ②的交付 item）：`_scanPlansByStatus` 扫描面对 `fieldErrors` 非空的 plan 输出告警——经 `console.warn`（执行时若引擎扫描面已有更贴切的日志通道则用既有通道，成文于实现），每文件每扫描至多一次，内容含文件相对路径 + fieldErrors 摘要（kill silence 的引擎面落点；队列成员资格不变）。
+- [x] `Proof` live 探针反向钉住：①手写 `status: completed` fixture → `plan-check --strict` exit 1 且 details 含 derived-status 禁写字样；②未知字段 / `verfy` typo fixture → exit 1 且指名未知键；③roadmap 缺 `audit-rounds` / 负数 fixture → roadmap-check 非 0；④存量合法语料（0635-3、0815 批次三份、00-guide 示例面、全部 frontmatter 化 corpus）plan-check 全 exit 0 + corpus 回归全绿并断言 `fieldsValid === true`（fixture 预期若翻转逐个改钉并注明理由）；⑤flow-loader warn 行为断言（fieldErrors fixture 触发、合法 fixture 零告警——console 可注入 spy）。命令：`pnpm --prefix tools/mission-driver test` + fixtures 的 CLI exit 断言（测试内 spawn 或直接函数断言）。
 
 Exit Criteria:
 
-- [ ] 三类缺陷 fixture 全部被读面拦截（exit 1 / 非 0），reason 指向合法路径
-- [ ] flow-loader warn 消费落地（缺陷 fixture 告警、合法 fixture 零告警，测试断言钉住）
-- [ ] 存量合法语料零误杀（corpus + CLI 全 exit 0，`fieldsValid === true`）
-- [ ] `pnpm --prefix tools/mission-driver test` 全绿（813 基线 + 新增不回退）
-- [ ] `docs/logs/` 更新
+- [x] 三类缺陷 fixture 全部被读面拦截（exit 1 / 非 0），reason 指向合法路径
+- [x] flow-loader warn 消费落地（缺陷 fixture 告警、合法 fixture 零告警，测试断言钉住）
+- [x] 存量合法语料零误杀（corpus + CLI 全 exit 0，`fieldsValid === true`）
+- [x] `pnpm --prefix tools/mission-driver test` 全绿（813 基线 + 新增不回退）
+- [x] `docs/logs/` 更新
 
 ## Phase 2 — verify 空数组空真封堵（WI44）
 
@@ -83,18 +83,18 @@ Skill: none
 - Item Types: `Add | Proof`
 - Prereqs: Phase 1（读 seam 就位——校验器拒绝面先于派生防御落地，两端同 plan 收口）
 
-- [ ] `Add` 校验器拒绝空数组：`validatePlanFrontmatter` 对 `verify: []` 报 error（字面指向合法路径：verify 非空 command-key 数组，或省略字段以回落 mission 默认）。`parseFrontmatter` 解析面行为不变（`verify: []` 仍是合法格式子集——解析/校验两层分离，`test/ledger-frontmatter.test.js:50` 钉住的解析行为保持）。
-- [ ] `Add` 派生面空集防御：`deriveCompleted` 对 `keys` 为显式空数组改按 `no-verify-keys` 处理（`mechanicalVerification = false`，reasons 记 `no-verify-keys`）——第二道防线，覆盖未经校验器的输入路径（外部写入、旧文件、绕过读 seam 的调用方）。与 Phase 1 校验器构成防御深度：校验器拦新写入，派生防御兜底存量与旁路。
-- [ ] `Proof` 空真封堵回归：①`verify: []` + 回执齐全 fixture → `validatePlanFrontmatter` error 且 `deriveCompleted` completed:false（reasons 含 `no-verify-keys`）；②`verify: []` 直接进 `deriveCompleted`（不经校验器）→ 同样 completed:false（旁路防御钉住）；③`verify: []` 显式空数组 **优先于**注入的 `opts.defaultVerifyKeys`——fail-closed 不回落默认（显式空 = 拒绝语义，非缺失语义；与 0925-1 Phase 2 注入落地后的组合行为钉住，防两 plan 交互漂移）；④`verify: [test]` 正常路径回归（绿路径不受伤）；⑤解析面 `verify: []` 可解析钉住（既有用例不修改）。命令：`pnpm --prefix tools/mission-driver test`。
-- [ ] `Proof` 语料断言：`rg -n "^verify: \[\]\s*$" docs/plans docs/backlog missions` 生产语料零命中（列锚定——排除 prose 中的反引号提及；现状已核，收口时复跑钉住——封堵无存量破坏面）。
+- [x] `Add` 校验器拒绝空数组：`validatePlanFrontmatter` 对 `verify: []` 报 error（字面指向合法路径：verify 非空 command-key 数组，或省略字段以回落 mission 默认）。`parseFrontmatter` 解析面行为不变（`verify: []` 仍是合法格式子集——解析/校验两层分离，`test/ledger-frontmatter.test.js:50` 钉住的解析行为保持）。
+- [x] `Add` 派生面空集防御：`deriveCompleted` 对 `keys` 为显式空数组改按 `no-verify-keys` 处理（`mechanicalVerification = false`，reasons 记 `no-verify-keys`）——第二道防线，覆盖未经校验器的输入路径（外部写入、旧文件、绕过读 seam 的调用方）。与 Phase 1 校验器构成防御深度：校验器拦新写入，派生防御兜底存量与旁路。
+- [x] `Proof` 空真封堵回归：①`verify: []` + 回执齐全 fixture → `validatePlanFrontmatter` error 且 `deriveCompleted` completed:false（reasons 含 `no-verify-keys`）；②`verify: []` 直接进 `deriveCompleted`（不经校验器）→ 同样 completed:false（旁路防御钉住）；③`verify: []` 显式空数组 **优先于**注入的 `opts.defaultVerifyKeys`——fail-closed 不回落默认（显式空 = 拒绝语义，非缺失语义；与 0925-1 Phase 2 注入落地后的组合行为钉住，防两 plan 交互漂移）；④`verify: [test]` 正常路径回归（绿路径不受伤）；⑤解析面 `verify: []` 可解析钉住（既有用例不修改）。命令：`pnpm --prefix tools/mission-driver test`。
+- [x] `Proof` 语料断言：`rg -n "^verify: \[\]\s*$" docs/plans docs/backlog missions` 生产语料零命中（列锚定——排除 prose 中的反引号提及；现状已核，收口时复跑钉住——封堵无存量破坏面）。
 
 Exit Criteria:
 
-- [ ] 空真通道双层封堵钉住（校验器 error + 派生 no-verify-keys）
-- [ ] 解析/校验分层钉住（既有解析用例零修改）
-- [ ] 绿路径（verify: [test]）回归无伤
-- [ ] `pnpm --prefix tools/mission-driver test` 全绿
-- [ ] `docs/logs/` 更新
+- [x] 空真通道双层封堵钉住（校验器 error + 派生 no-verify-keys）
+- [x] 解析/校验分层钉住（既有解析用例零修改）
+- [x] 绿路径（verify: [test]）回归无伤
+- [x] `pnpm --prefix tools/mission-driver test` 全绿
+- [x] `docs/logs/` 更新
 
 ## Phase 3 — 文档同步与回写
 
@@ -104,18 +104,18 @@ Skill: none
 - Item Types: `Add | Proof`
 - Prereqs: Phase 1/2 全绿
 
-- [ ] `Add` roadmap 回写：WI42 `[x]` + WI44 `[x]` + 各自证据指针（接线 diff、封堵 diff、测试文件、live 探针反向钉住输出）；头部 `> Last Updated` 日期同步（回写步固有动作）。WI24 不勾（M2 收口门归后续批次）。
-- [ ] `Add` 设计 owner-doc 同步：`docs/design/age-autonomy/01-file-ledger.md` §4.1 的 `verify` 字段行补一句空数组语义裁定（显式 `[]` = 校验器拒绝；派生面按 no-verify-keys fail-closed，不回落 mission 默认）——本 plan 把「未定义空数组语义」成文为契约，owner 字段表不得留守沉默（owner-doc drift 即本 mission 要消灭的类）。
-- [ ] `Add` CONTEXT.md 同步：ledger 库两段增一句「校验器经 `planLedgerState` 读 seam 接线全部生产读面；`verify: []` 被校验器拒绝且派生面按 no-verify-keys 处理」。
-- [ ] `Proof` 收口链：`node tools/mission-driver/src/mission-check.mjs missions/age-autonomy-implementation.json .` exit 0；`./verify-age.sh` L1+L2 绿；`node plugin/dsh/scripts/smoke-import.mjs` 绿（assets 重建后导入面）。
+- [x] `Add` roadmap 回写：WI42 `[x]` + WI44 `[x]` + 各自证据指针（接线 diff、封堵 diff、测试文件、live 探针反向钉住输出）；头部 `> Last Updated` 日期同步（回写步固有动作）。WI24 不勾（M2 收口门归后续批次）。
+- [x] `Add` 设计 owner-doc 同步：`docs/design/age-autonomy/01-file-ledger.md` §4.1 的 `verify` 字段行补一句空数组语义裁定（显式 `[]` = 校验器拒绝；派生面按 no-verify-keys fail-closed，不回落 mission 默认）——本 plan 把「未定义空数组语义」成文为契约，owner 字段表不得留守沉默（owner-doc drift 即本 mission 要消灭的类）。
+- [x] `Add` CONTEXT.md 同步：ledger 库两段增一句「校验器经 `planLedgerState` 读 seam 接线全部生产读面；`verify: []` 被校验器拒绝且派生面按 no-verify-keys 处理」。
+- [x] `Proof` 收口链：`node tools/mission-driver/src/mission-check.mjs missions/age-autonomy-implementation.json .` exit 0；`./verify-age.sh` L1+L2 绿；`node plugin/dsh/scripts/smoke-import.mjs` 绿（assets 重建后导入面）。
 
 Exit Criteria:
 
-- [ ] roadmap WI42/WI44 `[x]` + 证据指针 + Last Updated 同步；WI24 仍未勾
-- [ ] 01-file-ledger.md §4.1 `verify` 行含空数组语义裁定句
-- [ ] CONTEXT.md 语义句落地
-- [ ] `pnpm --prefix tools/mission-driver test` + `./verify-age.sh` L1+L2 + smoke-import 全绿
-- [ ] `docs/logs/` 收口条目
+- [x] roadmap WI42/WI44 `[x]` + 证据指针 + Last Updated 同步；WI24 仍未勾
+- [x] 01-file-ledger.md §4.1 `verify` 行含空数组语义裁定句
+- [x] CONTEXT.md 语义句落地
+- [x] `pnpm --prefix tools/mission-driver test` + `./verify-age.sh` L1+L2 + smoke-import 全绿
+- [x] `docs/logs/` 收口条目
 
 ## Draft Review Record
 

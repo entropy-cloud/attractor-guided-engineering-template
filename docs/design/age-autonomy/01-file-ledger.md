@@ -66,7 +66,7 @@ mission: dsh-plugin      # 归属 mission
 work-item: M4-WI14       # roadmap 回写锚点（必须命中 roadmap 中已登记 work-item）
 group: "2026-08-23-2200" # 批次标识（可选；缺失时回退文件名时间戳前缀）
 failures: 0              # 自最近一次进入 active 起的失败计数；limit=maxFailures 留配置
-verify: [test, build]    # 可选单层数组：本 plan 要求机械通过的 command key 集合；缺失时用 mission 默认
+verify: [test, build]    # 可选单层数组：本 plan 要求机械通过的 command key 集合；缺失时用 mission 默认；显式 verify: [] 为拒绝语义——校验器报错（非空数组或省略），派生面按 no-verify-keys fail-closed 不回落默认（空集不空真，M2-WI44 裁定）
 agent: "auditor"         # 可选：本 plan 的派发 agent 覆盖（仅可引用 autonomy.policy.yml agents 名单，如 auditor；缺失用 dispatch 映射默认；见 02-rule-law §4.9）
 hold: "缺上游裁定，等 D2" # 仅 status: held 时必填；其他状态不得出现
 # claim 与 claim-expires 仅在执行认领期间存在（见 §4.4），由守夜人写入与回收：
