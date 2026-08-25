@@ -56,16 +56,16 @@ Skill: none
 - Item Types: `Fix`
 - Prereqs: 无（可与 0925-1/2 并行——不同文件）
 
-- [ ] `Fix` §Public Exports vs Test Seams 登记三模块：`ledger-frontmatter.mjs`（frontmatter 子集解析器 + plan/roadmap 字段集校验器，契约 01 §2/§3.1/§4.1/§5.1）、`ledger-sections.mjs`（计数域扫描 + 内联审计区结构校验 + basisHash/deriveCompleted + 扫描谓词族，契约 01 §2.5/§3.2/§3.3/§4.2/§4.4/§5.2）、`ledger-dualread.mjs`（双读 resolver + env 断路器 `MISSION_DRIVER_LEDGER`，01 §5.2 单实现纪律的落点）；各条注明消费面（plan-check/flow-loader/roadmap-check/monitor 四引擎读面 + plugin assets 复制通道 + `docs/plans/00-guide`/`docs/backlog/00-roadmap-guide` 声明的 machine face）与零 import/零 npm 约束。
-- [ ] `Fix` 按该文件自身 Update Rule 补更新：执行时先读其 Update Rule 字面条款，按其要求的形态（登记行/changelog/状态段）落地——不发明新形态；M1 交付进度自述段同步（2026-08-25 M1 ledger 基座已落地一句，含 0635 批次指针）。
-- [ ] `Fix` 全文 ledger 相关键核对：`rg -n "ledger|dualread|frontmatter" docs/architecture/mission-driver-baseline.md` 逐命中核对与实况一致性，漂移即修（bounded：仅 ledger 相关键，不做无关重构）。
+- [x] `Fix` §Public Exports vs Test Seams 登记三模块：`ledger-frontmatter.mjs`（frontmatter 子集解析器 + plan/roadmap 字段集校验器，契约 01 §2/§3.1/§4.1/§5.1）、`ledger-sections.mjs`（计数域扫描 + 内联审计区结构校验 + basisHash/deriveCompleted + 扫描谓词族，契约 01 §2.5/§3.2/§3.3/§4.2/§4.4/§5.2）、`ledger-dualread.mjs`（双读 resolver + env 断路器 `MISSION_DRIVER_LEDGER`，01 §5.2 单实现纪律的落点）；各条注明消费面（plan-check/flow-loader/roadmap-check/monitor 四引擎读面 + plugin assets 复制通道 + `docs/plans/00-guide`/`docs/backlog/00-roadmap-guide` 声明的 machine face）与零 import/零 npm 约束。
+- [x] `Fix` 按该文件自身 Update Rule 补更新：执行时先读其 Update Rule 字面条款，按其要求的形态（登记行/changelog/状态段）落地——不发明新形态；M1 交付进度自述段同步（2026-08-25 M1 ledger 基座已落地一句，含 0635 批次指针）。
+- [x] `Fix` 全文 ledger 相关键核对：`rg -n "ledger|dualread|frontmatter" docs/architecture/mission-driver-baseline.md` 逐命中核对与实况一致性，漂移即修（bounded：仅 ledger 相关键，不做无关重构）。
 
 Exit Criteria:
 
-- [ ] `rg -c "ledger-frontmatter" docs/architecture/mission-driver-baseline.md` ≥ 1 ∧ `rg -c "ledger-sections"` ≥ 1 ∧ `rg -c "ledger-dualread"` ≥ 1（三模块名逐个进入登记段——逐模块断言防单模块多次提及凑数）
-- [ ] 登记内容与 01 §契约分节、build-bundle ALLOWED_MODULES、四读面 import 实况一致（抽查指针可点）
-- [ ] Update Rule 要求的形态全部满足（执行时以规则字面为准）
-- [ ] `docs/logs/` 更新
+- [x] `rg -c "ledger-frontmatter" docs/architecture/mission-driver-baseline.md` ≥ 1 ∧ `rg -c "ledger-sections"` ≥ 1 ∧ `rg -c "ledger-dualread"` ≥ 1（三模块名逐个进入登记段——逐模块断言防单模块多次提及凑数）
+- [x] 登记内容与 01 §契约分节、build-bundle ALLOWED_MODULES、四读面 import 实况一致（抽查指针可点）
+- [x] Update Rule 要求的形态全部满足（执行时以规则字面为准）
+- [x] `docs/logs/` 更新
 
 ## Phase 2 — packaging 文档漂移修复
 
@@ -75,17 +75,17 @@ Skill: none
 - Item Types: `Fix`
 - Prereqs: 无
 
-- [ ] `Fix` 计数更正两处：:119 "the 19 allowed modules" → 22 并点名 ledger 三件（与 `build-bundle.mjs:42-52` ALLOWED_MODULES 实况一致，注明计数来源与 ledger 段注释）；:108 目录树注释 "(19 files)" → 22（与 `plugin/dsh/assets/src/` 实况一致）。
-- [ ] `Fix` PLAN_STATUS_RE import 源更正两处：:209 与 :276 的 `assets/src/plan-check.mjs` → `assets/src/ledger-dualread.mjs`（与 `plan-status-gate.ts:57` 实况一致；:209 段落如含「零 engine diff」等派生表述，一并核对语境不被更正破坏）。
-- [ ] `Fix` import-graph / 模块枚举补 ledger 链（精确边，live 核实的 import 实况）：`plan-check.mjs` → `ledger-dualread.mjs` + `ledger-sections.mjs`；`flow-loader.js` → `plan-check.mjs` + `ledger-dualread.mjs`；`roadmap-check.mjs` → `ledger-dualread.mjs` + `ledger-sections.mjs`；库内链 `ledger-sections.mjs` → `ledger-frontmatter.mjs`、`ledger-dualread.mjs` → `ledger-frontmatter.mjs` + `ledger-sections.mjs`。注意：`monitor.js → ledger-dualread.mjs` 边**不进** packaging 文档的 import-graph（该图是「allowed list 编码的 import 闭包」，monitor.js 属 NOT-bundled 面——边写进去反而制造新漂移；monitor 消费面归 Phase 1 baseline 登记的消费面清单表述）。按文档既有枚举形态增量，不发明新图形。
-- [ ] `Fix` 全文 ledger 相关键核对：`rg -n "ledger|allowed modules|ALLOWED|\b19\b" docs/architecture/dsh-plugin-packaging.md` 逐命中核对（`\b19\b` 覆盖 "19 files" 类措辞变体），漂移即修（同 Phase 1 边界——仅 ledger/模块计数相关命中，不做无关重构）。
+- [x] `Fix` 计数更正两处：:119 "the 19 allowed modules" → 22 并点名 ledger 三件（与 `build-bundle.mjs:42-52` ALLOWED_MODULES 实况一致，注明计数来源与 ledger 段注释）；:108 目录树注释 "(19 files)" → 22（与 `plugin/dsh/assets/src/` 实况一致）。
+- [x] `Fix` PLAN_STATUS_RE import 源更正两处：:209 与 :276 的 `assets/src/plan-check.mjs` → `assets/src/ledger-dualread.mjs`（与 `plan-status-gate.ts:57` 实况一致；:209 段落如含「零 engine diff」等派生表述，一并核对语境不被更正破坏）。
+- [x] `Fix` import-graph / 模块枚举补 ledger 链（精确边，live 核实的 import 实况）：`plan-check.mjs` → `ledger-dualread.mjs` + `ledger-sections.mjs`；`flow-loader.js` → `plan-check.mjs` + `ledger-dualread.mjs`；`roadmap-check.mjs` → `ledger-dualread.mjs` + `ledger-sections.mjs`；库内链 `ledger-sections.mjs` → `ledger-frontmatter.mjs`、`ledger-dualread.mjs` → `ledger-frontmatter.mjs` + `ledger-sections.mjs`。注意：`monitor.js → ledger-dualread.mjs` 边**不进** packaging 文档的 import-graph（该图是「allowed list 编码的 import 闭包」，monitor.js 属 NOT-bundled 面——边写进去反而制造新漂移；monitor 消费面归 Phase 1 baseline 登记的消费面清单表述）。按文档既有枚举形态增量，不发明新图形。
+- [x] `Fix` 全文 ledger 相关键核对：`rg -n "ledger|allowed modules|ALLOWED|\b19\b" docs/architecture/dsh-plugin-packaging.md` 逐命中核对（`\b19\b` 覆盖 "19 files" 类措辞变体），漂移即修（同 Phase 1 边界——仅 ledger/模块计数相关命中，不做无关重构）。
 
 Exit Criteria:
 
-- [ ] `rg -n "19 (allowed|files)" docs/architecture/dsh-plugin-packaging.md` 0 命中
-- [ ] `rg -n "assets/src/plan-check.mjs" docs/architecture/dsh-plugin-packaging.md` 0 命中（PLAN_STATUS_RE 语境的旧源引用清除——live 复核修前命中恰为 :209 与 :276 两处，机械零命中即达标）
-- [ ] 文档模块计数与 `ALLOWED_MODULES` 及 `assets/src/` 实测清单一致（22，逐名可对）
-- [ ] `docs/logs/` 更新
+- [x] `rg -n "19 (allowed|files)" docs/architecture/dsh-plugin-packaging.md` 0 命中
+- [x] `rg -n "assets/src/plan-check.mjs" docs/architecture/dsh-plugin-packaging.md` 0 命中（PLAN_STATUS_RE 语境的旧源引用清除——live 复核修前命中恰为 :209 与 :276 两处，机械零命中即达标）
+- [x] 文档模块计数与 `ALLOWED_MODULES` 及 `assets/src/` 实测清单一致（22，逐名可对）
+- [x] `docs/logs/` 更新
 
 ## Phase 3 — 回写与收口断言
 
@@ -95,15 +95,15 @@ Skill: none
 - Item Types: `Add | Proof`
 - Prereqs: Phase 1/2 完成
 
-- [ ] `Add` roadmap 回写：WI43 `[x]` + 证据指针（两文档 diff 摘要 + Phase 1/2 的 rg 断言输出）；头部 `> Last Updated` 日期同步（回写步固有动作）。WI24 不勾（M2 收口门归后续批次）。
-- [ ] `Proof` 收口断言链：逐模块 `rg -c "ledger-<name>" docs/architecture/mission-driver-baseline.md` ≥ 1（×3）；`rg -n "19 (allowed|files)" docs/architecture/dsh-plugin-packaging.md` 零命中；`rg -n "assets/src/plan-check.mjs" docs/architecture/dsh-plugin-packaging.md` 零命中（PLAN_STATUS_RE 语境）；`pnpm --prefix tools/mission-driver test` 全绿（纯文档批次守护基线）；`node tools/mission-driver/src/mission-check.mjs missions/age-autonomy-implementation.json .` exit 0。
+- [x] `Add` roadmap 回写：WI43 `[x]` + 证据指针（两文档 diff 摘要 + Phase 1/2 的 rg 断言输出）；头部 `> Last Updated` 日期同步（回写步固有动作）。WI24 不勾（M2 收口门归后续批次）。
+- [x] `Proof` 收口断言链：逐模块 `rg -c "ledger-<name>" docs/architecture/mission-driver-baseline.md` ≥ 1（×3）；`rg -n "19 (allowed|files)" docs/architecture/dsh-plugin-packaging.md` 零命中；`rg -n "assets/src/plan-check.mjs" docs/architecture/dsh-plugin-packaging.md` 零命中（PLAN_STATUS_RE 语境）；`pnpm --prefix tools/mission-driver test` 全绿（纯文档批次守护基线）；`node tools/mission-driver/src/mission-check.mjs missions/age-autonomy-implementation.json .` exit 0。
 
 Exit Criteria:
 
-- [ ] roadmap WI43 `[x]` + 证据指针 + Last Updated 同步；WI24 仍未勾
-- [ ] Phase 1/2 全部 rg 断言绿
-- [ ] `pnpm --prefix tools/mission-driver test` 全绿
-- [ ] `docs/logs/` 收口条目
+- [x] roadmap WI43 `[x]` + 证据指针 + Last Updated 同步；WI24 仍未勾
+- [x] Phase 1/2 全部 rg 断言绿
+- [x] `pnpm --prefix tools/mission-driver test` 全绿
+- [x] `docs/logs/` 收口条目
 
 ## Draft Review Record
 
