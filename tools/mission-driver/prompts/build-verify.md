@@ -50,16 +50,16 @@ Before taking any action, check `git status` and `git log --oneline -5`:
          Plan: {{plansDir}}/{YYYY-MM-DD-HHmm}-...md
          ```
          (Match the surrounding `git log` tone — keep consistent with the repo's commit style.)
-       - **Doc commit** (plan file + architecture docs + roadmap + daily log):
-         ```
-         docs(<scope>): plan-{YYYY-MM-DD-HHmm} docs/log/roadmap update
+        - **Doc commit** (plan file + architecture docs + roadmap + daily log; roadmap updates are checkbox ticks on ledger roadmaps):
+          ```
+          docs(<scope>): plan-{YYYY-MM-DD-HHmm} docs/log/roadmap update
 
-         - Update docs/architecture/...md (§X ✅)
-         - Update {{roadmapPath}} (§Y ✅)
-         - Update docs/logs/{YYYY}/{MM-DD}.md (plan-{YYYY-MM-DD-HHmm} entry)
+          - Update docs/architecture/...md (§X done)
+          - Update {{roadmapPath}} (§Y done)
+          - Update docs/logs/{YYYY}/{MM-DD}.md (plan-{YYYY-MM-DD-HHmm} entry)
 
-         Plan: {{plansDir}}/{YYYY-MM-DD-HHmm}-...md
-         ```
+          Plan: {{plansDir}}/{YYYY-MM-DD-HHmm}-...md
+          ```
        - If code changes span multiple packages, emit multiple feat commits (split by package).
     c. **Failure handling** — if any `git commit` fails (pre-commit/Husky hook rejection, message format issue, staging problem):
        - Try to auto-fix the root cause and retry (e.g. fix lint/import-order/format issues, re-stage missing files). Up to 2 retries.
@@ -68,5 +68,29 @@ Before taking any action, check `git status` and `git log --oneline -5`:
     d. After all commits succeed, run `git log --oneline -5` to confirm the history
 
 If this run achieved a full-green state (unit tests + e2e both passed completely), follow AGENTS.md: record it in `docs/logs/{year}/{month}-{day}.md`, mention `full-green verification` in the commit message, then commit.
+
+## Ledger Verification pass lines (transition-period writer duty)
+
+For a plan in the **ledger format** (YAML frontmatter with `status:`), after ALL commands pass and ALL commits are done, record the mechanical-verification evidence the engine derives completion from (01 §5.2; agent-written on engine flow authority until the M2 gate/writer law lands):
+
+1. Compute the plan's current basis hash (from the project root; adjust the engine path if the engine is not at `tools/mission-driver`):
+
+   ```
+   node --input-type=module -e "const {readFileSync}=await import('node:fs');const {computeBasisHash}=await import('./tools/mission-driver/src/ledger-sections.mjs');console.log(computeBasisHash(readFileSync(process.argv[1],'utf8')))" {{PLAN_FILE}}
+   ```
+
+   The hash covers the frontmatter + all `## Phase` sections + `## Closure Findings` — write the pass lines LAST (after every checkbox tick and commit) so the hash cannot go stale; pass lines themselves live in `## Verification` and do NOT change the hash.
+
+2. Append one pass line per command key listed in the plan's frontmatter `verify` array (e.g. `test`) to the plan's `## Verification` section (create the section after `## Closure Findings` / before `## Closure` if absent; append-only — never edit existing lines):
+
+   ```
+   - pass <commandKey> <runId> basisHash=<sha256-from-step-1> exit=0
+   ```
+
+   `<commandKey>` must be exactly a key from the plan's `verify` array (its command must have actually run green in this step); `<runId>` is any non-space run identifier (e.g. the run timestamp). Only write lines for keys that ran green — never fabricate a pass line.
+
+3. Do NOT touch the frontmatter `status` (stays `active`; completion is derived) and do NOT write anything into `## Closure` (that is the independent closure auditor's receipt).
+
+Legacy-format plans (`> Plan Status:` line): skip this section entirely — the legacy close path applies.
 
 Your output MUST end with exactly one `<AI_STEP_RESULT>pass</AI_STEP_RESULT>` or `<AI_STEP_RESULT>fail</AI_STEP_RESULT>` marker. This is the only marker that is parsed; a missing or malformed marker triggers an additional correction run, so emit it exactly as shown.

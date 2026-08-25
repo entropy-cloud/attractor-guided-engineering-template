@@ -143,15 +143,15 @@ Skill: none
 - Item Types: `Add`
 - Prereqs: Phase 3
 
-- [ ] `Add` 八个 prompt 按 Phase 1 Decision 6 五条裁定改写（状态双模式 / roadmap tick 双模式 + Verification pass 行写入 / execute 4c 删除 / 审计生产面内联 + audit-rounds 自增 / prompt-check 规则同步）
+- [x] `Add` 八个 prompt 按 Phase 1 Decision 6 五条裁定改写（状态双模式 / roadmap tick 双模式 + Verification pass 行写入 / execute 4c 删除 / 审计生产面内联 + audit-rounds 自增 / prompt-check 规则同步）
       - Skill: none
-- [ ] `Proof` `pnpm --prefix tools/mission-driver test` 绿（prompt-check 结构校验含在链内）
+- [x] `Proof` `pnpm --prefix tools/mission-driver test` 绿（prompt-check 结构校验含在链内）
       - Skill: none
 
 Exit Criteria:
 
-- [ ] prompts 无脱离双模式语境的旧通道硬指令残留（`rg -n "Plan Status: completed|Review Hold|Source Audits|Audit Status|❌|✅" tools/mission-driver/prompts/` 逐命中均为双模式/legacy 回退语境或 deep-audit 内联指令）
-- [ ] `docs/logs/` updated
+- [x] prompts 无脱离双模式语境的旧通道硬指令残留（`rg -n "Plan Status: completed|Review Hold|Source Audits|Audit Status|❌|✅" tools/mission-driver/prompts/` 逐命中均为双模式/legacy 回退语境或 deep-audit 内联指令）
+- [x] `docs/logs/` updated
 
 ## Phase 5 — guides 收口 + AGENTS.md 职责行 + 外部审计生命周期成文（WI8+WI9）
 
