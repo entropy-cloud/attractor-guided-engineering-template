@@ -2,20 +2,17 @@ import { readFileSync, readdirSync, existsSync, writeFileSync } from "node:fs";
 import { resolve, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { inspectPlan } from "./plan-check.mjs";
+import { planLedgerState, normalizeLegacyStatus } from "./ledger-dualread.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TOOL_ROOT = resolve(__dirname, "..");
 
-const PLAN_STATUS_RE = /^>\s*\*{0,2}(?:[Pp]lan\s+)?[Ss]tatus\*{0,2}\s*:\s*\*{0,2}(.+?)\*{0,2}\s*$/m;
+// Plan status resolution is dual-read via the shared ledger library
+// (ledger-dualread.mjs — frontmatter first, legacy `> Plan Status:` fallback,
+// env breaker MISSION_DRIVER_LEDGER). No local status regex lives here anymore
+// (age-autonomy M1-WI7, plan 0635-3 Phase 3).
 // Canonical plan statuses: draft (initial) → active (post-review, ready to exec).
 // Legacy synonyms tolerated for backward compatibility with older plans.
-// Parenthetical annotations ("active（draft → active：…）") are noise: truncate
-// at the first ( or （ so only the status token is matched.
-function _normalizeStatus(s) {
-  const cut = s.search(/[（(]/);
-  if (cut !== -1) s = s.slice(0, cut);
-  return s.toLowerCase().replace(/\s+/g, " ").trim();
-}
 const ACTIVE_STATUSES = [
   "active",
   "planned",
@@ -27,7 +24,7 @@ const ACTIVE_STATUSES = [
   "started",
   "executing",
   "in flight",
-].map(_normalizeStatus);
+].map(normalizeLegacyStatus);
 const DRAFT_STATUSES = [
   "draft",
   "drafted",
@@ -36,7 +33,14 @@ const DRAFT_STATUSES = [
   "backlog",
   "in draft",
   "in-draft",
-].map(_normalizeStatus);
+].map(normalizeLegacyStatus);
+// LEGACY-ONLY open-audit channel (0635-3 Phase 1 Decision 6.4 adjudication):
+// `> Audit Status:` / `> Audit Type:` headers exist only in legacy external
+// `docs/audits/` files. New-format open audit state is expressed by roadmap
+// `## Deep Audit Record` dispatch/accepted pairing instead. This channel stays
+// (existing open audits must remain visible to the engine) until the M2
+// law/audit track (WI20/WI22) retires it — the ONLY sanctioned remaining
+// holder of an audit-status regex in engine src.
 const AUDIT_STATUS_RE = /^>\s*\*{0,2}Audit\s+Status\*{0,2}:\s*\*{0,2}(.+?)\*{0,2}\s*$/m;
 // WI4 Phase 5 — `> Audit Type:` header declared by the deep-audit-loop subflow's
 // MULTI/OPEN_AUDIT prompts (`multi-dimensional`, `open-ended`) and by plan-
@@ -77,9 +81,12 @@ function _scanPlansByStatus(plansDir, statuses) {
     .sort();
   for (const f of files) {
     const content = readFileSync(f, "utf8");
-    const m = content.match(PLAN_STATUS_RE);
-    const status = m ? _normalizeStatus(m[1]) : "";
-    if (status && statuses.includes(status)) {
+    const state = planLedgerState(content);
+    if (state.format === "none") continue;
+    // normalized: frontmatter `status` (or derived "completed") / legacy line
+    // value — derived-completed and writable-terminal plans match neither the
+    // active nor the draft list, i.e. they are closed (never re-fed to EXECUTE).
+    if (statuses.includes(state.normalized)) {
       results.push(f);
     }
   }
@@ -93,7 +100,7 @@ function _scanOpenAuditsList(auditsDir) {
   for (const f of files) {
     const content = readFileSync(f, "utf8");
     const m = content.match(AUDIT_STATUS_RE);
-    const status = m ? _normalizeStatus(m[1]) : "";
+    const status = m ? normalizeLegacyStatus(m[1]) : "";
     if (status === "open") {
       // WI4 (Phase 5 decision: Option A, design §5.4) — only count mission-level
       // audits so the audit-gate's openAudits() input reflects actual mission-

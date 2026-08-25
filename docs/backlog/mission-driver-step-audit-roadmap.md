@@ -1,3 +1,7 @@
+---
+audit-rounds: 0
+---
+
 # Mission-Driver Step Execution & Audit Count Roadmap
 
 > Last Updated: 2026-07-21 (WI1 → done; WI2 → done; WI3 → done; WI4 → done; WI5 → done)
@@ -16,20 +20,20 @@ It contains no implementation detail. The design doc owns the how; this file own
 
 ### M1 — Audit 计数权威化
 
-- WI1 audit 计数落盘到 run-state.json: `done` → plan `docs/plans/mission-driver-step-audit/2026-07-20-1147-1-audit-count-persist.md`
+- [x] WI1 audit 计数落盘到 run-state.json → plan `docs/plans/mission-driver-step-audit/2026-07-20-1147-1-audit-count-persist.md`
 
 ### M2 — 步骤执行模式
 
-- WI2 修固 `--step` 单步执行（maxSteps=1）: `done` → plan `docs/plans/mission-driver-step-audit/2026-07-20-1147-2-single-step-fix.md`
-- WI3 新增 `--from-step` 入口覆盖: `done` → plan `docs/plans/mission-driver-step-audit/2026-07-20-1147-3-from-step-entry.md`
+- [x] WI2 修固 `--step` 单步执行（maxSteps=1） → plan `docs/plans/mission-driver-step-audit/2026-07-20-1147-2-single-step-fix.md`
+- [x] WI3 新增 `--from-step` 入口覆盖 → plan `docs/plans/mission-driver-step-audit/2026-07-20-1147-3-from-step-entry.md`
 
 ### M3 — DRAFT_PLANS 决策引擎化
 
-- WI4 DRAFT_PLANS 删 done 出口 + audit-gate + prompt 改造: `done` → plan `docs/plans/mission-driver-step-audit/2026-07-20-1559-1-draft-plans-audit-gate.md`
+- [x] WI4 DRAFT_PLANS 删 done 出口 + audit-gate + prompt 改造 → plan `docs/plans/mission-driver-step-audit/2026-07-20-1559-1-draft-plans-audit-gate.md`
 
 ### M4 — 可观测性收尾
 
-- WI5 events/日志/monitor 展示 audit 计数: `done` → plan `docs/plans/mission-driver-step-audit/2026-07-20-1559-2-audit-count-observability.md`
+- [x] WI5 events/日志/monitor 展示 audit 计数 → plan `docs/plans/mission-driver-step-audit/2026-07-20-1559-2-audit-count-observability.md`
 
 ## Status Values
 

@@ -1,3 +1,7 @@
+---
+audit-rounds: 0
+---
+
 # AGE Autonomous Run Implementation Roadmap
 
 > Last Updated: 2026-08-24（新建；基于 `docs/design/age-autonomy/` 设计基线（已 human 批准 2026-08-24 转 supported baseline）+ 审计记录 `docs/audits/dsh-plugin/2026-08-24-age-autonomy-design-audit.md` + 终审 `docs/audits/dsh-plugin/2026-08-24-age-autonomy-design-final-review.md`；同日 human 提议加严「自动验证」硬约束，已在每个 milestone 末位插入 Verification Gate WI）
@@ -24,17 +28,17 @@
 
 ### M1 — P0 Ledger 账本改造（frontmatter 化 + 完成派生 + 审计内联）
 
-- [x] WI1 frontmatter 解析器：30 行内置解析；扁平标量 + 单层流式数组；块标量/嵌套对象禁用（依据 01 §2）（证据：`tools/mission-driver/src/ledger-frontmatter.mjs` + `tools/mission-driver/test/ledger-frontmatter.test.js`，plan `docs/plans/age-autonomy/2026-08-25-0635-1-m1-frontmatter-ledger-core.md`）: `done`
-- [x] WI2 plan frontmatter 最小集实现 + guide 同步（status/mission/work-item/group/failures/verify/hold/claim/claim-expires）（证据：同上 plan；guide 增补 `docs/plans/00-plan-authoring-and-execution-guide.md` § Plan Frontmatter Field Table）: `done`
-- [x] WI3 状态格 + 完成派生公式 + 计数域 grep 共享实现（Phase + Closure Findings）（证据：`tools/mission-driver/src/ledger-sections.mjs` + `tools/mission-driver/test/ledger-derivation.test.js`，plan `docs/plans/age-autonomy/2026-08-25-0635-2-m1-ledger-sections-derivation.md`）: `done`
-- [ ] WI4 Closure Gates 消解（codemod；可执行项并入最后 Phase；独立性/验证/一致性由公式派生）: `ready`
-- [x] WI5 评审/审计内联区格式 + Draft Review / Closure Findings / Verification / Closure 示例与结构校验（证据：`tools/mission-driver/src/ledger-sections.mjs` `scanPlanLedger` + `tools/mission-driver/test/ledger-sections.test.js` + 00-guide § Plan Body Sections 示例，plan 同 WI3）: `done`
-- [x] WI6 Deep Audit Record 格式 + accepted findings=none|items 机器可读（证据：`scanRoadmapLedger` Deep Audit Record 解析 + 00-roadmap-guide § Roadmap Frontmatter And Audit Record 示例，plan 同 WI3）: `done`
-- [ ] WI7 存量 plan / roadmap codemod + 双读过渡（plan-check.mjs 同时识别旧 `> Plan Status:` / `> Review Hold:` 与新 frontmatter，env 切换）: `ready`
-- [ ] WI8 `> Last Reviewed` / `> Source Audits` / 外部 `docs/audits/` 跨文件生命周期消解（迁移并归一）: `ready`
-- [ ] WI9 plan-guide/roadmap-guide 同步新格式（rules 11/12/13 退役；count 域 grep；frontmatter 字段表）: `ready`
-- [ ] WI10 CI 前置：跑通 plan-check frontmatter 版 + mission-check + 双读断点切换开关: `ready`
-- [ ] **WI11 Verification Gate — M1**（自动验证硬门，下列命令真实绿方可勾选；任何一条红 = M1 未收口）: `ready`
+- [x] WI1 frontmatter 解析器：30 行内置解析；扁平标量 + 单层流式数组；块标量/嵌套对象禁用（依据 01 §2）（证据：`tools/mission-driver/src/ledger-frontmatter.mjs` + `tools/mission-driver/test/ledger-frontmatter.test.js`，plan `docs/plans/age-autonomy/2026-08-25-0635-1-m1-frontmatter-ledger-core.md`）
+- [x] WI2 plan frontmatter 最小集实现 + guide 同步（status/mission/work-item/group/failures/verify/hold/claim/claim-expires）（证据：同上 plan；guide 增补 `docs/plans/00-plan-authoring-and-execution-guide.md` § Plan Frontmatter Field Table）
+- [x] WI3 状态格 + 完成派生公式 + 计数域 grep 共享实现（Phase + Closure Findings）（证据：`tools/mission-driver/src/ledger-sections.mjs` + `tools/mission-driver/test/ledger-derivation.test.js`，plan `docs/plans/age-autonomy/2026-08-25-0635-2-m1-ledger-sections-derivation.md`）
+- [ ] WI4 Closure Gates 消解（codemod；可执行项并入最后 Phase；独立性/验证/一致性由公式派生）
+- [x] WI5 评审/审计内联区格式 + Draft Review / Closure Findings / Verification / Closure 示例与结构校验（证据：`tools/mission-driver/src/ledger-sections.mjs` `scanPlanLedger` + `tools/mission-driver/test/ledger-sections.test.js` + 00-guide § Plan Body Sections 示例，plan 同 WI3）
+- [x] WI6 Deep Audit Record 格式 + accepted findings=none|items 机器可读（证据：`scanRoadmapLedger` Deep Audit Record 解析 + 00-roadmap-guide § Roadmap Frontmatter And Audit Record 示例，plan 同 WI3）
+- [ ] WI7 存量 plan / roadmap codemod + 双读过渡（plan-check.mjs 同时识别旧 `> Plan Status:` / `> Review Hold:` 与新 frontmatter，env 切换）
+- [ ] WI8 `> Last Reviewed` / `> Source Audits` / 外部 `docs/audits/` 跨文件生命周期消解（迁移并归一）
+- [ ] WI9 plan-guide/roadmap-guide 同步新格式（rules 11/12/13 退役；count 域 grep；frontmatter 字段表）
+- [ ] WI10 CI 前置：跑通 plan-check frontmatter 版 + mission-check + 双读断点切换开关
+- [ ] **WI11 Verification Gate — M1**（自动验证硬门，下列命令真实绿方可勾选；任何一条红 = M1 未收口）
   - `node tools/mission-driver/src/plan-check.mjs docs/plans/00-plan-authoring-and-execution-guide.md --strict` → exit 0（frontmatter 解析器对既有 plan guide 仍兼容）
   - `pnpm --prefix tools/mission-driver test` → 0 失败
   - `node plugin/dsh/test/ledger-frontmatter.test.mjs`（或 `node tools/mission-driver/src/frontmatter.test.mjs`，择一）→ 至少 12 用例（解析器、字段集、状态格、完成派生、双读切换、append-only）全绿
@@ -42,19 +46,19 @@
 
 ### M2 — P1 法律：门禁族 + 三硬门 + 机械验证机械化
 
-- [ ] WI12 gate 纯函数签名 + actor + proposedContent（02 §2）+ mission 注入适配（plugin/dsh pre-execute + plan-check CLI）: `todo`
-- [ ] WI13 `missions/autonomy.policy.yml` schema + missionCheck + 结构测试钉住（version/limits/gates/triggers + `agents`/`dispatch` 具名派发映射与 agent 名引用校验；见 02 §3/§4.9，A7 裁定；+ mission.json 增 `autonomyPolicy` 字段与 mission-check 校验（终审 P1-5）+ fixedPrefix 块 schema `{kind: text|file|dir, ref, maxFileBytes?}`（终审 P1-3）+ trigger 谓词语法=受限 and/or/not + 谓词集，R1–R4 归属同步（终审 P2-2））: `todo`
-- [ ] WI14 三硬门 1：审计回执绑定（dispatch/accepted 同 id + 写者 actor 匹配；plan Closure + roadmap Deep Audit 同构；+ dispatch 行 model lineage；audit agent `requireDistinctModel` 派发时强制）: `todo`
-- [ ] WI15 三硬门 2：状态转移写者身份（draft→active reviewerSessionId；held→active 仅守夜人 unlock/reviewer；人工 disposition 经 `mdcontrol.unlock`/`mdcontrol.disposition`）: `todo`
-- [ ] WI16 三硬门 3：完成派生校验（status=active ∧ 全勾 ∧ 机械验证 ∧ 审计回执 ∧ 派发登记；整文件 proposed content；整 plan 粒度）: `todo`
-- [ ] WI17 nothing claim 兜底门禁：仅当 `draftPlans==0 ∧ activePlans==0` 允许 Deep Audit 触发；`audit-rounds ≥ max` 或 `findings=none ∧ roadmap 有未勾` 走终态 R1/R3: `todo`
-- [ ] WI18 claim 合法性门禁：plan frontmatter `claim` 内含 holderSessionId；执行者勾选需 actor.id 匹配；claim 在 active 外/awaitingClosure 前必清: `todo`
-- [ ] WI19 机械验证门禁：守夜人在 awaitingClosure 直跑 `commands.test/build/lint/typecheck` 写 `## Verification` pass 行（basisHash sha256）；`verify` 只能是 commands.* key: `todo`
-- [ ] WI20 append-only 门禁：`## Draft Review Record` / `## Verification` / `## Closure` / roadmap `## Deep Audit Record` 只追加: `todo`
-- [ ] WI21 路径与结构护栏（含 one-mission-one-roadmap 边界；`work-item` 命中 roadmap 已登记；终态冻结；**执法层自护 P8**：`plugin/dsh/src/law/**`、`missions/autonomy.policy.yml`、`tools/mission-driver/src/{plan-check,gate-check}.mjs` 对 AI 写 deny，人工/CI/已批准立项为合法例外）: `todo`
-- [ ] WI22 WI13 证据面重建（run-state 子流程不再权威；证据谓词改读 plan frontmatter/closures；plugin/dsh plan-status-gate 迁移或退役）: `todo`
-- [ ] WI23 CI 门禁接线：`plan-check.mjs` frontmatter 版 + pre-commit hook + CI job（结构子集 + audit track）；与现有 `verify-age.sh`/`age-ci.yml` 协同: `todo`
-- [ ] **WI24 Verification Gate — M2**（自动验证硬门，下列命令真实绿方可勾选）: `todo`
+- [ ] WI12 gate 纯函数签名 + actor + proposedContent（02 §2）+ mission 注入适配（plugin/dsh pre-execute + plan-check CLI）
+- [ ] WI13 `missions/autonomy.policy.yml` schema + missionCheck + 结构测试钉住（version/limits/gates/triggers + `agents`/`dispatch` 具名派发映射与 agent 名引用校验；见 02 §3/§4.9，A7 裁定；+ mission.json 增 `autonomyPolicy` 字段与 mission-check 校验（终审 P1-5）+ fixedPrefix 块 schema `{kind: text|file|dir, ref, maxFileBytes?}`（终审 P1-3）+ trigger 谓词语法=受限 and/or/not + 谓词集，R1–R4 归属同步（终审 P2-2））
+- [ ] WI14 三硬门 1：审计回执绑定（dispatch/accepted 同 id + 写者 actor 匹配；plan Closure + roadmap Deep Audit 同构；+ dispatch 行 model lineage；audit agent `requireDistinctModel` 派发时强制）
+- [ ] WI15 三硬门 2：状态转移写者身份（draft→active reviewerSessionId；held→active 仅守夜人 unlock/reviewer；人工 disposition 经 `mdcontrol.unlock`/`mdcontrol.disposition`）
+- [ ] WI16 三硬门 3：完成派生校验（status=active ∧ 全勾 ∧ 机械验证 ∧ 审计回执 ∧ 派发登记；整文件 proposed content；整 plan 粒度）
+- [ ] WI17 nothing claim 兜底门禁：仅当 `draftPlans==0 ∧ activePlans==0` 允许 Deep Audit 触发；`audit-rounds ≥ max` 或 `findings=none ∧ roadmap 有未勾` 走终态 R1/R3
+- [ ] WI18 claim 合法性门禁：plan frontmatter `claim` 内含 holderSessionId；执行者勾选需 actor.id 匹配；claim 在 active 外/awaitingClosure 前必清
+- [ ] WI19 机械验证门禁：守夜人在 awaitingClosure 直跑 `commands.test/build/lint/typecheck` 写 `## Verification` pass 行（basisHash sha256）；`verify` 只能是 commands.* key
+- [ ] WI20 append-only 门禁：`## Draft Review Record` / `## Verification` / `## Closure` / roadmap `## Deep Audit Record` 只追加
+- [ ] WI21 路径与结构护栏（含 one-mission-one-roadmap 边界；`work-item` 命中 roadmap 已登记；终态冻结；**执法层自护 P8**：`plugin/dsh/src/law/**`、`missions/autonomy.policy.yml`、`tools/mission-driver/src/{plan-check,gate-check}.mjs` 对 AI 写 deny，人工/CI/已批准立项为合法例外）
+- [ ] WI22 WI13 证据面重建（run-state 子流程不再权威；证据谓词改读 plan frontmatter/closures；plugin/dsh plan-status-gate 迁移或退役）
+- [ ] WI23 CI 门禁接线：`plan-check.mjs` frontmatter 版 + pre-commit hook + CI job（结构子集 + audit track）；与现有 `verify-age.sh`/`age-ci.yml` 协同
+- [ ] **WI24 Verification Gate — M2**（自动验证硬门，下列命令真实绿方可勾选）
   - `node plugin/dsh/src/law/check-policy.mjs missions/autonomy.policy.yml`（或 plan-check 的 `--policy` 模式）→ exit 0 且 schema 校验通过
   - `node plugin/dsh/test/law-truth-table.test.mjs` → 真值表测试至少 30 用例（覆盖三硬门全部正向/反向/边界 + actor 缺省结构子集 + 评审租约 + **law 域 deny 面** + `requireDistinctModel` 正向/反向/单模型部署显式降级 + agent 名引用校验）+ 0 失败
   - `node tools/mission-driver/src/gate-check.mjs docs/plans/age-autonomy/<a-plan>.md` → 实际 plan 文件三硬门全部 pass（grep 至少一个 plan 文件跑通）
@@ -62,13 +66,13 @@
 
 ### M3 — P2 守夜人：Supervisor seam + claim/乐观锁 + 连续队列
 
-- [ ] WI25 Supervisor 拆 cordis service（plugin/dsh）或可独立运行（CLI）+ 五职责（sustain/trigger/meter/restart/receipt）: `todo`
-- [ ] WI26 trigger 规则：从 `missions/autonomy.policy.yml` `triggers:` 段读取并执行（plan-review/closure-audit/deep-audit/mechanical-verification/reclaim/draft-plans/nothing→deep-audit；+ 派发时按 `dispatch` 映射解析具名 agent 并应用模型/组合：DSH 形态补 native-executor 的 ModelSelection documented gap（agentProvider/agentModel/reasoningEffort），独立形态复用 config.js model/variant/agentFile 通道；plan frontmatter `agent:` 覆盖经守夜人路由；+ claim TTL 续期信号 = 活动信号（events/session 工具活动），续期是否落账本于立项时定（终审 P2-1））: `todo`
-- [ ] WI27 终态规则 R1–R4（clean exit / silent-completed 修复 / hold 死锁 / 停滞熔断；`partial/blocked` 显式区分；+ failures 归因桶枚举成文（executor 错误 / 测试红 / claim 到期无产出，各桶计/不计规则）与 maxFailures 默认值进 mission config（终审 P2-3））: `todo`
-- [ ] WI28 连续模式 opt-in：roadmap 即队列 + `mdcontrol.continuous` route + `mdcontrol.unlock` 路由 + 终态 receipt 回执: `todo`
-- [ ] WI29 崩溃恢复扫描：回收过期 claim、终态化残留 running、按 trigger 派发下一个（dispatch 行无结论时 resume or 重派）: `todo`
-- [ ] WI30 卡死检测 + 往返检测 + 停滞指纹（账本 hash + 活动信号）: `todo`
-- [ ] **WI31 Verification Gate — M3**（自动验证硬门，下列命令真实绿方可勾选）: `todo`
+- [ ] WI25 Supervisor 拆 cordis service（plugin/dsh）或可独立运行（CLI）+ 五职责（sustain/trigger/meter/restart/receipt）
+- [ ] WI26 trigger 规则：从 `missions/autonomy.policy.yml` `triggers:` 段读取并执行（plan-review/closure-audit/deep-audit/mechanical-verification/reclaim/draft-plans/nothing→deep-audit；+ 派发时按 `dispatch` 映射解析具名 agent 并应用模型/组合：DSH 形态补 native-executor 的 ModelSelection documented gap（agentProvider/agentModel/reasoningEffort），独立形态复用 config.js model/variant/agentFile 通道；plan frontmatter `agent:` 覆盖经守夜人路由；+ claim TTL 续期信号 = 活动信号（events/session 工具活动），续期是否落账本于立项时定（终审 P2-1））
+- [ ] WI27 终态规则 R1–R4（clean exit / silent-completed 修复 / hold 死锁 / 停滞熔断；`partial/blocked` 显式区分；+ failures 归因桶枚举成文（executor 错误 / 测试红 / claim 到期无产出，各桶计/不计规则）与 maxFailures 默认值进 mission config（终审 P2-3））
+- [ ] WI28 连续模式 opt-in：roadmap 即队列 + `mdcontrol.continuous` route + `mdcontrol.unlock` 路由 + 终态 receipt 回执
+- [ ] WI29 崩溃恢复扫描：回收过期 claim、终态化残留 running、按 trigger 派发下一个（dispatch 行无结论时 resume or 重派）
+- [ ] WI30 卡死检测 + 往返检测 + 停滞指纹（账本 hash + 活动信号）
+- [ ] **WI31 Verification Gate — M3**（自动验证硬门，下列命令真实绿方可勾选）
   - `node plugin/dsh/test/supervisor-trigger.test.mjs` → trigger DSL 真值表至少 20 用例（含 `terminal-claim=nothing-to-draft ∧ draftPlans==0 ∧ activePlans==0` 派 deep-audit、`full-tick ∧ mechanical-verification-pass ∧ closure-receipt-missing` 派 closure-audit 等 7 条 trigger 全部覆盖）全绿
   - `node plugin/dsh/test/supervisor-recovery.test.mjs` → 崩溃恢复模拟至少 8 用例（过期 claim 回收 / dispatch 无结论 resume-or-redispatch / 停滞指纹 / 往返检测 / `partial/blocked` 显式区分）全绿
   - `pnpm --prefix plugin/dsh run verify:e2e:continuous`（如本地无 env 则 fail-fast exit ≠ 0，CI 视为 opt-in 不阻塞）→ 真实宿主下连续模式 e2e 三连跑全绿
@@ -76,11 +80,11 @@
 
 ### M4 — P3 效率层：池化 + prompt 组装 + 上下文画像
 
-- [ ] WI32 agent 池（drafter:{projectRoot} / reviewer:{groupId}）+ CLOSURE_AUDIT/DEEP_AUDIT/multi-audit 禁入池（P7 原则；+ 角色互斥：同一 continuable subagent 不得同时为 drafter 与 reviewer/auditor，同 run 内 auditor session ≠ 任何执行者 session（终审 P2-5））: `todo`
-- [ ] WI33 PromptAssembler（FRESH/CONTINUE 双模式 + `<file path hash sha256>` 嵌入 + 目录全文 + compaction 哈希台账）: `todo`
-- [ ] WI34 上下文画像 `docs/references/context-profile.json`（种子化 / run 终态挖掘 / 防抖 / schema 版本化）: `todo`
-- [ ] WI35 独立形态降级：池化 → `--session` 续用 + 前缀纪律: `todo`
-- [ ] **WI36 Verification Gate — M4**（自动验证硬门，下列命令真实绿方可勾选）: `todo`
+- [ ] WI32 agent 池（drafter:{projectRoot} / reviewer:{groupId}）+ CLOSURE_AUDIT/DEEP_AUDIT/multi-audit 禁入池（P7 原则；+ 角色互斥：同一 continuable subagent 不得同时为 drafter 与 reviewer/auditor，同 run 内 auditor session ≠ 任何执行者 session（终审 P2-5））
+- [ ] WI33 PromptAssembler（FRESH/CONTINUE 双模式 + `<file path hash sha256>` 嵌入 + 目录全文 + compaction 哈希台账）
+- [ ] WI34 上下文画像 `docs/references/context-profile.json`（种子化 / run 终态挖掘 / 防抖 / schema 版本化）
+- [ ] WI35 独立形态降级：池化 → `--session` 续用 + 前缀纪律
+- [ ] **WI36 Verification Gate — M4**（自动验证硬门，下列命令真实绿方可勾选）
   - `node plugin/dsh/test/pool-lifecycle.test.mjs` → 至少 10 用例（drafter/reviewer 池生命周期 / 空闲 TTL dispose / 代际令牌 / audit 禁入池）全绿
   - `node plugin/dsh/test/prompt-assembly.test.mjs` → 至少 12 用例（FRESH vs CONTINUE 字节序 / 缓存命中 / 目录全文 / hash 台账 / 文件变则重发）全绿
   - `node plugin/dsh/test/context-profile.test.mjs` → 至少 8 用例（种子化 / run 终态挖掘 / 防抖 / schema 版本 / 不进 `missions/`）全绿
@@ -88,10 +92,10 @@
 
 ### M5 — P4 引擎退役判定门（可选收口）
 
-- [ ] WI37 评估门禁 + 守夜人覆盖引擎全部职责后，列出 engine 退役判定清单（transient 分类退避、pingPong、reconcile、L2 parity 等迁移证据）: `todo`
-- [ ] WI38 `partial/blocked` → `EXIT_MAP` 显式增补（保护契约变更走独立立项 + 测 `exit-map.test.js`）: `todo`
-- [ ] WI39 docs/design + architecture owner-doc 一致性收口（关闭 §Deferred But Adjudicated 立案条目）: `todo`
-- [ ] **WI40 Verification Gate — M5（最终关门）**（自动验证硬门，下列命令真实绿方可勾选；任何一条红 = 整 roadmap 不收口）: `todo`
+- [ ] WI37 评估门禁 + 守夜人覆盖引擎全部职责后，列出 engine 退役判定清单（transient 分类退避、pingPong、reconcile、L2 parity 等迁移证据）
+- [ ] WI38 `partial/blocked` → `EXIT_MAP` 显式增补（保护契约变更走独立立项 + 测 `exit-map.test.js`）
+- [ ] WI39 docs/design + architecture owner-doc 一致性收口（关闭 §Deferred But Adjudicated 立案条目）
+- [ ] **WI40 Verification Gate — M5（最终关门）**（自动验证硬门，下列命令真实绿方可勾选；任何一条红 = 整 roadmap 不收口）
   - `./verify-age.sh` → L1 + L2 全绿
   - `pnpm --prefix tools/mission-driver test` → 0 失败
   - `pnpm --prefix plugin/dsh run verify:e2e` → 真宿主 e2e（缺 env → fail-fast exit ≠ 0；CI 视为 opt-in 不阻塞）

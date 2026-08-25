@@ -30,6 +30,9 @@ const ALLOWED_MODULES = [
   "runner.js", "executor.js",
   "orchestrator.js", "flow-loader.js", "plan-check.mjs", "env-loader.js",
   "postmortem.mjs", "exit-map.js", "step-executor.js",
+  // shared ledger library (age-autonomy M1-WI1/WI3/WI7; reachable via the
+  // plan-check / flow-loader / roadmap-check importers since 0635-3)
+  "ledger-frontmatter.mjs", "ledger-sections.mjs", "ledger-dualread.mjs",
 ];
 
 test("package.json declares the verbatim dsh bundle manifest shape (R1 §5)", () => {

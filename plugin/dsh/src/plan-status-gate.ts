@@ -54,7 +54,7 @@
  */
 import { readFileSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { PLAN_STATUS_RE } from '../assets/src/plan-check.mjs'
+import { PLAN_STATUS_RE } from '../assets/src/ledger-dualread.mjs'
 import type { Context } from '@deepseek-ai/cordis'
 import type { PreToolDecision, ToolExecution } from '@deepseek-ai/dsh-tools'
 

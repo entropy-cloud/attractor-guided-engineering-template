@@ -5,11 +5,20 @@
  * and the FlowEngine (terminal reconciliation, §1.4-4) parse the roadmap with
  * ONE implementation — no regex drift between the two consumers.
  *
- * Supports two roadmap formats:
+ * Dual-read (age-autonomy M1-WI7, plan 0635-3): when the roadmap carries
+ * frontmatter (`audit-rounds`) AND checkbox Work Items under `### M<n>` blocks,
+ * the checkbox channel wins (01 §3.2 — checked = done, unchecked = todo;
+ * counting/reconciliation/UI share this one channel). Otherwise it falls back
+ * to the legacy block parser, unchanged:
  *  - Current guide (00-roadmap-authoring-guide.md): "## Work Item Status" with
  *    a markdown table (| Work Item | Status | … |) or bullet list.
  *  - Legacy: "## 阶段状态" with numbered bullets and ★ milestone markers.
+ * Env breaker MISSION_DRIVER_LEDGER = auto | legacy | frontmatter applies with
+ * the same semantics as the plan surfaces (ledger-dualread.mjs).
  */
+
+import { ledgerReadMode } from "./ledger-dualread.mjs";
+import { splitLedgerSections, MILESTONE_HEADING_RE, UNCHECKED_RE, CHECKED_RE } from "./ledger-sections.mjs";
 
 const VALID_STATUSES = new Set(["todo", "ready", "planned", "done"]);
 
@@ -42,7 +51,7 @@ function tryParseTableRow(line) {
   return { seq: null, name, status, isMilestone: false };
 }
 
-export function parseRoadmapMarkdown(content) {
+function legacyParse(content) {
   const phases = [];
   const lines = content.split("\n");
   let inBlock = false;
@@ -84,7 +93,35 @@ export function parseRoadmapMarkdown(content) {
       });
     }
   }
+  return phases;
+}
 
+// New-format channel (01 §3.2): checkbox Work Items under `### M<n> — <title>`
+// milestone blocks, column 0, fences skipped. checked ⇒ done, unchecked ⇒ todo.
+function checkboxParse(split) {
+  const phases = [];
+  for (const block of split.blocks) {
+    if (block.level !== 3) continue;
+    const mm = block.text.match(MILESTONE_HEADING_RE);
+    if (!mm) continue;
+    for (let i = block.bodyStart; i < block.bodyEnd; i++) {
+      if (split.fenced[i]) continue;
+      const line = split.lines[i];
+      if (!UNCHECKED_RE.test(line) && !CHECKED_RE.test(line)) continue;
+      const name = line.replace(/^- \[[ x]\]\s*/, "").trim();
+      phases.push({
+        seq: null,
+        name,
+        status: CHECKED_RE.test(line) ? "done" : "todo",
+        isMilestone: false,
+        milestone: `M${mm[1]}`,
+      });
+    }
+  }
+  return phases;
+}
+
+function withProgress(phases) {
   // overallProgress counts only work items (milestones excluded from denominator).
   const items = phases.filter((p) => !p.isMilestone);
   const done = items.filter((p) => p.status === "done").length;
@@ -92,10 +129,32 @@ export function parseRoadmapMarkdown(content) {
   return { phases, overallProgress };
 }
 
+export function parseRoadmapMarkdown(content) {
+  const mode = ledgerReadMode();
+  let checkboxPhases = null;
+
+  if (mode !== "legacy") {
+    const split = splitLedgerSections(content);
+    const hasFm = split.hasFrontmatter && split.fmError === null;
+    if (hasFm) {
+      checkboxPhases = checkboxParse(split);
+      if (mode === "frontmatter") return withProgress(checkboxPhases);
+    } else if (mode === "frontmatter") {
+      return withProgress([]);
+    }
+  }
+  if (checkboxPhases !== null && checkboxPhases.length > 0) {
+    return withProgress(checkboxPhases);
+  }
+  return withProgress(legacyParse(content));
+}
+
 /**
  * True iff the roadmap has at least one work item AND every work item is `done`.
  * Milestones are advisory and excluded from the completeness test (they mirror
  * the authoring guide's denominator rule). Used by terminal reconciliation.
+ * Dual-read: checkbox Work Items win for frontmatter roadmaps (all checked ⇒
+ * done); legacy suffix/table roadmaps keep the legacy derivation.
  */
 export function roadmapAllDone(content) {
   const { phases } = parseRoadmapMarkdown(content);

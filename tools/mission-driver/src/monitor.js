@@ -27,7 +27,7 @@ import {
 import { join, resolve, basename, extname, relative, isAbsolute, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getSpawner, __setSpawnerForTest } from "./spawner.mjs";
-import { PLAN_STATUS_RE } from "./plan-check.mjs";
+import { planLedgerState } from "./ledger-dualread.mjs";
 import { getAllProcesses, getDescendants } from "./platform.mjs";
 import { reconcileStaleRuns, isAliveAndOurs, markAborted } from "./run-reconcile.mjs";
 import { startDraftJob, readDraftJob, listDraftJobs, validateDraftDesc } from "./draft-job.mjs";
@@ -816,7 +816,8 @@ function handleGetRoadmap(projectRoot, name) {
 
 // GET /api/configs/:name/plans  (FIX-2)
 // Lists non-index plan files under the mission's plansDir with their status,
-// reusing PLAN_STATUS_RE from plan-check.mjs to avoid regex drift (FSD §3.2).
+// via the shared dual-read ledger resolver (ledger-dualread.mjs — frontmatter
+// first, legacy `> Plan Status:` fallback; M1-WI7 fourth consumption surface).
 function handleListPlans(projectRoot, name) {
   const safeName = basename(name);
   const mission = readMissionConfig(projectRoot, safeName);
@@ -836,8 +837,8 @@ function handleListPlans(projectRoot, name) {
       let status = "unknown";
       try {
         const content = readFileSync(filePath, "utf8");
-        const m = content.match(PLAN_STATUS_RE);
-        if (m) status = m[1].trim().toLowerCase();
+        const state = planLedgerState(content);
+        if (state.format !== "none") status = state.normalized;
       } catch {}
       let st;
       try {

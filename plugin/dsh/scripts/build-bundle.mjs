@@ -50,10 +50,11 @@ const ALLOWED_MODULES = [
   // orchestration entry path
   "orchestrator.js", "flow-loader.js", "plan-check.mjs", "env-loader.js",
   "postmortem.mjs", "exit-map.js", "step-executor.js",
-  // shared ledger library (age-autonomy M1-WI1 frontmatter + M1-WI3 sections;
-  // their importer lands with 0635-3/WI7 — until then they are
-  // unreachable-allowed, which is expected and non-failing)
-  "ledger-frontmatter.mjs", "ledger-sections.mjs",
+  // shared ledger library (age-autonomy M1-WI1 frontmatter + M1-WI3 sections
+  // + M1-WI7 dual-read resolver; importers landed with 0635-3/WI7 wiring —
+  // plan-check.mjs / flow-loader.js / roadmap-check.mjs consume them, so all
+  // three are import-closure reachable from here on)
+  "ledger-frontmatter.mjs", "ledger-sections.mjs", "ledger-dualread.mjs",
 ];
 
 // NOT bundled (packaging doc): monitor server, draft-job detached-process

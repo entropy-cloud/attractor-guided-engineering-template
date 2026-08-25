@@ -1,3 +1,7 @@
+---
+audit-rounds: 0
+---
+
 # Mission-Driver 明确可改问题 Roadmap（#1–#3, #5）
 
 > Last updated: 2026-07-30
@@ -16,10 +20,12 @@ Does not contain implementation details. Each `planned` stage is owned by its ex
 > AI takes the first `todo` item, drafts/executes plans (humans don't review individual
 > plans), and writes the item back to `done` when closure audit passes.
 
-- 1. REVIEW_PLANS approved marker alias fix: `done`
-- 2. Per-mission promptsDir config support: `done`
-- 3. CHECK configurable check command + prompt rewrite: `done`
-- 4. Draft description supports directory/multi-file references: `done`
+### M1 — Work Items
+
+- [x] 1. REVIEW_PLANS approved marker alias fix
+- [x] 2. Per-mission promptsDir config support
+- [x] 3. CHECK configurable check command + prompt rewrite
+- [x] 4. Draft description supports directory/multi-file references
 
 ## Status values
 

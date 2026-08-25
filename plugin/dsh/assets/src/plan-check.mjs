@@ -1,33 +1,28 @@
 /**
- * plan-check.mjs — Self-contained plan checklist inspector for the mission driver.
+ * plan-check.mjs — plan checklist inspector for the mission driver.
  *
- * This is the flux-project counterpart of nop-entropy's
- * `check-plan-checklist.mjs::inspectPlan`. It parses a plan markdown file and
- * reports unchecked checklist items, plan status, and closure-evidence gaps.
+ * Dual-read (age-autonomy M1-WI7, plan 0635-3): status resolution and new-format
+ * checkbox counting go through the shared ledger library
+ * (`src/ledger-dualread.mjs` + `src/ledger-sections.mjs`) — frontmatter first,
+ * legacy `> Plan Status:` fallback, env breaker MISSION_DRIVER_LEDGER.
  *
- * Plan format (see docs/plans/00-plan-authoring-and-execution-guide.md):
- *   > Plan Status: draft | active | completed | ...
- *   > Last Reviewed: YYYY-MM-DD
- *
- *   ### Phase N - Name
- *   Status: planned
- *   Exit Criteria:
- *   - [ ] item
- *
- *   ## Closure Gates
- *   - [ ] item
- *
- *   ## Closure
- *   Status Note: ...
- *   Closure Audit Evidence:
- *   - ...
+ *  - New-format plan (frontmatter with `status`): counts come from the counting
+ *    domain (`## Phase <n>` sections + `## Closure Findings`) only; template
+ *    examples outside the domain never pollute. `completed` is derived
+ *    (01 §5.2), never read from the file. Closure evidence = paired
+ *    dispatch/accepted lines in `## Closure`.
+ *  - Legacy plan: previous whole-document behavior is preserved verbatim
+ *    (legacy plans predate the counting-domain discipline).
+ *  - Neither (guides/templates): zero counts, status unknown — `--strict`
+ *    passes for the plan guide itself (M1-WI11 gate 1).
  */
 
 import { readFileSync } from "node:fs";
 import { relative } from "node:path";
 import { pathToFileURL } from "node:url";
+import { planLedgerState } from "./ledger-dualread.mjs";
+import { scanPlanLedger } from "./ledger-sections.mjs";
 
-export const PLAN_STATUS_RE = /^>\s*(?:\*\*)?(?:Plan\s+)?Status(?:\*\*)?:\s*\*{0,2}([A-Za-z][A-Za-z /-]*)\*{0,2}\s*$/im;
 const CHECKLIST_UNCHECKED_RE = /^(\s*)-\s+\[\s?\]\s+(.+)$/gm;
 const CHECKLIST_CHECKED_RE = /^(\s*)-\s+\[x\]\s+(.+)$/gim;
 // Match the real "## Closure" section, NOT "## Closure Gates". `\b` alone
@@ -41,20 +36,10 @@ function toPosix(p) {
   return p.split(/\\/).join("/");
 }
 
-/**
- * Analyze a plan file and return raw metrics.
- * @param {string} filePath absolute or project-relative path to the plan
- * @param {string} [projectRoot] for computing relative paths in output
- */
-function analyzePlan(filePath, projectRoot) {
-  const content = readFileSync(filePath, "utf-8");
-  const relPath = projectRoot ? toPosix(relative(projectRoot, filePath)) : toPosix(filePath);
-
-  const statusMatch = content.match(PLAN_STATUS_RE);
-  const planStatus = statusMatch ? statusMatch[1].trim().toLowerCase() : "unknown";
+function analyzeLegacy(content, planStatus) {
   const isCompleted = planStatus === "completed";
 
-  // Closure section presence + evidence
+  // Closure section presence + evidence (legacy shape)
   const closureHeaderIdx = content.search(CLOSURE_HEADER_RE);
   let hasClosureSection = closureHeaderIdx !== -1;
   let closureBody = "";
@@ -76,23 +61,72 @@ function analyzePlan(filePath, projectRoot) {
       if (!placeholderRe.test(m[1].trim())) closureEvidenceCount++;
     }
   }
-  const hasClosureEvidence = closureEvidenceCount > 0;
 
-  // Checklist counts (whole-document: phases + closure gates + execution plan)
+  // Checklist counts (whole-document, legacy behavior preserved)
   const totalUnchecked = (content.match(CHECKLIST_UNCHECKED_RE) || []).length;
   const totalChecked = (content.match(CHECKLIST_CHECKED_RE) || []).length;
-  const allUnchecked = totalChecked === 0 && totalUnchecked > 0;
 
   return {
-    file: relPath,
     planStatus,
     isCompleted,
     totalChecked,
     totalUnchecked,
-    allUnchecked,
     hasClosureSection,
-    hasClosureEvidence,
+    hasClosureEvidence: closureEvidenceCount > 0,
     closureEvidenceCount,
+    structuralErrors: [],
+  };
+}
+
+function analyzeFrontmatter(content, state) {
+  const scan = scanPlanLedger(content);
+  const isCompleted = state.completed;
+  const hasClosureSection = scan.closure !== null;
+  const closureEvidenceCount = scan.closure ? scan.closure.pairs.length : 0;
+  const structuralErrors = scan.errors.map((e) => `line ${e.line}: ${e.message}`);
+  if (scan.fmError) structuralErrors.push(`frontmatter: ${scan.fmError}`);
+  return {
+    planStatus: state.normalized,
+    isCompleted,
+    totalChecked: scan.counts.checked,
+    totalUnchecked: scan.counts.unchecked,
+    hasClosureSection,
+    hasClosureEvidence: closureEvidenceCount > 0,
+    closureEvidenceCount,
+    structuralErrors,
+  };
+}
+
+/**
+ * Analyze a plan file and return raw metrics (dual-read).
+ * @param {string} filePath absolute or project-relative path to the plan
+ * @param {string} [projectRoot] for computing relative paths in output
+ */
+function analyzePlan(filePath, projectRoot) {
+  const content = readFileSync(filePath, "utf-8");
+  const relPath = projectRoot ? toPosix(relative(projectRoot, filePath)) : toPosix(filePath);
+
+  const state = planLedgerState(content);
+  const analyzed = state.format === "frontmatter"
+    ? analyzeFrontmatter(content, state)
+    : state.format === "legacy"
+      ? analyzeLegacy(content, state.normalized)
+      : {
+          planStatus: "unknown",
+          isCompleted: false,
+          totalChecked: 0,
+          totalUnchecked: 0,
+          hasClosureSection: false,
+          hasClosureEvidence: false,
+          closureEvidenceCount: 0,
+          structuralErrors: state.rejected ? [state.rejected] : [],
+        };
+
+  return {
+    file: relPath,
+    format: state.format,
+    ...analyzed,
+    allUnchecked: analyzed.totalChecked === 0 && analyzed.totalUnchecked > 0,
   };
 }
 
@@ -116,7 +150,11 @@ export function inspectPlan(filePath, options = {}) {
     details.push(`${result.totalUnchecked} unchecked items`);
   }
 
-  // A plan marked completed must carry real closure evidence.
+  for (const err of result.structuralErrors) {
+    details.push(`ledger structure error: ${err}`);
+  }
+
+  // A completed plan must carry real closure evidence.
   if (result.isCompleted && !result.hasClosureEvidence) {
     details.push("missing closure evidence");
   }
@@ -131,6 +169,7 @@ export function inspectPlan(filePath, options = {}) {
   return {
     passed: !failed,
     file: result.file,
+    format: result.format,
     planStatus: result.planStatus,
     totalChecked: result.totalChecked,
     totalUnchecked: result.totalUnchecked,

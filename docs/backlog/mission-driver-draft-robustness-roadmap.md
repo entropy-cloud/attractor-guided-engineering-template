@@ -1,3 +1,7 @@
+---
+audit-rounds: 0
+---
+
 # Mission-Driver Draft Robustness Roadmap
 
 > Last Updated: 2026-07-22 (mdr-remediate-1 closed — N4 design §4.3.1 plansRoot snippet dropped + annotated; F4/N1-arch architecture coverage gap closed via new `docs/architecture/mission-driver-baseline.md`; project-wide template-debt row added to Follow-up Backlog)
@@ -16,20 +20,20 @@ It contains no implementation detail. The design doc owns the how; this file own
 
 ### M1 — Draft 输入与 gate
 
-- WI1 CLI 层 draft 描述校验: `done`
-- WI2 brief gate marker 契约 + 引擎强制: `done`
+- [x] WI1 CLI 层 draft 描述校验
+- [x] WI2 brief gate marker 契约 + 引擎强制
 
 ### M2 — 路径一致性
 
-- WI3 draft/brief 路径统一走模板变量: `done`
+- [x] WI3 draft/brief 路径统一走模板变量
 
 ### M3 — 校验工具健壮性
 
-- WI4 修固 mission-check.mjs 跨平台 CLI 入口: `done`
+- [x] WI4 修固 mission-check.mjs 跨平台 CLI 入口
 
 ### M4 — 执行状态持久化
 
-- WI5 subflowRuns 增量落盘到主 run-state: `done`
+- [x] WI5 subflowRuns 增量落盘到主 run-state
 
 ## Status Values
 

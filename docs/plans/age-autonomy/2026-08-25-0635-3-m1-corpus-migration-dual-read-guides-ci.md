@@ -1,12 +1,15 @@
+---
+status: active
+mission: age-autonomy-implementation
+work-item: M1-WI4+WI7+WI8+WI9+WI10+WI11
+group: "2026-08-25-0635"
+verify: [test]
+---
+
 # 2026-08-25-0635-3 M1 收口：存量迁移 + 双读接线 + guides/CI（age-autonomy M1-WI4+WI7+WI8+WI9+WI10+WI11）
 
-> Plan Status: active
-> Mission: age-autonomy-implementation
-> Work Item: M1-WI4+WI7+WI8+WI9+WI10+WI11
-> Last Reviewed: 2026-08-25
 > Source: `docs/backlog/age-autonomy-implementation-roadmap.md` M1 WI4/WI7–WI11；契约 owner `docs/design/age-autonomy/01-file-ledger.md` §3/§4.3/§5；`docs/discussions/2026-08-24-roadmap-plan-frontmatter-reform.md` §5 迁移成本清单 + §7 开放点 2（迁移策略需裁定）+ §8（审计内联裁定）
 > Related: 前置 `2026-08-25-0635-1`（N=1）、`2026-08-25-0635-2`（N=2）——本 plan 消费两者全部导出面；M1 全部 WI 的收官 plan
-> Audit: required
 
 ## Current Baseline
 
@@ -50,30 +53,27 @@
 
 - 迁移即数据变更：**回滚策略 = git revert codemod commit + env 开关回退 legacy 通道**（双读期间旧通道不删；无不可逆写）。codemod 幂等（重跑零 diff），先 `--dry-run` 全量 diff 审计后落盘。
 
-## Execution Plan
+## Phase 1 — Decision：迁移语义边界集中裁定
 
-### Phase 1 - Decision：迁移语义边界集中裁定
-
-Status: planned
 Targets: 决策记录于本 plan
 Skill: none
 
 - Item Types: `Decision`
 - Prereqs: 0635-1/0635-2 已 active（其 Phase 1 契约是本 phase 输入）
 
-- [ ] `Decision` **存量 `completed` plan 处置（讨论 §7 开放点 2 的落地裁定）**：52 份 completed 存量 plan **保持旧格式不迁移**，由双读 legacy 通道永远识别为 closed（`closedPlans()` 语义覆盖：legacy `> Plan Status: completed` ⇒ closed）。备选与否决：(a) 迁为可写终态（superseded 等）——否决：语义暴力（它们是完成史不是被取代），且 completed 不可写（01 §5.1）无诚实目标值；(b) 迁为 active + 合成 dispatch/accepted 回执——否决：伪造回执违背 id/nonce 防预造设计（01 §4.4）。codemod 的 plan 迁移面 = 非终态 plan（今日仅本批 3 份 draft；未来消费者语料同规则）。残险：仓库长期新旧并存——已裁定接受（双读是模板消费者兼容的硬需求，同一残险）。
+- [x] `Decision` **存量 `completed` plan 处置（讨论 §7 开放点 2 的落地裁定）**：52 份 completed 存量 plan **保持旧格式不迁移**，由双读 legacy 通道永远识别为 closed（`closedPlans()` 语义覆盖：legacy `> Plan Status: completed` ⇒ closed）。备选与否决：(a) 迁为可写终态（superseded 等）——否决：语义暴力（它们是完成史不是被取代），且 completed 不可写（01 §5.1）无诚实目标值；(b) 迁为 active + 合成 dispatch/accepted 回执——否决：伪造回执违背 id/nonce 防预造设计（01 §4.4）。codemod 的 plan 迁移面 = 非终态 plan（今日仅本批 3 份 draft；未来消费者语料同规则）。残险：仓库长期新旧并存——已裁定接受（双读是模板消费者兼容的硬需求，同一残险）。
       - Skill: none
-- [ ] `Decision` **过渡期回执写者与收口语义（自指陷阱裁定——迁移后非终态 plan 在 M1 语义下的收口通道）**：设计 §5.2 完成公式要求 Verification pass 行与 dispatch/accepted 回执，其「合法写者」守夜人要到 M3、写者身份门禁要到 M2 才存在——若不裁定，codemod 迁移的本批 3 份 draft（含本 plan 自身）将永远派生不出 `completed`，被 `activePlans` 永久重喂 EXECUTE。裁定：**过渡期（M1→M2 法律落地前）回执写者 = 引擎流程步骤经 prompt 指令驱动的 agent 会话**——BUILD_VERIFY 步写 `## Verification` pass 行（basisHash 由 0635-2 共享库计算规则成文于 prompt）、CLOSURE_AUDIT 步写 `## Closure` dispatch/accepted 行、plan-review 步写 `## Draft Review Record` dispatch/结论行、DEEP_AUDIT 步写 roadmap `## Deep Audit Record` 行并自增 `audit-rounds`（对应设计 §3.1「M1 = 引擎进入审计态」的写者注记）；「独立评审者把结论写进被审文件」本就是现役实践（讨论 §8.1）。备选：(a) 双读对迁移 plan 接受旧式 Closure 证据 → 否决：给完成公式开人肉后门，M2 后无法收口收紧；(b) 非终态 plan 仅在收口时刻迁移 → 否决：mid-mission 格式churn 正是双读要验证的场景，规避等于不测。**残险（成文接受）**：M2 前 id/nonce 与 append-only 无写时强制，回执是信任基（与今日现状同级），M2 WI14/WI20 执法后收口。
+- [x] `Decision` **过渡期回执写者与收口语义（自指陷阱裁定——迁移后非终态 plan 在 M1 语义下的收口通道）**：设计 §5.2 完成公式要求 Verification pass 行与 dispatch/accepted 回执，其「合法写者」守夜人要到 M3、写者身份门禁要到 M2 才存在——若不裁定，codemod 迁移的本批 3 份 draft（含本 plan 自身）将永远派生不出 `completed`，被 `activePlans` 永久重喂 EXECUTE。裁定：**过渡期（M1→M2 法律落地前）回执写者 = 引擎流程步骤经 prompt 指令驱动的 agent 会话**——BUILD_VERIFY 步写 `## Verification` pass 行（basisHash 由 0635-2 共享库计算规则成文于 prompt）、CLOSURE_AUDIT 步写 `## Closure` dispatch/accepted 行、plan-review 步写 `## Draft Review Record` dispatch/结论行、DEEP_AUDIT 步写 roadmap `## Deep Audit Record` 行并自增 `audit-rounds`（对应设计 §3.1「M1 = 引擎进入审计态」的写者注记）；「独立评审者把结论写进被审文件」本就是现役实践（讨论 §8.1）。备选：(a) 双读对迁移 plan 接受旧式 Closure 证据 → 否决：给完成公式开人肉后门，M2 后无法收口收紧；(b) 非终态 plan 仅在收口时刻迁移 → 否决：mid-mission 格式churn 正是双读要验证的场景，规避等于不测。**残险（成文接受）**：M2 前 id/nonce 与 append-only 无写时强制，回执是信任基（与今日现状同级），M2 WI14/WI20 执法后收口。
       - Skill: none
-- [ ] `Decision` **codemod plan 面**（非终态 plan）：`> Plan Status: X` → frontmatter `status`（`> Review Hold: r` → `status: held` + `hold: "r"`）；`> Mission:` / `> Work Item:` → `mission` / `work-item` 字段；`group` 回填文件名时间戳前缀；`> Last Reviewed:` / `> Audit:` 删除（审阅事实在 Draft Review Record，01 §4.3）；`> Source:` / `> Related:` 保留为正文引言 blockquote（机器不解析，非 frontmatter 字段）；per-Phase `Status:` 行删除；`### Phase N - <name>` → `## Phase N — <name>`（`## Execution Plan` 包装层移除）；`## Closure Gates` 消解：可执行项并入最后 Phase 尾部，派生类项（独立性/验证/一致性类）直接删除——其保证由完成派生公式接管（01 §4.3）；既有 `## Draft Review Record` / `## Closure` 区原文保留（append-only 尊重；0635-2 已裁定未知前缀行容忍为 prose，旧散文不破坏结构校验）；迁移后回执由上方过渡期写者裁定供给。
+- [x] `Decision` **codemod plan 面**（非终态 plan）：`> Plan Status: X` → frontmatter `status`（`> Review Hold: r` → `status: held` + `hold: "r"`）；`> Mission:` / `> Work Item:` → `mission` / `work-item` 字段；`group` 回填文件名时间戳前缀；`> Last Reviewed:` / `> Audit:` 删除（审阅事实在 Draft Review Record，01 §4.3）；`> Source:` / `> Related:` 保留为正文引言 blockquote（机器不解析，非 frontmatter 字段）；per-Phase `Status:` 行删除；`### Phase N - <name>` → `## Phase N — <name>`（`## Execution Plan` 包装层移除）；`## Closure Gates` 消解：可执行项并入最后 Phase 尾部，派生类项（独立性/验证/一致性类）直接删除——其保证由完成派生公式接管（01 §4.3）；既有 `## Draft Review Record` / `## Closure` 区原文保留（append-only 尊重；0635-2 已裁定未知前缀行容忍为 prose，旧散文不破坏结构校验）；迁移后回执由上方过渡期写者裁定供给。
       - Skill: none
-- [ ] `Decision` **codemod roadmap 面**：6 份 roadmap（发现口径 = `missions/*.json` `roadmapPath` 集——00-roadmap-authoring-guide 不入迁移面）加 frontmatter（`audit-rounds: 0` 统一起写——已知非零轮次的 roadmap 按实写，今日无）；Work Item 行尾缀 `: todo|ready|done` 剥除（01 §3.2 纯 checkbox；`ready` 语义由 plan 侧 status 承载，不再挂 roadmap）；`## Status Values` 表保留为 prose。roadmap-check.mjs 双读：checkbox 优先、尾缀回退（存量 demo/消费者 roadmap 兼容）。
+- [x] `Decision` **codemod roadmap 面**：6 份 roadmap（发现口径 = `missions/*.json` `roadmapPath` 集——00-roadmap-authoring-guide 不入迁移面）加 frontmatter（`audit-rounds: 0` 统一起写——已知非零轮次的 roadmap 按实写，今日无）；Work Item 行尾缀 `: todo|ready|done` 剥除（01 §3.2 纯 checkbox；`ready` 语义由 plan 侧 status 承载，不再挂 roadmap）；`## Status Values` 表保留为 prose。roadmap-check.mjs 双读：checkbox 优先、尾缀回退（存量 demo/消费者 roadmap 兼容）。
       - Skill: none
-- [ ] `Decision` **双读优先级 + 断点开关（WI7/WI10 字面）**：env `MISSION_DRIVER_LEDGER = auto | frontmatter | legacy`（对齐引擎 `MISSION_DRIVER_*` env 命名族，config.js 先例），默认 `auto` = 有 frontmatter 读 frontmatter、无则旧状态行/尾缀回退；`legacy` 为回退通道（rollback）；`frontmatter` 为收紧模式（M2 enforce 前的断点，切换时机由 M2 WI23 决定，本 plan 只交开关与测试）。开关语义对 plan-check / flow-loader / roadmap-check / monitor 四消费面一致（同一实现，禁各自带正则——01 §5.2）。
+- [x] `Decision` **双读优先级 + 断点开关（WI7/WI10 字面）**：env `MISSION_DRIVER_LEDGER = auto | frontmatter | legacy`（对齐引擎 `MISSION_DRIVER_*` env 命名族，config.js 先例），默认 `auto` = 有 frontmatter 读 frontmatter、无则旧状态行/尾缀回退；`legacy` 为回退通道（rollback）；`frontmatter` 为收紧模式（M2 enforce 前的断点，切换时机由 M2 WI23 决定，本 plan 只交开关与测试）。开关语义对 plan-check / flow-loader / roadmap-check / monitor 四消费面一致（同一实现，禁各自带正则——01 §5.2）。
       - Skill: none
-- [ ] `Decision` **WI11 grep gate 期望值钉住**：WI11 第 4 条 `grep -c "^- \[ ]" age-autonomy-implementation-roadmap.md` 的期望值分两个时刻钉住——**gate 执行时刻**（本 plan Phase 6，早于本 plan closure audit，故 WI4/WI7–WI10 尚未 tick）：**35**（= 40 总 WI − 已 closure 的 0635-1/2 的 5 项 WI1/WI2/WI3/WI5/WI6）；**M1 收口稳态**（本 plan closure audit 后，M1 全 11 项 tick）：**29**（M2–M5 未勾数）。tick 顺序依赖（closure audit 先于 tick）已在 roadmap 状态块纪律中固定。gate 意图 = 计数域无散落污染（不变式：checkbox 行仅存在于 Work Item 块）；执行时以实况校准并记录于 tick 证据。
+- [x] `Decision` **WI11 grep gate 期望值钉住**：WI11 第 4 条 `grep -c "^- \[ ]" age-autonomy-implementation-roadmap.md` 的期望值分两个时刻钉住——**gate 执行时刻**（本 plan Phase 6，早于本 plan closure audit，故 WI4/WI7–WI10 尚未 tick）：**35**（= 40 总 WI − 已 closure 的 0635-1/2 的 5 项 WI1/WI2/WI3/WI5/WI6）；**M1 收口稳态**（本 plan closure audit 后，M1 全 11 项 tick）：**29**（M2–M5 未勾数）。tick 顺序依赖（closure audit 先于 tick）已在 roadmap 状态块纪律中固定。gate 意图 = 计数域无散落污染（不变式：checkbox 行仅存在于 Work Item 块）；执行时以实况校准并记录于 tick 证据。
       - Skill: none
-- [ ] `Decision` **prompt 对齐范围（宽于状态行——覆盖 roadmap tick、Source-Audits 步、审计生产面）**：
+- [x] `Decision` **prompt 对齐范围（宽于状态行——覆盖 roadmap tick、Source-Audits 步、审计生产面）**：
   1. 状态操作双模式（execute / plan-review / closure-audit / draft-from-roadmap / draft-from-audit）：格式感知（plan 有 frontmatter → 操作 frontmatter；无 → 旧状态行），措辞与双读 `auto` 语义严格一致；`closure-audit.md` 五点一致性条目改为完成派生引用；draft 类 prompt 直接产出新格式骨架（frontmatter + 新区块）；`execute.md` 不再指示手写 `completed`（勾完即完成，派生）。
   2. roadmap tick 双模式（`execute.md:11` ❌→✅ 指令、`build-verify.md:53-58` ✅ 图标回写指令）：改为「checkbox 勾选（新格式 roadmap）/ 旧格式回退」双模式；`build-verify.md` 同时承担过渡期 `## Verification` pass 行写入指令（Phase 1 过渡期写者裁定的落地面，basisHash 计算规则成文于此）。
   3. `execute.md:12c` Source-Audits 关闭步整体删除（讨论 §8.2.4 明示）。
@@ -83,63 +83,60 @@ Skill: none
 
 Exit Criteria:
 
-- [ ] 七项 Decision 连同备选/残险记录于本 plan
-- [ ] `docs/logs/` updated（Phase 1 决策条目）
+- [x] 七项 Decision 连同备选/残险记录于本 plan
+- [x] `docs/logs/` updated（Phase 1 决策条目）
 
-### Phase 2 - codemod 实现 + 干跑审计 + 落盘
+## Phase 2 — codemod 实现 + 干跑审计 + 落盘
 
-Status: planned
 Targets: `plugin/dsh/scripts/migrate-ledger.mjs`（新一次性迁移脚本；复用 `tools/mission-driver/src/ledger-*.mjs` 共享库——scripts 非打包面，允许跨目录 import，build-bundle.mjs:36 REPO_ROOT 先例）
 Skill: none
 
 - Item Types: `Add | Proof`
 - Prereqs: Phase 1 + 0635-1/0635-2 **Phase 2 实现已落地**（codemod 直接消费其共享库与结构校验器）
 
-- [ ] `Add` codemod 脚本：plan 面 + roadmap 面（Phase 1 裁定全部规则）；`--dry-run` 输出全量 diff；幂等（二次运行零 diff）；`--scope plans|roadmaps` 分面执行
+- [x] `Add` codemod 脚本：plan 面 + roadmap 面（Phase 1 裁定全部规则）；`--dry-run` 输出全量 diff；幂等（二次运行零 diff）；`--scope plans|roadmaps` 分面执行
       - Skill: none
-- [ ] `Proof` 干跑审计：dry-run diff 逐文件抽查（本批 3 份 draft plan + 6 份 roadmap 全量；记录 diff 摘要于 log）；0635-2 结构校验器对迁移产物全绿（计数域无污染、区块语法合法、frontmatter 校验通过）
+- [x] `Proof` 干跑审计：dry-run diff 逐文件抽查（本批 3 份 draft plan + 6 份 roadmap 全量；记录 diff 摘要于 log）；0635-2 结构校验器对迁移产物全绿（计数域无污染、区块语法合法、frontmatter 校验通过）
       - Skill: none
-- [ ] `Add` 落盘 + git 提交（迁移即一个可 revert 的 commit；提交信息按 commitFormat `<type>(age-autonomy): <description>`）。**落盘窗口约束**：codemod 落盘 commit 必须与 Phase 3 双读接线同一 commit（或双读先行独立 commit）——迁移后、接线前存在「旧解析器对新语料失明」窗口（draftPlans 空、roadmapAllDone 假阴性、monitor unknown），不允许该窗口过夜
+- [x] `Add` 落盘 + git 提交（迁移即一个可 revert 的 commit；提交信息按 commitFormat `<type>(age-autonomy): <description>`）。**落盘窗口约束**：codemod 落盘 commit 必须与 Phase 3 双读接线同一 commit（或双读先行独立 commit）——迁移后、接线前存在「旧解析器对新语料失明」窗口（draftPlans 空、roadmapAllDone 假阴性、monitor unknown），不允许该窗口过夜
       - Skill: none
 
 Exit Criteria:
 
-- [ ] 迁移后全语料通过 0635-2 结构校验（非终态 plan + 全部 roadmap 为新格式；completed 存量保持旧格式且可被 legacy 通道识别）
-- [ ] codemod 幂等性被测试/复跑证明（二次运行零 diff）
-- [ ] `docs/logs/` updated（迁移记录：文件数、diff 概要、回滚点 commit）
+- [x] 迁移后全语料通过 0635-2 结构校验（非终态 plan + 全部 roadmap 为新格式；completed 存量保持旧格式且可被 legacy 通道识别）
+- [x] codemod 幂等性被测试/复跑证明（二次运行零 diff）
+- [x] `docs/logs/` updated（迁移记录：文件数、diff 概要、回滚点 commit）
 
-### Phase 3 - 双读接线（四消费面 + 开关）
+## Phase 3 — 双读接线（四消费面 + 开关）
 
-Status: planned
 Targets: `tools/mission-driver/src/plan-check.mjs`、`tools/mission-driver/src/flow-loader.js`、`tools/mission-driver/src/roadmap-check.mjs`、`tools/mission-driver/src/monitor.js`（plans 列表状态读取）、`tools/mission-driver/test/`（新增双读用例）
 Skill: none
 
 - Item Types: `Add | Fix | Proof`
 - Prereqs: Phase 2 + 0635-2 Phase 2
 
-- [ ] `Add` plan-check.mjs：状态读取切共享库（frontmatter 优先 / legacy 回退，env 开关）；checkbox 计数切计数域扫描器（新格式走区块计数；legacy plan 维持全文计数现状——其格式本就无区块纪律，行为不回归）；00-guide `--strict` 达成 exit 0（模板示例不再污染——无计数域 ⇔ 0 unchecked）
+- [x] `Add` plan-check.mjs：状态读取切共享库（frontmatter 优先 / legacy 回退，env 开关）；checkbox 计数切计数域扫描器（新格式走区块计数；legacy plan 维持全文计数现状——其格式本就无区块纪律，行为不回归）；00-guide `--strict` 达成 exit 0（模板示例不再污染——无计数域 ⇔ 0 unchecked）
       - Skill: none
-- [ ] `Add` flow-loader.js：`_scanPlansByStatus` 与 `inspectPlan` 消费面切共享谓词/双读（删除其自持 `PLAN_STATUS_RE`，:9）；`activePlans` 对 legacy completed 正确输出 closed（不被当作 active 捡起执行）
+- [x] `Add` flow-loader.js：`_scanPlansByStatus` 与 `inspectPlan` 消费面切共享谓词/双读（删除其自持 `PLAN_STATUS_RE`，:9）；`activePlans` 对 legacy completed 正确输出 closed（不被当作 active 捡起执行）
       - Skill: none
-- [ ] `Add` roadmap-check.mjs：Work Item 解析 checkbox 优先 / 尾缀回退；`roadmapAllDone`（engine.js:8 消费）对新旧格式均语义正确
+- [x] `Add` roadmap-check.mjs：Work Item 解析 checkbox 优先 / 尾缀回退；`roadmapAllDone`（engine.js:8 消费）对新旧格式均语义正确
       - Skill: none
-- [ ] `Add` monitor.js plans 列表：`handleListPlans`（:30/:839 自持 `PLAN_STATUS_RE` import）切共享双读；roadmap API 面经 `parseRoadmapMarkdown` 自动受益（无独立改动）
+- [x] `Add` monitor.js plans 列表：`handleListPlans`（:30/:839 自持 `PLAN_STATUS_RE` import）切共享双读；roadmap API 面经 `parseRoadmapMarkdown` 自动受益（无独立改动）
       - Skill: none
-- [ ] `Proof` 双读开关测试（进 0635-1 建立的 `ledger-frontmatter.test.js` 或独立 `ledger-dualread.test.js`，覆盖 WI11 gate 第 3 条的「双读切换」面）：`auto`（frontmatter plan / legacy plan / guide 类无状态文件三分支）、`legacy` 强制回退、`frontmatter` 收紧模式拒绝旧格式；legacy completed ⇒ closed
+- [x] `Proof` 双读开关测试（进 0635-1 建立的 `ledger-frontmatter.test.js` 或独立 `ledger-dualread.test.js`，覆盖 WI11 gate 第 3 条的「双读切换」面）：`auto`（frontmatter plan / legacy plan / guide 类无状态文件三分支）、`legacy` 强制回退、`frontmatter` 收紧模式拒绝旧格式；legacy completed ⇒ closed
       - Skill: none
-- [ ] `Proof` 引擎回归：`pnpm --prefix tools/mission-driver test` 全绿（既有 flow/monitor/audit 相关测试不回归）；flow-loader 扫描对迁移后 `docs/plans/age-autonomy/` 的实况输出与预期一致（本批 3 份 draft 被识别为 draftPlans）；monitor plans 列表对迁移语料状态非 `unknown`
+- [x] `Proof` 引擎回归：`pnpm --prefix tools/mission-driver test` 全绿（既有 flow/monitor/audit 相关测试不回归）；flow-loader 扫描对迁移后 `docs/plans/age-autonomy/` 的实况输出与预期一致（本批 3 份 draft 被识别为 draftPlans）；monitor plans 列表对迁移语料状态非 `unknown`
       - Skill: none
 
 Exit Criteria:
 
-- [ ] `node tools/mission-driver/src/plan-check.mjs docs/plans/00-plan-authoring-and-execution-guide.md --strict` → exit 0（WI11 gate 第 1 条提前达成）
-- [ ] 四消费面无自持状态正则（`rg -n "PLAN_STATUS_RE|AUDIT_STATUS_RE" tools/mission-driver/src/` 仅共享库命中——AUDIT_STATUS_RE 例外裁定见 Phase 1 Decision 6 第 4 条，保留于 flow-loader 作 legacy-only 通道则此条放宽为其唯一合法存留处并注释标明）
-- [ ] `pnpm --prefix tools/mission-driver test` 0 失败；`npm --prefix plugin/dsh test` 绿（assets freshness——共享库如经 build-bundle 复制，副本同步）
-- [ ] `docs/logs/` updated
+- [x] `node tools/mission-driver/src/plan-check.mjs docs/plans/00-plan-authoring-and-execution-guide.md --strict` → exit 0（WI11 gate 第 1 条提前达成）
+- [x] 四消费面无自持状态正则（`rg -n "PLAN_STATUS_RE|AUDIT_STATUS_RE" tools/mission-driver/src/` 仅共享库命中——AUDIT_STATUS_RE 例外裁定见 Phase 1 Decision 6 第 4 条，保留于 flow-loader 作 legacy-only 通道则此条放宽为其唯一合法存留处并注释标明）
+- [x] `pnpm --prefix tools/mission-driver test` 0 失败；`npm --prefix plugin/dsh test` 绿（assets freshness——共享库如经 build-bundle 复制，副本同步）
+- [x] `docs/logs/` updated
 
-### Phase 4 - prompt 状态指令对齐
+## Phase 4 — prompt 状态指令对齐
 
-Status: planned
 Targets: `tools/mission-driver/prompts/{execute,plan-review,closure-audit,draft-from-roadmap,draft-from-audit,build-verify,multi-audit,open-audit}.md`、（如需）`tools/mission-driver/src/prompt-check.mjs`
 Skill: none
 
@@ -156,9 +153,8 @@ Exit Criteria:
 - [ ] prompts 无脱离双模式语境的旧通道硬指令残留（`rg -n "Plan Status: completed|Review Hold|Source Audits|Audit Status|❌|✅" tools/mission-driver/prompts/` 逐命中均为双模式/legacy 回退语境或 deep-audit 内联指令）
 - [ ] `docs/logs/` updated
 
-### Phase 5 - guides 收口 + AGENTS.md 职责行 + 外部审计生命周期成文（WI8+WI9）
+## Phase 5 — guides 收口 + AGENTS.md 职责行 + 外部审计生命周期成文（WI8+WI9）
 
-Status: planned
 Targets: `docs/plans/00-plan-authoring-and-execution-guide.md`、`docs/backlog/00-roadmap-authoring-guide.md`、`AGENTS.md`（仅 docs/audits 职责行）、`docs/logs/`
 Skill: none
 
@@ -180,9 +176,8 @@ Exit Criteria:
 - [ ] AGENTS.md 改动仅限 docs/audits 职责行（diff 可审计，不触及其他规则）
 - [ ] `docs/logs/` updated
 
-### Phase 6 - M1 Verification Gate 执行 + roadmap 回写（WI10+WI11）
+## Phase 6 — M1 Verification Gate 执行 + roadmap 回写（WI10+WI11）
 
-Status: planned
 Targets: `docs/backlog/age-autonomy-implementation-roadmap.md`（WI 状态回写）、`docs/logs/`
 Skill: none
 
@@ -206,22 +201,14 @@ Exit Criteria:
 - [ ] roadmap M1 区 11 项 WI 状态与三份 plan 的 closure 状态一致
 - [ ] `docs/logs/` updated（M1 收口条目）
 
+Merged from `## Closure Gates` (ledger migration, 01 §4.3 dissolution):
+
+- [ ] relevant docs are aligned（两 guide、AGENTS.md 职责行、CONTEXT.md（如涉及）、roadmap 回写、logs）
+
 ## Draft Review Record
 
 - Independent draft review iteration 1: needs-revision（task `ses_fca0e2e01ffeyTWsogMcus4hb6`）——3 blocking：自指陷阱（迁移后非终态 plan 在 M1 无合法回执写者 → 永久 active 被重喂）；第四消费面 monitor.js `handleListPlans` 自持 `PLAN_STATUS_RE` 遗漏；prompt 对齐面窄于实际（build-verify ✅ 回写 / execute ❌→✅ 与 4c / multi/open-audit 外部审计生产面 / `_scanOpenAuditsList`）；另 8 项非阻塞（计数修正 4-draft/56-gates/6-roadmaps、grep 期望双时刻、落盘窗口、引用错误、prereq、AGENTS.md 行枚举、env 命名族）。
 - Independent draft review iteration 2: accept（task `ses_fca037d48ffeSHxdogYuFm3NdD`）——3 blocking 全解（过渡期回执写者 = 引擎流程步骤经 prompt 驱动，依据设计 §3.1 写者注记 + 讨论 §8.1 现役实践，信任基残险成文至 M2 执法；monitor 入 Phase 3 四消费面；Decision 6 扩为 5 子条覆盖 8 prompts + WI8 不 over-claim 裁定）；8 项非阻塞全部 addressed（AGENTS.md 第三处站点已按 iter2 指正改为 Operating Rule 10）。共识 `acceptable`，plan 转 active。
-
-## Closure Gates
-
-- [ ] in-scope behavior is complete（codemod 落盘 + 四消费面双读 + prompts 对齐 + guides/AGENTS.md 收口 + gate 执行）
-- [ ] relevant docs are aligned（两 guide、AGENTS.md 职责行、CONTEXT.md（如涉及）、roadmap 回写、logs）
-- [ ] verification has run（WI11 四条命令 + `npm --prefix plugin/dsh test` + `./verify-age.sh`）
-- [ ] scoped verification is not conflated with full verification（M1 gate 全量执行；如某命令因环境受限（如 pnpm 不可用）降级，必须显式记录 verification scope limited 并评残险）
-- [ ] no in-scope item downgraded to deferred/follow-up
-- [ ] independent draft review completed and recorded
-- [ ] text consistency verified: status, phases, gates, and log all agree
-- [ ] closure audit was independent
-- [ ] closure evidence exists in files
 
 ## Deferred But Adjudicated
 

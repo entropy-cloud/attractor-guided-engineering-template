@@ -1,3 +1,7 @@
+---
+audit-rounds: 0
+---
+
 # Demo Roadmap
 
 > Last Updated: 2026-07-14
@@ -9,12 +13,15 @@ This roadmap demonstrates the mission-driver dashboard. It is a minimal example 
 
 ## Work Item Status
 
-| Work Item | Status | Owner Doc / Source | Dependencies | Reuse |
-| --------- | ------ | ------------------ | ------------ | ----- |
-| M1/WI1 项目脚手架验证 | done | AGENTS.md | — | — |
-| M1/WI2 mission-driver 引擎冒烟 | done | tools/mission-driver/CONTEXT.md | WI1 | `node --test` |
-| M1/WI3 监控 Dashboard 集成验证 | ready | tools/mission-driver/CONTEXT.md | WI2 | `node src/main.js --monitor` |
-| M2/WI4 示例 mission 端到端运行 | todo | missions/demo.json | WI3 | `tools/mission-driver.sh` |
+### M1 — 基础验证
+
+- [x] WI1 项目脚手架验证（Owner: AGENTS.md；Dependencies: —；Reuse: —）
+- [x] WI2 mission-driver 引擎冒烟（Owner: tools/mission-driver/CONTEXT.md；Dependencies: WI1；Reuse: `node --test`）
+- [ ] WI3 监控 Dashboard 集成验证（Owner: tools/mission-driver/CONTEXT.md；Dependencies: WI2；Reuse: `node src/main.js --monitor`）
+
+### M2 — 端到端演示
+
+- [ ] WI4 示例 mission 端到端运行（Owner: missions/demo.json；Dependencies: WI3；Reuse: `tools/mission-driver.sh`）
 
 ## Milestones
 
