@@ -58,20 +58,20 @@ Skill: none
 - Item Types: `Decision | Fix | Add | Proof`
 - Prereqs: 无（M1 双读基座已在 main）
 
-- [ ] `Decision` **落点裁定（引擎侧 vs 插件层，roadmap WI41 字面要求）**：修复落引擎侧——`closureScriptCheck`（flow-loader.js script step 判定）+ `inspectPlan`/`analyzePlan` 派生视图透传（plan-check.mjs）。依据：收口路由是引擎自有流程语义，插件 pre-execute 面拦截不到引擎内部 script step 的路由决策；「零引擎 diff 底线」（`docs/design/age-autonomy/00-overview.md` §7 迁移路径 P1 law 行——live 核实该短语的实落段；roadmap 核心纪律 1 引作 §3 系指针偏差）约束的是门禁/守夜人**新增逻辑**的沉淀位置，不豁免引擎自身缺陷修复。备选：插件层写时门禁绕过引擎路由——否决：不改路由则 CLOSURE_AUDIT 步仍不可达，写者步不存在的面无从执法。硬约束自我加码：`engine.js` 与 `flows/plan-execution.json` 均零改动（fail→CLOSURE_AUDIT 既有路由即设计意图，只修判定条件）。残险：无新增面——引擎行为收窄为「多一个 fail 条件」，legacy 分支逐字节不变由测试钉住。
-- [ ] `Decision` **fail 条件语义**：`format === "frontmatter" ∧ 计数域全勾 ∧ deriveCompleted(text, {defaultVerifyKeys}) 不成立` → fail；fail text 与 `SCRIPT_CHECK_DETAILS` 携带 derived.reasons（`no-audit-receipt` / `missing-pass:<key>` / `basis-hash-mismatch:<key>` 等逐条，02 §2 结构化 deny 纪律同款——reason 指向缺失的合法路径）。该合取是 WI41 文字「全勾 ∧ 缺 verify pass 行 / 缺配对回执 → fail」的统一判定，并额外覆盖返工重勾后旧 pass 行 stale 的第三态（Closure Findings 返工 → 重勾 → basisHash 变 → 旧 pass 行失效）——三态归一，不另造第二套条件，复用 `planLedgerState`/`deriveCompleted` 单一实现（01 §5.2「不得各自带正则」纪律）。已知边界：`verify: []` 空真输入（空键集零 pass 行即满足合取）在本判定下仍会 pass——该洞由同批 N=2（WI44）双层封堵，批次顺序 N=1 → N=2 保证封堵先于 M2 收口；本 plan 不重复实现（防两处判定分叉）。非全勾时既有 `totalUnchecked > 0` 条件先行 fail，语义不变；legacy 与 format:none 行为逐字节不变。
-- [ ] `Add` `inspectPlan`/`analyzePlan` 派生视图输出：frontmatter 分支返回值增 `completionReasons`（derived.reasons）与 `verifyKeys`（生效键集及来源——显式 frontmatter / mission 默认注入）；CLI JSON 输出纯增量字段，既有字段（passed/file/format/planStatus/totalChecked/totalUnchecked/details/allUnchecked）语义不变。
-- [ ] `Fix | Add` `closureScriptCheck` fail 分支：按上述 Decision 语义实现（Phase 1 先消费显式 `verify` 字段；Phase 2 默认键注入后判定自动覆盖省略 verify 的 plan——两 Phase 共用同一判定函数，无第二实现）。
-- [ ] `Proof` 回归测试（新测试文件，node --test）：①全勾 fixture 无回执无 pass 行 → fail，reasons 含 `no-audit-receipt` 与 `missing-pass:test`；②追加合法 dispatch/accepted 对 → 仍 fail（`missing-pass:test`）；③追加 basisHash 匹配 pass 行 → pass；④返工态——③基础上 Closure Findings 增未勾返工项再全勾（basisHash 变）→ fail（`basis-hash-mismatch:test`）；⑤legacy 全勾带证据 fixture 行为不变；⑥0635-3 真实语料断言：当前态（全勾、缺 pass 行、缺回执）→ fail 且 reasons 正确（D2 死锁解除的路由面证明；0635-3 的实际收口由引擎下次 run 完成，见 Phase 3）。命令：`pnpm --prefix tools/mission-driver test`。
+- [x] `Decision` **落点裁定（引擎侧 vs 插件层，roadmap WI41 字面要求）**：修复落引擎侧——`closureScriptCheck`（flow-loader.js script step 判定）+ `inspectPlan`/`analyzePlan` 派生视图透传（plan-check.mjs）。依据：收口路由是引擎自有流程语义，插件 pre-execute 面拦截不到引擎内部 script step 的路由决策；「零引擎 diff 底线」（`docs/design/age-autonomy/00-overview.md` §7 迁移路径 P1 law 行——live 核实该短语的实落段；roadmap 核心纪律 1 引作 §3 系指针偏差）约束的是门禁/守夜人**新增逻辑**的沉淀位置，不豁免引擎自身缺陷修复。备选：插件层写时门禁绕过引擎路由——否决：不改路由则 CLOSURE_AUDIT 步仍不可达，写者步不存在的面无从执法。硬约束自我加码：`engine.js` 与 `flows/plan-execution.json` 均零改动（fail→CLOSURE_AUDIT 既有路由即设计意图，只修判定条件）。残险：无新增面——引擎行为收窄为「多一个 fail 条件」，legacy 分支逐字节不变由测试钉住。（执行注记：裁定按计划兑现——diff 落 `flow-loader.js:202-266` fail 条件 + `plan-check.mjs` 派生视图；`git diff --stat` 两保护区为空）
+- [x] `Decision` **fail 条件语义**：`format === "frontmatter" ∧ 计数域全勾 ∧ deriveCompleted(text, {defaultVerifyKeys}) 不成立` → fail；fail text 与 `SCRIPT_CHECK_DETAILS` 携带 derived.reasons（`no-audit-receipt` / `missing-pass:<key>` / `basis-hash-mismatch:<key>` 等逐条，02 §2 结构化 deny 纪律同款——reason 指向缺失的合法路径）。该合取是 WI41 文字「全勾 ∧ 缺 verify pass 行 / 缺配对回执 → fail」的统一判定，并额外覆盖返工重勾后旧 pass 行 stale 的第三态（Closure Findings 返工 → 重勾 → basisHash 变 → 旧 pass 行失效）——三态归一，不另造第二套条件，复用 `planLedgerState`/`deriveCompleted` 单一实现（01 §5.2「不得各自带正则」纪律）。已知边界：`verify: []` 空真输入（空键集零 pass 行即满足合取）在本判定下仍会 pass——该洞由同批 N=2（WI44）双层封堵，批次顺序 N=1 → N=2 保证封堵先于 M2 收口；本 plan 不重复实现（防两处判定分叉）。非全勾时既有 `totalUnchecked > 0` 条件先行 fail，语义不变；legacy 与 format:none 行为逐字节不变。（执行注记：语义按计划落地——`flow-loader.js` closureScriptCheck 第三 fail 条件，reasons 逐条各成一条 issue line）
+- [x] `Add` `inspectPlan`/`analyzePlan` 派生视图输出：frontmatter 分支返回值增 `completionReasons`（derived.reasons）与 `verifyKeys`（生效键集及来源——显式 frontmatter / mission 默认注入）；CLI JSON 输出纯增量字段，既有字段（passed/file/format/planStatus/totalChecked/totalUnchecked/details/allUnchecked）语义不变。（执行注记：实落为四增量字段 `derivedCompleted`/`completionReasons`/`verifyKeys`/`verifyKeysSource`，仅 frontmatter 分支输出——legacy/none 输出逐字节不变；live 验证 0635-3 CLI 输出 `completionReasons: ["missing-pass:test","no-audit-receipt"]`）
+- [x] `Fix | Add` `closureScriptCheck` fail 分支：按上述 Decision 语义实现（Phase 1 先消费显式 `verify` 字段；Phase 2 默认键注入后判定自动覆盖省略 verify 的 plan——两 Phase 共用同一判定函数，无第二实现）。（执行注记：单一判定 = inspectPlan 派生视图；Phase 2 注入后同一条件自动覆盖省略 verify 面）
+- [x] `Proof` 回归测试（新测试文件，node --test）：①全勾 fixture 无回执无 pass 行 → fail，reasons 含 `no-audit-receipt` 与 `missing-pass:test`；②追加合法 dispatch/accepted 对 → 仍 fail（`missing-pass:test`）；③追加 basisHash 匹配 pass 行 → pass；④返工态——③基础上 Closure Findings 增未勾返工项再全勾（basisHash 变）→ fail（`basis-hash-mismatch:test`）；⑤legacy 全勾带证据 fixture 行为不变；⑥0635-3 真实语料断言：当前态（全勾、缺 pass 行、缺回执）→ fail 且 reasons 正确（D2 死锁解除的路由面证明；0635-3 的实际收口由引擎下次 run 完成，见 Phase 3）。命令：`pnpm --prefix tools/mission-driver test`。（执行注记：`tools/mission-driver/test/closure-routing.test.js` 13 例全绿——①–⑥ + SCRIPT_CHECK_DETAILS/flowVars 面 + inspectPlan 增量字段面；⑥写成「路由决策镜像派生态」的双向断言，引擎恢复补回执后不回退）
 
 Exit Criteria:
 
-- [ ] 三态 fixture（缺回执 / 缺 pass 行 / stale basisHash）全部 fail 且 reasons 断言正确；补齐后 pass
-- [ ] legacy 与 format:none 行为回归钉住（既有测试零修改通过；如需改钉须证明是被测行为而非测试漂移）
-- [ ] 0635-3 语料 fail 断言绿
-- [ ] `git diff --stat tools/mission-driver/src/engine.js` 与 `git diff --stat tools/mission-driver/flows/plan-execution.json` 均为空
-- [ ] `pnpm --prefix tools/mission-driver test` 全绿（813 基线不回退）
-- [ ] `docs/logs/` 更新
+- [x] 三态 fixture（缺回执 / 缺 pass 行 / stale basisHash）全部 fail 且 reasons 断言正确；补齐后 pass
+- [x] legacy 与 format:none 行为回归钉住（既有测试零修改通过；如需改钉须证明是被测行为而非测试漂移）
+- [x] 0635-3 语料 fail 断言绿
+- [x] `git diff --stat tools/mission-driver/src/engine.js` 与 `git diff --stat tools/mission-driver/flows/plan-execution.json` 均为空
+- [x] `pnpm --prefix tools/mission-driver test` 全绿（813 基线不回退）（执行实测：863 → 876/0，+13 新测试）
+- [x] `docs/logs/` 更新
 
 ## Phase 2 — defaultVerifyKeys 引擎读面注入
 
@@ -81,16 +81,16 @@ Skill: none
 - Item Types: `Decision | Fix | Add | Proof`
 - Prereqs: Phase 1（判定函数就位）
 
-- [ ] `Decision` **mission 默认 verify 键裁定 = `["test"]`**：依据 = `commands.test` 是 mission-check REQUIRED_FIELDS 唯一强制命令键，全 mission 普适存在且语义即「机械验证」。备选①全部非空 commands 键——否决：gates/mission-check/verify-age/verify-e2e 非幂等机械验证面（e2e 缺 env fail-fast、gates 属门禁语义），全键默认会把 BUILD_VERIFY 变全命令矩阵；备选②mission 增显式 `defaultVerify` 配置字段——否决：无真实需求背书的配置面增长，0815-3 verify-keys 门禁落地后按需重开（裁定已在本 plan 成文，重开有据）。残险：依赖 build/typecheck 收口的 plan 必须显式写 `verify`——存量语料全部显式 `verify: [test]`，无回退面。01 §4.1「缺失→mission 默认」的引擎路径由此实现（Follow-up P2 清偿）。
-- [ ] `Fix | Add` flow-loader 注入面：`createExpressionFunctions` 谓词族与 `closureScriptCheck` 的 `planLedgerState`/派生调用注入 `defaultVerifyKeys = ["test"]`（mission 无 `commands.test` 时退化为不注入，行为同现状——防御性分支，本仓库 mission 必有）。`plan-check.mjs` CLI 的 `analyzePlan` **同步注入同一默认**（CLI 显示与 closureScriptCheck 路由判定不劈叉——同一 mission 上下文同一键集）。效果：省略 `verify` 的全勾 + 回执齐全 plan 派生 completed、离开 activePlans（消灭 verify-省略版死锁）。
-- [ ] `Proof` 注入语义测试：省略 verify + 全勾 + 回执齐全 + basisHash 匹配 pass 行 fixture → 注入后 `completed:true`；不注入（模拟无 commands.test mission）→ reasons 含 `no-verify-keys`（现状语义钉住，防注入面扩大误伤）；谓词面（activePlans/closedPlans 归属）对两类 fixture 的队列断言。命令：`pnpm --prefix tools/mission-driver test`。
+- [x] `Decision` **mission 默认 verify 键裁定 = `["test"]`**：依据 = `commands.test` 是 mission-check REQUIRED_FIELDS 唯一强制命令键，全 mission 普适存在且语义即「机械验证」。备选①全部非空 commands 键——否决：gates/mission-check/verify-age/verify-e2e 非幂等机械验证面（e2e 缺 env fail-fast、gates 属门禁语义），全键默认会把 BUILD_VERIFY 变全命令矩阵；备选②mission 增显式 `defaultVerify` 配置字段——否决：无真实需求背书的配置面增长，0815-3 verify-keys 门禁落地后按需重开（裁定已在本 plan 成文，重开有据）。残险：依赖 build/typecheck 收口的 plan 必须显式写 `verify`——存量语料全部显式 `verify: [test]`，无回退面。01 §4.1「缺失→mission 默认」的引擎路径由此实现（Follow-up P2 清偿）。（执行注记：单一实现 = `plan-check.mjs` 导出 `missionDefaultVerifyKeys(mission)`——commands.test 非空字符串 → `["test"]`，否则 null 不注入；gate-check `--verify` 面的 DEFAULT_VERIFY_KEY_ORDER 四键交集属不同消费面另案裁定，不合并）
+- [x] `Fix | Add` flow-loader 注入面：`createExpressionFunctions` 谓词族与 `closureScriptCheck` 的 `planLedgerState`/派生调用注入 `defaultVerifyKeys = ["test"]`（mission 无 `commands.test` 时退化为不注入，行为同现状——防御性分支，本仓库 mission 必有）。`plan-check.mjs` CLI 的 `analyzePlan` **同步注入同一默认**（CLI 显示与 closureScriptCheck 路由判定不劈叉——同一 mission 上下文同一键集）。效果：省略 `verify` 的全勾 + 回执齐全 plan 派生 completed、离开 activePlans（消灭 verify-省略版死锁）。（执行注记：CLI 面经 `discoverOwningMission` 祖先走查解析 owning mission——该函数自 gate-check.mjs 上移 `mission-check.mjs` 共享单一实现，gate-check 改 import；plugin assets 重建（flow-loader/mission-check/plan-check 三副本，freshness 43 文件 content-equal））
+- [x] `Proof` 注入语义测试：省略 verify + 全勾 + 回执齐全 + basisHash 匹配 pass 行 fixture → 注入后 `completed:true`；不注入（模拟无 commands.test mission）→ reasons 含 `no-verify-keys`（现状语义钉住，防注入面扩大误伤）；谓词面（activePlans/closedPlans 归属）对两类 fixture 的队列断言。命令：`pnpm --prefix tools/mission-driver test`。（执行注记：`closure-routing.test.js` Phase 2 describe 5 例——missionDefaultVerifyKeys 矩阵 / 注入后 pass+verifyKeysSource=mission-default / 无 commands.test 退化 no-verify-keys / activePlans·draftPlans·closedPlans 归属 / CLI 端到端 mission-default 注入）
 
 Exit Criteria:
 
-- [ ] 省略 verify 的 plan 派生语义与显式 `verify: [test]` 一致（注入后）
-- [ ] 无 commands.test 的退化分支行为同现状（钉住）
-- [ ] `pnpm --prefix tools/mission-driver test` 全绿
-- [ ] `docs/logs/` 更新
+- [x] 省略 verify 的 plan 派生语义与显式 `verify: [test]` 一致（注入后）
+- [x] 无 commands.test 的退化分支行为同现状（钉住）
+- [x] `pnpm --prefix tools/mission-driver test` 全绿（执行实测 876/0）
+- [x] `docs/logs/` 更新
 
 ## Phase 3 — 回写、bug 关闭与恢复通路成文
 
@@ -100,18 +100,18 @@ Skill: none
 - Item Types: `Add | Proof`
 - Prereqs: Phase 1/2 全绿
 
-- [ ] `Add` bug doc D2 状态更新：`Status: open` → `fixed`，记录修复 commit、回归测试文件指针、0635-3 恢复通路说明（修复落地后下一次引擎 run 对 0635-3 重跑 subflow：closureScriptCheck fail → CLOSURE_AUDIT 补 dispatch/accepted 回执 → BUILD_VERIFY 补 pass 行 → 派生 completed 离队；恢复是引擎运行期事件，非本 plan 可代跑，成文即可）；D1 段落维持 restart 裁定不变。
-- [ ] `Add` roadmap 回写：WI41 `[x]` + 证据指针（修复 diff 文件、回归测试路径、bug doc closed 状态）；头部 `> Last Updated` 日期同步（清偿 deep-audit round 2 P2「头部日期过期」项——回写步固有动作，0925 批次三份各自回写时同步）。WI24 不勾（M2 收口门归后续 WI21–WI24 批次）。
-- [ ] `Add` CONTEXT.md 同步：flow-loader 相关段增一句 closureScriptCheck 回执感知语义（frontmatter 全勾 plan 缺回执/pass 行/basisHash stale → 路由 CLOSURE_AUDIT）。
-- [ ] `Proof` 收口链：`node tools/mission-driver/src/plan-check.mjs docs/plans/age-autonomy/2026-08-25-0635-3-m1-corpus-migration-dual-read-guides-ci.md` 输出含 completionReasons（CLI 面可见性面）；`node tools/mission-driver/src/mission-check.mjs missions/age-autonomy-implementation.json .` exit 0；`./verify-age.sh` L1+L2 绿。
+- [x] `Add` bug doc D2 状态更新：`Status: open` → `fixed`，记录修复 commit、回归测试文件指针、0635-3 恢复通路说明（修复落地后下一次引擎 run 对 0635-3 重跑 subflow：closureScriptCheck fail → CLOSURE_AUDIT 补 dispatch/accepted 回执 → BUILD_VERIFY 补 pass 行 → 派生 completed 离队；恢复是引擎运行期事件，非本 plan 可代跑，成文即可）；D1 段落维持 restart 裁定不变。（执行注记：`docs/bugs/2026-08-25-ledger-plan-closure-deadlock.md` 头部 Status → D2 fixed + commit `00aeb9c` + 测试指针；§4 Fix 段与 §5 Tests 段同步改写；D1 restart 裁定原样保留）
+- [x] `Add` roadmap 回写：WI41 `[x]` + 证据指针（修复 diff 文件、回归测试路径、bug doc closed 状态）；头部 `> Last Updated` 日期同步（清偿 deep-audit round 2 P2「头部日期过期」项——回写步固有动作，0925 批次三份各自回写时同步）。WI24 不勾（M2 收口门归后续 WI21–WI24 批次）。（执行注记：WI41 证据括注含 engine.js/plan-execution.json 零 diff 与 876/0 + L1+L2 GREEN；Follow-up「引擎读面未注入 defaultVerifyKeys」P2 与「头部日期过期」P2 均勾选清偿（前者本 plan Goals 明示清偿、后者回写固有动作）——monitor 显示面残项按本 plan Deferred But Adjudicated 归后续；WI24 仍未勾 ✓）
+- [x] `Add` CONTEXT.md 同步：flow-loader 相关段增一句 closureScriptCheck 回执感知语义（frontmatter 全勾 plan 缺回执/pass 行/basisHash stale → 路由 CLOSURE_AUDIT）。（执行注记：落「账本区块/派生库」段尾——回执感知 fail 条件 + defaultVerifyKeys `["test"]` 三面注入 + inspectPlan 增量派生视图字段一句成文）
+- [x] `Proof` 收口链：`node tools/mission-driver/src/plan-check.mjs docs/plans/age-autonomy/2026-08-25-0635-3-m1-corpus-migration-dual-read-guides-ci.md` 输出含 completionReasons（CLI 面可见性面）；`node tools/mission-driver/src/mission-check.mjs missions/age-autonomy-implementation.json .` exit 0；`./verify-age.sh` L1+L2 绿。（执行实测：completionReasons = `["missing-pass:test","no-audit-receipt"]` + verifyKeys [test]/frontmatter；mission-check exit 0；L1 876/0 + L2 221/0 + freshness 43 文件 content-equal + smoke-import ok = GREEN）
 
 Exit Criteria:
 
-- [ ] bug doc D2 标记 fixed 且证据指针可验证
-- [ ] roadmap WI41 `[x]` + 证据指针 + Last Updated 同步；WI24 仍未勾
-- [ ] CONTEXT.md 语义句落地
-- [ ] `pnpm --prefix tools/mission-driver test` + `./verify-age.sh` L1+L2 全绿
-- [ ] `docs/logs/` 收口条目
+- [x] bug doc D2 标记 fixed 且证据指针可验证
+- [x] roadmap WI41 `[x]` + 证据指针 + Last Updated 同步；WI24 仍未勾
+- [x] CONTEXT.md 语义句落地
+- [x] `pnpm --prefix tools/mission-driver test` + `./verify-age.sh` L1+L2 全绿（执行实测 876/0 + 221/0 GREEN）
+- [x] `docs/logs/` 收口条目
 
 ## Draft Review Record
 

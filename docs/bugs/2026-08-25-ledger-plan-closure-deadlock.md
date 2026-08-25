@@ -1,7 +1,7 @@
 # Ledger-format plans invisible to a running engine + closure receipt writer unreachable (EXEC_PLANS no-op death loop)
 
 > Discovered: 2026-08-25 (age-autonomy run `2026-08-25-063133-mission-driver`, DRAFT_PLANS visit 3)
-> Status: **open** — D1 clears on engine restart (zero code diff); D2 has no fix yet and blocks closure of every ledger-format plan, including the whole active 0815 batch
+> Status: **D2 fixed** (2026-08-25, plan `docs/plans/age-autonomy/2026-08-25-0925-1-m2-wi41-closure-routing-deadlock.md` M2-WI41, commit `00aeb9c`) — regression net `tools/mission-driver/test/closure-routing.test.js`（三态 fixture + legacy 钉住 + 0635-3 live 双向断言）；D1 维持 restart 裁定（零代码修，不变）
 > Related: `docs/backlog/age-autonomy-implementation-roadmap.md` M2 WI14/WI16/WI19（回执绑定 / 完成派生 / 机械验证写者——D2 是它们的引擎侧前置缺口）; plan `docs/plans/age-autonomy/2026-08-25-0635-3`（0635-3 为首个受害者）; `docs/plans/00-plan-authoring-and-execution-guide.md` § Plan Body Sections（回执语法权威）
 
 ## 1. Problem
@@ -36,9 +36,9 @@ Entry symptom: DRAFT_PLANS visit 3 invoked while the three 0815 plans showed `st
 ## 4. Fix
 
 - **D1**: restart the engine process (resume/reconcile path exists: `--step` resume / run-state reconcile). No code change — HEAD is correct.
-- **D2 (planned work, not yet landed)**: make the closure path ledger-aware — for a frontmatter-format plan, `closureScriptCheck` must fail (routing to CLOSURE_AUDIT) when the plan is all-ticked but lacks `## Verification` pass lines matching its `verify` keys or lacks a paired dispatch/accepted receipt. This is an engine-side seam change (flow-loader.js script step / plan-execution routing), in-scope only under a covering plan per project-context AI Block Conditions; it is the engine-side prerequisite the M2 law items (WI14 receipt binding, WI16 completion-derivation gate, WI19 mechanical-verification writer) will enforce from the plugin side.
-- **0635-3 recovery**: never hand-forge receipts — after D2 lands, let the subflow re-run complete BUILD_VERIFY pass lines + CLOSURE_AUDIT receipt on it.
+- **D2 (FIXED 2026-08-25, M2-WI41, commit `00aeb9c`)**: `closureScriptCheck`（`tools/mission-driver/src/flow-loader.js`）新增回执感知 fail 条件——`format === "frontmatter" ∧ 计数域全勾 ∧ deriveCompleted 不成立` → fail，derived.reasons 逐条（`no-audit-receipt` / `missing-pass:<key>` / `basis-hash-mismatch:<key>`）进 fail text 与 `SCRIPT_CHECK_DETAILS`（CLOSURE_AUDIT 反馈面）；`flows/plan-execution.json` 既有 `fail → CLOSURE_AUDIT` 路由即设计意图，零改动，`engine.js` 零 diff。同时落地引擎读面 `defaultVerifyKeys = ["test"]` 注入（`plan-check.mjs` `missionDefaultVerifyKeys` 单一实现——flow-loader 谓词族 + closureScriptCheck + plan-check CLI 三面同源），清偿 verify-省略版死锁（Follow-up P2）。`inspectPlan` 增量输出 `derivedCompleted`/`completionReasons`/`verifyKeys`/`verifyKeysSource`。
+- **0635-3 recovery（引擎运行期事件，非代码可代跑）**: 修复落地后的下一次引擎 run 会对 0635-3 重跑 plan-execution subflow：closureScriptCheck 现对当前态（全勾 43 项、缺 pass 行、缺回执）fail 并携带 `missing-pass:test` + `no-audit-receipt` → 路由 CLOSURE_AUDIT 补 dispatch/accepted 回执 → BUILD_VERIFY 补 `## Verification` pass 行（basisHash 当次计算）→ 五合取成立 → 派生 completed 离开 activePlans。恢复通路由 `closure-routing.test.js` ⑥「路由决策镜像派生态」双向钉住（补齐回执后该测试仍绿）。永不手造回执。
 
 ## 5. Tests
 
-None yet (defect open). Regression coverage to land with the D2 fix: a `plan-execution` routing test asserting `closureScriptCheck` fails for an all-ticked ledger fixture lacking receipts (unit, node --test against a fixture plan), plus a corpus assertion that 0635-3 derives completed only after the re-run receipts exist.
+Landed with the D2 fix (commit `00aeb9c`, M2-WI41): `tools/mission-driver/test/closure-routing.test.js` — ① all-ticked ledger fixture lacking receipts + pass lines → `closureScriptCheck` fail with `no-audit-receipt` + `missing-pass:test`; ② receipt added still fails on the pass line; ③ basisHash-matching pass line passes; ④ Closure-Findings rework (stale basisHash) fails; ⑤ legacy fixtures byte-identical behavior; ⑥ 0635-3 live corpus assertion — routing decision mirrors `deriveCompleted` in both directions (fails pre-recovery, passes once re-run receipts exist). Suite: `pnpm --prefix tools/mission-driver test` 876/0 (baseline 863).
