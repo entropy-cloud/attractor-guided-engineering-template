@@ -59,18 +59,18 @@ Skill: none
 - Item Types: `Add | Proof`
 - Prereqs: 0815-1 全部 Phase（注册表 / policy / actor 裁定）
 
-- [ ] `Add` dispatch 行 `models=` 后缀显式解析：`DISPATCH_RE` 尾部可选 ` models={exec:<名>,aud:<名>}` 字段（向后兼容：无后缀行行为不变；有后缀时解析进 dispatch 记录供绑定校验与驳回率统计消费）+ 语法真值表（合法/畸形后缀/半配对）钉住。
-- [ ] `Add` `closure-audit-binding`（plan 面）：拦截目标 = 触碰 `## Closure` 区或触发全勾过渡判定的 plan 写入。校验链：① 结构面（全部署面）：proposed content 中 Closure 区 dispatch/accepted 行语法合法 ∧ 同 id 配对（复用 section.pairs）∧ accepted 无 findings 词法混同；② 写者面（DSH actor 面）：accepted 行写者 actor.id == dispatch 行 auditorSessionId ∧ dispatch 行写者为派发方角色（engine/supervisor；过渡期 = flow 派发步会话）；③ id 词法：nonce8 + tail-anchored（parseLedgerId）。deny reason 指向缺失的合法路径（02 §2 结构化 deny 纪律）。
-- [ ] `Add` `roadmap-audit-binding`（roadmap 面，同构）：`## Deep Audit Record` 区 dispatch/accepted 同 id + accepted 必须携带 `findings=none|items` 词法（01 §3.3 域）+ 写者面同上。
-- [ ] `Add` `requireDistinctModel` 静态可满足性检查（check-policy 面）：policy 中 auditor `requireDistinctModel: true` 时，解析 dispatch 映射（execute→executor、closure-audit/deep-audit→auditor）对应 agents 的 model {provider,model} 对——相等 → 校验错误；单模型部署显式降级 = policy 显式声明 `downgrade: single-model` 类标注通道（不静默，02 §4.9）。runtime 派发绑定 = M3/WI26 接口注记（派发时实际模型对的校验由守夜人在派发点执行，接口 = dispatch 行 models= 数据 + 本检查函数复用）。
-- [ ] `Proof` 真值表：合法配对 / 错 id / accepted 无 dispatch / dispatch 无 accepted（派生中间态，非 deny）/ accepted 写者错位（actor 面）/ 结构面无 actor 时不声称写者验证 / roadmap 面 findings 词法缺失 / models= 畸形后缀。命令：`node --test plugin/dsh/test/law-truth-table.test.mjs` + `pnpm --prefix tools/mission-driver test`。
+- [x] `Add` dispatch 行 `models=` 后缀显式解析：`DISPATCH_RE` 尾部可选 ` models={exec:<名>,aud:<名>}` 字段（向后兼容：无后缀行行为不变；有后缀时解析进 dispatch 记录供绑定校验与驳回率统计消费）+ 语法真值表（合法/畸形后缀/半配对）钉住。**执行落点**：`ledger-sections.mjs` 尾部字段独立解析（` models=` 起头必须完整解析，否则 malformed-dispatch error——严格语法行不容忍为 prose；` models={exec:a,aud:b}` 进 dispatch 记录 `models` 字段）；引擎测试 `ledger-sections.test.js` +2 例。
+- [x] `Add` `closure-audit-binding`（plan 面）：拦截目标 = 触碰 `## Closure` 区或触发全勾过渡判定的 plan 写入。校验链：① 结构面（全部署面）：proposed content 中 Closure 区 dispatch/accepted 行语法合法 ∧ 同 id 配对（复用 section.pairs）∧ accepted 无 findings 词法混同；② 写者面（DSH actor 面）：accepted 行写者 actor.id == dispatch 行 auditorSessionId ∧ dispatch 行写者为派发方角色（engine/supervisor；过渡期 = flow 派发步会话）；③ id 词法：nonce8 + tail-anchored（parseLedgerId）。deny reason 指向缺失的合法路径（02 §2 结构化 deny 纪律）。**执行落点**：`law-rules.mjs`（新规则模块，经 law-policy side-effect import 注册）；结构面 error 按 M1 扫描器行号过滤进 `## Closure` 区（区内语法违例 deny、区外不管）；accepted 无同 id dispatch = `unbound conclusion` deny；dispatch 无 accepted = 中间态永不 deny；accepted 写者错位 deny（actor.id 对 dispatch sessionId）；dispatch 写者角色白名单（role 可得时，id-only 注记不 deny）；无 actor = 结构子集 allow + 「writer face not evaluated」reason（不冒充）。
+- [x] `Add` `roadmap-audit-binding`（roadmap 面，同构）：`## Deep Audit Record` 区 dispatch/accepted 同 id + accepted 必须携带 `findings=none|items` 词法（01 §3.3 域）+ 写者面同上。**执行落点**：同模块 `roadmapAuditBindingRule`（findings required 经 M1 扫描器 `required` 模式 error 进区过滤）；无 DAR 区/无 frontmatter roadmap = 域外放行。
+- [x] `Add` `requireDistinctModel` 静态可满足性检查（check-policy 面）：policy 中 auditor `requireDistinctModel: true` 时，解析 dispatch 映射（execute→executor、closure-audit/deep-audit→auditor）对应 agents 的 model {provider,model} 对——相等 → 校验错误；单模型部署显式降级 = policy 显式声明 `downgrade: single-model` 类标注通道（不静默，02 §4.9）。runtime 派发绑定 = M3/WI26 接口注记（派发时实际模型对的校验由守夜人在派发点执行，接口 = dispatch 行 models= 数据 + 本检查函数复用）。**执行落点**：`law-policy.mjs` `checkDistinctModelSatisfiability`（export 供 M3 派发点复用）+ agent def 字段 `downgrade`（值域 `single-model`，无 requireDistinctModel: true 时声明 = 错误）+ 接入 `validatePolicy`；真实 policy auditor 显式 `downgrade: single-model`（本仓库单模型部署诚实口径）。
+- [x] `Proof` 真值表：合法配对 / 错 id / accepted 无 dispatch / dispatch 无 accepted（派生中间态，非 deny）/ accepted 写者错位（actor 面）/ 结构面无 actor 时不声称写者验证 / roadmap 面 findings 词法缺失 / models= 畸形后缀。命令：`node --test plugin/dsh/test/law-truth-table.test.mjs` + `pnpm --prefix tools/mission-driver test`。**执行证据**：41 例全绿（+16：gate1 plan 面 10 / roadmap 面 4 / requireDistinctModel 1 / models= 语法 1；引擎侧另 +5）。
 
 Exit Criteria:
 
-- [ ] 双面规则对构造的正反例 fixture 判定全对（含 deny reason 文本断言）
-- [ ] check-policy 对 requireDistinctModel 反例（executor/auditor 同模型）报校验错误、显式降级通道可过
-- [ ] `pnpm --prefix tools/mission-driver test` + `npm --prefix plugin/dsh test` 全绿
-- [ ] `docs/logs/` 更新
+- [x] 双面规则对构造的正反例 fixture 判定全对（含 deny reason 文本断言）
+- [x] check-policy 对 requireDistinctModel 反例（executor/auditor 同模型）报校验错误、显式降级通道可过
+- [x] `pnpm --prefix tools/mission-driver test` + `npm --prefix plugin/dsh test` 全绿
+- [x] `docs/logs/` 更新
 
 ## Phase 2 — 状态转移写者身份规则
 
@@ -80,16 +80,16 @@ Skill: none
 - Item Types: `Add | Proof`
 - Prereqs: Phase 1（dispatch 行解析与配对面复用）
 
-- [ ] `Add` 转移边执法（01 §5.1 逐边表为契约）：① `draft → active`：写者 actor.id == Draft Review Record dispatch 行 reviewerSessionId ∧ 该区含同 id 结论行（日期迭代形态），否则 deny；② `held → active`：写者为守夜人 unlock（人工经 `mdcontrol.unlock` 路由）或新评审派发的 reviewer，且同一次写入把 `failures` 重置 0（重置缺失 → deny malformed-transition）；③ 终态 disposition（cancelled/superseded/deferred 写入）：守夜人执行人工 disposition 或已登记评审者；④ 执行者（executor role）写 `status` 一律 deny（无例外边）。CLI/结构面：status 翻转的 proposed content 须同文件携带匹配回执，或 currentFileState 已存在匹配回执（结构子集不声称验证写者，02 §4.1 同纪律）；**结构面对身份依赖边（held→active unlock 无回执语法、租约第三者写入）退化为「回执伴随校验（仅在有回执语法的边生效）+ unverified-writer 注记」，不 deny 不冒充**——02 §2 结构子集纪律，注记进观察日志。
-- [ ] `Add` 评审租约：Draft Review Record 存在未闭环 `dispatch review`（有 dispatch 无同 id 结论行）期间，除该 reviewerSessionId、守夜人、引擎外 actor 对该 plan 的任何写入 deny（租约结束条件 = 结论行落地）。
-- [ ] `Proof` 真值表：转移边 × actor 角色 × 证据在文件/在 proposed/缺失 三维矩阵（draft→active 合法 reviewer / 错位 reviewer / 执行者尝试 / 无结论行；held→active 带 failures 重置 / 不带；租约期间第三者写 / reviewer 写 / 守夜人写；终态 disposition 各角色）。命令：`node --test plugin/dsh/test/law-truth-table.test.mjs`。
+- [x] `Add` 转移边执法（01 §5.1 逐边表为契约）：① `draft → active`：写者 actor.id == Draft Review Record dispatch 行 reviewerSessionId ∧ 该区含同 id 结论行（日期迭代形态），否则 deny；② `held → active`：写者为守夜人 unlock（人工经 `mdcontrol.unlock` 路由）或新评审派发的 reviewer，且同一次写入把 `failures` 重置 0（重置缺失 → deny malformed-transition）；③ 终态 disposition（cancelled/superseded/deferred 写入）：守夜人执行人工 disposition 或已登记评审者；④ 执行者（executor role）写 `status` 一律 deny（无例外边）。CLI/结构面：status 翻转的 proposed content 须同文件携带匹配回执，或 currentFileState 已存在匹配回执（结构子集不声称验证写者，02 §4.1 同纪律）；**结构面对身份依赖边（held→active unlock 无回执语法、租约第三者写入）退化为「回执伴随校验（仅在有回执语法的边生效）+ unverified-writer 注记」，不 deny 不冒充**——02 §2 结构子集纪律，注记进观察日志。**执行落点**：`law-rules.mjs` `writer-identity` 规则——`LEGAL_TRANSITIONS` 集合钉 01 §5.1 全部合法边（非法边/终态复活 deny + 指路）；draft→active 回执 = proposed DRR 配对（dispatch review + 同 id 日期迭代结论行）；held→active = failures 重置 ∧ hold 移除同写强制 + reviewer 可证/unlock 注记；执行者 deny 双面（role=executor ∧ actor.id 命中 claim holder——`claimHolderMatches` 尾部锚定提取 holderSessionId，nonce8 剥离后 endsWith，连字符 session id 安全）。
+- [x] `Add` 评审租约：Draft Review Record 存在未闭环 `dispatch review`（有 dispatch 无同 id 结论行）期间，除该 reviewerSessionId、守夜人、引擎外 actor 对该 plan 的任何写入 deny（租约结束条件 = 结论行落地）。**执行落点**：同规则内 current 态未闭环 dispatch × proposed 未闭环 → reviewer/supervisor/engine 白名单（第三者带 actor.id 即 deny——session 比对在 DSH 面可判定）；结论行同写落地 = 租约结束（reviewer 翻 active 正常路径测试钉住）。
+- [x] `Proof` 真值表：转移边 × actor 角色 × 证据在文件/在 proposed/缺失 三维矩阵（draft→active 合法 reviewer / 错位 reviewer / 执行者尝试 / 无结论行；held→active 带 failures 重置 / 不带；租约期间第三者写 / reviewer 写 / 守夜人写；终态 disposition 各角色）。命令：`node --test plugin/dsh/test/law-truth-table.test.mjs`。**执行证据**：11 例全绿（合法 reviewer / 错位 / 无结论行 / 执行者 role+claim-holder 双面 / held→active 三态 / 租约五角色 / 租约结束 / 终态 disposition 三角色 / 非法边 active→draft 与 cancelled→active 复活 / 无转移与无 currentFileState 惰性）。
 
 Exit Criteria:
 
-- [ ] 全部转移边与租约用例判定正确，deny reason 指向合法路径
-- [ ] 结构面（无 actor）对 status 翻转的回执伴随校验正确且不冒充写者验证
-- [ ] `npm --prefix plugin/dsh test` + `pnpm --prefix tools/mission-driver test` 全绿
-- [ ] `docs/logs/` 更新
+- [x] 全部转移边与租约用例判定正确，deny reason 指向合法路径
+- [x] 结构面（无 actor）对 status 翻转的回执伴随校验正确且不冒充写者验证
+- [x] `npm --prefix plugin/dsh test` + `pnpm --prefix tools/mission-driver test` 全绿
+- [x] `docs/logs/` 更新
 
 ## Phase 3 — 完成派生校验规则、enforce 切换与收口
 
@@ -99,18 +99,18 @@ Skill: none
 - Item Types: `Decision | Add | Proof`
 - Prereqs: Phase 1/2（回执绑定与写者身份是公式合取的输入）
 
-- [ ] `Decision` **直接 enforce 授权成文**：三硬门注册 `mode: enforce`（不走 observe 爬坡），授权依据 = 02 §6 例外条款 + P0（M1 账本迁移）已收口（roadmap WI1–WI11 全 tick + 807 测试绿）；观察日志保留（enforce 模式下 allow 决策仍记录，deny 决策天然可见）。
-- [ ] `Add` `plan-completed` 全勾过渡门禁（02 §4.3，整文件 proposed content 粒度）：写入后内容经 `scanPlanLedger` 计数域全勾 → 三岔：① 已有有效审计回执 ∧ 机械验证 pass 行 basisHash == 写入后内容 basisHash → 校验完成公式（`deriveCompleted`）成立才 allow；② 尚无审计回执 → 仅当前写者持有有效 claim（actor.id == holderSessionId ∧ 未过期）时 allow，plan 进入派生 `awaitingClosure`，且该放行写入必须同时清除 claim（01 §4.4「claim 在 awaitingClosure 前必清」——与 0815-3 Phase 2 ④ 同一约束的两侧声明，避免「携带残留 claim 的 awaitingClosure 写入在两 plan 间落空」）；无 claim 或 claim 不属写者 → deny + reason；③ 审计拒绝路径：`## Closure Findings` 追加未勾返工项 → plan 自然脱离全勾（不依赖额外状态位，返工项追加是合法写）。计数与 01 §5.2 同域（Phase + Closure Findings，复用 ledger-sections，无第二实现）。
-- [ ] `Add` 终态冻结：`completed(p)` 已派生或 `status ∈ {cancelled, superseded, deferred}` → 任何 Phase checkbox / `status` / 机器字段（claim/claim-expires/failures/verify/hold）写入 deny（重新开工 = 新 plan，01 §5.1）；防「已 accepted 旧回执被新未勾项复用」。
-- [ ] `Proof` 真值表与 corpus：三岔全分支（回执齐 allow / 无回执持 claim allow 入 awaitingClosure / 无回执无 claim deny / claim 过期 deny / formula 不满足 deny）+ 终态冻结矩阵 + corpus 语义按文件类钉住（legacy 文件如 0635-1/2 → gate-check 经双读通道声明跳过并陈述 vacuity；新格式 awaitingClosure 态文件 0635-3 → 断言 awaitingClosure 合法态而非完成态；正向完成路径正例 = 构造 fixture，仓库尚无新格式 completed plan——本 plan 自身收口回执成为首个生产语料）；累计真值表用例数记录（向 WI24 ≥30 推进，收口门本 plan 不勾）。
-- [ ] `Add` 文档同步与回写：`tools/mission-driver/CONTEXT.md` 三硬门行；roadmap WI14/WI15/WI16 tick + 证据指针（规则模块 + 真值表路径 + gate-check corpus 输出；**WI14 证据显式注记残项**：`requireDistinctModel` 派发时运行时强制归 M3/WI26 守夜人派发点——WI26 文字未点名，靠本注记防 roadmap over-claim）；`docs/logs/` 收口条目。
+- [x] `Decision` **直接 enforce 授权成文**：三硬门注册 `mode: enforce`（不走 observe 爬坡），授权依据 = 02 §6 例外条款 + P0（M1 账本迁移）已收口（roadmap WI1–WI11 全 tick + 807 测试绿）；观察日志保留（enforce 模式下 allow 决策仍记录，deny 决策天然可见）。**执行落点**：`missions/autonomy.policy.yml` 四 gate 条目 enforce（closure-audit-binding / roadmap-audit-binding / writer-identity / plan-completed；plan-structure 维持 observe——收紧开关归 WI21）+ 授权注释成文于 policy；gate 顺序 = binding 先于 formula（deny reason 优先级，评审 iteration 2 非阻塞项 3 落地）。
+- [x] `Add` `plan-completed` 全勾过渡门禁（02 §4.3，整文件 proposed content 粒度）：写入后内容经 `scanPlanLedger` 计数域全勾 → 三岔：① 已有有效审计回执 ∧ 机械验证 pass 行 basisHash == 写入后内容 basisHash → 校验完成公式（`deriveCompleted`）成立才 allow；② 尚无审计回执 → 仅当前写者持有有效 claim（actor.id == holderSessionId ∧ 未过期）时 allow，plan 进入派生 `awaitingClosure`，且该放行写入必须同时清除 claim（01 §4.4「claim 在 awaitingClosure 前必清」——与 0815-3 Phase 2 ④ 同一约束的两侧声明，避免「携带残留 claim 的 awaitingClosure 写入在两 plan 间落空」）；无 claim 或 claim 不属写者 → deny + reason；③ 审计拒绝路径：`## Closure Findings` 追加未勾返工项 → plan 自然脱离全勾（不依赖额外状态位，返工项追加是合法写）。计数与 01 §5.2 同域（Phase + Closure Findings，复用 ledger-sections，无第二实现）。**执行落点**：`law-rules.mjs` `plan-completed`——①公式 deny reason 携带 `deriveCompleted` reasons（stale basisHash → 指向重验证）；②claim 门四 deny 面（无 claim / 过期（ctx.now 时钟可注入）/ 错主 / proposed 残留 claim）+ awaitingClosure 维护写（current 已全勾无回执：pass 行/dispatch 落地）放行——不造 D2/WI41 式收口死锁；③Closure Findings 追加自然脱离全勾（测试钉住）。
+- [x] `Add` 终态冻结：`completed(p)` 已派生或 `status ∈ {cancelled, superseded, deferred}` → 任何 Phase checkbox / `status` / 机器字段（claim/claim-expires/failures/verify/hold）写入 deny（重新开工 = 新 plan，01 §5.1）；防「已 accepted 旧回执被新未勾项复用」。**执行落点**：current 派生 completed ∧/∨ current 终态 → `computeBasisHash` 比对（basis 域 = frontmatter + Phase + Closure Findings = 全部可变机器面）——变即 deny，append-only 区追加放行；cancelled 复活写测试钉住（与 writer-identity 非法边双重拦截）。
+- [x] `Proof` 真值表与 corpus：三岔全分支（回执齐 allow / 无回执持 claim allow 入 awaitingClosure / 无回执无 claim deny / claim 过期 deny / formula 不满足 deny）+ 终态冻结矩阵 + corpus 语义按文件类钉住（legacy 文件如 0635-1/2 → gate-check 经双读通道声明跳过并陈述 vacuity；新格式 awaitingClosure 态文件 0635-3 → 断言 awaitingClosure 合法态而非完成态；正向完成路径正例 = 构造 fixture，仓库尚无新格式 completed plan——本 plan 自身收口回执成为首个生产语料）；累计真值表用例数记录（向 WI24 ≥30 推进，收口门本 plan 不勾）。**执行证据**：truth table 累计 **64 例**（本 plan 增 39：gate1 双面 16 + gate2 11 + gate3/corpus 12）；正向完成正例 = completedPlan() fixture（`deriveCompleted` true + 公式 allow）；stale basisHash 返工用例（评审 iteration 2 非阻塞项 1）+ corpus 三类（0635-3/0815-1 awaitingClosure 真实文件断言、legacy 双读跳过、真实 enforce policy 端到端越权 deny）；gate-check 命令输出见 Verification。
+- [x] `Add` 文档同步与回写：`tools/mission-driver/CONTEXT.md` 三硬门行；roadmap WI14/WI15/WI16 tick + 证据指针（规则模块 + 真值表路径 + gate-check corpus 输出；**WI14 证据显式注记残项**：`requireDistinctModel` 派发时运行时强制归 M3/WI26 守夜人派发点——WI26 文字未点名，靠本注记防 roadmap over-claim）；`docs/logs/` 收口条目。**执行落点**：CONTEXT.md「三硬门规则」段；roadmap WI14（含 M3/WI26 残项注记）/WI15（含 unlock 路由 M3 注记）/WI16（含 WI21 消费注记）`[x]` + 证据；logs 三条 Phase 条目 + 收口条目；另：closure-audit/multi-audit/open-audit 三 prompt dispatch 行 ` models=` lineage 写入指令最小增量（Non-Goal 边界内的最小面，本 plan 收口回执 = 首个生产写入者）。
 
 Exit Criteria:
 
-- [ ] 三规则 enforce 注册后，构造的全勾越权写入（无回执无 claim）被 deny 且 reason 正确；合法 awaitingClosure 路径放行（含 claim 同写清除）
-- [ ] corpus 语义按文件类钉住：`node tools/mission-driver/src/gate-check.mjs docs/plans/age-autonomy/2026-08-25-0635-3-m1-corpus-migration-dual-read-guides-ci.md` 断言 awaitingClosure 合法态（非完成态）；legacy 语料（0635-1/2）经双读通道声明跳过——无误杀
-- [ ] `pnpm --prefix tools/mission-driver test` + `npm --prefix plugin/dsh test` + `./verify-age.sh` L1+L2 全绿
-- [ ] roadmap WI14/WI15/WI16 `[x]` + 证据指针；`docs/logs/` 收口条目
+- [x] 三规则 enforce 注册后，构造的全勾越权写入（无回执无 claim）被 deny 且 reason 正确；合法 awaitingClosure 路径放行（含 claim 同写清除）
+- [x] corpus 语义按文件类钉住：`node tools/mission-driver/src/gate-check.mjs docs/plans/age-autonomy/2026-08-25-0635-3-m1-corpus-migration-dual-read-guides-ci.md` 断言 awaitingClosure 合法态（非完成态）；legacy 语料（0635-1/2）经双读通道声明跳过——无误杀
+- [x] `pnpm --prefix tools/mission-driver test` + `npm --prefix plugin/dsh test` + `./verify-age.sh` L1+L2 全绿
+- [x] roadmap WI14/WI15/WI16 `[x]` + 证据指针；`docs/logs/` 收口条目
 
 ## Draft Review Record
 
@@ -120,5 +120,8 @@ Exit Criteria:
 - 2026-08-25：iteration 2，共识 acceptable-as-is #review-2026-08-25-063133-mission-driver-2026-08-25-0815-2-m2-three-hard-gates-2-16420c5f（独立复核：corpus 诚实口径重写独立验证为实（0635-1/2 legacy、0635-3 awaitingClosure、仓库无新格式 completed plan）；八项非阻塞修复全部落地；Phase 2/3 与 02 §4.2/§4.3 忠实镜像；无新引入问题。非阻塞 3 项留执行期：审计拒绝后返工重勾的 stale basisHash 真值表用例、`downgrade: single-model` 键名与 0815-1 schema 对齐、closure-audit-binding 与 plan-completed 的规则组合序）
 
 ## Verification
+
+- 2026-08-25 执行期复核（过渡期写者裁定承袭 0635-3/0815-1：`- pass` 行由引擎 BUILD_VERIFY 步骤按当次 basisHash 补写，此处记录执行面证据）：三 Phase 全执行完毕。`pnpm --prefix tools/mission-driver test` 863 pass/0 fail（prompt-check OK；本 plan 增 ledger-sections +2 / law-policy +3）；`npm --prefix plugin/dsh test` 197 pass/0 fail（本 plan 增 truth table 39 例至 64；closure 25/25、freshness 42 文件 content-equal、smoke-import ok、tsc --noEmit 干净）；`node --test plugin/dsh/test/law-truth-table.test.mjs` 64/0；`node tools/mission-driver/src/gate-check.mjs --policy missions/autonomy.policy.yml` exit 0（5 gates：plan-structure observe + 三硬门四条 enforce）；`node tools/mission-driver/src/gate-check.mjs docs/plans/age-autonomy/2026-08-25-0635-3-m1-corpus-migration-dual-read-guides-ci.md` exit 0 且 plan-completed observation = `awaitingClosure (legal derived middle state, 01 §5.2)`；legacy 0635-1/2 同命令 exit 0 全 gate 域外跳过（无误杀）；`./verify-age.sh` L1+L2 GREEN；`node tools/mission-driver/src/mission-check.mjs missions/age-autonomy-implementation.json .` exit 0；web typecheck/build 绿（web/src 无 diff，worktree dist 环境漂移还原 committed 世代）；`lint:prompts` OK；`git diff --stat tools/mission-driver/src/engine.js` 为空（零引擎 diff 不变量）。真值表累计 64 例（WI24 ≥30 推进量记录于 Phase 3 Proof；WI24 收口门归下批不勾）。
+- pass test 2026-08-25-205251-mission-driver basisHash=091bf73e0faa7ce79bfb9edf591a2f5f5d1df2c0532181f179303ad41b5decab exit=0
 
 ## Closure
