@@ -2,23 +2,33 @@ Read `{{openAuditPrompt}}` **completely** and follow it precisely.
 
 Perform an open-ended adversarial audit on mission `{{missionName}}`. Probe `{{moduleDir}}/` — read code, config, tests, and docs **completely** — for contract drift, dead code, missing error handling, framework-specific anti-patterns, and convention violations per `AGENTS.md` (read it **completely** too).
 
-Write results to `{{auditsDir}}/{{TIMESTAMP}}-open-audit-{{missionName}}.md`. The result file MUST start with:
+## Record conclusions INLINE in the roadmap (single-file ledger — no external audit files)
+
+Write your audit receipt into `{{roadmapPath}}` (create the section at the end of the file if absent; append-only once created):
+
+1. Increment the roadmap frontmatter counter: `audit-rounds: <n>` → `audit-rounds: <n+1>` (this count is the mission's global Deep Audit round budget consumption).
+2. Append two lines to `## Deep Audit Record` sharing one id (`<roadmap>` = roadmap filename stem without `.md`; generate a fresh 8-hex nonce):
 
 ```
-> Audit Status: open
-> Audit Type: open-ended
-> Mission: {{missionName}}
+- dispatch audit #audit-<runId>-<roadmap>-<round>-<nonce8hex> to <your-session-id>
+- accepted #audit-<runId>-<roadmap>-<round>-<same-nonce8hex> findings=none|items：结论
 ```
+
+`findings=none` when clean; `findings=items` when you found anything.
+
+3. Findings as work items (the closing mechanism is the checkbox, not an audit file): every `P0`/`P1` finding lands as a NEW unchecked work item (column-0 `- [ ]`) under the owning milestone block in the roadmap (or a trailing `### M<n> — Deep Audit Findings R<round>` block if none fits), tagged `[P0]`/`[P1]` with a one-line justification. `P2` findings go to the roadmap's `## Follow-up Backlog` section (create if absent), each with `source: deep-audit round <n>`. Remediation plans are drafted from these roadmap items by the DRAFT pipeline — do not draft plans yourself here.
+
+Do NOT create files under `{{auditsDir}}/` — that location is reserved for pre-migration legacy archives (still readable by the engine's legacy channel) and rare human-authored records.
 
 ## Priority every finding — `[P0]` / `[P1]` / `[P2]`
 
-Prefix EVERY finding in the report body with a priority tag and one-line justification:
+Prefix EVERY finding with a priority tag and one-line justification:
 
 - **`[P0]`** — blocking: contract break, incorrect behavior, data loss, security, failing/absent test for changed behavior. MUST be fixed.
 - **`[P1]`** — material: a real defect or contract drift that should be fixed but is not blocking. MUST be fixed.
 - **`[P2]`** — trivial / non-blocking polish: doc line-number rot, wording, naming consistency, dead-comment nits. Record it, but it does NOT by itself warrant a remediation plan.
 
-Downstream, only `P0`+`P1` findings drive remediation-plan drafting; `P2`-only audits are triaged to the follow-up backlog without a plan. Do not inflate a cosmetic nit to `P1`.
+Downstream, only `P0`+`P1` findings drive remediation-plan drafting; `P2`-only rounds are triaged to the follow-up backlog without a plan. Do not inflate a cosmetic nit to `P1`.
 
 Your output MUST end with exactly one `<AI_STEP_RESULT>` marker:
 - Any finding at all (`P0`/`P1`/`P2`): `<AI_STEP_RESULT>issues</AI_STEP_RESULT>`

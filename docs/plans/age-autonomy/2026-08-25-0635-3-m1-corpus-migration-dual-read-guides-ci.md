@@ -184,26 +184,26 @@ Skill: none
 - Item Types: `Proof | Add`
 - Prereqs: Phase 1–5 全部完成 + 0635-1/0635-2 已 closure
 
-- [ ] `Proof` WI10 CI 前置：全语料双读结构冒烟进 L1 链（engine test 新增 corpus 用例：`docs/plans/**/*.md` + `docs/backlog/*roadmap*.md` 逐文件过双读解析无 error——格式漂移的常驻回归网）；`./verify-age.sh` L1+L2 全绿；`node tools/mission-driver/src/mission-check.mjs missions/age-autonomy-implementation.json .` → exit 0
+- [x] `Proof` WI10 CI 前置：全语料双读结构冒烟进 L1 链（engine test 新增 corpus 用例：`docs/plans/**/*.md` + `docs/backlog/*roadmap*.md` 逐文件过双读解析无 error——格式漂移的常驻回归网）；`./verify-age.sh` L1+L2 全绿；`node tools/mission-driver/src/mission-check.mjs missions/age-autonomy-implementation.json .` → exit 0
       - Skill: none
-- [ ] `Proof` WI11 四条 gate 命令逐条真实执行并记录输出（任一红 = M1 不收口，本 plan 不闭环）：
+- [x] `Proof` WI11 四条 gate 命令逐条真实执行并记录输出（任一红 = M1 不收口，本 plan 不闭环）：
       1. `node tools/mission-driver/src/plan-check.mjs docs/plans/00-plan-authoring-and-execution-guide.md --strict` → exit 0
       2. `pnpm --prefix tools/mission-driver test` → 0 失败
       3. ledger 测试族（`node --test tools/mission-driver/test/ledger-*.test.js`）→ 合计 ≥12 例且覆盖六面（解析器/字段集/状态格/完成派生/双读切换/append-only 结构判定）全绿——**路径裁定**：roadmap WI11 字面二选一（`plugin/dsh/test/ledger-frontmatter.test.mjs` / `tools/mission-driver/src/frontmatter.test.mjs`）均偏离引擎测试惯例（`test/*.test.js` 自动进链），按其意图（单一可跑命令 + ≥12 例 + 六面覆盖）钉住为 ledger 测试族聚合命令，裁定记录于 roadmap tick 证据
       4. `grep -c "^- \[ ]" docs/backlog/age-autonomy-implementation-roadmap.md` → 与 Phase 1 Decision 5 钉住的两时刻期望值一致（gate 执行时刻 35 / M1 收口稳态 29，按 tick 实况校准；无计数域污染）
       - Skill: none
-- [ ] `Add` roadmap 回写：M1 WI1–WI10 随各 plan closure 已回写（0635-1：WI1/WI2；0635-2：WI3/WI5/WI6；本 plan：WI4/WI7/WI8/WI9/WI10）；WI11 于四条 gate 全绿后 tick；`Work Item Status` 区按 roadmap 纪律更新（本 plan closure audit 通过 → 对应 WI `done`）
+- [x] `Add` roadmap 回写：M1 WI1–WI10 随各 plan closure 已回写（0635-1：WI1/WI2；0635-2：WI3/WI5/WI6；本 plan：WI4/WI7/WI8/WI9/WI10）；WI11 于四条 gate 全绿后 tick；`Work Item Status` 区按 roadmap 纪律更新（本 plan closure audit 通过 → 对应 WI `done`）
       - Skill: none
 
 Exit Criteria:
 
-- [ ] WI11 四条命令输出与退出码记录于 plan Closure + log（真实绿，非口头 close——roadmap「核心纪律」2）
-- [ ] roadmap M1 区 11 项 WI 状态与三份 plan 的 closure 状态一致
-- [ ] `docs/logs/` updated（M1 收口条目）
+- [x] WI11 四条命令输出与退出码记录于 plan Closure + log（真实绿，非口头 close——roadmap「核心纪律」2）
+- [x] roadmap M1 区 11 项 WI 状态与三份 plan 的 closure 状态一致
+- [x] `docs/logs/` updated（M1 收口条目）
 
 Merged from `## Closure Gates` (ledger migration, 01 §4.3 dissolution):
 
-- [ ] relevant docs are aligned（两 guide、AGENTS.md 职责行、CONTEXT.md（如涉及）、roadmap 回写、logs）
+- [x] relevant docs are aligned（两 guide、AGENTS.md 职责行、CONTEXT.md（如涉及）、roadmap 回写、logs）
 
 ## Draft Review Record
 
@@ -232,6 +232,17 @@ Merged from `## Closure Gates` (ledger migration, 01 §4.3 dissolution):
 
 ## Closure
 
-Status Note: pending
+Status Note: executed 2026-08-25 (single session, all six phases). Completion is derived per the ledger formula — frontmatter `status` stays `active`; the `## Verification` pass lines (BUILD_VERIFY step) and the dispatch/accepted receipt below (CLOSURE_AUDIT step) are the transition-period writer surfaces per Phase 1 Decision 2.
 
-Closure Audit Evidence: pending
+WI11 Verification Gate — real outputs (gate-execution moment, 2026-08-25):
+
+1. `node tools/mission-driver/src/plan-check.mjs docs/plans/00-plan-authoring-and-execution-guide.md --strict` → exit 0 (`format: none`, 0 unchecked — template examples outside the counting domain no longer pollute)
+2. `pnpm --prefix tools/mission-driver test` → 807 tests / 807 pass / 0 fail (prompt-check OK; includes the 147-test ledger family + 66-test corpus smoke)
+3. `node --test tools/mission-driver/test/ledger-*.test.js` → 147 tests / 0 fail (≥12; six faces covered — parser/field-set: ledger-frontmatter 22; state lattice + completion derivation: ledger-derivation 21; append-only structure + counting domain: ledger-sections 15; dual-read switching: ledger-dualread 23; corpus smoke: ledger-corpus 66; path adjudication for this aggregate command recorded in the Phase 6 item itself)
+4. `grep -c "^- \[ ]" docs/backlog/age-autonomy-implementation-roadmap.md` → **35** at gate moment (= 40 WI − 5 already-closed M1 items; matches the Phase 1 Decision 5 pinned value); after the M1 write-back (WI4/WI7–WI11 ticked) the steady state is **29** (M2–M5 remainder), 11 checked — both pinned values hit
+
+Additional chain evidence: `./verify-age.sh` → L1+L2 GREEN (assets rebuilt after the prompt rewrite); `npm --prefix plugin/dsh test` → 133 pass / 0 fail; `node tools/mission-driver/src/mission-check.mjs missions/age-autonomy-implementation.json .` → exit 0; rollback point = commit "ledger corpus migration + dual-read wiring" (git revert + `MISSION_DRIVER_LEDGER=legacy`).
+
+Closure Audit Evidence:
+
+- pending the independent CLOSURE_AUDIT receipt (dispatch/accepted pair, same id)

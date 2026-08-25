@@ -31,14 +31,14 @@ audit-rounds: 0
 - [x] WI1 frontmatter 解析器：30 行内置解析；扁平标量 + 单层流式数组；块标量/嵌套对象禁用（依据 01 §2）（证据：`tools/mission-driver/src/ledger-frontmatter.mjs` + `tools/mission-driver/test/ledger-frontmatter.test.js`，plan `docs/plans/age-autonomy/2026-08-25-0635-1-m1-frontmatter-ledger-core.md`）
 - [x] WI2 plan frontmatter 最小集实现 + guide 同步（status/mission/work-item/group/failures/verify/hold/claim/claim-expires）（证据：同上 plan；guide 增补 `docs/plans/00-plan-authoring-and-execution-guide.md` § Plan Frontmatter Field Table）
 - [x] WI3 状态格 + 完成派生公式 + 计数域 grep 共享实现（Phase + Closure Findings）（证据：`tools/mission-driver/src/ledger-sections.mjs` + `tools/mission-driver/test/ledger-derivation.test.js`，plan `docs/plans/age-autonomy/2026-08-25-0635-2-m1-ledger-sections-derivation.md`）
-- [ ] WI4 Closure Gates 消解（codemod；可执行项并入最后 Phase；独立性/验证/一致性由公式派生）
+- [x] WI4 Closure Gates 消解（codemod；可执行项并入最后 Phase；独立性/验证/一致性由公式派生）
 - [x] WI5 评审/审计内联区格式 + Draft Review / Closure Findings / Verification / Closure 示例与结构校验（证据：`tools/mission-driver/src/ledger-sections.mjs` `scanPlanLedger` + `tools/mission-driver/test/ledger-sections.test.js` + 00-guide § Plan Body Sections 示例，plan 同 WI3）
 - [x] WI6 Deep Audit Record 格式 + accepted findings=none|items 机器可读（证据：`scanRoadmapLedger` Deep Audit Record 解析 + 00-roadmap-guide § Roadmap Frontmatter And Audit Record 示例，plan 同 WI3）
-- [ ] WI7 存量 plan / roadmap codemod + 双读过渡（plan-check.mjs 同时识别旧 `> Plan Status:` / `> Review Hold:` 与新 frontmatter，env 切换）
-- [ ] WI8 `> Last Reviewed` / `> Source Audits` / 外部 `docs/audits/` 跨文件生命周期消解（迁移并归一）
-- [ ] WI9 plan-guide/roadmap-guide 同步新格式（rules 11/12/13 退役；count 域 grep；frontmatter 字段表）
-- [ ] WI10 CI 前置：跑通 plan-check frontmatter 版 + mission-check + 双读断点切换开关
-- [ ] **WI11 Verification Gate — M1**（自动验证硬门，下列命令真实绿方可勾选；任何一条红 = M1 未收口）
+- [x] WI7 存量 plan / roadmap codemod + 双读过渡（plan-check.mjs 同时识别旧 `> Plan Status:` / `> Review Hold:` 与新 frontmatter，env 切换）
+- [x] WI8 `> Last Reviewed` / `> Source Audits` / 外部 `docs/audits/` 跨文件生命周期消解（迁移并归一）
+- [x] WI9 plan-guide/roadmap-guide 同步新格式（rules 11/12/13 退役；count 域 grep；frontmatter 字段表）
+- [x] WI10 CI 前置：跑通 plan-check frontmatter 版 + mission-check + 双读断点切换开关
+- [x] **WI11 Verification Gate — M1**（自动验证硬门，下列命令真实绿方可勾选；任何一条红 = M1 未收口）
   - `node tools/mission-driver/src/plan-check.mjs docs/plans/00-plan-authoring-and-execution-guide.md --strict` → exit 0（frontmatter 解析器对既有 plan guide 仍兼容）
   - `pnpm --prefix tools/mission-driver test` → 0 失败
   - `node plugin/dsh/test/ledger-frontmatter.test.mjs`（或 `node tools/mission-driver/src/frontmatter.test.mjs`，择一）→ 至少 12 用例（解析器、字段集、状态格、完成派生、双读切换、append-only）全绿
