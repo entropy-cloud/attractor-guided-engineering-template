@@ -188,6 +188,12 @@ export function validatePlanFrontmatter(fm, opts = {}) {
     const v = fm.verify;
     if (!Array.isArray(v)) {
       errors.push('"verify" must be a single-level array of command keys');
+    } else if (v.length === 0) {
+      // M2-WI44 vacuous-pass block: an empty array would make the §5.2
+      // mechanical-verification conjunct vacuously true (zero pass lines
+      // needed). Explicit [] is a rejection, not an omission — omit the
+      // field to fall back to the mission default (01 §4.1).
+      errors.push('"verify" must be a non-empty array of command keys — omit the field to fall back to the mission default (verify: [] is a vacuous-pass channel)');
     } else {
       for (const el of v) {
         if (typeof el !== "string" || !COMMAND_KEY_RE.test(el)) {

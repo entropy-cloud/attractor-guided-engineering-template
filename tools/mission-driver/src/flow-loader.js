@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync, existsSync, writeFileSync } from "node:fs";
-import { resolve, dirname, basename } from "node:path";
+import { resolve, dirname, basename, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { inspectPlan, missionDefaultVerifyKeys } from "./plan-check.mjs";
 import { planLedgerState, normalizeLegacyStatus } from "./ledger-dualread.mjs";
@@ -86,6 +86,18 @@ function _scanPlansByStatus(plansDir, statuses, defaultVerifyKeys) {
     // completed even with full receipts, deadlocking it in activePlans.
     const state = planLedgerState(content, defaultVerifyKeys ? { defaultVerifyKeys } : {});
     if (state.format === "none") continue;
+    // M2-WI42: field-set violations must not stay silent on the engine scan
+    // face (deep-audit R1 "silent channel"). Kill silence, not the queue:
+    // membership stays status-based (a field typo must not starve a plan out
+    // of the execution queue — the mirror image of the silent-exit disease
+    // WI42 exists to cure), but every scan warns once per offending file.
+    // console.warn is the scan face's only log channel today (no engine logger
+    // reaches these expression functions) and is console-injectable for tests.
+    if (state.format === "frontmatter" && Array.isArray(state.fieldErrors) && state.fieldErrors.length > 0) {
+      console.warn(
+        `[flow-loader] plan field validation failed: ${relative(process.cwd(), f)} — ${state.fieldErrors.join("; ")}`,
+      );
+    }
     // normalized: frontmatter `status` (or derived "completed") / legacy line
     // value — derived-completed and writable-terminal plans match neither the
     // active nor the draft list, i.e. they are closed (never re-fed to EXECUTE).

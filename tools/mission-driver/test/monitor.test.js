@@ -1420,6 +1420,43 @@ describe("Monitor — detail page fixes (FIX-1~4)", () => {
     }
   });
 
+  it("WI42: GET /api/configs/:name/plans exposes fieldErrors from the read seam", async () => {
+    const root = makeTmpProject();
+    try {
+      const plansDir = join(root, "docs", "plans", "t", "mission-fix2d");
+      mkdirSync(plansDir, { recursive: true });
+      writeFileSync(
+        join(plansDir, "2026-08-25-0900-1-bad.md"),
+        "---\nstatus: active\nmission: m\nwork-item: WI1\nverfy: [test]\n---\n\n# typo plan\n\n## Phase 1 — x\n\n- [ ] work\n",
+      );
+      writeFileSync(
+        join(plansDir, "2026-08-25-0900-2-good.md"),
+        "---\nstatus: active\nmission: m\nwork-item: WI2\nverify: [test]\n---\n\n# good plan\n\n## Phase 1 — x\n\n- [ ] work\n",
+      );
+      makeMission(root, "mission-fix2d", {
+        name: "mission-fix2d",
+        plansDir: "docs/plans/t/mission-fix2d",
+      });
+
+      const monitor = await startMonitor({ projectRoot: root, port: 0, webDir: join(root, "web") });
+      try {
+        const res = await fetchJson(`${baseUrl(monitor)}/api/configs/mission-fix2d/plans`);
+        assert.equal(res.status, 200);
+        const byName = {};
+        for (const p of res.body.plans) byName[p.fileName] = p;
+        assert.ok(
+          byName["2026-08-25-0900-1-bad.md"].fieldErrors.some((e) => e.includes('unknown field "verfy"')),
+          `expected verfy fieldError, got ${JSON.stringify(byName["2026-08-25-0900-1-bad.md"])}`,
+        );
+        assert.deepEqual(byName["2026-08-25-0900-2-good.md"].fieldErrors, []);
+      } finally {
+        await monitor.close();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("FIX-2: GET /api/configs/:name/plans skips 00- prefixed index files", async () => {
     const root = makeTmpProject();
     try {

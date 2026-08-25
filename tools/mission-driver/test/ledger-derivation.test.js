@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { parseFrontmatter, validatePlanFrontmatter } from "../src/ledger-frontmatter.mjs";
 import {
   computeBasisHash,
   deriveCompleted,
@@ -154,6 +155,50 @@ describe("deriveCompleted — verify keys resolution", () => {
     const onlyTest = buildPlan({ verifyLine: "verify: [test]" });
     const r = deriveCompleted({ path: PATH, text: onlyTest }, { defaultVerifyKeys: ["test", "build"] });
     assert.deepEqual(r.verification.keys, ["test"]);
+    assert.equal(r.completed, true);
+  });
+});
+
+// M2-WI44 vacuous-pass block (deep-audit R2): `verify: []` used to make the
+// mechanical-verification conjunct vacuously TRUE (empty keys → missingKeys=[]
+// → zero pass lines needed). Two defense layers: the validator rejects the
+// empty array (ledger-frontmatter face), and deriveCompleted treats an
+// explicit empty set as no-verify-keys — fail-closed, never falling back to
+// injected defaults, covering inputs that never saw the validator (external
+// writes, old files, callers bypassing the read seam).
+describe("deriveCompleted — M2-WI44 verify:[] vacuous-pass block", () => {
+  const FULL_RECEIPTS_EMPTY_VERIFY = buildPlan({ verifyLine: "verify: []" });
+
+  it("verify:[] + full receipts → validator rejects AND derivation stays incomplete (no-verify-keys)", () => {
+    const fm = parseFrontmatter(FULL_RECEIPTS_EMPTY_VERIFY).fm;
+    const v = validatePlanFrontmatter(fm);
+    assert.equal(v.ok, false);
+    assert.ok(v.errors.some((e) => e.includes('"verify" must be a non-empty array')));
+    const r = deriveCompleted({ path: PATH, text: FULL_RECEIPTS_EMPTY_VERIFY });
+    assert.equal(r.completed, false);
+    assert.equal(r.conjuncts.mechanicalVerification, false);
+    assert.ok(r.reasons.includes("no-verify-keys"));
+  });
+
+  it("verify:[] fed straight into deriveCompleted (validator bypassed) → still completed:false", () => {
+    const r = deriveCompleted({ path: PATH, text: FULL_RECEIPTS_EMPTY_VERIFY });
+    assert.equal(r.completed, false);
+    assert.ok(r.reasons.includes("no-verify-keys"));
+    assert.equal(r.verification.keys, undefined);
+  });
+
+  it("verify:[] takes precedence over injected defaultVerifyKeys — fail-closed, no fallback", () => {
+    const r = deriveCompleted({ path: PATH, text: FULL_RECEIPTS_EMPTY_VERIFY }, { defaultVerifyKeys: ["test"] });
+    assert.equal(r.verification.keys, undefined);
+    assert.equal(r.conjuncts.mechanicalVerification, false);
+    assert.ok(r.reasons.includes("no-verify-keys"));
+    assert.ok(!r.reasons.includes("missing-pass:test"));
+    assert.equal(r.completed, false);
+  });
+
+  it("green path unharmed: verify: [test] with receipts still completes", () => {
+    const r = deriveCompleted({ path: PATH, text: buildPlan({ verifyLine: "verify: [test]" }) });
+    assert.equal(r.conjuncts.mechanicalVerification, true);
     assert.equal(r.completed, true);
   });
 });

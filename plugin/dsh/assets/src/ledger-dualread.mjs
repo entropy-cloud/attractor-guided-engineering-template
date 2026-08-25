@@ -7,7 +7,7 @@
 //                invisible (treated as non-plans), never misparsed
 //   frontmatter— tightening mode (M2 enforce breakpoint): legacy-only files are
 //                rejected, not silently legacy-parsed
-import { parseFrontmatter, TERMINAL_PLAN_STATUSES } from "./ledger-frontmatter.mjs";
+import { parseFrontmatter, TERMINAL_PLAN_STATUSES, validatePlanFrontmatter } from "./ledger-frontmatter.mjs";
 import { splitLedgerSections, deriveCompleted } from "./ledger-sections.mjs";
 
 // The single legacy `> Plan Status:` line matcher — union of the two formerly
@@ -40,11 +40,24 @@ function fmHasStatus(fm) {
   return fm !== null && typeof fm === "object" && fm.status !== undefined;
 }
 
+// M2-WI42: field-set validation rides the ONE read seam — every
+// frontmatter-format read carries `fieldErrors` (validator messages) and
+// `fieldsValid`, so plan-check / flow-loader / monitor see them through
+// planLedgerState without each re-implementing the check (01 §5.2 single
+// implementation discipline). Non-frontmatter formats simply don't attach the
+// keys — there is no plan field set to validate on a legacy line or a guide.
+function fmReadResult(mode, split) {
+  const { ok, errors } = validatePlanFrontmatter(split.fm);
+  return { mode, format: "frontmatter", status: split.fm.status, rejected: null, fieldErrors: errors, fieldsValid: ok };
+}
+
 /**
  * Resolve a plan file's ledger format + status under the active env mode.
  * Returns { mode, format: "frontmatter"|"legacy"|"none", status, rejected }.
  *  - format "frontmatter": status = fm.status (writable vocabulary only —
- *    `completed` is derived and never written; use planDerivedCompleted for it)
+ *    `completed` is derived and never written; use planDerivedCompleted for it);
+ *    additionally carries fieldErrors[] + fieldsValid from
+ *    validatePlanFrontmatter (M2-WI42 read-seam wiring)
  *  - format "legacy": status = raw legacy line value (normalizeLegacyStatus it)
  *  - format "none": not a plan (guide/template) — or rejected in frontmatter mode
  * Fenced template examples never match the legacy line (fence mask applies).
@@ -55,7 +68,7 @@ export function readPlanStatus(text) {
   const hasFm = split.hasFrontmatter && split.fmError === null && fmHasStatus(split.fm);
 
   if (mode === "frontmatter") {
-    if (hasFm) return { mode, format: "frontmatter", status: split.fm.status, rejected: null };
+    if (hasFm) return fmReadResult(mode, split);
     return { mode, format: "none", status: null, rejected: "legacy-or-non-plan-format-rejected-in-frontmatter-mode" };
   }
 
@@ -72,7 +85,7 @@ export function readPlanStatus(text) {
       : { mode, format: "none", status: null, rejected: null };
   }
 
-  if (hasFm) return { mode, format: "frontmatter", status: split.fm.status, rejected: null };
+  if (hasFm) return fmReadResult(mode, split);
   if (legacy !== null) return { mode, format: "legacy", status: legacy, rejected: null };
   return { mode, format: "none", status: null, rejected: null };
 }

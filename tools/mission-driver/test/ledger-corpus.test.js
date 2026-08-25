@@ -10,6 +10,7 @@ import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { planLedgerState } from "../src/ledger-dualread.mjs";
 import { scanPlanLedger, scanRoadmapLedger } from "../src/ledger-sections.mjs";
+import { parseRoadmapMarkdown } from "../src/roadmap-check.mjs";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
@@ -53,6 +54,11 @@ for (const file of planFiles) {
       const scan = scanPlanLedger(text);
       assert.deepEqual(scan.errors, [], `counting-domain/structure errors in ${file}`);
       assert.equal(scan.fmError, null, `frontmatter parse error in ${file}`);
+      // M2-WI42 read-seam wiring: every frontmatter corpus plan must be
+      // field-set valid (fieldsValid === true) — the validator is now a
+      // first-class read-face citizen, so a corpus flip here is a regression
+      // signal, not noise.
+      assert.equal(state.fieldsValid, true, `field-set errors in ${file}: ${JSON.stringify(state.fieldErrors)}`);
       // display status must come from the writable vocabulary or derived completed
       assert.ok(
         ["draft", "active", "held", "cancelled", "superseded", "deferred", "completed"].includes(state.normalized),
@@ -72,6 +78,10 @@ for (const file of roadmapFiles) {
       // migrated roadmaps carry the full new-format WI surface
       assert.ok(scan.counts.total > 0, `frontmatter roadmap without checkbox Work Items: ${file}`);
       assert.equal(scan.fm["audit-rounds"] >= 0, true, `invalid audit-rounds in ${file}`);
+      // M2-WI42: roadmap field-set validation via parseRoadmapMarkdown's hasFm
+      // point — corpus roadmaps must be field-valid (zero false kills).
+      const parsed = parseRoadmapMarkdown(text);
+      assert.deepEqual(parsed.fieldErrors, [], `roadmap field-set errors in ${file}`);
     }
   });
 }

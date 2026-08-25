@@ -33,6 +33,7 @@ export interface RoadmapData {
   roadmapPath?: string | null
   phases: RoadmapPhase[]
   overallProgress: number
+  fieldErrors?: string[]
 }
 
 export interface RoadmapPhase {
@@ -47,6 +48,7 @@ export interface RoadmapPhase {
 export interface PlanInfo {
   fileName: string
   status: string
+  fieldErrors?: string[]
   sizeBytes: number
   lastModified: number
 }

@@ -86,6 +86,11 @@ function analyzeFrontmatter(content, state) {
   const closureEvidenceCount = scan.closure ? scan.closure.pairs.length : 0;
   const structuralErrors = scan.errors.map((e) => `line ${e.line}: ${e.message}`);
   if (scan.fmError) structuralErrors.push(`frontmatter: ${scan.fmError}`);
+  // M2-WI42: field-set violations from the read seam (planLedgerState →
+  // readPlanStatus frontmatter branch) — surfaced as `field:` details, same
+  // no-strict-gate treatment as structuralErrors (field semantics are not a
+  // strictness option).
+  const fieldErrors = state.fieldErrors ?? [];
   const derived = state.derived;
   // Derived completion view (M2-WI41): expose why deriveCompleted holds or
   // fails (01 §5.2 reasons, verbatim) plus the effective verify key set and
@@ -108,6 +113,8 @@ function analyzeFrontmatter(content, state) {
     hasClosureEvidence: closureEvidenceCount > 0,
     closureEvidenceCount,
     structuralErrors,
+    fieldErrors,
+    fieldsValid: state.fieldsValid ?? true,
     derivedCompleted: isCompleted,
     completionReasons: derived ? derived.reasons : [],
     verifyKeys,
@@ -172,7 +179,8 @@ function analyzePlan(filePath, projectRoot, opts = {}) {
  * Mirrors the contract the mission-driver engine expects:
  *   { passed, file, planStatus, totalChecked, totalUnchecked, details, allUnchecked }
  * plus the additive derived-completion view (M2-WI41): derivedCompleted,
- * completionReasons, verifyKeys, verifyKeysSource (frontmatter format only).
+ * completionReasons, verifyKeys, verifyKeysSource (frontmatter format only),
+ * and the field-set view (M2-WI42): fieldErrors, fieldsValid.
  *
  * @param {string} filePath plan file path
  * @param {{ strict?: boolean, projectRoot?: string, defaultVerifyKeys?: string[] }} [options]
@@ -190,6 +198,13 @@ export function inspectPlan(filePath, options = {}) {
 
   for (const err of result.structuralErrors) {
     details.push(`ledger structure error: ${err}`);
+  }
+
+  // M2-WI42: field-set violations (unknown keys, unwritable status values,
+  // claim pairing, verify element shape, …) fail the check — not strict-gated,
+  // mirroring structuralErrors. The `field:` prefix marks the source.
+  for (const fe of result.fieldErrors ?? []) {
+    details.push(`field: ${fe}`);
   }
 
   // A completed plan must carry real closure evidence.
@@ -219,6 +234,8 @@ export function inspectPlan(filePath, options = {}) {
           completionReasons: result.completionReasons,
           verifyKeys: result.verifyKeys,
           verifyKeysSource: result.verifyKeysSource,
+          fieldErrors: result.fieldErrors,
+          fieldsValid: result.fieldsValid,
         }
       : {}),
   };

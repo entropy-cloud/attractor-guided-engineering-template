@@ -173,6 +173,22 @@ describe("validatePlanFrontmatter — field conditional rules", () => {
     assert.equal(validatePlanFrontmatter({ ...base, verify: ["test", "lint:prompts"] }).ok, true);
   });
 
+  // M2-WI44 vacuous-pass block: `verify: []` parses (subset format, pinned
+  // above) but must NOT validate — an empty key set would make the §5.2
+  // mechanical-verification conjunct vacuously true. Explicit [] is a
+  // rejection; omission (undefined) is the legal path to the mission default.
+  it("rejects verify: [] (vacuous-pass channel) while omission stays legal", () => {
+    const base = { status: "active", mission: "m", "work-item": "WI1" };
+    const r = validatePlanFrontmatter({ ...base, verify: [] });
+    assert.equal(r.ok, false);
+    assert.ok(
+      r.errors.some((e) => e.includes('"verify" must be a non-empty array of command keys') && e.includes("omit the field")),
+      `expected vacuous-pass rejection wording, got ${JSON.stringify(r.errors)}`,
+    );
+    assert.deepEqual(validatePlanFrontmatter(base).errors, []);
+    assert.deepEqual(validatePlanFrontmatter({ ...base, verify: ["test"] }).errors, []);
+  });
+
   it("validates agent lexical shape; group/agent stay optional", () => {
     const base = { status: "draft", mission: "m", "work-item": "WI1" };
     assert.equal(validatePlanFrontmatter(base).ok, true);

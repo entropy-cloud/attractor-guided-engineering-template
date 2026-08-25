@@ -17,8 +17,11 @@
  * the same semantics as the plan surfaces (ledger-dualread.mjs).
  */
 
+import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import { ledgerReadMode } from "./ledger-dualread.mjs";
 import { splitLedgerSections, MILESTONE_HEADING_RE, UNCHECKED_RE, CHECKED_RE } from "./ledger-sections.mjs";
+import { validateRoadmapFrontmatter } from "./ledger-frontmatter.mjs";
 
 const VALID_STATUSES = new Set(["todo", "ready", "planned", "done"]);
 
@@ -132,21 +135,26 @@ function withProgress(phases) {
 export function parseRoadmapMarkdown(content) {
   const mode = ledgerReadMode();
   let checkboxPhases = null;
+  // M2-WI42: roadmap field-set validation rides the ONE roadmap parse point —
+  // monitor handleGetRoadmap and engine reconciliation share this function, so
+  // violations surface on every read face (never re-validated per consumer).
+  let fieldErrors = [];
 
   if (mode !== "legacy") {
     const split = splitLedgerSections(content);
     const hasFm = split.hasFrontmatter && split.fmError === null;
     if (hasFm) {
+      fieldErrors = validateRoadmapFrontmatter(split.fm).errors;
       checkboxPhases = checkboxParse(split);
-      if (mode === "frontmatter") return withProgress(checkboxPhases);
+      if (mode === "frontmatter") return { ...withProgress(checkboxPhases), fieldErrors };
     } else if (mode === "frontmatter") {
-      return withProgress([]);
+      return { ...withProgress([]), fieldErrors };
     }
   }
   if (checkboxPhases !== null && checkboxPhases.length > 0) {
-    return withProgress(checkboxPhases);
+    return { ...withProgress(checkboxPhases), fieldErrors };
   }
-  return withProgress(legacyParse(content));
+  return { ...withProgress(legacyParse(content)), fieldErrors };
 }
 
 /**
@@ -160,4 +168,23 @@ export function roadmapAllDone(content) {
   const { phases } = parseRoadmapMarkdown(content);
   const items = phases.filter((p) => !p.isMilestone);
   return items.length > 0 && items.every((p) => p.status === "done");
+}
+
+// CLI entrypoint (M2-WI42): node roadmap-check.mjs <roadmap.md>
+// Mirrors plan-check.mjs's CLI conventions (pathToFileURL guard — the naive
+// `file://${process.argv[1]}` concatenation never compares equal on Windows,
+// see plan-check O6 — JSON output, exit 0/1). Fails on field-set violations
+// (fieldErrors from validateRoadmapFrontmatter via parseRoadmapMarkdown).
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const argv = process.argv.slice(2);
+  const file = argv.find((a) => !a.startsWith("--"));
+  if (!file) {
+    console.error("Usage: roadmap-check.mjs <roadmap.md>");
+    process.exit(2);
+  }
+  const content = readFileSync(file, "utf8");
+  const res = parseRoadmapMarkdown(content);
+  const passed = res.fieldErrors.length === 0;
+  console.log(JSON.stringify({ file, passed, fieldErrors: res.fieldErrors, phases: res.phases, overallProgress: res.overallProgress }, null, 2));
+  process.exit(passed ? 0 : 1);
 }

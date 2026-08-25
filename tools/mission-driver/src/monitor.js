@@ -835,10 +835,14 @@ function handleListPlans(projectRoot, name) {
     .map((f) => {
       const filePath = join(plansDir, f);
       let status = "unknown";
+      let fieldErrors = [];
       try {
         const content = readFileSync(filePath, "utf8");
         const state = planLedgerState(content);
         if (state.format !== "none") status = state.normalized;
+        // M2-WI42: transparently expose the read-seam field-set verdict
+        // (API data face only — frontend rendering is a monitor-face concern).
+        if (Array.isArray(state.fieldErrors)) fieldErrors = state.fieldErrors;
       } catch {}
       let st;
       try {
@@ -846,7 +850,7 @@ function handleListPlans(projectRoot, name) {
       } catch {
         st = { size: 0, mtimeMs: 0 };
       }
-      return { fileName: f, status, sizeBytes: st.size, lastModified: st.mtimeMs };
+      return { fileName: f, status, fieldErrors, sizeBytes: st.size, lastModified: st.mtimeMs };
     })
     .sort((a, b) => b.lastModified - a.lastModified);
   return { plans, plansDir: mission.plansDir };

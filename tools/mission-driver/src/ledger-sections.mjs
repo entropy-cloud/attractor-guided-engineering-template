@@ -446,7 +446,12 @@ export function deriveCompleted(record, opts = {}) {
   if (!conjuncts.allChecked) reasons.push(`unchecked-items:${scan.counts.unchecked}`);
 
   const verifyField = scan.fm ? scan.fm.verify : undefined;
-  const keys = Array.isArray(verifyField)
+  // M2-WI44 derivation defense (second layer under the validator): an
+  // explicit empty verify array is a REJECTION, not an omission — it never
+  // falls back to opts.defaultVerifyKeys (fail-closed) and never yields a
+  // vacuously-true conjunct. Treated exactly like no-verify-keys.
+  const explicitEmptyVerify = Array.isArray(verifyField) && verifyField.length === 0;
+  const keys = Array.isArray(verifyField) && !explicitEmptyVerify
     ? verifyField
     : verifyField === undefined && Array.isArray(opts.defaultVerifyKeys)
       ? opts.defaultVerifyKeys
