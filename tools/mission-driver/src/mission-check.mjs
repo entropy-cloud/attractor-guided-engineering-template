@@ -6,8 +6,8 @@
  * schema for ANY project, does not read project-specific config.
  */
 
-import { existsSync, readFileSync } from "node:fs";
-import { resolve, dirname } from "node:path";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { resolve, dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const REQUIRED_FIELDS = ["name", "roadmapPath", "plansDir", "commands"];
@@ -106,6 +106,43 @@ export function loadMission(missionFile, projectRoot) {
     throw new Error(`Invalid mission '${missionFile}':\n  ${errors.join("\n  ")}`);
   }
   return mission;
+}
+
+/**
+ * Ancestor walk from a plan file: the first missions/*.json whose resolved
+ * plansDir CONTAINS the plan is the owning mission (plansDir is the
+ * discriminator — several missions may share a project root). Full extends
+ * resolution via loadMission; unvalidatable files (base configs / invalid
+ * missions) skip. Shared by gate-check.mjs --verify and the plan-check.mjs
+ * CLI default-verify-key injection (age-autonomy M2-WI41).
+ * @param {string} planAbs absolute path to the plan file
+ * @returns {{ mission: object, projectRoot: string, missionFile: string } | null}
+ */
+export function discoverOwningMission(planAbs) {
+  let dir = dirname(planAbs);
+  for (;;) {
+    const missionsDir = join(dir, "missions");
+    if (existsSync(missionsDir)) {
+      for (const entry of readdirSync(missionsDir)) {
+        if (!entry.endsWith(".json")) continue;
+        const missionFile = join(missionsDir, entry);
+        try {
+          const mission = loadMission(missionFile, dir);
+          if (typeof mission.plansDir === "string" && mission.plansDir !== "") {
+            const plansAbs = resolve(dir, mission.plansDir);
+            if (planAbs === plansAbs || planAbs.startsWith(plansAbs + "/") || planAbs.startsWith(plansAbs + "\\")) {
+              return { mission, projectRoot: dir, missionFile };
+            }
+          }
+        } catch {
+          // base configs / invalid missions do not own plan dirs
+        }
+      }
+    }
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

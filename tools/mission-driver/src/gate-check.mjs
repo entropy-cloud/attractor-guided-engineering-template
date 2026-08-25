@@ -45,12 +45,12 @@
  * assets copy, not this CLI.
  */
 
-import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { evaluateGates, structuralRuleIds } from "./law-core.mjs";
 import { loadPolicyFile, policyAgentNames } from "./law-policy.mjs";
-import { loadMission } from "./mission-check.mjs";
+import { discoverOwningMission } from "./mission-check.mjs";
 import { resolveVerifyPlan, runVerifyCommands } from "./verify-runner.mjs";
 
 function usage() {
@@ -132,39 +132,8 @@ function runSingleFileMode(file) {
 }
 
 // ── <plan.md> --verify: mechanical-verification execution face (02 §5) ──────
-
-/**
- * Ancestor walk from the plan file: the first missions/*.json whose resolved
- * plansDir CONTAINS the plan is the owning mission (plansDir is the
- * discriminator — several missions may share a project root). Full extends
- * resolution via mission-check's loadMission; unvalidatable files skip.
- */
-function discoverOwningMission(planAbs) {
-  let dir = dirname(planAbs);
-  for (;;) {
-    const missionsDir = join(dir, "missions");
-    if (existsSync(missionsDir)) {
-      for (const entry of readdirSync(missionsDir)) {
-        if (!entry.endsWith(".json")) continue;
-        const missionFile = join(missionsDir, entry);
-        try {
-          const mission = loadMission(missionFile, dir);
-          if (typeof mission.plansDir === "string" && mission.plansDir !== "") {
-            const plansAbs = resolve(dir, mission.plansDir);
-            if (planAbs === plansAbs || planAbs.startsWith(plansAbs + "/") || planAbs.startsWith(plansAbs + "\\")) {
-              return { mission, projectRoot: dir, missionFile };
-            }
-          }
-        } catch {
-          // base configs / invalid missions do not own plan dirs
-        }
-      }
-    }
-    const parent = dirname(dir);
-    if (parent === dir) return null;
-    dir = parent;
-  }
-}
+// discoverOwningMission (ancestor walk, plansDir 判属) moved to mission-check.mjs
+// at M2-WI41 — shared with the plan-check.mjs CLI default-verify-key injection.
 
 async function runVerifyMode(file) {
   const abs = resolve(file);

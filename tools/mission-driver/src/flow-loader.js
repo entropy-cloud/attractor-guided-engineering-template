@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, existsSync, writeFileSync } from "node:fs";
 import { resolve, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
-import { inspectPlan } from "./plan-check.mjs";
+import { inspectPlan, missionDefaultVerifyKeys } from "./plan-check.mjs";
 import { planLedgerState, normalizeLegacyStatus } from "./ledger-dualread.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -73,7 +73,7 @@ function _walkMarkdown(dir) {
   return out;
 }
 
-function _scanPlansByStatus(plansDir, statuses) {
+function _scanPlansByStatus(plansDir, statuses, defaultVerifyKeys) {
   const results = [];
   if (!existsSync(plansDir)) return results;
   const files = _walkMarkdown(plansDir)
@@ -81,7 +81,10 @@ function _scanPlansByStatus(plansDir, statuses) {
     .sort();
   for (const f of files) {
     const content = readFileSync(f, "utf8");
-    const state = planLedgerState(content);
+    // M2-WI41: defaultVerifyKeys injection (01 §4.1 "verify missing → mission
+    // default") — without it a plan omitting `verify` can never derive
+    // completed even with full receipts, deadlocking it in activePlans.
+    const state = planLedgerState(content, defaultVerifyKeys ? { defaultVerifyKeys } : {});
     if (state.format === "none") continue;
     // normalized: frontmatter `status` (or derived "completed") / legacy line
     // value — derived-completed and writable-terminal plans match neither the
@@ -159,13 +162,17 @@ function _isMissionLevelAudit(filePath, content) {
 export function createExpressionFunctions(config) {
   const projectRoot = config.projectRoot;
   const mission = config.mission || {};
+  // M2-WI41: single shared mission-default verify key set for the whole
+  // predicate family (plan-check.mjs missionDefaultVerifyKeys — the closure
+  // script check injects the same set; one implementation, no divergence).
+  const defaultVerifyKeys = missionDefaultVerifyKeys(mission);
 
   return {
     activePlans: () => _scanPlansByStatus(
-      resolve(projectRoot, mission.plansDir), ACTIVE_STATUSES
+      resolve(projectRoot, mission.plansDir), ACTIVE_STATUSES, defaultVerifyKeys
     ),
     draftPlans: () => _scanPlansByStatus(
-      resolve(projectRoot, mission.plansDir), DRAFT_STATUSES
+      resolve(projectRoot, mission.plansDir), DRAFT_STATUSES, defaultVerifyKeys
     ),
     openAudits: () => _scanOpenAuditsList(
       resolve(projectRoot, mission.auditsDir || "audits")
@@ -212,7 +219,14 @@ async function closureScriptCheck(delegates, flowVars) {
       ? planFile
       : (projectRoot ? resolve(projectRoot, planFile) : planFile);
 
-    const result = inspectPlan(absPath, { strict: false, projectRoot });
+    // M2-WI41: inject the mission default verify keys (01 §4.1) so the
+    // routing judgment below sees the same key set the scan predicates use.
+    const defaultVerifyKeys = missionDefaultVerifyKeys(delegates?.config?.mission);
+    const result = inspectPlan(absPath, {
+      strict: false,
+      projectRoot,
+      ...(defaultVerifyKeys ? { defaultVerifyKeys } : {}),
+    });
 
     const coreIssues = [];
     if (result.totalUnchecked > 0) {
@@ -222,6 +236,28 @@ async function closureScriptCheck(delegates, flowVars) {
     }
     if (result.planStatus === "completed" && result.details.includes("missing closure evidence")) {
       coreIssues.push("completed plan missing Closure evidence");
+    }
+    // M2-WI41 receipt-aware routing (bug 2026-08-25-ledger-plan-closure-deadlock
+    // D2): a frontmatter-format plan whose counting domain is fully ticked
+    // must satisfy the 01 §5.2 completion formula before it may pass to
+    // BUILD_VERIFY. Anything missing (## Closure dispatch/accepted receipt,
+    // ## Verification pass line, stale basisHash after rework) fails here so
+    // the flow routes to CLOSURE_AUDIT — the only writer of the Closure
+    // receipt — instead of silently deadlocking the plan in activePlans.
+    // Legacy / format:none plans are untouched (behavior byte-identical).
+    if (
+      result.format === "frontmatter" &&
+      result.totalUnchecked === 0 &&
+      result.derivedCompleted === false
+    ) {
+      const reasons = result.completionReasons?.length
+        ? result.completionReasons
+        : ["derive-completed-false"];
+      for (const reason of reasons) {
+        coreIssues.push(
+          `ledger completion formula unmet (all ${result.totalChecked} items checked, 01 §5.2): ${reason}`
+        );
+      }
     }
 
     if (coreIssues.length === 0) {
