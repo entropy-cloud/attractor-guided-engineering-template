@@ -182,9 +182,9 @@ dispatch:                                # 派发类型 → 具名 agent（提�
 
 | 形态 | 部署点 | 说明 |
 | --- | --- | --- |
-| DSH 插件 | `tools/pre-execute` 监听器 | 拦截 write/edit/str_replace_editor 与 claim/dispatch/terminal-claim 动作，校验 proposed content + actor |
-| 独立形态 | CI job + git pre-commit hook | 同一套纯函数的结构子集（无 actor），作为合并/提交门禁 |
-| 手动文件流 | `plan-check.mjs`（frontmatter 版） | 纯校验 CLI |
+| DSH 插件 | `tools/pre-execute` 监听器 | 拦截 write/edit/str_replace_editor 与 claim/dispatch/terminal-claim 动作，校验 proposed content + actor。适配层 `plugin/dsh/src/law/host-adapter.ts`（M2-WI12）：policy 加载 + 内核 evaluate + 观察日志（`_tmp/law-observations.jsonl`），与 plan-status-gate 并存 |
+| 独立形态 | CI job + git pre-commit hook | 同一套纯函数的结构子集（无 actor），作为合并/提交门禁（接线 WI23） |
+| 手动文件流 | `plan-check.mjs`（frontmatter 版）+ `gate-check.mjs` | 纯校验 CLI：`gate-check.mjs --policy <file>` 校验 policy schema；`gate-check.mjs <plan.md>` 单文件结构面评估（02 §6 部署面 3，M2-WI12） |
 
 **上线纪律**：一般门禁先 observe-only（记录而不拦截）积累真实日志 → 校准 matcher/规则 → 再切 enforce；fail-open 默认，无证据面时 allow + 观察日志（从未跑过引擎的项目手写文档合法）。**例外**：P0 迁移完成后的三硬门与 append-only 门禁直接 enforce——它们防的是净倒退，不是新增便利。WI13 门禁的误杀教训（字面规则 kill 掉合法 in-run 编辑）作为此类工程的默认反例存档。
 
@@ -192,3 +192,7 @@ dispatch:                                # 派发类型 → 具名 agent（提�
 
 - 门禁只裁决**可判定事实**：文件存在、hash 相等、状态位值、计数未超限、dispatch/accepted 行匹配。
 - 计划质量、scope 是否诚实、closure 证据是否充分——这些是判断，由独立评审 agent 依 guide 完成（Draft Review Record / Closure 内联），门禁只保证「该审的审了」（派发+回执绑定），不保证「审得对」。
+
+## Changelog
+
+- 2026-08-25（M2-WI12/WI13，plan `docs/plans/age-autonomy/2026-08-25-0815-1`）：§6 部署面表补 gate-check.mjs 与 DSH 适配层实名（supported baseline 的最小事实性增补——内核 `tools/mission-driver/src/{law-core,law-policy}.mjs`、真实实例 `missions/autonomy.policy.yml` 已落地；本文其余契约无改动）。
