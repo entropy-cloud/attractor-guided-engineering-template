@@ -55,6 +55,12 @@ const ALLOWED_MODULES = [
   // plan-check.mjs / flow-loader.js / roadmap-check.mjs consume them, so all
   // three are import-closure reachable from here on)
   "ledger-frontmatter.mjs", "ledger-sections.mjs", "ledger-dualread.mjs",
+  // shared law kernel (age-autonomy M2-WI12; 0815-1 ruling extends the 0635-1
+  // engine-side placement to law): law-policy.mjs is reachable via config.js
+  // (autonomyPolicy fail-fast load), law-core.mjs via law-policy (rule-name
+  // cross-validation). gate-check.mjs is deliberately NOT here — it is an
+  // engine-side CLI (main.js family), not a bundled library face.
+  "law-core.mjs", "law-policy.mjs",
 ];
 
 // NOT bundled (packaging doc): monitor server, draft-job detached-process

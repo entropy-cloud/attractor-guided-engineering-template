@@ -154,7 +154,11 @@ function pushUnknownFieldErrors(fm, fields, errors) {
   }
 }
 
-export function validatePlanFrontmatter(fm) {
+// opts.agentNames (M2/WI13): policy agents-section name list. When provided,
+// an `agent:` value must hit the list (02 §4.9 "plan 级引用只能用已定义名");
+// when omitted the check is skipped — M1 behavior preserved (deployments
+// without a policy degrade to skip + the caller notes it).
+export function validatePlanFrontmatter(fm, opts = {}) {
   const errors = [];
   if (!isPlainObject(fm)) return { ok: false, errors: ["frontmatter must be a plain object"] };
   pushUnknownFieldErrors(fm, PLAN_FRONTMATTER_FIELDS, errors);
@@ -196,6 +200,10 @@ export function validatePlanFrontmatter(fm) {
     const v = fm.agent;
     if (typeof v !== "string" || !AGENT_NAME_RE.test(v)) {
       errors.push(`"agent" must be an agent-name string (got ${JSON.stringify(v)}); policy-list membership is an M2 check`);
+    } else if (Array.isArray(opts.agentNames) && !opts.agentNames.includes(v)) {
+      errors.push(
+        `"agent" ${JSON.stringify(v)} is not defined in the autonomy policy agents section (known: ${opts.agentNames.join(", ")})`,
+      );
     }
   }
   const held = status === "held";

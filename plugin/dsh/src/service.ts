@@ -30,6 +30,11 @@
  *   - tools/pre-execute plan-status reinforcement gate — LANDED (M3-WI13,
  *     plan `2026-08-23-1852-3`): denies plan-status `completed` edits
  *     without run-state closure evidence (see ./plan-status-gate.ts).
+ *   - tools/pre-execute law gate — LANDED (age-autonomy M2-WI12, plan
+ *     `docs/plans/age-autonomy/2026-08-25-0815-1`): observe-only
+ *     policy-driven evaluate via the bundled law kernel, recording to the
+ *     observation-log face (see ./law/host-adapter.ts; evidence-face
+ *     rebuild/retirement of the plan-status gate is age-autonomy WI22).
  *
  * Exposure surface (plan Phase 1 Decision 1, better-sidebar precedent):
  * the wire-method record lives in `./mdcontrol-routes.ts`; this service
@@ -48,6 +53,7 @@ import {
 } from './mdcontrol-routes.ts'
 import { registerMissionControlSkills, type SkillsRegistryFace } from './mdcontrol-skills.ts'
 import { gateMountSummary, registerPlanStatusGate } from './plan-status-gate.ts'
+import { lawGateMountSummary, registerLawGate } from './law/host-adapter.ts'
 
 /** Plugin config row from cordis.patch.yml (`assetsDir: ./assets` today). */
 export interface MissionControlConfig {
@@ -106,13 +112,21 @@ export function apply(ctx: Context, config: MissionControlConfig = {}): void {
   const disposeGate = registerPlanStatusGate(ctx, logger)
   ctx.effect(() => disposeGate, 'mdcontrol: tools/pre-execute plan-status gate')
 
+  // age-autonomy M2-WI12 (plan 0815-1 Phase 3): policy-driven law gate —
+  // observe-only evaluate via the bundled law kernel, recording to the
+  // observation-log face. Independent listener + disposer beside the
+  // plan-status gate (no shared mutable state).
+  const disposeLawGate = registerLawGate(ctx, logger)
+  ctx.effect(() => disposeLawGate, 'mdcontrol: tools/pre-execute law gate')
+
   ctx.logger(LOGGER_NAME).info('mission-control mounted', {
     scope: 'mdcontrol',
-    phase: 'M3-WI13',
+    phase: 'M3-WI13 + M2-WI12(law)',
     assetsDir: config.assetsDir ?? './assets',
     routes: 'run/status/list (M2-WI10) + draft/analyze (M3-WI12)',
     skills: 'mission-control-run/draft/analyze (M3-WI12)',
     planStatusGate: gateMountSummary(),
+    lawGate: lawGateMountSummary(),
     httpDispatcher: disposeHttp ? '/mdcontrol/api' : 'absent (webServer not provided)',
     guard: 'single-engine-activity-per-projectRoot, run+draft shared slot (1447-1 + 1852-2 adjudications)',
   })

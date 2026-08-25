@@ -77,6 +77,9 @@ export function validateMission(mission, projectRoot) {
       ["contextDir", mission.contextDir],
       ["moduleDir", mission.moduleDir],
       ["promptsDir", mission.promptsDir],
+      // M2/WI13: optional autonomyPolicy joins the set-if-present existence
+      // family (typo fail-fast, same as contextDir/moduleDir/promptsDir).
+      ["autonomyPolicy", mission.autonomyPolicy],
     ]) {
       if (val && !existsSync(resolve(projectRoot, val))) {
         errors.push(`${field} does not exist: ${val}`);

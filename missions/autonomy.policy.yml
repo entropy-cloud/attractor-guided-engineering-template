@@ -1,0 +1,63 @@
+# AGE autonomy policy — the single declarative law file (02-rule-law §3).
+# Mission: age-autonomy-implementation (paths resolve per mission context:
+# {{plansDir}} / {{roadmapPath}}; this file is law data — changes only through
+# a plan's Add item, never ad-hoc edits; P8 self-protection is WI21 scope).
+#
+# limits precedence: policy is authoritative, mission config (engine
+# flow.maxAuditRounds) is the fallback — one authority + one fallback per
+# constraint. maxAuditRounds here matches flows/mission-driver.json (3) so the
+# two channels agree until consumers switch (M2/M3 plans). maxFailures is
+# schema-reserved; default semantics land with M3/WI27.
+version: 1
+limits:
+  maxAuditRounds: 3
+  maxFailures: 3
+gates:
+  # Seed rule only (0815-1). N=2/N=3 plans append the three hard gates and
+  # supporting gates here; per-gate mode flips to enforce carry their own
+  # authorization in those plans (02 §6: observe-first discipline).
+  - id: plan-structure
+    match: "{{plansDir}}/**/*.md"
+    rule: plan-structure
+    mode: observe
+triggers:
+  # Execution semantics belong to M3/WI26 — schema-pinned syntax only.
+  - when: "plan.full-tick and mechanical-verification-missing"
+    dispatch: mechanical-verification
+  - when: "plan.full-tick and mechanical-verification-pass and closure-receipt-missing"
+    dispatch: closure-audit
+  - when: "plan.status=draft and review-dispatch-missing"
+    dispatch: plan-review
+  - when: "plan.status=active and claim-expired"
+    action: reclaim-claim
+  - when: "terminal-claim=nothing-to-draft and draftPlans()==0 and activePlans()==0"
+    dispatch: deep-audit
+  - when: "deep-audit.accepted-findings=items"
+    dispatch: draft-plans
+  - when: "deep-audit.accepted-findings=none and draftPlans()==0 and activePlans()==0 and roadmap.unchecked"
+    terminal: partial/blocked
+agents:
+  drafter:
+    mode: pooled
+    poolKey: "drafter:{projectRoot}"
+    idleTtlMinutes: 30
+    rotateEvery: 8
+    model: { provider: zhipuai, model: glm-5.2, reasoningEffort: default }
+  reviewer:
+    mode: fresh
+    model: { provider: zhipuai, model: glm-5.2, reasoningEffort: default }
+  auditor:
+    mode: fresh
+    model: { provider: zhipuai, model: glm-5.2, reasoningEffort: high }
+    requireDistinctModel: true
+  executor:
+    mode: pooled
+    poolKey: "executor:{projectRoot}"
+    model: { provider: zhipuai, model: glm-5.2, reasoningEffort: default }
+dispatch:
+  plan-review: reviewer
+  closure-audit: auditor
+  deep-audit: auditor
+  mechanical-verification: executor
+  execute: executor
+  draft-plans: drafter

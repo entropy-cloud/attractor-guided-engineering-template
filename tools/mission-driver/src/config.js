@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node
 import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadMission } from "./mission-check.mjs";
+import { loadPolicyFile, policyAgentNames } from "./law-policy.mjs";
 
 // Engine root (parent of src/). Locates driver assets (e.g. the pi persona)
 // relative to the running engine, so paths resolve for both this repo and
@@ -706,6 +707,27 @@ export function resolveConfig(args = {}) {
     ? resolve(projectRoot, mission.promptsDir)
     : "";
 
+  // M2/WI13 (0815-1): autonomyPolicy joins the mission config face. Resolve
+  // the path (existence is mission-check's job) and load+validate eagerly —
+  // a broken policy must fail the run fast, not first-gate. The parsed policy
+  // (with its agents name list) is a runtime parameter for gate consumers
+  // (DSH adapter / gate-check CLI); {{plansDir}}/{{roadmapPath}} placeholders
+  // resolve per event from this mission's plansDir/roadmapPath.
+  let autonomyPolicyPath = "";
+  let autonomyPolicy = null;
+  if (mission.autonomyPolicy) {
+    autonomyPolicyPath = resolve(projectRoot, mission.autonomyPolicy);
+    const loaded = loadPolicyFile(autonomyPolicyPath);
+    if (!loaded.ok) {
+      throw new Error(
+        `Invalid autonomy policy '${autonomyPolicyPath}':\n  ${loaded.errors.join("\n  ")}`
+      );
+    }
+    autonomyPolicy = loaded.policy;
+    const agentNames = policyAgentNames(autonomyPolicy);
+    autonomyPolicy = { ...autonomyPolicy, _agentNames: agentNames };
+  }
+
   // Inject mission.env into process.env (never overwrite existing vars).
   // base.local.json is the right place for machine-local config (proxy etc.) not committed to git.
   loadBaseAndInjectEnv(missionsDir);
@@ -807,6 +829,8 @@ export function resolveConfig(args = {}) {
     missionName,
     mission,
     missionPromptsDir,
+    autonomyPolicyPath,
+    autonomyPolicy,
     runDir,
     timestamp,
     driver: resolvedDriver,

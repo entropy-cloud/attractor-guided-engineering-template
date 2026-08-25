@@ -73,6 +73,8 @@ sourcePaths（依赖模块源码路径，不同同事路径不同）
 
 **账本区块/派生库**（age-autonomy M1-WI3/WI5/WI6）：`src/ledger-sections.mjs`——计数域扫描（plan Phase/Closure Findings 区块 + roadmap Work Item 块，仅列 0 checkbox，代码围栏跳过）+ 内联审计区结构校验（dispatch/accepted/pass/评审结论行语法、尾部锚定 id 解析、`findings=none|items` 词法、append-only 已知前缀严格/未知行容忍）+ `computeBasisHash`/`deriveCompleted`（§5.2 五合取完成公式，reasons 逐项可解释）+ 扫描谓词族 `draftPlans/activePlans/heldPlans/closedPlans/openPlans/awaitingClosure`（可注入 `defaultVerifyKeys`）；契约 `docs/design/age-autonomy/01-file-ledger.md` §3.2/§3.3/§4.2/§4.4/§5.2，build-bundle 同通道登记（0635-3 接线前 unreachable-allowed 属预期）。
 
+**法律内核**（age-autonomy M2-WI12/WI13，plan `docs/plans/age-autonomy/2026-08-25-0815-1`）：`src/law-core.mjs`——proposedAction 契约（七 type 枚举 + baseHash CAS 尽力比对 + actor 缺省结构子集）+ 规则注册表（rule id → 纯函数）+ `evaluateGates`（policy gates 按 match 域分派，observe/enforce 姿态，per-rule fail-open）+ 种子规则 `plan-structure`（写入后仍是合法 plan 账本；legacy 格式域外放行）；`src/law-policy.mjs`——受限 YAML 子集解析 + `missions/autonomy.policy.yml` schema 校验（version/limits/gates/triggers/agents/dispatch、fixedPrefix 块、agent 名交叉校验、trigger 谓词受限语法）。落点裁定 = 引擎侧零 npm 模块（0635-1 共享库裁定沿用到 law），可达链 config.js→law-policy→law-core（autonomyPolicy fail-fast 加载），build-bundle 登记；插件宿主适配层 `plugin/dsh/src/law/host-adapter.ts`（actor 解析 + 观察 JSONL + pre-execute 注册，observe-only）；纯校验 CLI `src/gate-check.mjs`（`--policy` 校验 / 单文件结构面，非 bundle 面）。mission 字段 `autonomyPolicy` 可选、设置即经 mission-check 校验存在。
+
 ## Monitor Dashboard 前端
 
 **技术栈**: Vue 3 + Naive UI 2 + TypeScript + Vite + xterm.js + Pinia（资源监控用 Naive UI 表格，ECharts 已移除）

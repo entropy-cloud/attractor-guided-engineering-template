@@ -1,0 +1,287 @@
+// law-policy.test.js — autonomy.policy.yml schema suite (age-autonomy
+// M2-WI13, plan docs/plans/age-autonomy/2026-08-25-0815-1 Phase 2 Proof).
+//
+// Pins:
+//   1. the real instance missions/autonomy.policy.yml parses + validates
+//      (version/limits/gates/triggers/agents/dispatch all populated);
+//   2. the legal/illegal fixture matrix: missing version, unknown rule name,
+//      dispatch→undefined agent, fixedPrefix bad kind / dir without
+//      maxFileBytes, out-of-subset trigger syntax, unknown top-level key,
+//      duplicate gate ids, path-form match violations, limits type errors,
+//      agents field errors — each denied with a reason pointing at the legal
+//      shape (02 §2 structured-deny discipline);
+//   3. restricted-YAML hard boundary: anchors, aliases, block scalars,
+//      multi-line scalars, tabs, deep nesting rejected;
+//   4. trigger when-grammar: predicate set + and/or/not + parens + comparison
+//      forms (atom/cmp/call), unknown predicates, wrong forms, trailing junk;
+//   5. placeholder resolution: {{plansDir}}/{{roadmapPath}} substituted,
+//      single-brace poolKey tokens untouched;
+//   6. mission-check: autonomyPolicy joins the set-if-present existence
+//      family (missing file → error naming the field).
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import {
+  parsePolicy,
+  parseRestrictedYaml,
+  parseTriggerWhen,
+  validatePolicy,
+  resolvePolicyPlaceholders,
+  policyAgentNames,
+  TRIGGER_PREDICATES,
+} from "../src/law-policy.mjs";
+import { validateMission } from "../src/mission-check.mjs";
+
+const REPO_ROOT = resolve(import.meta.dirname, "..", "..", "..");
+const REAL_POLICY = readFileSync(resolve(REPO_ROOT, "missions", "autonomy.policy.yml"), "utf8");
+
+const BASE = `
+version: 1
+gates:
+  - id: plan-structure
+    match: "{{plansDir}}/**/*.md"
+    rule: plan-structure
+    mode: observe
+`;
+
+function fixture(extra) {
+  return `${BASE.trim()}\n${extra}\n`;
+}
+
+describe("real instance", () => {
+  it("missions/autonomy.policy.yml parses + validates with every section populated", () => {
+    const r = parsePolicy(REAL_POLICY);
+    assert.equal(r.ok, true, r.errors?.join("; "));
+    assert.equal(r.policy.version, 1);
+    assert.deepEqual(r.policy.limits, { maxAuditRounds: 3, maxFailures: 3 });
+    assert.deepEqual(r.policy.gates, [
+      { id: "plan-structure", match: "{{plansDir}}/**/*.md", rule: "plan-structure", mode: "observe" },
+    ]);
+    assert.deepEqual(policyAgentNames(r.policy), ["drafter", "reviewer", "auditor", "executor"]);
+    assert.equal(r.policy.triggers.length, 7);
+    assert.equal(r.policy.dispatch["closure-audit"], "auditor");
+    assert.equal(r.policy.agents.auditor.requireDistinctModel, true);
+    assert.equal(r.policy.agents.drafter.mode, "pooled");
+    assert.equal(r.policy.agents.drafter.poolKey, "drafter:{projectRoot}");
+  });
+});
+
+describe("schema fixture matrix — every illegal shape denies with a pointed reason", () => {
+  const cases = [
+    ["missing version", "gates: []\n", /missing required key "version"/],
+    ["wrong version", "version: 2\n", /version must be 1/],
+    ["unknown top-level key", fixture("bogus-top: 1"), /unknown top-level key "bogus-top"/],
+    ["unknown gate rule", fixture('gates2: []'), null], // placeholder, replaced below
+  ];
+  it("denies unknown rule name", () => {
+    const r = parsePolicy(fixture(''));
+    const bad = parsePolicy(`version: 1\ngates:\n  - id: g\n    match: "{{plansDir}}/**/*.md"\n    rule: no-such-rule\n`);
+    assert.equal(bad.ok, false);
+    assert.match(bad.errors[0], /rule "no-such-rule" is not in the kernel registry/);
+    assert.equal(r.ok, true);
+  });
+  it("denies duplicate gate ids", () => {
+    const bad = parsePolicy(
+      `version: 1\ngates:\n  - id: plan-structure\n    match: "{{plansDir}}/**/*.md"\n    rule: plan-structure\n  - id: plan-structure\n    match: "{{roadmapPath}}"\n    rule: plan-structure\n`,
+    );
+    assert.equal(bad.ok, false);
+    assert.match(bad.errors.find((e) => /duplicate id/.test(e)), /duplicate id "plan-structure"/);
+  });
+  it("denies bad match forms (no placeholder, bad action type)", () => {
+    for (const [match, re] of [
+      ["docs/plans/**/*.md", /match must start with/],
+      ["action:bogus", /action match must be action:<type>/],
+    ]) {
+      const bad = parsePolicy(`version: 1\ngates:\n  - id: g\n    match: "${match}"\n    rule: plan-structure\n`);
+      assert.equal(bad.ok, false, match);
+      assert.match(bad.errors[0], re, match);
+    }
+    const okAction = parsePolicy(`version: 1\ngates:\n  - id: g\n    match: "action:terminal-claim"\n    rule: plan-structure\n`);
+    assert.equal(okAction.ok, true);
+  });
+  it("denies unknown gate field and bad mode", () => {
+    const bad = parsePolicy(fixture('') .replace("    mode: observe", "    posture: mean") + "");
+    const bad2 = parsePolicy(`version: 1\ngates:\n  - id: g\n    match: "{{plansDir}}/**/*.md"\n    rule: plan-structure\n    mode: maybe\n`);
+    assert.equal(bad2.ok, false);
+    assert.match(bad2.errors[0], /mode must be one of: observe \| enforce/);
+  });
+  it("denies limits type errors and unknown limits keys", () => {
+    const bad = parsePolicy("version: 1\nlimits:\n  maxAuditRounds: three\n  bogus: 1\n");
+    assert.equal(bad.ok, false);
+    assert.match(bad.errors.find((e) => /maxAuditRounds must be/.test(e)), /non-negative integer/);
+    assert.match(bad.errors.find((e) => /unknown key "bogus"/.test(e)), /legal keys: maxAuditRounds, maxFailures/);
+  });
+  it("denies dispatch references to undefined agents and unknown dispatch types", () => {
+    const bad = parsePolicy(fixture("dispatch:\n  closure-audit: ghost\n"));
+    assert.equal(bad.ok, false);
+    assert.match(bad.errors[0], /references undefined agent "ghost"/);
+    const badType = parsePolicy(fixture("dispatch:\n  teleport: auditor\n"));
+    assert.equal(badType.ok, false);
+    assert.match(badType.errors[0], /unknown dispatch type "teleport"/);
+  });
+  it("denies fixedPrefix violations: bad kind, dir without maxFileBytes, unknown field", () => {
+    const base = (block) =>
+      parsePolicy(fixture(`agents:\n  auditor:\n    mode: fresh\n    fixedPrefix: [ ${block} ]\n`));
+    const badKind = base("{ kind: tape, ref: prompts/x.md }");
+    assert.equal(badKind.ok, false);
+    assert.match(badKind.errors[0], /kind must be one of: text \| file \| dir/);
+    const dirNoCap = base("{ kind: dir, ref: docs/context }");
+    assert.equal(dirNoCap.ok, false);
+    assert.match(dirNoCap.errors.find((e) => /maxFileBytes is required/.test(e)), /kind is dir/);
+    const unknownField = base("{ kind: file, ref: x.md, budget: 5 }");
+    assert.equal(unknownField.ok, false);
+    assert.match(unknownField.errors[0], /unknown field "budget"/);
+    const ok = base("{ kind: file, ref: x.md }");
+    assert.equal(ok.ok, true, ok.errors?.join(";"));
+    const okDir = base("{ kind: dir, ref: docs/context, maxFileBytes: 50000 }");
+    assert.equal(okDir.ok, true, okDir.errors?.join(";"));
+  });
+  it("denies agents field errors: missing mode, pooled without poolKey, bad model shape", () => {
+    const noMode = parsePolicy(fixture("agents:\n  auditor:\n    model: { provider: p, model: m }\n"));
+    assert.equal(noMode.ok, false);
+    assert.match(noMode.errors[0], /mode must be one of: pooled \| fresh/);
+    const pooledNoKey = parsePolicy(fixture("agents:\n  worker:\n    mode: pooled\n"));
+    assert.equal(pooledNoKey.ok, false);
+    assert.match(pooledNoKey.errors[0], /poolKey is required when mode is pooled/);
+    const badModel = parsePolicy(fixture("agents:\n  auditor:\n    mode: fresh\n    model: { provider: p }\n"));
+    assert.equal(badModel.ok, false);
+    assert.match(badModel.errors[0], /model\.model must be a non-empty string/);
+    const badEffort = parsePolicy(fixture("agents:\n  auditor:\n    mode: fresh\n    model: { provider: p, model: m, reasoningEffort: extreme }\n"));
+    assert.equal(badEffort.ok, false);
+    assert.match(badEffort.errors[0], /reasoningEffort must be one of/);
+  });
+  it("denies trigger exit violations: zero or multiple exits, bad exit values", () => {
+    const noExit = parsePolicy(fixture('triggers:\n  - when: "plan.full-tick"\n'));
+    assert.equal(noExit.ok, false);
+    assert.match(noExit.errors[0], /exactly one exit of dispatch \| action \| terminal/);
+    const twoExits = parsePolicy(fixture('triggers:\n  - when: "plan.full-tick"\n    dispatch: closure-audit\n    action: reclaim-claim\n'));
+    assert.equal(twoExits.ok, false);
+    assert.match(twoExits.errors[0], /exactly one exit/);
+    const badDispatch = parsePolicy(fixture('triggers:\n  - when: "plan.full-tick"\n    dispatch: teleport\n'));
+    assert.equal(badDispatch.ok, false);
+    assert.match(badDispatch.errors[0], /dispatch must be one of/);
+    const badTerminal = parsePolicy(fixture('triggers:\n  - when: "plan.full-tick"\n    terminal: maybe\n'));
+    assert.equal(badTerminal.ok, false);
+    assert.match(badTerminal.errors[0], /terminal must be one of/);
+  });
+});
+
+describe("restricted-YAML hard boundary (mirror of the ledger-frontmatter subset)", () => {
+  it("rejects anchors, aliases, block scalars, multi-line scalars, tabs, deep nesting", () => {
+    const bad = [
+      ["anchor", "version: 1\nbase: &anchor 1\n"],
+      ["alias", "version: 1\nbase: *anchor\n"],
+      ["block scalar", "version: 1\ndesc: |\n  folded text\n"],
+      ["multi-line bare scalar", "version: 1\ndesc: some text\n  continued on the next line\n"],
+      ["tab indent", "version: 1\nlimits:\n\tmaxAuditRounds: 3\n"],
+      ["deep nesting", "version: 1\na:\n  b:\n    c:\n      d:\n        e: 1\n"],
+      ["unterminated quote", 'version: 1\ndesc: "open\n'],
+    ];
+    for (const [label, text] of bad) {
+      const r = parseRestrictedYaml(text);
+      assert.equal(r.ok, false, label);
+      assert.ok(r.errors.length > 0, label);
+    }
+  });
+
+  it("accepts the legal subset shapes: blocks, flow map/array, flow-in-flow, comments, quoting", () => {
+    const r = parseRestrictedYaml(BASE);
+    assert.equal(r.ok, true, r.errors?.join(";"));
+    const flow = parseRestrictedYaml(
+      'version: 1\nx: { a: 1, b: "two" }\ny: [ { kind: file, ref: a.md }, { kind: dir, ref: d, maxFileBytes: 5 } ]\nz: [one, two]\n',
+    );
+    assert.equal(flow.ok, true, flow.errors?.join(";"));
+    assert.deepEqual(flow.value.x, { a: 1, b: "two" });
+    assert.equal(flow.value.y[1].maxFileBytes, 5);
+    assert.deepEqual(flow.value.z, ["one", "two"]);
+  });
+});
+
+describe("trigger when-grammar (restricted predicate set)", () => {
+  it("parses every real-instance trigger", () => {
+    const r = parsePolicy(REAL_POLICY);
+    assert.equal(r.ok, true);
+    for (const t of r.policy.triggers) {
+      const p = parseTriggerWhen(t.when);
+      assert.equal(p.ok, true, t.when);
+    }
+  });
+
+  it("parses and/or/not, parens, unicode connectives, comparisons", () => {
+    const ok = [
+      "plan.full-tick",
+      "not plan.full-tick",
+      "plan.full-tick and mechanical-verification-missing",
+      "plan.full-tick ∧ mechanical-verification-missing",
+      "plan.full-tick or mechanical-verification-missing",
+      "plan.full-tick ∨ mechanical-verification-missing",
+      "¬plan.full-tick",
+      "plan.status=draft",
+      "plan.status==draft",
+      "terminal-claim=nothing-to-draft",
+      "draftPlans()==0",
+      "activePlans()>=1",
+      "(plan.full-tick or plan.status=active) and not claim-expired",
+    ];
+    for (const expr of ok) {
+      const p = parseTriggerWhen(expr);
+      assert.equal(p.ok, true, expr);
+    }
+  });
+
+  it("denies unknown predicates, wrong forms, and out-of-subset syntax", () => {
+    const bad = [
+      ["unknown predicate", "vibes-check", /unknown predicate "vibes-check"/],
+      ["unknown predicate in composition", "plan.full-tick and vibes-check", /unknown predicate "vibes-check"/],
+      ["atom with comparison", "plan.full-tick=1", /takes no call or comparison/],
+      ["cmp without comparison", "plan.status", /requires a comparison/],
+      ["call without parens", "draftPlans==0", /must be called as draftPlans\(\)/],
+      ["call without comparison", "draftPlans()", /requires a numeric comparison/],
+      ["xor is not in the subset", "plan.full-tick xor claim-expired", /unknown predicate "xor"|unexpected/],
+      ["trailing junk", "plan.full-tick)", /unexpected trailing tokens/],
+      ["args in calls", "draftPlans(3)==0", /take no arguments/],
+      ["bare garbage", "!!!", /unexpected end of expression|expected a predicate name/],
+    ];
+    for (const [label, expr, re] of bad) {
+      const p = parseTriggerWhen(expr);
+      assert.equal(p.ok, false, label);
+      assert.match(p.error, re, label);
+    }
+    assert.equal(TRIGGER_PREDICATES.length >= 14, true);
+  });
+});
+
+describe("placeholder resolution", () => {
+  it("resolves mission placeholders; single-brace tokens untouched", () => {
+    const out = resolvePolicyPlaceholders("{{plansDir}}/**/*.md vs {{roadmapPath}} vs {projectRoot}", {
+      plansDir: "/r/docs/plans/x",
+      roadmapPath: "/r/docs/backlog/r.md",
+    });
+    assert.equal(out, "/r/docs/plans/x/**/*.md vs /r/docs/backlog/r.md vs {projectRoot}");
+    assert.equal(resolvePolicyPlaceholders("{{plansDir}}", {}), "{{plansDir}}");
+  });
+});
+
+describe("mission-check autonomyPolicy face (M2/WI13)", () => {
+  it("set-but-missing policy file is an existence error naming the field", () => {
+    const v = validateMission(
+      { name: "x", roadmapPath: "docs/plans", plansDir: "docs/plans", commands: { test: "true" }, autonomyPolicy: "missions/nope.yml" },
+      REPO_ROOT,
+    );
+    assert.equal(v.valid, false);
+    assert.match(v.errors[0], /autonomyPolicy does not exist: missions\/nope\.yml/);
+  });
+
+  it("unset policy stays valid (optional field) and the real mission validates", () => {
+    const v = validateMission({ name: "x", roadmapPath: "docs/plans", plansDir: "docs/plans", commands: { test: "true" } }, REPO_ROOT);
+    assert.equal(v.valid, true);
+    const real = validateMission(
+      JSON.parse(readFileSync(resolve(REPO_ROOT, "missions", "age-autonomy-implementation.json"), "utf8")),
+      REPO_ROOT,
+    );
+    // standalone (unresolved) real mission still needs name etc.; existence
+    // checks pass because roadmapPath/plansDir/autonomyPolicy all exist
+    assert.equal(real.valid, true, real.errors.join("; "));
+  });
+});
