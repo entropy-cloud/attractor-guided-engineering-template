@@ -10,9 +10,11 @@ Write your audit receipt into `{{roadmapPath}}` (create the section at the end o
 2. Append two lines to `## Deep Audit Record` sharing one id (`<roadmap>` = roadmap filename stem without `.md`; generate a fresh 8-hex nonce):
 
 ```
-- dispatch audit #audit-<runId>-<roadmap>-<round>-<nonce8hex> to <your-session-id>
+- dispatch audit #audit-<runId>-<roadmap>-<round>-<nonce8hex> to <your-session-id> models={exec:<executing-agent-or-model>,aud:<auditing-agent-or-model>}
 - accepted #audit-<runId>-<roadmap>-<round>-<same-nonce8hex> findings=none|items：结论
 ```
+
+On the dispatch line, append the ` models={exec:…,aud:…}` lineage suffix (02-rule-law §4.1): `exec:` = the agent/model that executed the audited work, `aud:` = your own agent/model (identical pairs are the declared single-model downgrade — record them honestly, never omit the suffix's shape).
 
 `findings=none` when clean; `findings=items` when you found anything.
 

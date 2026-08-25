@@ -22,6 +22,9 @@ const WI_ID_RE = /\bWI(\d+)\b/;
 
 const ID_TOKEN = "#(?:review|audit)-[0-9A-Za-z_-]+";
 const DISPATCH_RE = new RegExp(`^- dispatch (review|audit) (${ID_TOKEN}) to (\\S+)`);
+// model lineage suffix (02-rule-law §4.1 G4): ` models={exec:<name>,aud:<name>}`
+// — optional, tail-parsed separately so the no-suffix line shape is unchanged.
+const DISPATCH_MODELS_RE = /^ models=\{exec:([^,}\s]+),aud:([^,}\s]+)\}$/;
 const ACCEPTED_RE = new RegExp(`^- accepted (${ID_TOKEN})\\s*(.*)$`);
 const PASS_RE = /^- pass ([A-Za-z][A-Za-z0-9:_-]*) (\S+) basisHash=([0-9a-f]{64}) exit=(\d+)\s*(.*)$/;
 const REVIEW_CONCLUSION_RE = new RegExp(
@@ -151,7 +154,7 @@ function scanRegistryLines(split, block, acceptedFindingsMode, errors) {
       }
       const id = parseLedgerId(m[2]);
       const kindMismatch = id !== null && id.kind !== m[1];
-      const valid = id !== null && !kindMismatch;
+      let valid = id !== null && !kindMismatch;
       if (!valid) {
         pushError(
           errors,
@@ -162,7 +165,24 @@ function scanRegistryLines(split, block, acceptedFindingsMode, errors) {
             : `invalid ledger id ${m[2]} — expected #<review|audit>-<runId>-<plan|roadmap>-<iter|round>-<nonce8 hex>`,
         );
       }
-      dispatches.push({ line: lineNo, kind: m[1], id: m[2], sessionId: m[3], valid });
+      // Tail field: a ` models=…` fragment must parse fully as the lineage
+      // pair (half-pairs and malformed shapes are rejected, not tolerated as
+      // prose — dispatch lines are strict-grammar lines).
+      const tail = line.slice(m[0].length);
+      let models = null;
+      const modelsM = tail.match(DISPATCH_MODELS_RE);
+      if (modelsM) {
+        models = { exec: modelsM[1], aud: modelsM[2] };
+      } else if (tail.startsWith(" models=")) {
+        valid = false;
+        pushError(
+          errors,
+          lineNo,
+          "malformed-dispatch",
+          "models= lineage suffix must be exactly ` models={exec:<name>,aud:<name>}` — half-pairs and malformed shapes are rejected",
+        );
+      }
+      dispatches.push({ line: lineNo, kind: m[1], id: m[2], sessionId: m[3], valid, ...(models ? { models } : {}) });
       continue;
     }
     if (line.startsWith("- accepted ")) {

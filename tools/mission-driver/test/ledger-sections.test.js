@@ -354,6 +354,67 @@ work-item: WI1
     assert.deepEqual(r.closure.pairs, []);
   });
 
+  it("models= lineage suffix: legal pair parses into the dispatch record; no-suffix lines unchanged", () => {
+    const withModels = scanPlanLedger(`---
+status: active
+mission: m
+work-item: WI1
+---
+# t
+
+## Phase 1
+
+- [x] item
+
+## Draft Review Record
+
+- dispatch review ${REVIEW_ID} to ses_reviewer_1 models={exec:glm-5.2,aud:glm-5.2-auditor}
+
+## Verification
+
+## Closure
+
+- dispatch audit ${AUDIT_ID} to ses_auditor_1 models={exec:agent-a,aud:agent-b}
+`);
+    assert.deepEqual(withModels.errors, []);
+    assert.deepEqual(withModels.draftReviewRecord.dispatches[0].models, { exec: "glm-5.2", aud: "glm-5.2-auditor" });
+    assert.deepEqual(withModels.closure.dispatches[0].models, { exec: "agent-a", aud: "agent-b" });
+    const without = scanPlanLedger(fullPlan());
+    assert.equal(without.closure.dispatches[0].models, undefined);
+    assert.equal(without.draftReviewRecord.dispatches[0].models, undefined);
+  });
+
+  it("models= lineage suffix: malformed and half-paired suffixes are structural errors, not tolerated prose", () => {
+    for (const [label, suffix] of [
+      ["half pair (aud missing)", " models={exec:only}"],
+      ["half pair (exec missing)", " models={aud:only}"],
+      ["no braces", " models=exec:a,aud:b"],
+      ["trailing comma slot", " models={exec:a,aud:}"],
+    ]) {
+      const r = scanPlanLedger(`---
+status: active
+mission: m
+work-item: WI1
+---
+# t
+
+## Phase 1
+
+- [x] item
+
+## Draft Review Record
+
+## Verification
+
+## Closure
+
+- dispatch audit ${AUDIT_ID} to ses_auditor_1${suffix}
+`);
+      assert.ok(r.errors.some((e) => e.code === "malformed-dispatch" && /models= lineage suffix/.test(e.message)), label);
+      assert.equal(r.closure.dispatches[0].valid, false, label);
+    }
+  });
+
   it("tolerates unknown-prefix prose lines in append-only sections (legacy migration corpus)", () => {
     const legacy = `---
 status: active

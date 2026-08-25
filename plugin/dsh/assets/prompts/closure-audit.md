@@ -64,11 +64,11 @@ The plan structure is valid. Now verify the SEMANTICS:
 If ALL checks pass, and the plan is **ledger format**, record your audit receipt (append-only, create the `## Closure` section after `## Verification` if absent) — two lines sharing one id:
 
 ```
-- dispatch audit #audit-<runId>-<plan-file-stem>-<round>-<nonce8hex> to <your-session-id>
+- dispatch audit #audit-<runId>-<plan-file-stem>-<round>-<nonce8hex> to <your-session-id> models={exec:<executing-agent-or-model>,aud:<auditing-agent-or-model>}
 - accepted #audit-<runId>-<plan-file-stem>-<round>-<same-nonce8hex>：审计结论与证据（一句结论 + 关键验证命令与结果）
 ```
 
-Generate a fresh 8-hex nonce; do NOT reuse ids from other plans or rounds. This receipt (with the BUILD_VERIFY step's `## Verification` pass lines) is what lets the engine derive `completed` — without it the plan can never close.
+Generate a fresh 8-hex nonce; do NOT reuse ids from other plans or rounds. On the dispatch line, append the ` models={exec:…,aud:…}` lineage suffix (02-rule-law §4.1): `exec:` = the agent/model that executed the plan, `aud:` = your own agent/model (names or provider/model from `missions/autonomy.policy.yml` `agents:`; identical pairs are the declared single-model downgrade — record them honestly, never omit the suffix's shape). This receipt (with the BUILD_VERIFY step's `## Verification` pass lines) is what lets the engine derive `completed` — without it the plan can never close.
 
 Then return results in the following format:
 ```

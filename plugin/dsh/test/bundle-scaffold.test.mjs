@@ -34,8 +34,9 @@ const ALLOWED_MODULES = [
   // plan-check / flow-loader / roadmap-check importers since 0635-3)
   "ledger-frontmatter.mjs", "ledger-sections.mjs", "ledger-dualread.mjs",
   // shared law kernel (age-autonomy M2-WI12; law-policy reachable via
-  // config.js autonomyPolicy load, law-core via law-policy)
-  "law-core.mjs", "law-policy.mjs",
+  // config.js autonomyPolicy load, law-core via law-policy, law-rules
+  // (M2-WI14..16 hard gates) via law-policy's registration import)
+  "law-core.mjs", "law-policy.mjs", "law-rules.mjs",
 ];
 
 test("package.json declares the verbatim dsh bundle manifest shape (R1 §5)", () => {

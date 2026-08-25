@@ -13,13 +13,34 @@ limits:
   maxAuditRounds: 3
   maxFailures: 3
 gates:
-  # Seed rule only (0815-1). N=2/N=3 plans append the three hard gates and
-  # supporting gates here; per-gate mode flips to enforce carry their own
-  # authorization in those plans (02 §6: observe-first discipline).
+  # Seed structural rule only (0815-1); the frontmatter-tightening enforce
+  # flip belongs to the M2 path-guard plan (WI21) — stays observe.
   - id: plan-structure
     match: "{{plansDir}}/**/*.md"
     rule: plan-structure
     mode: observe
+  # Three hard gates — direct enforce authorization (02 §6 exception clause:
+  # post-P0 hard gates skip the observe ramp; P0 = the M1 ledger migration
+  # closed with roadmap WI1–WI11 all ticked and 807 tests green). Decision
+  # recorded in docs/plans/age-autonomy/2026-08-25-0815-2 Phase 3. Gate order
+  # matters for deny-reason precedence: receipt binding denies (forged /
+  # misbound receipts) before the completion formula denies.
+  - id: closure-audit-binding
+    match: "{{plansDir}}/**/*.md"
+    rule: closure-audit-binding
+    mode: enforce
+  - id: roadmap-audit-binding
+    match: "{{roadmapPath}}"
+    rule: roadmap-audit-binding
+    mode: enforce
+  - id: writer-identity
+    match: "{{plansDir}}/**/*.md"
+    rule: writer-identity
+    mode: enforce
+  - id: plan-completed
+    match: "{{plansDir}}/**/*.md"
+    rule: plan-completed
+    mode: enforce
 triggers:
   # Execution semantics belong to M3/WI26 — schema-pinned syntax only.
   - when: "plan.full-tick and mechanical-verification-missing"
@@ -50,6 +71,11 @@ agents:
     mode: fresh
     model: { provider: zhipuai, model: glm-5.2, reasoningEffort: high }
     requireDistinctModel: true
+    # Explicit single-model deployment declaration (02 §4.9): this repo runs
+    # executor and auditor on the same provider/model pair; the distinct-model
+    # independence floor is consciously downgraded here instead of silently
+    # unsatisfied. Runtime dispatch-time enforcement = M3/WI26.
+    downgrade: single-model
   executor:
     mode: pooled
     poolKey: "executor:{projectRoot}"

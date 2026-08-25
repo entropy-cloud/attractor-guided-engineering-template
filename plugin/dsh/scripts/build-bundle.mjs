@@ -58,9 +58,11 @@ const ALLOWED_MODULES = [
   // shared law kernel (age-autonomy M2-WI12; 0815-1 ruling extends the 0635-1
   // engine-side placement to law): law-policy.mjs is reachable via config.js
   // (autonomyPolicy fail-fast load), law-core.mjs via law-policy (rule-name
-  // cross-validation). gate-check.mjs is deliberately NOT here — it is an
-  // engine-side CLI (main.js family), not a bundled library face.
-  "law-core.mjs", "law-policy.mjs",
+  // cross-validation). law-rules.mjs (M2-WI14..16 hard gates, 0815-2) is
+  // reachable via law-policy's side-effect rule registration import.
+  // gate-check.mjs is deliberately NOT here — it is an engine-side CLI
+  // (main.js family), not a bundled library face.
+  "law-core.mjs", "law-policy.mjs", "law-rules.mjs",
 ];
 
 // NOT bundled (packaging doc): monitor server, draft-job detached-process

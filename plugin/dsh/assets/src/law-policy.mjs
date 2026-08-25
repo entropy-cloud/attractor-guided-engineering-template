@@ -23,6 +23,11 @@
 
 import { readFileSync } from "node:fs";
 import { listRuleIds, PROPOSED_ACTION_TYPES } from "./law-core.mjs";
+// Side-effect import: registering the hard-gate rules (0815-2) into the
+// kernel registry BEFORE this module's validatePolicy() consults
+// listRuleIds() — every law-policy consumer (config.js fail-fast,
+// gate-check.mjs, the DSH host adapter) therefore sees the full rule set.
+import "./law-rules.mjs";
 
 export const POLICY_VERSION = 1;
 export const POLICY_TOP_LEVEL_FIELDS = ["version", "limits", "gates", "triggers", "agents", "dispatch"];
@@ -30,12 +35,13 @@ export const LIMITS_FIELDS = ["maxAuditRounds", "maxFailures"];
 export const GATE_FIELDS = ["id", "match", "rule", "mode"];
 export const GATE_MODES = ["observe", "enforce"];
 export const TRIGGER_FIELDS = ["when", "dispatch", "action", "terminal"];
-export const AGENT_DEF_FIELDS = ["mode", "poolKey", "idleTtlMinutes", "rotateEvery", "fixedPrefix", "model", "requireDistinctModel"];
+export const AGENT_DEF_FIELDS = ["mode", "poolKey", "idleTtlMinutes", "rotateEvery", "fixedPrefix", "model", "requireDistinctModel", "downgrade"];
 export const AGENT_MODES = ["pooled", "fresh"];
 export const FIXED_PREFIX_FIELDS = ["kind", "ref", "maxFileBytes"];
 export const FIXED_PREFIX_KINDS = ["text", "file", "dir"];
 export const MODEL_FIELDS = ["provider", "model", "reasoningEffort"];
 export const REASONING_EFFORTS = ["default", "minimal", "low", "medium", "high"];
+export const DOWNGRADE_VALUES = ["single-model"];
 export const DISPATCH_TYPES = ["plan-review", "closure-audit", "deep-audit", "mechanical-verification", "draft-plans", "execute"];
 export const TRIGGER_ACTION_NAMES = ["reclaim-claim"];
 export const TRIGGER_TERMINAL_VALUES = ["partial", "blocked", "partial/blocked"];
@@ -461,6 +467,47 @@ function checkPredicateVocabulary(node) {
   return null;
 }
 
+// ── requireDistinctModel static satisfiability (02 §4.9, check-policy face) ─
+
+/**
+ * Static satisfiability check for `requireDistinctModel: true` agents
+ * (age-autonomy M2-WI14): resolve the dispatch mapping
+ * (execute → executor; closure-audit / deep-audit → auditor) and compare the
+ * target agents' `model: {provider, model}` pairs — an auditor pinned to the
+ * SAME model pair as the executor is a validation error unless the deployment
+ * declares the explicit `downgrade: single-model` channel (never silent,
+ * 02 §4.9). Runtime dispatch-time enforcement of the ACTUAL bound model pair
+ * is M3/WI26 supervisor scope; its interface = the dispatch-line `models=`
+ * lineage data plus this same function reused at the dispatch point.
+ *
+ * @returns {string[]} validation errors ([] when satisfiable / degraded)
+ */
+export function checkDistinctModelSatisfiability(policy) {
+  const errors = [];
+  if (!isPlainObject(policy) || !isPlainObject(policy.agents) || !isPlainObject(policy.dispatch)) {
+    return errors;
+  }
+  const execTarget = policy.dispatch.execute;
+  if (typeof execTarget !== "string") return errors;
+  const execAgent = policy.agents[execTarget];
+  const execModel = isPlainObject(execAgent) ? execAgent.model : undefined;
+  if (!isPlainObject(execModel)) return errors;
+  for (const dtype of ["closure-audit", "deep-audit"]) {
+    const target = policy.dispatch[dtype];
+    if (typeof target !== "string") continue;
+    const agent = policy.agents[target];
+    if (!isPlainObject(agent) || agent.requireDistinctModel !== true) continue;
+    if (agent.downgrade === "single-model") continue;
+    if (!isPlainObject(agent.model)) continue;
+    if (agent.model.provider === execModel.provider && agent.model.model === execModel.model) {
+      errors.push(
+        `agents.${target}: requireDistinctModel is unsatisfiable — dispatch.${dtype} target model {provider: ${agent.model.provider}, model: ${agent.model.model}} equals dispatch.execute target "${execTarget}" model; change the auditor model or declare the explicit "downgrade: single-model" channel (02 §4.9)`,
+      );
+    }
+  }
+  return errors;
+}
+
 // ── schema validation ───────────────────────────────────────────────────────
 
 function isPlainObject(v) {
@@ -637,6 +684,13 @@ export function validatePolicy(policy, opts = {}) {
         if (def.requireDistinctModel !== undefined && typeof def.requireDistinctModel !== "boolean") {
           errors.push(`agents.${name}.requireDistinctModel must be a boolean`);
         }
+        if (def.downgrade !== undefined) {
+          if (!DOWNGRADE_VALUES.includes(def.downgrade)) {
+            errors.push(`agents.${name}.downgrade must be one of: ${DOWNGRADE_VALUES.join(" | ")} (got ${JSON.stringify(def.downgrade)}) — the explicit single-model degradation channel, 02 §4.9`);
+          } else if (def.requireDistinctModel !== true) {
+            errors.push(`agents.${name}.downgrade is only meaningful together with requireDistinctModel: true`);
+          }
+        }
         if (def.fixedPrefix !== undefined) {
           if (!Array.isArray(def.fixedPrefix)) {
             errors.push(`agents.${name}.fixedPrefix must be an array of { kind, ref, maxFileBytes? } blocks`);
@@ -698,6 +752,8 @@ export function validatePolicy(policy, opts = {}) {
       }
     }
   }
+
+  errors.push(...checkDistinctModelSatisfiability(policy));
 
   return { ok: errors.length === 0, errors };
 }

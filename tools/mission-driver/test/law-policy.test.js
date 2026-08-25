@@ -57,13 +57,74 @@ describe("real instance", () => {
     assert.deepEqual(r.policy.limits, { maxAuditRounds: 3, maxFailures: 3 });
     assert.deepEqual(r.policy.gates, [
       { id: "plan-structure", match: "{{plansDir}}/**/*.md", rule: "plan-structure", mode: "observe" },
+      { id: "closure-audit-binding", match: "{{plansDir}}/**/*.md", rule: "closure-audit-binding", mode: "enforce" },
+      { id: "roadmap-audit-binding", match: "{{roadmapPath}}", rule: "roadmap-audit-binding", mode: "enforce" },
+      { id: "writer-identity", match: "{{plansDir}}/**/*.md", rule: "writer-identity", mode: "enforce" },
+      { id: "plan-completed", match: "{{plansDir}}/**/*.md", rule: "plan-completed", mode: "enforce" },
     ]);
     assert.deepEqual(policyAgentNames(r.policy), ["drafter", "reviewer", "auditor", "executor"]);
     assert.equal(r.policy.triggers.length, 7);
     assert.equal(r.policy.dispatch["closure-audit"], "auditor");
     assert.equal(r.policy.agents.auditor.requireDistinctModel, true);
+    assert.equal(r.policy.agents.auditor.downgrade, "single-model");
     assert.equal(r.policy.agents.drafter.mode, "pooled");
     assert.equal(r.policy.agents.drafter.poolKey, "drafter:{projectRoot}");
+  });
+});
+
+describe("requireDistinctModel satisfiability (02 §4.9, M2-WI14)", () => {
+  const sameModelAgents = `
+agents:
+  executor:
+    mode: pooled
+    poolKey: "executor:{projectRoot}"
+    model: { provider: p, model: m, reasoningEffort: default }
+  auditor:
+    mode: fresh
+    model: { provider: p, model: m, reasoningEffort: high }
+    requireDistinctModel: true
+dispatch:
+  execute: executor
+  closure-audit: auditor
+  deep-audit: auditor
+`;
+  const distinctModelAgents = sameModelAgents.replace(
+    "model: { provider: p, model: m, reasoningEffort: high }",
+    "model: { provider: p2, model: m, reasoningEffort: high }",
+  );
+
+  it("executor/auditor sharing the model pair is a validation error pointing at the legal paths", () => {
+    const r = parsePolicy(fixture(sameModelAgents));
+    assert.equal(r.ok, false);
+    assert.match(r.errors.join(" | "), /agents\.auditor: requireDistinctModel is unsatisfiable/);
+    assert.match(r.errors.join(" | "), /downgrade: single-model/);
+  });
+
+  it("a distinct model pair passes; the explicit downgrade channel passes; downgrade without the flag is an error", () => {
+    assert.equal(parsePolicy(fixture(distinctModelAgents)).ok, true);
+    const downgraded = parsePolicy(
+      fixture(
+        sameModelAgents.replace("requireDistinctModel: true", "requireDistinctModel: true\n    downgrade: single-model"),
+      ),
+    );
+    assert.equal(downgraded.ok, true, downgraded.errors?.join("; "));
+    const orphan = parsePolicy(
+      fixture(
+        sameModelAgents
+          .replace("    requireDistinctModel: true", "")
+          .replace("  auditor:\n", "  auditor:\n    downgrade: single-model\n"),
+      ),
+    );
+    assert.equal(orphan.ok, false);
+    assert.match(orphan.errors.join(" | "), /downgrade is only meaningful together with requireDistinctModel: true/);
+  });
+
+  it("unknown downgrade values deny with the enum; missing execute mapping degrades to skip", () => {
+    const bad = parsePolicy(fixture(sameModelAgents.replace("requireDistinctModel: true", "requireDistinctModel: true\n    downgrade: whatever")));
+    assert.equal(bad.ok, false);
+    assert.match(bad.errors.join(" | "), /downgrade must be one of: single-model/);
+    const noExecute = parsePolicy(fixture(sameModelAgents.replace("  execute: executor\n", "")));
+    assert.equal(noExecute.ok, true, noExecute.errors?.join("; "));
   });
 });
 
