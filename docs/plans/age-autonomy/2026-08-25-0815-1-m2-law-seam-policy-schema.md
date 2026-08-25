@@ -129,5 +129,6 @@ Exit Criteria:
 ## Verification
 
 - 2026-08-25 执行期复核（过渡期写者裁定承袭 0635-3：`- pass` 行由引擎 BUILD_VERIFY 步骤按当次 basisHash 补写，此处记录执行面证据）：`pnpm --prefix tools/mission-driver test` 857 pass/0 fail（基线 816 + law-core 23 + law-policy 18；prompt-check OK）；`npm --prefix plugin/dsh test` 158 pass/0 fail（基线 133 + law-truth-table 25；closure 24/24、freshness 41 文件 content-equal、smoke-import ok、tsc --noEmit 干净）；`node tools/mission-driver/src/mission-check.mjs missions/age-autonomy-implementation.json .` exit 0；`node tools/mission-driver/src/gate-check.mjs --policy missions/autonomy.policy.yml` exit 0；`node tools/mission-driver/src/gate-check.mjs docs/plans/age-autonomy/2026-08-25-0635-1-m1-frontmatter-ledger-core.md` exit 0（legacy 域外放行）；`./verify-age.sh` L1+L2 GREEN；web typecheck/build 绿（web/src 无 diff，worktree 环境性 dist 哈希漂移已还原 committed 世代）；`git diff --stat tools/mission-driver/src/engine.js` 为空（保护面不变量成立）。
+- pass test 2026-08-25-205251-mission-driver basisHash=cc004e36a5debf8e1d9a5b000b8c0c013c512d2f6b300ab8454817746a14f953 exit=0
 
 ## Closure
