@@ -62,17 +62,17 @@ Skill: none
 - Item Types: `Decision | Add | Proof`
 - Prereqs: 0815-1 全部 Phase（注册表与 policy 加载在 Phase 1/2；gate-check CLI 单文件评估面是 Phase 3 交付——本 Phase 的 CLI 接线项消费之）
 
-- [ ] `Decision` **复合 work-item 标签语法钉住**（0815-3 Non-Goal 移交项）：合法形态 = `M<n>-WI<a>` 单项 或 `M<n>-WI<a>+WI<b>+...` 复合——首 token 携里程碑前缀，后续 token 裸 `WI<m>` 继承同里程碑；后续 token 显式重复 `M<n>-` 前缀的形态**接受**（等价展开，防语料分歧误杀）。每个展开后的 `M<n>-WI<m>` 必须命中 `scanRoadmapLedger` 注册表中里程碑 `M<n>` 的已登记 WI id。备选：强制每 token 全前缀——否决，frontmatter 语料 10 份（含本 plan）的后继 token 均为裸形态，会全量误杀。残险：里程碑号写错但 WI 号存在的跨里程碑错挂（如 `M3-WI21`）——由注册表的 (milestone, id) 二元组匹配消解，错挂即 deny。
-- [ ] `Add` 注册谓词 `workItemRegistered(label, roadmapScan)`（law 内核纯函数）：标签展开 + (milestone, WI id) 二元组对账，返回命中明细或 deny reason（含未命中 token 与注册表合法集提示，02 §2 结构化 deny 纪律）；接进 plan-structure 规则的校验链（0815-1 种子规则的增项：proposedContent frontmatter `work-item` 逐 token 对账 ctx 内 roadmap 扫描结果）。
-- [ ] `Add` gate-check CLI 面单文件评估携带注册对账结果（结构子集面：路径在 plansDir 域内的存量 plan 全量校验，输出 registered/missing 明细）；存量 frontmatter 语料 10 份（含本 plan，见 Current Baseline 清单）全过（live 对账断言）。
-- [ ] `Proof` 真值表：合法单项/复合/显式重复前缀；未知 WI 号、错挂里程碑、空展开、畸形分隔符（`WI12+`、`+WI12`）；roadmap 扫描结果注入的反例（注册表空/里程碑缺失时的 fail 行为）。命令：`node --test plugin/dsh/test/law-truth-table.test.mjs` + `pnpm --prefix tools/mission-driver test`。
+- [x] `Decision` **复合 work-item 标签语法钉住**（0815-3 Non-Goal 移交项）：合法形态 = `M<n>-WI<a>` 单项 或 `M<n>-WI<a>+WI<b>+...` 复合——首 token 携里程碑前缀，后续 token 裸 `WI<m>` 继承同里程碑；后续 token 显式重复 `M<n>-` 前缀的形态**接受**（等价展开，防语料分歧误杀）。每个展开后的 `M<n>-WI<m>` 必须命中 `scanRoadmapLedger` 注册表中里程碑 `M<n>` 的已登记 WI id。备选：强制每 token 全前缀——否决，frontmatter 语料 10 份（含本 plan）的后继 token 均为裸形态，会全量误杀。残险：里程碑号写错但 WI 号存在的跨里程碑错挂（如 `M3-WI21`）——由注册表的 (milestone, id) 二元组匹配消解，错挂即 deny。
+- [x] `Add` 注册谓词 `workItemRegistered(label, roadmapScan)`（law 内核纯函数）：标签展开 + (milestone, WI id) 二元组对账，返回命中明细或 deny reason（含未命中 token 与注册表合法集提示，02 §2 结构化 deny 纪律）；接进 plan-structure 规则的校验链（0815-1 种子规则的增项：proposedContent frontmatter `work-item` 逐 token 对账 ctx 内 roadmap 扫描结果）。
+- [x] `Add` gate-check CLI 面单文件评估携带注册对账结果（结构子集面：路径在 plansDir 域内的存量 plan 全量校验，输出 registered/missing 明细）；存量 frontmatter 语料 10 份（含本 plan，见 Current Baseline 清单）全过（live 对账断言）。
+- [x] `Proof` 真值表：合法单项/复合/显式重复前缀；未知 WI 号、错挂里程碑、空展开、畸形分隔符（`WI12+`、`+WI12`）；roadmap 扫描结果注入的反例（注册表空/里程碑缺失时的 fail 行为）。命令：`node --test plugin/dsh/test/law-truth-table.test.mjs` + `pnpm --prefix tools/mission-driver test`。
 
 Exit Criteria:
 
-- [ ] 存量 frontmatter 语料 10 份注册对账全 pass（`node tools/mission-driver/src/gate-check.mjs docs/plans/age-autonomy/<file>` 抽验 ≥3 份含复合标签）
-- [ ] 构造反例（未知 WI / 跨里程碑错挂）在写面与 CLI 面均 deny 且 reason 指向注册表
-- [ ] `pnpm --prefix tools/mission-driver test` + `npm --prefix plugin/dsh test` 全绿
-- [ ] `docs/logs/` 更新
+- [x] 存量 frontmatter 语料 10 份注册对账全 pass（`node tools/mission-driver/src/gate-check.mjs docs/plans/age-autonomy/<file>` 抽验 ≥3 份含复合标签）
+- [x] 构造反例（未知 WI / 跨里程碑错挂）在写面与 CLI 面均 deny 且 reason 指向注册表
+- [x] `pnpm --prefix tools/mission-driver test` + `npm --prefix plugin/dsh test` 全绿
+- [x] `docs/logs/` 更新
 
 ## Phase 2 — 路径护栏、one-mission-one-roadmap 与 roadmap 写回护栏
 
@@ -82,19 +82,19 @@ Skill: none
 - Item Types: `Decision | Add | Proof`
 - Prereqs: Phase 1（注册谓词是写回护栏「已登记」判定的输入）
 
-- [ ] `Decision` **plan 形文件的判定面**：path-guardrail 拦截目标 = 写入 `.md` 文件且 proposedContent 经 frontmatter 解析命中 plan 字段集特征（`status` + `mission` + `work-item` 三键齐备即视为 plan 形，宽松于全字段——非 plan 文档不会巧合三键齐备）。域 = 被动扫描 `missions/*.json` 的 plansDir 值 ∪ 各祖先默认 `docs/plans` 根（承袭 plan-status-gate `knownPlansRootsAt` 先例，malformed mission 贡献零根）。备选：拦一切含 YAML frontmatter 的 .md——否决，00-guide/00-roadmap-guide 等带 frontmatter 的非 plan 文档会被误杀。legacy `> Plan Status:` 形 plan 的域外写入不在本规则面（legacy 冻结收编归 N=2/WI22 裁定）。**残险（成文）**：跨 mission 弱化——域是全 mission plansDir 并集而非 per-mission 域，plan 形文件写入另一 mission 的 plansDir 不会被本规则拦（02 §4.7 字面是「mission 配置的 plansDir 域内」的 per-mission 强读法）；M2 采并集域是 passive-scan 先例下的最小实现，per-mission 强读法需要 proposedContent `mission` 字段与落盘域的交叉校验，误杀面（合法跨域引用）未经验证——列为后续收紧项（见 Deferred），CI 结构面兜底。
-- [ ] `Add` `path-guardrail` 规则：plan 形 .md 写入路径不在注册域内 → deny + reason 指向合法 plansDir 集域内写、域外不写。新建与改写同拦（proposedContent 判定对两者等价）。
-- [ ] `Add` one-mission-one-roadmap 校验（policy/mission 加载面，fail-fast）：扫描 missions/*.json 的 roadmapPath，同一 roadmap 被多 mission 声明 → 加载错误（结构化报错指明冲突 mission 名；01 :30 边界条契约）。本仓库现状合规（live 各 mission roadmapPath 互异），构造 fixture 钉住。
-- [ ] `Decision` **roadmap 写回护栏语义（字面 vs 实践裁定）**：允许 = 已注册 WI 行的勾选状态翻转 + 该行内追加证据注记（M1 以来回写实践，roadmap guide :66 AI 回写纪律的既成解释）；deny = 新增/删除 WI 行、改写 WI 行首的 WI id、增删改 milestone 标题行，除非 actor ∈ {engine, supervisor}（deep-audit findings=items 经引擎 DRAFT 步落新 WI 的合法路径——02 §2 role enum 内的合法角色；DSH 面 flow 步会话到 role 的映射依 0815-1 Phase 1 actor 裁定，映射不可得时该例外退化为 unverified-writer 注记）或已批准立项（active plan 声明 roadmapPath 为 Target）。备选 A：02 §4.7 字面「只能改 checkbox」——否决，证据指针追加是 roadmap guide 实践且 M1 全量回写依赖之，字面执行 = 全量误杀；备选 B：完全不拦 roadmap 结构变更——否决，注册表是 Phase 1 注册谓词的根基，根基可被随手改则注册校验空转。残险：WI 行内恶意改写非注记内容（如改 WI 描述文字）不在此拦——对账面归 CI 结构校验与 git 归因（A1 护栏强度，02 §2 成文漏杀面）。
-- [ ] `Add` `roadmap-write-guard` 规则：按上述裁定实现（proposedContent 与 currentFileState 的 WI 行集合比对：id 集合不变 ∧ 勾选只 [ ]→[x] ∧ 行内变更限定为尾部追加——首 token 前缀字节保持）。
-- [ ] `Proof` 真值表：path-guardrail（域内新建/改写 allow、域外 plan 形 deny、域外非 plan 形 .md allow、三键不齐备不拦）；roadmap-write-guard（勾选翻转 allow、行内证据追加 allow、新增 WI 行 engine actor allow / drafter actor deny、删行 deny、改 id deny、milestone 标题改写 deny）；roadmapPath 唯一性（合规 pass / 冲突 fixture fail-fast）。命令：`node --test plugin/dsh/test/law-truth-table.test.mjs`。
+- [x] `Decision` **plan 形文件的判定面**：path-guardrail 拦截目标 = 写入 `.md` 文件且 proposedContent 经 frontmatter 解析命中 plan 字段集特征（`status` + `mission` + `work-item` 三键齐备即视为 plan 形，宽松于全字段——非 plan 文档不会巧合三键齐备）。域 = 被动扫描 `missions/*.json` 的 plansDir 值 ∪ 各祖先默认 `docs/plans` 根（承袭 plan-status-gate `knownPlansRootsAt` 先例，malformed mission 贡献零根）。备选：拦一切含 YAML frontmatter 的 .md——否决，00-guide/00-roadmap-guide 等带 frontmatter 的非 plan 文档会被误杀。legacy `> Plan Status:` 形 plan 的域外写入不在本规则面（legacy 冻结收编归 N=2/WI22 裁定）。**残险（成文）**：跨 mission 弱化——域是全 mission plansDir 并集而非 per-mission 域，plan 形文件写入另一 mission 的 plansDir 不会被本规则拦（02 §4.7 字面是「mission 配置的 plansDir 域内」的 per-mission 强读法）；M2 采并集域是 passive-scan 先例下的最小实现，per-mission 强读法需要 proposedContent `mission` 字段与落盘域的交叉校验，误杀面（合法跨域引用）未经验证——列为后续收紧项（见 Deferred），CI 结构面兜底。
+- [x] `Add` `path-guardrail` 规则：plan 形 .md 写入路径不在注册域内 → deny + reason 指向合法 plansDir 集域内写、域外不写。新建与改写同拦（proposedContent 判定对两者等价）。
+- [x] `Add` one-mission-one-roadmap 校验（policy/mission 加载面，fail-fast）：扫描 missions/*.json 的 roadmapPath，同一 roadmap 被多 mission 声明 → 加载错误（结构化报错指明冲突 mission 名；01 :30 边界条契约）。本仓库现状合规（live 各 mission roadmapPath 互异），构造 fixture 钉住。
+- [x] `Decision` **roadmap 写回护栏语义（字面 vs 实践裁定）**：允许 = 已注册 WI 行的勾选状态翻转 + 该行内追加证据注记（M1 以来回写实践，roadmap guide :66 AI 回写纪律的既成解释）；deny = 新增/删除 WI 行、改写 WI 行首的 WI id、增删改 milestone 标题行，除非 actor ∈ {engine, supervisor}（deep-audit findings=items 经引擎 DRAFT 步落新 WI 的合法路径——02 §2 role enum 内的合法角色；DSH 面 flow 步会话到 role 的映射依 0815-1 Phase 1 actor 裁定，映射不可得时该例外退化为 unverified-writer 注记）或已批准立项（active plan 声明 roadmapPath 为 Target）。备选 A：02 §4.7 字面「只能改 checkbox」——否决，证据指针追加是 roadmap guide 实践且 M1 全量回写依赖之，字面执行 = 全量误杀；备选 B：完全不拦 roadmap 结构变更——否决，注册表是 Phase 1 注册谓词的根基，根基可被随手改则注册校验空转。残险：WI 行内恶意改写非注记内容（如改 WI 描述文字）不在此拦——对账面归 CI 结构校验与 git 归因（A1 护栏强度，02 §2 成文漏杀面）。
+- [x] `Add` `roadmap-write-guard` 规则：按上述裁定实现（proposedContent 与 currentFileState 的 WI 行集合比对：id 集合不变 ∧ 勾选只 [ ]→[x] ∧ 行内变更限定为尾部追加——首 token 前缀字节保持）。
+- [x] `Proof` 真值表：path-guardrail（域内新建/改写 allow、域外 plan 形 deny、域外非 plan 形 .md allow、三键不齐备不拦）；roadmap-write-guard（勾选翻转 allow、行内证据追加 allow、新增 WI 行 engine actor allow / drafter actor deny、删行 deny、改 id deny、milestone 标题改写 deny）；roadmapPath 唯一性（合规 pass / 冲突 fixture fail-fast）。命令：`node --test plugin/dsh/test/law-truth-table.test.mjs`。
 
 Exit Criteria:
 
-- [ ] 全部真值表用例判定正确，deny reason 指向合法路径
-- [ ] 本 roadmap 真实语料抽验：勾选翻转与证据注记追加两形态 allow（构造 fixture，不实际改 roadmap）
-- [ ] `pnpm --prefix tools/mission-driver test` + `npm --prefix plugin/dsh test` 全绿
-- [ ] `docs/logs/` 更新
+- [x] 全部真值表用例判定正确，deny reason 指向合法路径
+- [x] 本 roadmap 真实语料抽验：勾选翻转与证据注记追加两形态 allow（构造 fixture，不实际改 roadmap）
+- [x] `pnpm --prefix tools/mission-driver test` + `npm --prefix plugin/dsh test` 全绿
+- [x] `docs/logs/` 更新
 
 ## Phase 3 — P8 执法层自护、姿态裁定与回写
 
@@ -104,18 +104,18 @@ Skill: none
 - Item Types: `Decision | Add | Proof`
 - Prereqs: Phase 1/2（规则注册序）
 
-- [ ] `Decision` **P8 直接 enforce 授权与例外集字面钉住**：`law-self-protection` 注册即 `mode: enforce`——授权 = 02 §2 信任模型（P8 是唯一无条件对抗级，不走护栏降级）+ §4.7 字面；observe 爬坡对自护规则无意义（observe 期间被执法者可改执法者，爬坡本身就是漏洞窗口）。**例外集 = 02 §4.7 字面三支：人工（actor role = human）/ CI / 已批准立项——`engine` 不入例外集**：roadmap 与 02 §4.7 的例外字面均无 engine，且本批全部合法写入面（0815-1 的 policy Add、0950-2 的 law/policy 写入、本 plan 自身落地）均由「已批准立项」支覆盖（active plan 正文含目标路径字面），把 engine 加进例外只会无条件放宽对抗级面而无任何需求方——不加。「CI 支」的机器面映射：CI 无 actor（02 §2 结构子集），其合法性由部署面承载（CI runner 的写入不经 pre-execute 拦截面——与 hook/CI 接线后「CI 是唯一机器字段写者」的 M3 演进方向一致；同一边界等价地适用于人类经 git commit 而非 DSH 宿主的写入——02 §2 A1 裁定的成文漏杀面，非本规则独有）；结构子集面（gate-check CLI）对保护路径的判定 = 纯结构条件。「已批准立项」例外的机器面 = 存在 `status: active` 的 plan 其正文显式含目标路径字符串（Phase Targets 或 body；结构近似，M2 无守夜人下的唯一零新机制判据）。备选：例外的精确判据（plan Phase Targets 逐条解析）——列为执行期可收紧项，首版字符串包含即可（防过松：reason 记录命中的 plan 文件与行）。
-- [ ] `Add` `law-self-protection` 规则：保护路径集 = `plugin/dsh/src/law/**`、`missions/autonomy.policy.yml`、`tools/mission-driver/src/plan-check.mjs`、`tools/mission-driver/src/gate-check.mjs`（02 §4.7 字面，路径按 mission/projectRoot 上下文解析）。写入命中且不满足例外（actor role = human ∨ active-plan 引用）→ deny + reason 列出可援引的例外通道。结构子集面（无 actor）的判定分解：身份依赖例外（human）退化为 unverified-writer 注记不 deny 不冒充；**actor 无关条件保持可判**——保护路径 ∧ 无 active-plan 引用 → 结构面亦 deny（「已批准立项」支本身是结构事实，不依赖 actor）。**自指注意**：本规则自身落地的写入（law 内核新文件 + policy 增条目）由本 plan 的 active 状态构成「已批准立项」例外——规则的第一个合法消费者是它自己的宿主 plan。
-- [ ] `Add` 本批三规则（work-item 对账并入 plan-structure 增项 + path-guardrail + roadmap-write-guard + law-self-protection）注册进 `missions/autonomy.policy.yml`（姿态：path-guardrail/roadmap-write-guard/work-item 面 = enforce——窄域可判定事实，同 0815-3 Phase 1 四门禁裁定的①②③论证；law-self-protection = enforce，P8 授权）；CONTEXT.md 增护栏与自护行。
-- [ ] `Proof` 收口：真值表累计用例数与覆盖清单记录（向 WI24 ≥30 推进，gate 验收归 N=3）；P8 反例（executor 角色改 policy / 改 law 内核 / 改 gate-check.mjs → deny；援引 active plan fixture → allow；human actor → allow；engine role 改 policy → deny——例外集字面钉住的反向用例）；存量 corpus 无误杀（gate-check 对 docs/plans/age-autonomy/ 全量 + docs/plans/00-guide：本 plan 不改这些文件，评估面只读）。命令：`node --test plugin/dsh/test/law-truth-table.test.mjs` + `pnpm --prefix tools/mission-driver test` + `./verify-age.sh`。
-- [ ] `Add` 文档同步与回写：roadmap WI21 tick + 证据指针（规则模块 + truth-table 路径 + corpus 输出；**残项注记**：「已批准立项」例外判据为结构近似（active plan 引用字符串），精确化归 M3 守夜人统一落盘路径；02 §4.7 保护清单与 0815-1 law 内核放置裁定的字面错位指针——见 Deferred「law 内核 P8 覆盖缺口」，防 roadmap 侧丢线索）；`docs/logs/` 收口条目。
+- [x] `Decision` **P8 直接 enforce 授权与例外集字面钉住**：`law-self-protection` 注册即 `mode: enforce`——授权 = 02 §2 信任模型（P8 是唯一无条件对抗级，不走护栏降级）+ §4.7 字面；observe 爬坡对自护规则无意义（observe 期间被执法者可改执法者，爬坡本身就是漏洞窗口）。**例外集 = 02 §4.7 字面三支：人工（actor role = human）/ CI / 已批准立项——`engine` 不入例外集**：roadmap 与 02 §4.7 的例外字面均无 engine，且本批全部合法写入面（0815-1 的 policy Add、0950-2 的 law/policy 写入、本 plan 自身落地）均由「已批准立项」支覆盖（active plan 正文含目标路径字面），把 engine 加进例外只会无条件放宽对抗级面而无任何需求方——不加。「CI 支」的机器面映射：CI 无 actor（02 §2 结构子集），其合法性由部署面承载（CI runner 的写入不经 pre-execute 拦截面——与 hook/CI 接线后「CI 是唯一机器字段写者」的 M3 演进方向一致；同一边界等价地适用于人类经 git commit 而非 DSH 宿主的写入——02 §2 A1 裁定的成文漏杀面，非本规则独有）；结构子集面（gate-check CLI）对保护路径的判定 = 纯结构条件。「已批准立项」例外的机器面 = 存在 `status: active` 的 plan 其正文显式含目标路径字符串（Phase Targets 或 body；结构近似，M2 无守夜人下的唯一零新机制判据）。备选：例外的精确判据（plan Phase Targets 逐条解析）——列为执行期可收紧项，首版字符串包含即可（防过松：reason 记录命中的 plan 文件与行）。
+- [x] `Add` `law-self-protection` 规则：保护路径集 = `plugin/dsh/src/law/**`、`missions/autonomy.policy.yml`、`tools/mission-driver/src/plan-check.mjs`、`tools/mission-driver/src/gate-check.mjs`（02 §4.7 字面，路径按 mission/projectRoot 上下文解析）。写入命中且不满足例外（actor role = human ∨ active-plan 引用）→ deny + reason 列出可援引的例外通道。结构子集面（无 actor）的判定分解：身份依赖例外（human）退化为 unverified-writer 注记不 deny 不冒充；**actor 无关条件保持可判**——保护路径 ∧ 无 active-plan 引用 → 结构面亦 deny（「已批准立项」支本身是结构事实，不依赖 actor）。**自指注意**：本规则自身落地的写入（law 内核新文件 + policy 增条目）由本 plan 的 active 状态构成「已批准立项」例外——规则的第一个合法消费者是它自己的宿主 plan。
+- [x] `Add` 本批三规则（work-item 对账并入 plan-structure 增项 + path-guardrail + roadmap-write-guard + law-self-protection）注册进 `missions/autonomy.policy.yml`（姿态：path-guardrail/roadmap-write-guard/work-item 面 = enforce——窄域可判定事实，同 0815-3 Phase 1 四门禁裁定的①②③论证；law-self-protection = enforce，P8 授权）；CONTEXT.md 增护栏与自护行。
+- [x] `Proof` 收口：真值表累计用例数与覆盖清单记录（向 WI24 ≥30 推进，gate 验收归 N=3）；P8 反例（executor 角色改 policy / 改 law 内核 / 改 gate-check.mjs → deny；援引 active plan fixture → allow；human actor → allow；engine role 改 policy → deny——例外集字面钉住的反向用例）；存量 corpus 无误杀（gate-check 对 docs/plans/age-autonomy/ 全量 + docs/plans/00-guide：本 plan 不改这些文件，评估面只读）。命令：`node --test plugin/dsh/test/law-truth-table.test.mjs` + `pnpm --prefix tools/mission-driver test` + `./verify-age.sh`。
+- [x] `Add` 文档同步与回写：roadmap WI21 tick + 证据指针（规则模块 + truth-table 路径 + corpus 输出；**残项注记**：「已批准立项」例外判据为结构近似（active plan 引用字符串），精确化归 M3 守夜人统一落盘路径；02 §4.7 保护清单与 0815-1 law 内核放置裁定的字面错位指针——见 Deferred「law 内核 P8 覆盖缺口」，防 roadmap 侧丢线索）；`docs/logs/` 收口条目。
 
 Exit Criteria:
 
-- [ ] P8 四路径反例全 deny 且例外通道（active plan 援引）可过；规则自身落地经例外通道完成（自指一致性）
-- [ ] `git diff --stat tools/mission-driver/src/engine.js` 为空（零引擎 diff）
-- [ ] `pnpm --prefix tools/mission-driver test` + `npm --prefix plugin/dsh test` + `./verify-age.sh` L1+L2 全绿
-- [ ] roadmap WI21 `[x]` + 证据指针；`docs/logs/` 收口条目
+- [x] P8 四路径反例全 deny 且例外通道（active plan 援引）可过；规则自身落地经例外通道完成（自指一致性）
+- [x] `git diff --stat tools/mission-driver/src/engine.js` 为空（零引擎 diff）
+- [x] `pnpm --prefix tools/mission-driver test` + `npm --prefix plugin/dsh test` + `./verify-age.sh` L1+L2 全绿
+- [x] roadmap WI21 `[x]` + 证据指针；`docs/logs/` 收口条目
 
 ## Draft Review Record
 
