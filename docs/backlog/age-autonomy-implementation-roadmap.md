@@ -1,5 +1,5 @@
 ---
-audit-rounds: 0
+audit-rounds: 2
 ---
 
 # AGE Autonomous Run Implementation Roadmap
@@ -58,6 +58,10 @@ audit-rounds: 0
 - [ ] WI21 路径与结构护栏（含 one-mission-one-roadmap 边界；`work-item` 命中 roadmap 已登记；终态冻结；**执法层自护 P8**：`plugin/dsh/src/law/**`、`missions/autonomy.policy.yml`、`tools/mission-driver/src/{plan-check,gate-check}.mjs` 对 AI 写 deny，人工/CI/已批准立项为合法例外）
 - [ ] WI22 WI13 证据面重建（run-state 子流程不再权威；证据谓词改读 plan frontmatter/closures；plugin/dsh plan-status-gate 迁移或退役）
 - [ ] WI23 CI 门禁接线：`plan-check.mjs` frontmatter 版 + pre-commit hook + CI job（结构子集 + audit track）；与现有 `verify-age.sh`/`age-ci.yml` 协同
+- [ ] WI41 [P0·deep-audit R1] 修复 D2 账本收口死锁：`flows/plan-execution.json` 将 `CLOSURE_SCRIPT_CHECK.pass → BUILD_VERIFY` 且 `closureScriptCheck`（`flow-loader.js`）对账本格式回执盲视——全勾 plan 永远到不了 CLOSURE_AUDIT（`## Closure` 回执唯一写者），`deriveCompleted` 的 auditReceipt 合取永假 → plan 永驻 `activePlans()` 无限重喂（live 受害者 0635-3；`docs/bugs/2026-08-25-ledger-plan-closure-deadlock.md` D2 open 且无 roadmap 项）。修法 = closureScriptCheck 对 frontmatter plan 增加「全勾 ∧ 缺 verify pass 行 / 缺配对回执 → fail（路由 CLOSURE_AUDIT）」+ 回归测试；落点（引擎 diff vs 插件层）立项时按「零引擎 diff 底线」裁定
+- [ ] WI42 [P1·deep-audit R1] 接线 `validatePlanFrontmatter`/`validateRoadmapFrontmatter` 到生产读面（M1-WI2 校验器当前零生产消费者——plan-check/flow-loader/monitor/roadmap-check/corpus 测试均不调用）：live 证实手写 `status: completed`（禁写派生态）+ 伪 basisHash 可过 `plan-check --strict` exit 0，normalized="completed" 而 completed:false/terminal:false 自相矛盾，且使 plan 静默退出 active/draft 双队列（第二真相通道，正是 01 §2 纪律所禁）；未知字段/键名 typo 同样静默通过
+- [ ] WI43 [P1·deep-audit R1] 架构 owner-doc 契约同步：M1 三个公共契约模块（`ledger-frontmatter.mjs`/`ledger-sections.mjs`/`ledger-dualread.mjs`——四引擎消费面 + 插件 assets 通道 + 两 guide 声明的 machine face）未登记进 `docs/architecture/mission-driver-baseline.md` §Public Exports（该文件最后更新停在 M1 之前，违反其自身 Update Rule）；伴生漂移：`docs/architecture/dsh-plugin-packaging.md` "the 19 allowed modules"（build-bundle 实为 22）+ import-graph 枚举缺 ledger 链 + plan-status-gate 的 `PLAN_STATUS_RE` import 源已改 `assets/src/ledger-dualread.mjs`（doc 仍写 plan-check.mjs）
+- [ ] WI44 [P1·deep-audit R2] 堵住 `verify: []` 空真（vacuous-pass）通道：`validatePlanFrontmatter` 接受空数组、`deriveCompleted`（ledger-sections.mjs `mechanicalVerification` 合取）对空 keys 集合 `missingKeys=[]` 直接判 true——零条 pass 行即机械验证通过，live 探针证实 `verify: []` + 回执齐全的 plan 派生 `completed:true`，agent 可静默豁免全部机械验证；设计 01 §4.1 只定义「缺失→mission 默认」未定义空数组，与 roadmap 纪律 2（Verification Gate 硬约束）意图相悖；修法 = 校验器拒绝空 `verify`（或按缺失处理走 defaultVerifyKeys/no-verify-keys）+ 空集不空真的 deriveCompleted 回归测试（现测试仅钉 `verify: []` 可解析，未钉派生语义）
 - [ ] **WI24 Verification Gate — M2**（自动验证硬门，下列命令真实绿方可勾选）
   - `node plugin/dsh/src/law/check-policy.mjs missions/autonomy.policy.yml`（或 plan-check 的 `--policy` 模式）→ exit 0 且 schema 校验通过
   - `node plugin/dsh/test/law-truth-table.test.mjs` → 真值表测试至少 30 用例（覆盖三硬门全部正向/反向/边界 + actor 缺省结构子集 + 评审租约 + **law 域 deny 面** + `requireDistinctModel` 正向/反向/单模型部署显式降级 + agent 名引用校验）+ 0 失败
@@ -147,3 +151,20 @@ audit-rounds: 0
 
 - 本 mission（`age-autonomy-implementation`）是 age-autonomy 设计在仓库内的**唯一执行 mission**；不存在姊妹 mission 复刻同一份 design。
 - 旧 `docs/backlog/age-autonomy-plugin-roadmap.md`（如未来再有类似产物）应视为本 roadmap 的「插件形态视角」，不应另立 mission；本路线选择后该产物应被本 roadmap 收编或弃用。
+
+## Deep Audit Record
+
+- dispatch audit #audit-2026-08-25-063133-mission-driver-age-autonomy-implementation-roadmap-1-38473bf4 to ses-2026-08-25-063133-deep-audit-r1
+- accepted #audit-2026-08-25-063133-mission-driver-age-autonomy-implementation-roadmap-1-38473bf4 findings=items：1×P0（D2 账本收口死锁无 roadmap 项 → WI41）+ 2×P1（frontmatter 校验器零生产接线 → WI42；架构 owner-doc 契约漂移 → WI43）+ 4×P2（Follow-up Backlog）；基线 810 tests green、corpus 0 error、mission-check exit 0
+- dispatch audit #audit-2026-08-25-063133-mission-driver-age-autonomy-implementation-roadmap-2-faae192a to ses-2026-08-25-063133-deep-audit-r2
+- accepted #audit-2026-08-25-063133-mission-driver-age-autonomy-implementation-roadmap-2-faae192a findings=items：1×P1（`verify: []` 空数组使 mechanicalVerification 合取空真、零 pass 行即派生 completed → WI44）+ 3×P2（Follow-up Backlog）；WI41/WI42/WI43 复核仍 open 未重复立项；基线 810 tests green + prompt-check OK + mission-check exit 0 + web typecheck green
+
+## Follow-up Backlog
+
+  - [ ] [P2] mission config 前向引用缺失文件：`autonomyPolicy: missions/autonomy.policy.yml` 与 `commands.gates` → `tools/mission-driver/src/gate-check.mjs` 今日均 ENOENT（WI12/WI13 落地后自愈；mission-check 不校验这两字段，期间无人报错）。source: deep-audit round 1
+  - [ ] [P2] roadmap 残留已退役格式段：`## Status Values` 表与 `Work Item Status` 导语中的 `ready` 生命周期散文，按 00-roadmap-authoring-guide 2026-08-25 changelog 已退役（done=勾选、ready 语义归 plan 侧）。source: deep-audit round 1
+  - [ ] [P2] `scanPlanLedger`/`scanRoadmapLedger` 对重复 append-only 锚点静默容忍（只扫首个 `## Closure`/`## Verification`/`## Draft Review Record`/`## Deep Audit Record`，重复区内的回执从派生面消失且无结构 error）——建议补 duplicate-anchor 结构 error。source: deep-audit round 1
+  - [ ] [P2] 引擎读面（flow-loader/monitor 的 `planLedgerState` 调用）未注入 `defaultVerifyKeys`，01 §4.1「verify 缺失时用 mission 默认」在引擎路径未实现——省略 `verify` 的 plan 即使回执齐全也派生不出 completed（与 WI41 同族，裁定归 WI19/WI41 立项）。source: deep-audit round 1
+  - [ ] [P2] roadmap 头部 `> Last Updated: 2026-08-24` 过期：2026-08-25 已落地 round-1 回执、WI41–WI43 与 Follow-up Backlog 各轮编辑，头部日期未同步更新。source: deep-audit round 2
+  - [ ] [P2] monitor 读 mission 配置未走 `extends` 合并（`readMissionConfig`/`handleGetRoadmap`/`handleListConfigs` 裸 JSON.parse，引擎侧 `loadMission` 走 base→local→mission 合并）——从 base.json 继承 roadmapPath/plansDir/commands 字段的 mission 在 dashboard 显示为空/缺字段且被 `/api/configs` 过滤；本仓库无实害，模板消费者面 latent。source: deep-audit round 2
+  - [ ] [P2] `prompts/draft-from-roadmap.md` step 4 指示 drafting agent 自派 sub-agent 评审后自行将 plan 置 `active`，引擎 REVIEW_PLANS 步骤对这些 plan 变成空转（`draftPlans()` 为空 → forEach all_complete 直通 EXEC）——评审独立性从流程结构保证退化为 prompt 纪律，直至 M2-WI15 写者身份门禁落地（0815 批次回执实践正常，暂无实害）。source: deep-audit round 2
