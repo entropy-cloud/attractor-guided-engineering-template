@@ -4,6 +4,10 @@
 
 `docs/plans/` is for non-trivial execution slices that need explicit scope, closure criteria, and proof.
 
+## Format Authority
+
+This guide is the single format authority for plans (contract: `docs/design/age-autonomy/01-file-ledger.md`; machine face: `tools/mission-driver/src/ledger-frontmatter.mjs` + `ledger-sections.mjs` + `ledger-dualread.mjs`). The current format is the **ledger format**: a YAML frontmatter block plus `## Phase <n>` body sections. Completion is **derived**, never written. Legacy plans (pre-migration, `> Plan Status:` header lines) remain readable by the engine's dual-read legacy channel but are historical — do not create new plans in the legacy format.
+
 ## When To Write A Plan
 
 Write a plan when the task:
@@ -29,36 +33,17 @@ If unsure, use a full plan.
 
 1. **Start from live baseline.** Read the repo first, then write `Current Baseline`. Do not rely on memory or old plans. For net-new features, the baseline must inventory all existing code the feature will touch or contradict — hardcoded values, missing hooks, incompatible patterns. An inventory is not optional.
 2. **Write Goals and Non-Goals.** If either is unclear, the plan boundary is not ready.
-3. **Use checkboxes for execution and closure.** Unchecked items mean unfinished work until closure.
+3. **Use checkboxes for execution and closure.** Unchecked items mean unfinished work until closure. Checkboxes live ONLY inside `## Phase <n>` sections and `## Closure Findings` (counting domain, 01 §2.5) — column 0, never in code fences or other sections.
 4. **One plan, one result surface.** If the plan needs multiple independent closure criteria, it is too wide. Split it. Multi-module extraction or migration that shares the same behavioral contract and closure criteria is still ONE result surface — do not over-split.
-5. **Proof before closure.** Do not mark a plan complete until the repo contains verifiable proof for every exit criterion.
+5. **Proof before closure.** Do not consider a plan closed until the repo contains verifiable proof for every exit criterion (mechanical verification pass lines + audit receipt, see the completion formula below).
 6. **No code-design dumps.** The plan captures scope, proof, and closure logic, not low-level implementation detail. Exception: refactoring and extraction plans MUST include the interface contracts between extracted modules — these are structural boundary definitions, not implementation pseudocode.
 7. **Tag items with types.** Each execution item must be `Fix`, `Add`, `Decision`, `Proof`, or `Follow-up`. `Fix` covers defect repairs; `Add` covers net-new code or config. An item may carry multiple types (e.g., `Decision | Add`); when it does, all implied obligations apply. A confirmed live defect or contract drift must be `Fix`, not `Follow-up`. When 80%+ of items in a phase share one type, declare the uniform type at the phase level instead of per-item (e.g., `Phase 1 — Fix-heavy (8/10 items tagged Fix)`).
 8. **Record skill usage deliberately.** For each phase or item where a reusable skill matters, record `Skill: <name>` or `Skill: none`. Skills choose the work method, not the business truth. If a skill is named, its required inputs and expected output must already be clear from `docs/skills/README.md` and the referenced owner docs.
-9. **Record Decisions with rationale.** Every `Decision` item must document the choice, the alternatives considered, and the residual risk if any. Write the rationale into the plan or a referenced doc. If a decision requires prototyping or exploration before committing, add a temporary `Explore` item that must conclude before the `Decision` resolves. Framework-forced or obvious choices (e.g., "must match existing framework pattern") can be noted as constrained without full alternatives analysis.
-10. **Checklist integrity before closure.** Before marking a plan complete, no in-scope checklist item may remain unchecked. Either complete it or explicitly move it out of scope with a written reason. Scope narrowing after plan approval is a scope change and must be recorded with rationale; silently removing items from scope is a violation.
-11. **Text consistency before closure.** Before closing, verify that `Plan Status`, every phase `Status`, every phase `Exit Criteria`, `Closure Gates`, and the `docs/logs/` entry all agree. No `completed` at the top while a phase inside still says `draft`.
-12. **Status/checkbox consistency.** A `Status: completed` phase must have all its checkboxes ticked (`[x]`). An `active` phase may have unticked items in its current phase, but all prior phases must be fully ticked. Inconsistency between `Status: completed` and unchecked `[ ]` items can cause automated workflows to loop infinitely between `EXECUTE` and `VERIFY`. Verify with: `grep -B5 "\- \[ \]" <plan-file> | grep "Status: completed"` — result must be empty.
-13. **Independent draft review and closure audit.** Do not implement a created plan until independent draft review has revised it into an acceptable execution contract, and do not mark it complete as a side effect of finishing the last implementation slice. Use a separate review pass. Closure audit must be performed by an independent subagent or reviewer; self-review cannot mark a created plan complete. Protected areas, unresolved product risk, and source-of-truth conflicts require human/subagent review or stay open.
-14. **Non-degradable items** cannot be downgraded to non-blocking follow-ups: confirmed live defects, confirmed contract drift, confirmed owner-doc drift, and CI/lint rules already fixed in the repo.
-
-## Plan Status Flow
-
-Use these statuses deliberately:
-
-- `draft` - the plan exists but has not yet passed independent draft review
-- `active` - independent draft review has converged on an acceptable execution contract and implementation may begin
-- `completed` - independent closure audit accepted closure
-- `superseded | replaced | deferred | cancelled` - use when the plan no longer owns live closure in its original form
-
-Recommended default flow for created plans:
-
-1. create the first honest draft as `draft`
-2. run independent draft review until the draft is acceptable
-3. record the iterations in `## Draft Review Record`
-4. change `Plan Status` to `active`
-5. execute and update phase/workstream statuses
-6. close only after independent closure audit
+9. **Record Decisions with rationale.** Every `Decision` item must document the choice, the alternatives considered, and the residual risk if any. Write the rationale into the plan or a referenced doc. If a decision requires prototyping or exploration before committing, add a temporary `Explore` item that must conclude before the `Decision` resolves. Framework-forced or obvious choices (e.g. "must match existing framework pattern") can be noted as constrained without full alternatives analysis.
+10. **Checklist integrity before closure.** Before closure, no in-scope checklist item may remain unchecked. Either complete it or explicitly move it out of scope with a written reason. Scope narrowing after plan approval is a scope change and must be recorded with rationale; silently removing items from scope is a violation.
+11. **Completion is derived (01 §5.2).** A plan is closed iff: `status: active` ∧ every counting-domain checkbox is `[x]` ∧ every frontmatter `verify` key has a `## Verification` pass line whose `basisHash` equals the plan's current basis hash ∧ `## Closure` contains a dispatch line and a same-id accepted line. Nobody writes `completed` — there is no status text to keep consistent with the checkboxes; consistency between "declared done" and "actually done" is enforced by the formula and the M2 gates. Phase progress = that Phase's `[ ]` count (no per-Phase status lines exist).
+12. **Independent review and closure audit (receipt-enforced).** A plan may only reach `active` via an independent draft review (receipt lines in `## Draft Review Record`: dispatch + date-iteration conclusion sharing one id) and may only close via an independent closure audit (dispatch + accepted pair in `## Closure`). Self-closing is structurally impossible — `completed` cannot be written. Protected areas, unresolved product risk, and source-of-truth conflicts still require human/subagent review or stay open, per `AGENTS.md`.
+13. **Non-degradable items** cannot be downgraded to non-blocking follow-ups: confirmed live defects, confirmed contract drift, confirmed owner-doc drift, and CI/lint rules already fixed in the repo.
 
 ### Anti-Slacking Rule
 
@@ -66,11 +51,9 @@ Every in-scope item before closure must land in exactly one state: `landed`, `ad
 
 The following words are forbidden for in-scope items: `optional`, `if time permits`, `consider`, `maybe`, `nice to have`, `as needed`. If an item is truly optional, move it out of scope explicitly rather than leaving it in a fuzzy state.
 
-A `Follow-up` item must name the trigger condition that would promote it into scope (e.g., "when user count exceeds 10K"). A `Deferred But Adjudicated` item must name the event or decision that would reopen it (e.g., "if the new API is adopted, this work may become redundant").
+A `Follow-up` item must name the trigger condition that would promote it into scope (e.g. "when user count exceeds 10K"). A `Deferred But Adjudicated` item must name the event or decision that would reopen it (e.g. "if the new API is adopted, this work may become redundant").
 
-## Plan Frontmatter Field Table (M1 Additive Format)
-
-> Status: additive (age-autonomy M1, 2026-08-25). New and old formats coexist during the transition period — legacy `> Plan Status:` / `> Review Hold:` lines remain valid until the full switch (retirement of rules 11/12/13 mapping and template replacement is planned follow-up work, not done here). Contract owner: `docs/design/age-autonomy/01-file-ledger.md` §4.1; machine implementation: `tools/mission-driver/src/ledger-frontmatter.mjs` (the `PLAN_FRONTMATTER_FIELDS` constant is the single source for this field list).
+## Plan Frontmatter Field Table
 
 Format subset (hard boundary, 01 §2): flat scalar keys plus single-level flow arrays only; strings written as single-line quoted strings or bare single words; block scalars (`|` / `>`), nested objects, anchors, aliases, and duplicate keys are rejected by the parser — no tolerant fallback.
 
@@ -100,21 +83,28 @@ verify: [test]
 ---
 ```
 
-Migration mapping for legacy header lines (codemod contract, planned follow-up):
+Retired legacy header lines and their migration mapping (codemod contract, executed 2026-08-25):
 
-| Legacy line | New frontmatter |
+| Legacy line | New home |
 | --- | --- |
-| `> Plan Status: <v>` | `status: <v>` |
+| `> Plan Status: <v>` | frontmatter `status` |
 | `> Review Hold: <reason>` | `status: held` + `hold: "<reason>"` |
+| `> Mission:` / `> Work Item:` | frontmatter `mission` / `work-item` |
+| `> Last Reviewed:` | deleted — review facts live in `## Draft Review Record` |
+| `> Audit: required` | deleted — audit receipt lives in `## Closure` |
+| `> Source:` / `> Related:` | kept as prose blockquote under the title (machine does not parse them) |
+| per-Phase `Status:` lines | deleted — phase progress = the Phase's `[ ]` count |
+| `## Closure Gates` | dissolved — executable items merged into the last Phase; consistency/verification/independence guarantees are derived (01 §4.3) |
 
-## Plan Body Sections (M1 Additive Format)
+## Plan Body Sections
 
-> Status: additive (age-autonomy M1, 2026-08-25). New-format body structure per `docs/design/age-autonomy/01-file-ledger.md` §4.2/§4.4; machine implementation: `tools/mission-driver/src/ledger-sections.mjs` (`scanPlanLedger` / `computeBasisHash` / `deriveCompleted`, pinned by `tools/mission-driver/test/ledger-sections.test.js` + `test/ledger-derivation.test.js`). Legacy `### Phase N` (h3) plans remain valid during the transition; normalization codemod and dual-read wiring are planned follow-up work.
-
-New-format body blocks, in document order. `## Phase <n>` is an h2 heading that may carry a trailing name (`## Phase 1 — <name>` or `## Phase 1 - <name>`); the section runs until the next h2:
+Body blocks, in document order. `## Phase <n>` is an h2 heading that may carry a trailing name (`## Phase 1 — <name>` or `## Phase 1 - <name>`); the section runs until the next h2:
 
 ```md
 # <title>
+
+> Source: <requirement / bug / analysis / request>
+> Related: <related plans, optional>
 
 ## Current Baseline
 ## Goals
@@ -144,63 +134,70 @@ The example above is fixture-isomorphic: it parses green under `scanPlanLedger` 
 | roadmap `## Deep Audit Record` | `- accepted #<id> findings=none\|items：结论` | `findings=` required |
 | plan `## Draft Review Record` | `- <date>：iteration <n>，共识 <verdict> #<id>` | pairs with the review dispatch, not with accepted lines |
 
-- Dispatch lines: `- dispatch (review|audit) #<id> to <sessionId>`, written by the supervisor/engine before dispatch; reviewers/auditors may only append conclusion lines after it.
+- Dispatch lines: `- dispatch (review|audit) #<id> to <sessionId>`, written before dispatch; reviewers/auditors may only append conclusion lines after it.
 - ids: `#review-<runId>-<plan>-<iter>-<nonce8>` / `#audit-<runId>-<plan>-<round>-<nonce8>`; `<plan>` is the filename stem (without `.md`); `<nonce8>` is 8 hex chars (prevents pre-forged receipts). Parsed tail-anchored, so hyphen-rich stems are safe.
-- pass lines: `- pass <commandKey> <runId> basisHash=<sha256hex> exit=<code>`; a pass line satisfies mechanical verification only when `exit=0` and its `basisHash` equals the plan's current basis hash.
+- pass lines: `- pass <commandKey> <runId> basisHash=<sha256hex> exit=<code>`; a pass line satisfies mechanical verification only when `exit=0` and its `basisHash` equals the plan's current basis hash (`computeBasisHash` over the frontmatter + all Phase sections + `## Closure Findings`).
 - A dispatch line without a same-id conclusion line is a derived-state fact (feeds `awaitingClosure` / the completion formula), not a syntax error.
 
 ### Counting-domain and append-only rules
 
 - Checkboxes are counted only at **column 0** inside `## Phase <n>` sections and `## Closure Findings`. Indented lines (e.g. indented gate-command sub-items) are outside the machine face.
-- A column-0 checkbox anywhere else is a structural error (counting-domain discipline; legacy `## Closure Gates` content must merge into the last Phase during migration).
+- A column-0 checkbox anywhere else is a structural error (counting-domain discipline).
 - Lines inside code fences never participate in counting or syntax matching — template examples written in fences do not pollute.
 - `## Draft Review Record` / `## Verification` / `## Closure` are append-only regions: lines hitting a known prefix (`dispatch` / `accepted` / `pass` / the date-iteration form) must match the pinned grammar strictly; unknown lines are tolerated as prose (legacy migration corpus keeps old notes). Write-time interception is M2 law.
 - Bounded inline review (01 §5.3): a normal review round records 2–3 consensus lines; when a dispute history exceeds ~20 lines, keep the conclusion inline and move the process to a discussion draft.
 
+## Plan Status Flow
+
+Writable statuses (frontmatter `status`): `draft | active | held | cancelled | superseded | deferred`. `completed` is derived (01 §5.2) and `cancelled | superseded | deferred` are writable terminal states — a terminal plan never revives; restarting the work = a new plan.
+
+Recommended default flow for created plans:
+
+1. create the first honest draft as `status: draft`
+2. run independent draft review until the draft is acceptable (each round appends receipt lines to `## Draft Review Record`)
+3. the reviewer flips `status: draft` → `status: active` on accept
+4. execute: tick Phase checkboxes as slices land (ticks are the only per-phase signal)
+5. the BUILD_VERIFY step records `## Verification` pass lines; the CLOSURE_AUDIT step records the `## Closure` dispatch/accepted receipt — completion derives from them (never written)
+
 ## When Executing
 
-1. Before implementation, revise the plan directly until independent draft review finds no blocking issue, then record the draft-review evidence durably in the plan by default.
-2. Keep new plans at `Plan Status: draft` during draft review. Change to `active` only after the draft-review record shows the plan is acceptable for execution.
-3. When you start a slice, update its `Status` to `in progress`.
-4. When you finish a slice, update its `Status` to `completed` and check off all its execution items and exit criteria.
-5. Before executing a phase, confirm the listed `Skill` still matches the task and available inputs. If not, update the plan before proceeding.
-6. If a slice changes the live baseline or public contract, its exit criteria must include the doc-update step. If no doc update is needed, write `No owner-doc update required` explicitly.
-7. Do not mark a slice complete because the function signature exists. Verify that the behavior, error handling, and test coverage land too.
-8. If an item cannot be completed, move it to `Deferred But Adjudicated` with classification and reason. Do not leave it unchecked in the execution list.
-9. Keep `docs/logs/` in sync with plan progress. A single aggregate log entry at plan closure is sufficient when all phases cover the same feature in one sprint; individual phase entries are required only when a phase spans a different day or a distinct deliverable.
+1. Before implementation, revise the plan directly until independent draft review finds no blocking issue; the review receipts live in `## Draft Review Record`.
+2. When you start a slice, execute it fully; when it lands, tick its items and its Phase's Exit Criteria `[x]`.
+3. Before executing a phase, confirm the listed `Skill` still matches the task and available inputs. If not, update the plan before proceeding.
+4. If a slice changes the live baseline or public contract, its exit criteria must include the doc-update step. If no doc update is needed, write `No owner-doc update required` explicitly.
+5. Do not mark a slice complete because the function signature exists. Verify that the behavior, error handling, and test coverage land too.
+6. If an item cannot be completed, move it to `Deferred But Adjudicated` with classification and reason. Do not leave it unchecked in the execution list.
+7. Keep `docs/logs/` in sync with plan progress. A single aggregate log entry at plan closure is sufficient when all phases cover the same feature in one sprint; individual phase entries are required only when a phase spans a different day or a distinct deliverable.
 
 ## When Closing
 
-Before setting `Plan Status: completed`, do all of the following:
+Closing is derived, but a responsible closer still verifies, before the last tick, all of the following:
 
-**All created plans:**
+1. Check every Phase `Exit Criteria` — every one must be `[x]`.
+2. Distinguish "interface exists" from "behavior is complete". Verify the actual runtime behavior with a test or demo, not just the type signature.
+3. Run the real verification commands for the repo (they become the `## Verification` pass lines). For plans whose primary result surface is visual, behavioral, or UX-driven, customize the verification gates with explicit justification in the plan.
+4. **Scoped verification is not full verification.** If a scoped command (e.g. affected-modules-only build) was used instead of the full verification suite, note "verification scope limited" explicitly in the plan and evaluate residual risk. A scoped pass cannot be reported as full green.
+5. The closure audit is performed by an independent subagent or reviewer, whose dispatch/accepted receipt in `## Closure` is the machine-checked evidence.
+6. If the plan used a solo cold-replay fallback (see `AGENTS.md` Reviewer-Availability Fallback), the closure record MUST state it was used and confirm the cold-replay self-check was performed against the plan, affected docs, the actual diff, and real verification commands.
+7. For full closure (multi-session, multi-module, or high-risk plans): re-read the entire plan from the top, not just the most recent slice.
 
-1. Check every phase `Exit Criteria` — every one must be `[x]`.
-2. Check every `Closure Gates` item — every one must be `[x]`.
-3. Verify text consistency: top status, phase statuses, exit criteria, closure gates, and log entry all agree.
-4. Distinguish "interface exists" from "behavior is complete". Verify the actual runtime behavior with a test or demo, not just the type signature.
-5. Run the real verification commands for the repo. For plans whose primary result surface is visual, behavioral, or UX-driven, customize the verification gates with explicit justification in the plan.
-6. **Scoped verification is not full verification.** If a scoped command (e.g. affected-modules-only build) was used instead of the full verification suite, note "verification scope limited" explicitly in the plan and evaluate residual risk. A scoped pass cannot be reported as full green.
-7. Perform an independent closure audit by an independent subagent or reviewer.
-8. If the plan used a solo cold-replay fallback (see `AGENTS.md` Reviewer-Availability Fallback), the closure record MUST state it was used and confirm the cold-replay self-check was performed against the plan, affected docs, the actual diff, and real verification commands.
-
-**Full closure** (multi-session, multi-module, or high-risk plans — add these):
-
-9. Re-read the entire plan from the top, not just the most recent slice.
-10. Record independent closure-audit evidence in the plan's `Closure` section and link any stored audit file under `docs/audits/` when one exists.
-
-If any of these fail, the plan stays open.
+If any of these fail, the plan stays open (its unchecked items keep it open automatically).
 
 ## Template
 
 ```md
+---
+status: draft
+mission: <mission-name>
+work-item: <roadmap-work-item-label>
+group: "{YYYY-MM-DD-HHmm}"
+verify: [test]
+---
+
 # <plan-id> <title>
 
-> Plan Status: draft
-> Last Reviewed: YYYY-MM-DD
 > Source: <requirement / bug / analysis / request>
 > Related: <related plans, optional>
-> Audit: required
 
 ## Current Baseline
 
@@ -227,11 +224,8 @@ If any of these fail, the plan stays open.
 - <if none, write "No infra prereqs beyond existing baseline">
 - <for data-migration plans: include rollback strategy or script path>
 
-## Execution Plan
+## Phase 1 — <name>
 
-### Phase 1 - <name>
-
-Status: planned
 Targets: `<paths>`
 Skill: `<skill-name | none>`
 
@@ -253,20 +247,9 @@ Exit Criteria:
 
 ## Draft Review Record
 
-- Independent draft review iteration 1: <needs revision | acceptable as-is | accept> (<task/session id>) because <why>
-- Independent draft review iteration 2: <needs revision | acceptable as-is | accept> (<task/session id>) after <what changed>
+## Verification
 
-## Closure Gates
-
-- [ ] in-scope behavior is complete
-- [ ] relevant docs are aligned
-- [ ] verification has run (specify which commands; customize for visual/UX domains if needed)
-- [ ] scoped verification is not conflated with full verification — if scope was limited, "verification scope limited" is noted explicitly
-- [ ] no in-scope item downgraded to deferred/follow-up
-- [ ] independent draft review completed and recorded
-- [ ] text consistency verified: status, phases, gates, and log all agree
-- [ ] closure audit was independent
-- [ ] closure evidence exists in files
+## Closure
 
 ## Deferred But Adjudicated
 
@@ -275,22 +258,12 @@ Exit Criteria:
 - Classification: `watch-only residual | optimization candidate | out-of-scope improvement`
 - Why Not Blocking Closure: <reason>
 - Successor Required: `yes | no`
-
-## Closure
-
-Status Note: <why the plan can close>
-
-Closure Audit Evidence:
-
-- Auditor / Agent: <independent auditor or independent subagent>
-- Evidence: <task id / log link / walkthrough record>
-
-Follow-up:
-
-- <non-blocking follow-up items only; confirmed defects must not appear here>
 ```
+
+`## Verification` and `## Closure` start empty — the BUILD_VERIFY / CLOSURE_AUDIT steps fill them (append-only). Do not add a `## Closure Gates` section (retired — derivation covers it) or any per-Phase `Status:` lines.
 
 ## Changelog
 
+- 2026-08-25 — **Full switch to the ledger format** (age-autonomy M1-WI9, plan `2026-08-25-0635-3`): template replaced with the frontmatter + `## Phase <n>` skeleton; rules 11 (text consistency) / 12 (status-vs-checkbox consistency) retired and replaced by the completion-derivation formula reference (01 §5.2); the former rule 13 is reformulated as receipt-enforced independent review/closure (dispatch + same-id conclusion lines); `> Last Reviewed:` / `> Audit:` / per-Phase `Status:` / `## Closure Gates` retired with migration mappings recorded; the two M1 additive sections (frontmatter field table, plan body sections) are merged in as the main format sections. Legacy `> Plan Status:` plans remain readable via the engine's dual-read legacy channel (migration: 52 completed plans stay legacy forever).
 - 2026-08-25 — Added `## Plan Body Sections (M1 Additive Format)` (age-autonomy 01-file-ledger §4.2/§4.4, plan `2026-08-25-0635-2` M1-WI3/WI5/WI6): canonical new-format body-block example (Phase / Draft Review Record / Closure Findings / Verification / Closure), the three pinned conclusion-line forms (plan accepted without findings / roadmap accepted with `findings=none|items` / review date-iteration line), id + pass-line grammars, counting-domain rules (column-0 discipline, fence skipping), append-only shape policy, and bounded inline review. Machine face: `tools/mission-driver/src/ledger-sections.mjs`. Additive only; examples live inside code fences so counting stays unpolluted.
 - 2026-08-25 — Added `## Plan Frontmatter Field Table (M1 Additive Format)` (age-autonomy 01-file-ledger §4.1/§7): new plan frontmatter field set `status/mission/work-item/group/failures/verify/agent/hold/claim/claim-expires` with parser-subset hard boundary and legacy-line migration mapping. Additive only: legacy `> Plan Status:` format stays valid during the transition; rules 11/12/13 retirement and template replacement are planned follow-up work.

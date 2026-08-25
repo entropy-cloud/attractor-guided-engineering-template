@@ -161,20 +161,20 @@ Skill: none
 - Item Types: `Add`
 - Prereqs: Phase 2–4
 
-- [ ] `Add` 00-guide 全量切换：模板换新格式（frontmatter 头 + `## Phase <n>` + 新区块骨架，无 `> Plan Status:` 行 / per-Phase Status / Closure Gates）；rules 11/12/13 退役，替换为完成派生公式引用（一致性由公式与门禁派生，01 §4.3）；0635-1/2 的 additive 增补小节转正合并；changelog 记录格式切换事件
+- [x] `Add` 00-guide 全量切换：模板换新格式（frontmatter 头 + `## Phase <n>` + 新区块骨架，无 `> Plan Status:` 行 / per-Phase Status / Closure Gates）；rules 11/12/13 退役，替换为完成派生公式引用（一致性由公式与门禁派生，01 §4.3）；0635-1/2 的 additive 增补小节转正合并；changelog 记录格式切换事件
       - Skill: none
-- [ ] `Add` 00-roadmap-guide 全量切换：frontmatter `audit-rounds` + 纯 checkbox Work Item + `## Deep Audit Record` 格式 + Status Values 表退役说明（ready/done 语义去向）；changelog 事件
+- [x] `Add` 00-roadmap-guide 全量切换：frontmatter `audit-rounds` + 纯 checkbox Work Item + `## Deep Audit Record` 格式 + Status Values 表退役说明（ready/done 语义去向）；changelog 事件
       - Skill: none
-- [ ] `Add` WI8 成文：AGENTS.md `docs/audits/` 职责收窄（三处提及——Operating Rule 10（:63 附近）、Documentation Ownership 段（:96 附近）、Optional Workflow Layers 段（:122 附近）的相关行；执行时逐行钉住具体行号，diff 仅限职责措辞收窄，不触及其他规则）+ 评审/审计结论内联于 plan/roadmap 的指向（讨论 §8.2.5）；外部存量审计文件保留为归档不迁移；`> Source Audits` / `> Audit: required` 头部线在 codemod 中删除的映射已含于 Phase 1 Decision 3；生产面（multi/open-audit 内联化）与消费通道（_scanOpenAuditsList legacy-only）adjudication 见 Phase 1 Decision 6 第 4 条
+- [x] `Add` WI8 成文：AGENTS.md `docs/audits/` 职责收窄（三处提及——Operating Rule 10（:63 附近）、Documentation Ownership 段（:96 附近）、Optional Workflow Layers 段（:122 附近）的相关行；执行时逐行钉住具体行号，diff 仅限职责措辞收窄，不触及其他规则）+ 评审/审计结论内联于 plan/roadmap 的指向（讨论 §8.2.5）；外部存量审计文件保留为归档不迁移；`> Source Audits` / `> Audit: required` 头部线在 codemod 中删除的映射已含于 Phase 1 Decision 3；生产面（multi/open-audit 内联化）与消费通道（_scanOpenAuditsList legacy-only）adjudication 见 Phase 1 Decision 6 第 4 条
       - Skill: none
-- [ ] `Proof` 切换后 guide 双自洽：`node tools/mission-driver/src/plan-check.mjs docs/plans/00-plan-authoring-and-execution-guide.md --strict` → exit 0；guide 模板示例与 0635-2 fixtures 同构
+- [x] `Proof` 切换后 guide 双自洽：`node tools/mission-driver/src/plan-check.mjs docs/plans/00-plan-authoring-and-execution-guide.md --strict` → exit 0；guide 模板示例与 0635-2 fixtures 同构
       - Skill: none
 
 Exit Criteria:
 
-- [ ] 两 guide 与设计契约一致（01 §7：guide 是格式权威；字段表/区块语法/淘汰项清单三面对照）
-- [ ] AGENTS.md 改动仅限 docs/audits 职责行（diff 可审计，不触及其他规则）
-- [ ] `docs/logs/` updated
+- [x] 两 guide 与设计契约一致（01 §7：guide 是格式权威；字段表/区块语法/淘汰项清单三面对照）
+- [x] AGENTS.md 改动仅限 docs/audits 职责行（diff 可审计，不触及其他规则）
+- [x] `docs/logs/` updated
 
 ## Phase 6 — M1 Verification Gate 执行 + roadmap 回写（WI10+WI11）
 

@@ -60,7 +60,7 @@ Do not jump from a feature request directly to code unless the route is already 
 7. Keep logs short, dated, and append-only. After completing any significant code change, you MUST update the daily dev log at `docs/logs/{year}/{month}-{day}.md` (reverse chronological, see `docs/logs/00-log-writing-guide.md` for format).
 8. Record non-obvious regressions in `docs/bugs/`.
 9. If prototype and implementation diverge materially, capture the reason in `docs/retrospectives/` instead of silently moving on.
-10. Promote repeated process lessons into `docs/skills/` or `docs/audits/` only when the pattern is recurring enough to justify reuse.
+10. Promote repeated process lessons into `docs/skills/` only when the pattern is recurring enough to justify reuse. Plan/roadmap audit conclusions are recorded inline in the audited file, not as external audit files.
 11. When creating, revising, executing, or auditing a file under `docs/plans/`, read `docs/plans/00-plan-authoring-and-execution-guide.md` first and follow it as the controlling workflow.
 12. Keep code comments minimal. Prefer self-explanatory code; add only rare comments when a local constraint is otherwise easy to misread.
 13. When a referenced file is not found at its expected path, check `docs/archive/` before concluding it does not exist. Archived files retain their original relative name under `docs/archive/`. Do not move files to `docs/archive/` without human approval.
@@ -93,7 +93,7 @@ Read additionally when needed:
 - `docs/architecture/` owns cross-cutting technical and module-boundary truth.
 - `docs/lessons/` owns durable reusable lessons extracted from bugs, audits, and retrospectives.
 - `docs/plans/` owns execution and closure criteria for non-trivial work.
-- `docs/audits/` owns audit workflow records and audit methodology.
+- `docs/audits/` owns audit methodology guides and rare human-authored cross-mission audit records. Plan/roadmap review and audit conclusions are recorded inline in the audited file (`## Draft Review Record` / `## Closure` / `## Deep Audit Record`), not as external audit files.
 - `docs/skills/` owns reusable prompts, review playbooks, and audit prompt templates.
 - `docs/logs/` owns dated implementation memory.
 - `docs/testing/` owns manual and exploratory testing records.
@@ -119,7 +119,7 @@ Read additionally when needed:
 
 Use these when warranted by task complexity. Plan and closure audits are mandatory for created plans.
 
-- `docs/audits/` for document audits and non-trivial stored audit records
+- `docs/audits/` for audit methodology and rare human-authored cross-mission records (inline receipts in plans/roadmaps are the default)
 - `docs/testing/` for manual or exploratory proof
 - `docs/retrospectives/` for material requirement/prototype gaps
 - `docs/skills/` for reusable prompts after repeated failures
