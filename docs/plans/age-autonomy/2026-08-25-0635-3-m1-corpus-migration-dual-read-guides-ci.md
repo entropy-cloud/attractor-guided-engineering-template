@@ -230,6 +230,11 @@ Merged from `## Closure Gates` (ledger migration, 01 §4.3 dissolution):
 - Why Not Blocking Closure: Phase 1 Decision 1 裁定保持旧格式（历史完整性 + completed 不可写）。重开条件：若 M5 引擎退役评估要求单一格式语料，届时以 human 批准的 disposition 立项。
 - Successor Required: no（条件触发）
 
+## Verification
+
+- 2026-08-26 CLOSURE_AUDIT 复跑（恢复通路，`docs/bugs/2026-08-25-ledger-plan-closure-deadlock.md` D2 成文路径的运行期兑现）：`pnpm --prefix tools/mission-driver test` 899 pass / 0 fail（prompt-check OK）；`node tools/mission-driver/src/plan-check.mjs docs/plans/00-plan-authoring-and-execution-guide.md --strict` exit 0；basisHash 按当次文件态计算（覆盖 frontmatter + Phase 区 + Closure Findings，与本节无关、不会 stale）。
+- pass test 2026-08-26-072439-mission-driver basisHash=d29b5bd8e7c2655e408d70bfc6ed6ca505caf0365809aff9ec135ba6456d1a86 exit=0
+
 ## Closure
 
 Status Note: executed 2026-08-25 (single session, all six phases). Completion is derived per the ledger formula — frontmatter `status` stays `active`; the `## Verification` pass lines (BUILD_VERIFY step) and the dispatch/accepted receipt below (CLOSURE_AUDIT step) are the transition-period writer surfaces per Phase 1 Decision 2.
@@ -245,4 +250,5 @@ Additional chain evidence: `./verify-age.sh` → L1+L2 GREEN (assets rebuilt aft
 
 Closure Audit Evidence:
 
-- pending the independent CLOSURE_AUDIT receipt (dispatch/accepted pair, same id)
+- dispatch audit #audit-2026-08-26-072439-mission-driver-2026-08-25-0635-3-m1-corpus-migration-dual-read-guides-ci-1-94b944cc to ses_auditor_2026-08-26-072439 models={exec:zhipuai/glm-5.2,aud:zhipuai/glm-5.2}
+- accepted #audit-2026-08-26-072439-mission-driver-2026-08-25-0635-3-m1-corpus-migration-dual-read-guides-ci-1-94b944cc：approved——独立收口复核全绿：计数域 43/43 全勾；复跑 `pnpm --prefix tools/mission-driver test` 899 pass / 0 fail（prompt-check OK）、guide `plan-check --strict` exit 0、`plugin/dsh/scripts/migrate-ledger.mjs` 在位、`AUDIT_STATUS_RE` 唯一合法存留处注释在案（Phase 1 Decision 6 第 4 条例外裁定兑现）、`MISSION_DRIVER_LEDGER` 开关经共享库接线；roadmap 计数域当前 19 = M1 稳态 29 之后续 M2+ plan 收口推进所致，非计数域污染（两钉住值 35/29 已于各自时刻命中并记录）；pass 行 basisHash 与本文件当次态一致（无 stale）；单模型 exec/aud 同型按 policy `downgrade: single-model` 声明如实记录。
