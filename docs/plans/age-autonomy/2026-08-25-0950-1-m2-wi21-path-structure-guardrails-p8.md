@@ -128,7 +128,14 @@ Exit Criteria:
 
 ## Verification
 
+- 2026-08-26 执行期复核（写者裁定承袭 0925 批次先例：`- pass` 行由本 run BUILD_VERIFY/CLOSURE_AUDIT 面经 `gate-check <plan> --verify`（verify-runner，M2-WI19）按当次 basisHash 机械产出，此处记录执行面证据）：三 Phase 计数域 27/27 全勾（本 run 早前批次执行完毕，工作树洁净）。`pnpm --prefix tools/mission-driver test` **899 pass / 0 fail**（prompt-check OK）；`./verify-age.sh` **L1+L2 GREEN**（plugin 240/0 + freshness content-equal + smoke-import ok，真值表 107 例在册）；`git diff --stat HEAD -- tools/mission-driver/src/engine.js` 为空（零引擎 diff 退出判据成立）；roadmap WI21 `[x]` 全证据指针 + Last Updated 头部同步、CONTEXT.md WI21 段、`docs/logs/2026/08-26.md` Phase 1/2/3 条目 + EXEC_PLANS 冷放复验条目均已在库。
+- pass test 2026-08-26-072439-mission-driver basisHash=c14c88ea7b7801a8d1f2ac906a1c887357706fc19f7bc0a016cbd7c33e389350 exit=0
+- pass verify-age 2026-08-26-072439-mission-driver basisHash=c14c88ea7b7801a8d1f2ac906a1c887357706fc19f7bc0a016cbd7c33e389350 exit=0
+
 ## Closure
+
+- dispatch audit #audit-2026-08-26-072439-mission-driver-2026-08-25-0950-1-m2-wi21-path-structure-guardrails-p8-1-001637b5 to ses_auditor_2026-08-26-072439 models={exec:zhipuai/glm-5.2,aud:zhipuai/glm-5.2}
+- accepted #audit-2026-08-26-072439-mission-driver-2026-08-25-0950-1-m2-wi21-path-structure-guardrails-p8-1-001637b5：approved——独立收口审计通过（2026-08-26，ses_auditor_2026-08-26-072439 独立 subagent；单模型 exec/aud 同型按 policy `downgrade: single-model` 声明如实记录，承 0925-1 先例）。① 计数域 27/27 全勾、无 `- [ ]` 残留、Draft Review Record 三轮回执在册（iteration 3 acceptable-as-is）；② 工件实证（live 抽查）：`law-core.mjs` `workItemRegistered` :273 + plan-structure 注册面接线 :356（语法面单独可判定）；`law-rules.mjs` `path-guardrail` :1063-1140 / `roadmap-write-guard` :1173-1289（`activePlanReferencing` :1151 例外通道 reason 记命中文件与行）/ `law-self-protection` :1291+（`isLawProtectedPath` :1329 四保护路径族，corpus 缺省 fail-closed :1368）；`mission-check.mjs` `checkRoadmapUniqueness` :158 + CLI 接线 :203；`law-policy.mjs` `{{projectRoot}}` 占位符 match/resolve 双面 :567/:821；`missions/autonomy.policy.yml` 7 新 gate 条目全 enforce + plan-structure 切 enforce；真值表 `plugin/dsh/test/law-truth-table.test.mjs` 107 例实测计数一致；③ 命令复跑：`gate-check <plan> --verify`（verify-runner，MISSION_DRIVER_RUN_ID=本 run）机械产出双 pass 行——test 899/0 + prompt-check OK、verify-age L1+L2 GREEN，basisHash=c14c88ea…9350 与当次 plan basis 一致；④ 保护面不变量：工作树洁净，`git diff --stat HEAD -- tools/mission-driver/src/engine.js` 为空（零引擎 diff）；⑤ 回写实证：roadmap WI21 `[x]` 全证据指针（含三项残项注记）+ `> Last Updated` 头部同步、CONTEXT.md「路径与结构护栏 + 执法层自护 P8」段在位、`docs/logs/2026/08-26.md` Phase 1/2/3 + EXEC_PLANS 冷放复验条目在册；⑥ Deferred 诚实性：三项均与 Non-Goals/成文残险对应且后继已登记（monitor 显示面 P2 条件触发 / per-mission 强读法 watch-only / law 内核 P8 覆盖缺口归 M5 WI39 docs 收口）；无 in-scope 缺陷藏匿 Deferred。结论：27/27 计数域全勾 + 双 pass 行 basisHash 绑定 + 本回执对满足 01 §5.2 完成派生公式。
 
 ## Deferred But Adjudicated
 
