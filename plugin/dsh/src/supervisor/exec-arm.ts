@@ -26,8 +26,10 @@
  *   5. draft-plans — drafter agent dispatch + the receipt occurrence
  *      registry (the one dispatch type with no ledger grammar).
  *   6. reclaim-claim — writer clear/re-issue (claim-validity ④⑤ dispatcher
- *      face) + execute re-dispatch; full resume-or-redispatch semantics stay
- *      with WI29 (this arm re-issues only when an agents face is present).
+ *      face) + execute re-dispatch; the dispatch-line crash face
+ *      (resume-or-redispatch of un-concluded review/audit occurrences)
+ *      lives in ./recovery.ts (M3-WI29) — this arm re-issues the claim only
+ *      when an agents face is present.
  *   7. terminal — the R3 DECLARED face (M3-WI27): the decision object is
  *      executed by re-running the SAME R1–R4 evaluation core over a fresh
  *      snapshot (./terminal-rules.ts — dual entry, one implementation); the
@@ -217,7 +219,7 @@ function newClaimToken(runId: string, holderSessionId: string): string {
 }
 
 /** Create one dispatched agent session bound to the resolved model selection. */
-async function createDispatchAgent(
+export async function createDispatchAgent(
   agents: DispatchAgentsFace,
   binding: AgentModelBinding,
   options: { projectRoot: string; label: string },
@@ -616,8 +618,8 @@ export async function reclaimClaim(hit: TriggerHit, opts: ExecArmOptions): Promi
       return { action: 'reclaim-claim', status: 'failed', detail }
     }
   }
-  opts.receipt({ kind: 'observation', runId, plan: planPath, event: 'reclaim-claim', detail: 'claim cleared; no agents face — re-dispatch deferred (full resume-or-redispatch semantics = WI29)' })
-  return { action: 'reclaim-claim', status: 'degraded', detail: 'cleared; re-dispatch deferred (WI29)' }
+  opts.receipt({ kind: 'observation', runId, plan: planPath, event: 'reclaim-claim', detail: 'claim cleared; no agents face — AI re-dispatch deferred (stale-dispatch resume-or-redispatch = the recovery scan, M3-WI29 recovery.ts; this posture is the legal headless degradation)' })
+  return { action: 'reclaim-claim', status: 'degraded', detail: 'cleared; re-dispatch deferred to the recovery scan (no agents face)' }
 }
 
 /**

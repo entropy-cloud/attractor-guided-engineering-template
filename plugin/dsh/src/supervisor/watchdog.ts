@@ -23,9 +23,13 @@
  * heartbeat re-entry pileup).
  *
  * Restart seam (03 §6): start() runs one immediate cycle labeled as the
- * recovery scan (expired claims / residual awaitingClosure land as
- * observation receipts). Reclaim/redispatch execution = 1411-2 reclaim
- * trigger + WI29 full semantics — this plan only observes.
+ * recovery scan. Since M3-WI29 the recovery label CARRIES the restart
+ * duty's action face: before the normal trigger evaluation, the cycle runs
+ * ./recovery.ts runRecoveryScan — un-concluded dispatch occurrences
+ * (conclusion missing × agents face liveness) are resumed (original session
+ * followup) or redispatched (a NEW dispatch line, old line append-only);
+ * expired-claim reclaim keeps flowing through the existing reclaim trigger
+ * (evaluated on every cycle, recovery included).
  *
  * Default posture (plan Phase 1 Decision 3 + M3-WI26): decisions of type
  * dispatch WITHOUT a trigger payload (policies without a `triggers:`
@@ -85,6 +89,7 @@ import {
   type ExecArmOptions,
 } from './exec-arm.ts'
 import type { TriggerHit } from './trigger-eval.ts'
+import { runRecoveryScan, type RecoveryAgentsFace } from './recovery.ts'
 import { discoverLawContext, fsLawGateIo, type LawGateIo, type MissionLawContext } from '../law/host-adapter.ts'
 import { parseFrontmatter } from '../../assets/src/ledger-frontmatter.mjs'
 import { fsMeterWriterIo } from './writer.ts'
@@ -281,6 +286,14 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
   // continuous-enabling session can register itself (mdcontrol.continuous
   // followup); A8 best-effort delivery, dead sessions tolerated.
   let receiptTargetSessionId = options.receiptSessionId
+
+  // M3-WI29: per-mount recovery handled-occurrence set — one recovery
+  // action (resume nudge / redispatch / degraded observation) per occurrence
+  // per mount, so repeated recovery cycles perform zero duplicate actions
+  // (03 §5 idempotency; restart clears the set — the ActiveRunGuard
+  // precedent — and the ledger line stays the cross-restart at-most-once
+  // face).
+  const recoveryHandled = new Set<string>()
 
   // terminal-receipt chain: durable record first, then the A8 best-effort
   // delivery, then the declared hooks (1411-2/1411-3 consumption seam), then
@@ -479,6 +492,46 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
       if (snapshot === null) {
         logger.info?.(`[mdsupervisor] cycle ${trigger}: no governing law context under ${projectRoot} — idle`)
         return null
+      }
+      // M3-WI29 recovery duty (03 §6): the restart-labeled cycle runs the
+      // stale-disposition scan BEFORE the normal trigger evaluation —
+      // un-concluded dispatch occurrences are resumed (original session
+      // alive) or redispatched (session dead, NEW line, old line stays
+      // append-only). NOT gated by continuous mode (crash completion of
+      // already-dispatched work, not new unattended progression — plan
+      // 1954-2: 「恢复后链式继续沿其门」chains onward stay gated); suppressed
+      // once the mission run reached a terminal word (stop-dispatch
+      // priority). Expired-claim reclaim needs no recovery-side twin — the
+      // reclaim trigger below evaluates on every cycle, recovery included.
+      if (trigger === 'recovery' && terminalState === null) {
+        try {
+          await runRecoveryScan({
+            projectRoot,
+            lawCtx: ctx!,
+            snapshot,
+            agents: options.dispatchAgents as RecoveryAgentsFace | undefined,
+            handled: recoveryHandled,
+            io: execIo,
+            clock,
+            now,
+            runId: 'mdsupervisor',
+            receipt,
+            logger,
+          })
+        } catch (err) {
+          // fail-soft (the exec-arm discipline): one recovery exception is a
+          // receipt, the cycle itself continues
+          receipt({
+            kind: 'exception',
+            runId: null,
+            plan: null,
+            event: 'recovery-scan-error',
+            detail: err instanceof Error ? err.message : String(err),
+          })
+          logger.warn?.(`[mdsupervisor] recovery scan threw (isolated, cycle continues)`, {
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
       }
       renewDueClaims(snapshot)
       // M3-WI28 continuous gate (03 §4 opt-in): dispatch decisions downgrade

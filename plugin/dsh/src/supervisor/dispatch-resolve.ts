@@ -41,7 +41,7 @@ interface PlanScanFace {
 }
 
 interface RoadmapScanFace {
-  deepAuditRecord: { dispatches: Array<{ id: string }>; unpairedDispatches: string[] } | null
+  deepAuditRecord: { dispatches: Array<{ id: string }>; unpairedDispatches: string[]; pairs: string[] } | null
 }
 
 // ── policy faces (parsed/validated upstream by law-policy) ──────────────────
@@ -332,6 +332,16 @@ export interface OccurrenceDedupFace {
  * lines and claim fields ARE the registry (03 §5). The one dispatch type
  * with no ledger grammar (draft-plans) dedups against the receipt JSONL —
  * the durable dispatch record — keyed by the ledger-derived occurrenceKey.
+ *
+ * M3-WI29 latest-line increment: when one occurrence carries MULTIPLE
+ * dispatch lines (a crash redispatch appends a new line, the old one stays
+ * append-only), the LATEST line by order answers — stale superseded lines
+ * do not occupy. Deep-audit is the substantive face: the last line PAIRED
+ * (concluded) re-opens the occurrence for the next round even when earlier
+ * crash-orphaned lines remain unpaired forever; the last line UNPAIRED
+ * marks the audit in flight. Review/audit (plan-level) keep their
+ * any-line-registered answer with the detail naming the latest line (one
+ * face with the review lease, law-rules.mjs writer-identity).
  */
 export function dispatchAlreadyRegistered(options: {
   occurrenceType: string
@@ -347,19 +357,34 @@ export function dispatchAlreadyRegistered(options: {
   if (occurrenceType === 'review') {
     const scan = planText !== null ? (scanPlanLedger(planText) as unknown as PlanScanFace) : null
     const dispatches = scan?.draftReviewRecord?.dispatches ?? []
-    if (dispatches.length > 0) return { already: true, detail: `Draft Review Record already carries ${dispatches.length} dispatch review line(s) (first id ${dispatches[0]?.id})` }
+    if (dispatches.length > 0) {
+      const last = dispatches[dispatches.length - 1]!
+      return { already: true, detail: `Draft Review Record already carries ${dispatches.length} dispatch review line(s) (latest ${last.id} — latest line answers, M3-WI29)` }
+    }
     return { already: false, detail: 'no dispatch review line in Draft Review Record' }
   }
   if (occurrenceType === 'audit') {
     const scan = planText !== null ? (scanPlanLedger(planText) as unknown as PlanScanFace) : null
     const dispatches = scan?.closure?.dispatches ?? []
-    if (dispatches.length > 0) return { already: true, detail: `Closure already carries ${dispatches.length} dispatch audit line(s) (first id ${dispatches[0]?.id})` }
+    if (dispatches.length > 0) {
+      const last = dispatches[dispatches.length - 1]!
+      return { already: true, detail: `Closure already carries ${dispatches.length} dispatch audit line(s) (latest ${last.id} — latest line answers, M3-WI29)` }
+    }
     return { already: false, detail: 'no dispatch audit line in Closure' }
   }
   if (occurrenceType === 'deep-audit') {
     const scan = roadmapText !== null ? (scanRoadmapLedger(roadmapText) as unknown as RoadmapScanFace) : null
-    const unpaired = scan?.deepAuditRecord?.unpairedDispatches ?? []
-    if (unpaired.length > 0) return { already: true, detail: `roadmap Deep Audit Record has an unpaired dispatch audit line in flight (${unpaired[0]})` }
+    const record = scan?.deepAuditRecord ?? null
+    if (record !== null) {
+      const dispatches = record.dispatches ?? []
+      if (dispatches.length > 0) {
+        const last = dispatches[dispatches.length - 1]!
+        if ((record.pairs ?? []).includes(last.id)) {
+          return { already: false, detail: `latest deep-audit dispatch ${last.id} is paired (concluded) — the occurrence is open for the next round; ${(record.unpairedDispatches ?? []).length} superseded unpaired line(s) do not occupy (M3-WI29)` }
+        }
+        return { already: true, detail: `roadmap Deep Audit Record's latest dispatch audit line ${last.id} is unpaired (in flight)` }
+      }
+    }
     return { already: false, detail: 'no unpaired deep-audit dispatch in the roadmap DAR' }
   }
   if (occurrenceType === 'draft') {

@@ -30,6 +30,7 @@ import {
   computeBasisHash,
   deriveCompleted,
   draftPlans,
+  parseLedgerId,
   scanPlanLedger,
   scanRoadmapLedger,
   splitLedgerSections,
@@ -297,32 +298,41 @@ function writerIdentityRule(action, currentFileState) {
     };
   }
 
-  // ── review lease (02 §4.2): an open `dispatch review` in the CURRENT DRR
-  // (dispatch without same-id conclusion) that this write does not close
-  // blocks every writer except that reviewer, the supervisor, and the engine.
+  // ── review lease (02 §4.2): the LAST valid dispatch review line in the
+  // CURRENT DRR owns the lease (M3-WI29 latest-line semantics — ONE face
+  // with the dispatch idempotency answer, not a second rule): unpaired and
+  // not concluded by THIS write → every writer except that reviewer, the
+  // supervisor, and the engine is denied. Superseded earlier lines hold no
+  // lease — after a crash redispatch the dead session's orphaned line must
+  // not lock the plan's write face forever; a paired LAST line closes the
+  // lease even when earlier lines stay unpaired forever (append-only: a
+  // dead session's line never gains its conclusion).
   const currentDrr = currentScan.draftReviewRecord;
   const proposedDrr = scan.draftReviewRecord;
   const proposedConclusions = new Set([
     ...((proposedDrr?.accepted ?? []).filter((a) => a.valid !== false).map((a) => a.id)),
     ...((proposedDrr?.conclusions ?? []).map((c) => c.id)),
   ]);
-  const openDispatches = ((currentDrr?.dispatches ?? []).filter(
-    (d) => d.valid && !((currentDrr.pairs ?? []).includes(d.id)),
-  )).filter((d) => !proposedConclusions.has(d.id));
-  if (openDispatches.length > 0) {
-    const leaseReviewers = openDispatches.map((d) => d.sessionId);
+  const validDispatches = (currentDrr?.dispatches ?? []).filter((d) => d.valid);
+  const lastDispatch = validDispatches.length > 0 ? validDispatches[validDispatches.length - 1] : null;
+  const leaseOpen =
+    lastDispatch !== null &&
+    !((currentDrr?.pairs ?? []).includes(lastDispatch.id)) &&
+    !proposedConclusions.has(lastDispatch.id);
+  if (leaseOpen) {
+    const leaseReviewer = lastDispatch.sessionId;
     const exempt = actorRole !== null && LEASE_EXEMPT_ROLES.includes(actorRole);
-    const isReviewer = actorId !== null && leaseReviewers.includes(actorId);
+    const isReviewer = actorId !== null && actorId === leaseReviewer;
     if (!exempt && !isReviewer) {
       if (actorId !== null) {
         return {
           verdict: "deny",
-          reason: `writer-identity: review lease active — dispatch review ${openDispatches[0].id} to ${leaseReviewers[0]} is not yet concluded; only that reviewer, the supervisor, or the engine may write this plan until the same-id conclusion line lands (02 §4.2)`,
+          reason: `writer-identity: review lease active — dispatch review ${lastDispatch.id} to ${leaseReviewer} is not yet concluded; only that reviewer, the supervisor, or the engine may write this plan until the same-id conclusion line lands (02 §4.2; lease holder = the LATEST dispatch line, superseded earlier lines hold no lease — M3-WI29)`,
         };
       }
       return {
         verdict: "allow",
-        reason: `writer-identity: review lease observed (${openDispatches.map((d) => d.id).join(", ")}) but no actor on this face — third-party writer cannot be excluded, not claiming verification (unverified-writer posture)`,
+        reason: `writer-identity: review lease observed (${lastDispatch.id} to ${leaseReviewer}) but no actor on this face — third-party writer cannot be excluded, not claiming verification (unverified-writer posture)`,
       };
     }
   }
@@ -666,10 +676,11 @@ function auditRoundsOverflowRule(action, currentFileState, ctx = {}) {
     };
   }
   const currentDar = findSection(currentSplit, 2, "Deep Audit Record");
+  const currentScanFace = scanRoadmapLedger(currentText);
   const currentIds = new Set(
     currentDar === null
       ? []
-      : (scanRoadmapLedger(currentText).deepAuditRecord?.dispatches ?? []).filter((d) => d.valid).map((d) => d.id),
+      : (currentScanFace.deepAuditRecord?.dispatches ?? []).filter((d) => d.valid).map((d) => d.id),
   );
   const proposedDispatches = (scanRoadmapLedger(text).deepAuditRecord?.dispatches ?? []).filter((d) => d.valid);
   const newDispatches = proposedDispatches.filter((d) => !currentIds.has(d.id));
@@ -677,6 +688,33 @@ function auditRoundsOverflowRule(action, currentFileState, ctx = {}) {
     return {
       verdict: "allow",
       reason: "audit-rounds-overflow: no new dispatch audit lines — budget face inert (existing lines untouched)",
+    };
+  }
+  // M3-WI29 same-occurrence redispatch exemption (01 §3.1 「同一审计
+  // occurrence 崩溃重派不重复自增」): a new dispatch line whose ROUND number
+  // (the id's iter segment) matches an existing UNPAIRED in-flight dispatch
+  // is a crash redispatch — the round was already paid by the crashed
+  // attempt, so it consumes no budget and is never denied here. Round
+  // numbers are unique per audit occurrence (the monotone audit-rounds
+  // counter, 01 §3.1), so the iter segment alone carries occurrence
+  // identity. Without this exemption a budget exhausted by the crashed
+  // attempt would deny the redispatch forever (deadlock: the dead session
+  // never writes its conclusion).
+  const unpairedRounds = new Set(
+    (currentScanFace.deepAuditRecord?.unpairedDispatches ?? [])
+      .map((id) => parseLedgerId(id))
+      .filter((p) => p !== null)
+      .map((p) => p.iter),
+  );
+  const redispatches = newDispatches.filter((d) => {
+    const parsed = parseLedgerId(d.id);
+    return parsed !== null && unpairedRounds.has(parsed.iter);
+  });
+  const freshRounds = newDispatches.filter((d) => !redispatches.includes(d));
+  if (freshRounds.length === 0) {
+    return {
+      verdict: "allow",
+      reason: `audit-rounds-overflow: ${redispatches.length} new dispatch audit line(s) are same-occurrence crash redispatch(s) of unpaired in-flight round(s) (${unpairedRounds.size} in flight) — the round was already paid, no budget consumed, no increment required (01 §3.1, M3-WI29)`,
     };
   }
   const max = typeof ctx.maxAuditRounds === "number" && Number.isInteger(ctx.maxAuditRounds) && ctx.maxAuditRounds >= 0
@@ -689,12 +727,12 @@ function auditRoundsOverflowRule(action, currentFileState, ctx = {}) {
   if (!(rounds < max)) {
     return {
       verdict: "deny",
-      reason: `audit-rounds-overflow: deep-audit budget exhausted (audit-rounds=${rounds} ≥ maxAuditRounds=${max}) — deny new dispatch ${newDispatches[0].id}; raise the budget (policy limits.maxAuditRounds, mission flow fallback) or close the mission via R1 (03-supervisor, M3/WI27)`,
+      reason: `audit-rounds-overflow: deep-audit budget exhausted (audit-rounds=${rounds} ≥ maxAuditRounds=${max}) — deny new dispatch ${freshRounds[0].id}; raise the budget (policy limits.maxAuditRounds, mission flow fallback) or close the mission via R1 (03-supervisor, M3/WI27)`,
     };
   }
   return {
     verdict: "allow",
-    reason: `audit-rounds-overflow: budget available (audit-rounds=${rounds} < maxAuditRounds=${max}) for ${newDispatches.length} new dispatch audit line(s)`,
+    reason: `audit-rounds-overflow: budget available (audit-rounds=${rounds} < maxAuditRounds=${max}) for ${freshRounds.length} new dispatch audit line(s)${redispatches.length > 0 ? ` (+${redispatches.length} same-occurrence redispatch(s), budget-inert — M3-WI29)` : ""}`,
   };
 }
 

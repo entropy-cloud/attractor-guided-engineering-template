@@ -801,6 +801,42 @@ test("gate2: lease ends when the same write lands the same-id conclusion (review
   assert.match(out.observations[0].reason, /draft→active with paired review receipt/);
 });
 
+/* ── 8b. M3-WI29 lease increment: latest-line semantics (crash-redispatch corpus) ── */
+
+const REDISPATCH_OLD_ID = "#review-2026-08-26-130203-mission-driver-demo-plan-1-1111aaaa";
+const REDISPATCH_NEW_ID = "#review-2026-08-26-130203-mission-driver-demo-plan-1-2222bbbb";
+const REDISPATCH_IN_FLIGHT_DRR = `- dispatch review ${REDISPATCH_OLD_ID} to ses_crash_dead
+- dispatch review ${REDISPATCH_NEW_ID} to ses_review_new
+`;
+const REDISPATCH_CONCLUDED_DRR = `- dispatch review ${REDISPATCH_OLD_ID} to ses_crash_dead
+- dispatch review ${REDISPATCH_NEW_ID} to ses_review_new
+- 2026-08-26：iteration 1，共识 acceptable-as-is ${REDISPATCH_NEW_ID}
+`;
+
+test("gate2 M3-WI29: in-flight redispatch — the LATEST unpaired line holds the lease; the superseded dead session is denied as a third party", () => {
+  const current = transitionPlan({ drr: REDISPATCH_IN_FLIGHT_DRR, ticked: true });
+  const elsewhere = current.replace("- [x] only item", "- [x] only item\n- [ ] second item");
+  const drafter = gate2(current, elsewhere, { id: "ses-drafter-self" });
+  assert.equal(drafter.decision, "deny");
+  assert.match(
+    drafter.reason,
+    new RegExp(`review lease active — dispatch review ${REDISPATCH_NEW_ID} to ses_review_new is not yet concluded`),
+  );
+  assert.match(drafter.reason, /lease holder = the LATEST dispatch line, superseded earlier lines hold no lease — M3-WI29/);
+  const dead = gate2(current, elsewhere, { id: "ses_crash_dead" });
+  assert.equal(dead.decision, "deny", "the crash-orphaned superseded line holds no lease — its dead session is a third party now");
+  assert.match(dead.reason, /review lease active/);
+  assert.equal(gate2(current, elsewhere, { id: "ses_review_new" }).decision, "allow");
+});
+
+test("gate2 M3-WI29: concluded redispatch — a paired LATEST line closes the lease even while the crash-orphaned earlier line stays unpaired (drafter write face unblocked)", () => {
+  const current = transitionPlan({ drr: REDISPATCH_CONCLUDED_DRR, ticked: true });
+  const elsewhere = current.replace("- [x] only item", "- [x] only item\n- [ ] second item");
+  const drafter = gate2(current, elsewhere, { id: "ses-drafter-self" });
+  assert.equal(drafter.decision, "allow", "lease closed by the paired latest line — redispatch no longer locks the plan write face forever (the M3-WI29 deadlock fix)");
+  assert.match(drafter.observations[0].reason, /no status transition in this write/);
+});
+
 test("gate2: terminal disposition — registered reviewer/supervisor verified, other ids degrade to the note (never impersonated)", () => {
   const active = transitionPlan({ status: "active", drr: PAIRED_DRR, ticked: true });
   const cancelled = transitionPlan({ status: "cancelled", drr: PAIRED_DRR, ticked: true });
@@ -1242,6 +1278,33 @@ test("gate-meter: audit-rounds = max denies the new round; unconfigured (both so
   });
   assert.equal(unconfigured.decision, "deny");
   assert.match(unconfigured.reason, /audit-rounds=0 ≥ maxAuditRounds=0/);
+});
+
+test("gate-meter M3-WI29: same-occurrence crash redispatch of an unpaired in-flight round consumes NO budget — allowed even when exhausted (01 §3.1)", () => {
+  const deadInFlight = `- dispatch audit #audit-2026-08-26-130203-mission-driver-roadmap-3-aaaaaaaa to ses_dead_auditor\n`;
+  const redispatchLine = `- dispatch audit #audit-2026-08-26-130203-mission-driver-roadmap-3-bbbbbbbb to ses_new_auditor\n`;
+  // budget exhausted (rounds=3 ≥ max=3) by the crashed attempt that already
+  // paid round 3: denying the redispatch would deadlock the occurrence
+  // forever (the dead session never writes its conclusion).
+  const exhausted = meter(roadmapBudget({ rounds: 3, dar: deadInFlight + redispatchLine }), {
+    current: roadmapBudget({ rounds: 3, dar: deadInFlight }),
+    maxAuditRounds: 3,
+  });
+  assert.equal(exhausted.decision, "allow");
+  assert.match(exhausted.observations[0].reason, /same-occurrence crash redispatch\(s\) of unpaired in-flight round\(s\)/);
+  assert.match(exhausted.observations[0].reason, /the round was already paid, no budget consumed, no increment required/);
+  // budget available with a MIXED write (fresh round + same-round
+  // redispatch): the fresh round consumes budget, the redispatch rides inert
+  const inFlight2 = `- dispatch audit #audit-2026-08-26-130203-mission-driver-roadmap-2-cccccccc to ses_dead_auditor\n`;
+  const redispatch2 = `- dispatch audit #audit-2026-08-26-130203-mission-driver-roadmap-2-dddddddd to ses_new_auditor\n`;
+  const fresh2 = `- dispatch audit #audit-2026-08-26-130203-mission-driver-roadmap-3-eeeeeeee to ses_auditor_2\n`;
+  const available = meter(roadmapBudget({ rounds: 2, dar: inFlight2 + redispatch2 + fresh2 }), {
+    current: roadmapBudget({ rounds: 2, dar: inFlight2 }),
+    maxAuditRounds: 3,
+  });
+  assert.equal(available.decision, "allow");
+  assert.match(available.observations[0].reason, /budget available \(audit-rounds=2 < maxAuditRounds=3\) for 1 new dispatch audit line\(s\)/);
+  assert.match(available.observations[0].reason, /\+1 same-occurrence redispatch\(s\), budget-inert — M3-WI29/);
 });
 
 test("gate-meter: existing dispatch lines only / no prior state / no DAR / legacy stay inert", () => {
