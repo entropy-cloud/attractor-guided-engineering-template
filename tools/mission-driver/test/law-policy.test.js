@@ -82,6 +82,9 @@ describe("real instance", () => {
       { id: "law-self-protection-policy", match: "{{projectRoot}}/missions/autonomy.policy.yml", rule: "law-self-protection", mode: "enforce" },
       { id: "law-self-protection-plan-check", match: "{{projectRoot}}/tools/mission-driver/src/plan-check.mjs", rule: "law-self-protection", mode: "enforce" },
       { id: "law-self-protection-gate-check", match: "{{projectRoot}}/tools/mission-driver/src/gate-check.mjs", rule: "law-self-protection", mode: "enforce" },
+      // legacy-plan-freeze (0950-2 / M2-WI22): the retired dsh plan-status
+      // gate's protection semantics collected into the law kernel.
+      { id: "legacy-plan-freeze", match: "action:write", rule: "legacy-plan-freeze", mode: "enforce" },
     ]);
     assert.deepEqual(policyAgentNames(r.policy), ["drafter", "reviewer", "auditor", "executor"]);
     assert.equal(r.policy.triggers.length, 7);

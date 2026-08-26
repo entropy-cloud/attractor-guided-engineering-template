@@ -20,7 +20,6 @@
     "verify:native": "node scripts/verify-native.mjs",
     "verify:native:keyless": "node scripts/verify-native.mjs --keyless",
     "verify:e2e": "node scripts/e2e-demo.mjs",
-    "verify:e2e:gate": "node scripts/e2e-plan-gate.mjs",
     "verify:e2e:preset": "node scripts/e2e-preset.mjs"
   },
   "dependencies": {

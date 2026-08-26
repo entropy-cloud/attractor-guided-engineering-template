@@ -294,8 +294,20 @@ export function scanPlanLedger(text) {
       countingBlocks.push(block);
       continue;
     }
-    if (PLAN_ANCHORS.includes(block.text) && !anchors.has(block.text)) {
-      anchors.set(block.text, block);
+    if (PLAN_ANCHORS.includes(block.text)) {
+      if (anchors.has(block.text)) {
+        // M2-WI22 (deep-audit round-1 P2): duplicate append-only anchors are
+        // a structural error, not silent tolerance — receipts inside later
+        // duplicates vanish from the derived face while looking committed.
+        pushError(
+          errors,
+          block.headingLine,
+          "duplicate-anchor",
+          `duplicate append-only anchor \`## ${block.text}\` (first anchored at line ${anchors.get(block.text).headingLine}) — append-only sections are single-block; only the first block is the derived face`,
+        );
+      } else {
+        anchors.set(block.text, block);
+      }
     }
   }
 
@@ -377,8 +389,20 @@ export function scanRoadmapLedger(text) {
       countingBlocks.push(block);
       continue;
     }
-    if (block.level === 2 && block.text === "Deep Audit Record" && deepAuditBlock === null) {
-      deepAuditBlock = block;
+    if (block.level === 2 && block.text === "Deep Audit Record") {
+      if (deepAuditBlock === null) {
+        deepAuditBlock = block;
+      } else {
+        // M2-WI22 (deep-audit round-1 P2): same duplicate-anchor discipline
+        // as the plan face — dispatch/accepted lines in later duplicates must
+        // not silently disappear from the derived face.
+        pushError(
+          errors,
+          block.headingLine,
+          "duplicate-anchor",
+          `duplicate append-only anchor \`## Deep Audit Record\` (first anchored at line ${deepAuditBlock.headingLine}) — append-only sections are single-block; only the first block is the derived face`,
+        );
+      }
     }
   }
 

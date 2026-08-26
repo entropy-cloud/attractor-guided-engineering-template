@@ -117,6 +117,17 @@ gates:
     match: "{{projectRoot}}/tools/mission-driver/src/gate-check.mjs"
     rule: law-self-protection
     mode: enforce
+  # legacy-plan-freeze (M2-WI22, plan docs/plans/age-autonomy/2026-08-25-0950-2):
+  # the retired dsh plan-status-gate's protection semantics, collected into
+  # the law kernel. Posture: enforce — the deny face is a narrow decidable
+  # fact (a legacy TERMINAL `> Plan Status:` line carried/rewritten/deleted
+  # by an in-domain .md write, glyph tolerance inherited from the shared
+  # PLAN_STATUS_RE), the exceptions are the P8 literal three legs, and the
+  # 54-plan frozen legacy corpus has no in-run writer left to false-kill.
+  - id: legacy-plan-freeze
+    match: "action:write"                # plan-domain .md writes; the rule self-scopes via ctx.plansRoots
+    rule: legacy-plan-freeze
+    mode: enforce
 triggers:
   # Execution semantics belong to M3/WI26 — schema-pinned syntax only.
   - when: "plan.full-tick and mechanical-verification-missing"

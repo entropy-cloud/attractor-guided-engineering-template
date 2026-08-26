@@ -3,8 +3,7 @@ import assert from "node:assert/strict";
 import { FlowEngine } from "../src/engine.js";
 import { makeMockDelegates } from "./helpers.js";
 import { createMissionDriverFlow } from "../src/flow-loader.js";
-import { _scanOpenAuditsList, _isMissionLevelAudit } from "../src/flow-loader.js";
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -30,6 +29,17 @@ import { tmpdir } from "node:os";
 // nothing → DEEP_AUDIT subflow → DRAFT_PLANS cycle. The DEEP_AUDIT step is
 // mocked as a plain agent step so we can deterministically drive `auditRound`
 // without spawning the deep-audit-loop subflow.
+//
+// M2-WI22 note (plan docs/plans/age-autonomy/2026-08-25-0950-2): the engine
+// gate itself is UNTOUCHED (engine.js is a protected area — zero diff). These
+// cases inject mock expressionFuncs directly, so they keep testing the live
+// `_shouldCompleteOnAuditQuota` semantics; with the flow-loader `openAudits`
+// registry key retired, production runs see [] (no open audits) from the
+// engine's optional-chained consumers — exactly the Row-3-shaped world. The
+// former "WI4 Phase 5 — _scanOpenAuditsList audit-type filter" describe block
+// was deleted: its tested functions were retired with the legacy channel
+// (retired-object deletion, not assertion drift — the channel-removal guards
+// live in test/audit-convergence.test.js).
 
 function gateFlow({ maxAuditRounds, auditEntry = "DEEP_AUDIT", withAuditEntry = true, pingPongWindow = 20 }) {
   const flow = {
@@ -432,126 +442,8 @@ describe("WI4 DRAFT_PLANS audit-gate (Plan mdo-step-audit-4)", () => {
   });
 });
 
-// WI4 Phase 5 — audit-type filter on `_scanOpenAuditsList` (design §5.4).
-// Verifies the helper logic that classifies audit files as mission-level vs
-// plan-level, plus an end-to-end scan that mixes both kinds in one dir.
-describe("WI4 Phase 5 — _scanOpenAuditsList audit-type filter", () => {
-  it("classifies files by `> Audit Type:` header (mission vs plan)", () => {
-    // Header wins over filename. Mission-level types include but are not
-    // limited to the two declared by the deep-audit-loop prompts.
-    const cases = [
-      // [filename, content, expectedMissionLevel]
-      ["2026-07-20-multi-audit-x.md", "> Audit Status: open\n> Audit Type: multi-dimensional\n", true],
-      ["2026-07-20-open-audit-x.md", "> Audit Status: open\n> Audit Type: open-ended\n", true],
-      ["2026-07-20-future-audit.md", "> Audit Status: open\n> Audit Type: security\n", true],
-      ["2026-07-20-closure-audit-x.md", "> Audit Status: open\n> Audit Type: closure\n", false],
-      ["2026-07-20-plan-audit-x.md", "> Audit Status: open\n> Audit Type: plan\n", false],
-    ];
-    for (const [name, content, expected] of cases) {
-      assert.equal(
-        _isMissionLevelAudit(name, content),
-        expected,
-        `classification wrong for ${name}`,
-      );
-    }
-  });
-
-  it("falls back to filename pattern when `> Audit Type:` header is missing", () => {
-    // Legacy / convention-violating audit files without the header fall back
-    // to a filename heuristic. Files with neither signal default to mission-
-    // level (include) so we never silently drop an open audit.
-    const cases = [
-      // [filename, content, expectedMissionLevel]
-      ["2026-07-20-multi-audit-x.md", "> Audit Status: open\n", true],
-      ["2026-07-20-open-audit-x.md", "> Audit Status: open\n", true],
-      ["2026-07-20-closure-audit-x.md", "> Audit Status: open\n", false],
-      ["2026-07-20-plan-audit-x.md", "> Audit Status: open\n", false],
-      ["2026-07-20-legacy-audit.md", "> Audit Status: open\n", true],
-    ];
-    for (const [name, content, expected] of cases) {
-      assert.equal(
-        _isMissionLevelAudit(name, content),
-        expected,
-        `fallback classification wrong for ${name}`,
-      );
-    }
-  });
-
-  it("end-to-end: _scanOpenAuditsList counts only mission-level open audits", () => {
-    const dir = mkdtempSync(join(tmpdir(), "md-audit-filter-"));
-    try {
-      // Mission-level open audits (counted)
-      writeFileSync(join(dir, "2026-07-20-1000-multi-audit-a.md"),
-        "> Audit Status: open\n> Audit Type: multi-dimensional\n");
-      writeFileSync(join(dir, "2026-07-20-1000-open-audit-b.md"),
-        "> Audit Status: open\n> Audit Type: open-ended\n");
-      // Plan-level closure audit (filtered out)
-      writeFileSync(join(dir, "2026-07-20-1000-closure-audit-c.md"),
-        "> Audit Status: open\n> Audit Type: closure\n");
-      // Mission-level audit already closed (NOT counted — status filter)
-      writeFileSync(join(dir, "2026-07-20-1000-multi-audit-d.md"),
-        "> Audit Status: closed\n> Audit Type: multi-dimensional\n");
-      // Plan-level closure audit closed (NOT counted)
-      writeFileSync(join(dir, "2026-07-20-1000-closure-audit-e.md"),
-        "> Audit Status: closed\n> Audit Type: closure\n");
-
-      const result = _scanOpenAuditsList(dir);
-      assert.equal(result.length, 2,
-        "only the 2 mission-level OPEN audits must be counted; closure-audit / closed files excluded");
-      // Filenames returned (basename only check, paths vary by OS)
-      const bases = result.map((p) => p.replace(/^(.*[\\/])/, ""));
-      assert.ok(bases.includes("2026-07-20-1000-multi-audit-a.md"));
-      assert.ok(bases.includes("2026-07-20-1000-open-audit-b.md"));
-      assert.ok(!bases.some((b) => b.includes("closure")));
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it("end-to-end: gate fires when only plan-level closure audits remain 'open'", async () => {
-    // Verify the integration: with auditRound === maxAuditRounds and a plan-
-    // level closure audit file in docs/audits/, the gate MUST still short-
-    // circuit to completed (because openAudits() correctly returns []).
-    const runDir = mkdtempSync(join(tmpdir(), "md-gate-planaudit-"));
-    try {
-      // Use a real audits dir for the expressionFuncs to scan so the filter
-      // is exercised end-to-end.
-      const auditsDir = join(runDir, "docs", "audits");
-      mkdirSync(auditsDir, { recursive: true });
-      writeFileSync(join(auditsDir, "2026-07-20-1000-closure-audit-x.md"),
-        "> Audit Status: open\n> Audit Type: closure\n");
-
-      // Wire openAudits() to a real flow-loader scan against the temp dir.
-      const flow = gateFlow({ maxAuditRounds: 1 });
-      const delegates = makeMockDelegates({
-        responses: {
-          DRAFT_PLANS: NOTHING,
-          DEEP_AUDIT: AUDIT_COMPLETE,
-        },
-        config: { projectRoot: runDir, runDir },
-      });
-      // Override expressionFuncs to scan the temp auditsDir directly.
-      delegates.expressionFuncs = {
-        activePlans: () => [],
-        draftPlans: () => [],
-        openAudits: () => _scanOpenAuditsList(auditsDir),
-      };
-
-      const engine = new FlowEngine(flow, delegates);
-      const result = await engine.run();
-
-      // Even with the closure-audit file present, openAudits() returns [] due
-      // to the WI4 Phase 5 filter. So the audit-gate fires on schedule when
-      // auditRound reaches maxAuditRounds.
-      assert.equal(result.status, "completed",
-        "gate must short-circuit to completed when only plan-level closure audits remain");
-
-      const events = readEvents(runDir);
-      const gateEvents = events.filter((e) => e.type === "transition" && e.via === "audit_gate");
-      assert.equal(gateEvents.length, 1,
-        "audit-gate must fire exactly once when openAudits() is empty (closure audits filtered out)");
-    } finally {
-      rmSync(runDir, { recursive: true, force: true });
-    }
-  });
-});
+// Deleted with the legacy open-audit channel (M2-WI22): the former
+// "WI4 Phase 5 — _scanOpenAuditsList audit-type filter" suite tested the
+// retired _scanOpenAuditsList/_isMissionLevelAudit helpers (retired-object
+// deletion, not assertion drift; replacement guards in
+// test/audit-convergence.test.js).

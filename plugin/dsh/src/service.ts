@@ -27,14 +27,13 @@
  *   - skills registration (mission-control-run/draft/analyze) — LANDED
  *     (M3-WI12): runtime rows on `ctx.skills` via reactive `ctx.inject`
  *     (see ./mdcontrol-skills.ts).
- *   - tools/pre-execute plan-status reinforcement gate — LANDED (M3-WI13,
- *     plan `2026-08-23-1852-3`): denies plan-status `completed` edits
- *     without run-state closure evidence (see ./plan-status-gate.ts).
- *   - tools/pre-execute law gate — LANDED (age-autonomy M2-WI12, plan
- *     `docs/plans/age-autonomy/2026-08-25-0815-1`): observe-only
- *     policy-driven evaluate via the bundled law kernel, recording to the
- *     observation-log face (see ./law/host-adapter.ts; evidence-face
- *     rebuild/retirement of the plan-status gate is age-autonomy WI22).
+ *   - tools/pre-execute gates — the law gate is the solo listener since
+ *     age-autonomy M2-WI22 (plan `docs/plans/age-autonomy/2026-08-25-0950-2`)
+ *     retired the run-state plan-status reinforcement gate (M3-WI13): its
+ *     protection semantics live in the law kernel rule `legacy-plan-freeze`,
+ *     its run-state evidence faces (F1/F2/F3) are abolished — plan
+ *     frontmatter/closures are the only completion evidence face (see
+ *     ./law/host-adapter.ts).
  *
  * Exposure surface (plan Phase 1 Decision 1, better-sidebar precedent):
  * the wire-method record lives in `./mdcontrol-routes.ts`; this service
@@ -52,7 +51,6 @@ import {
   type MdControlRoutes,
 } from './mdcontrol-routes.ts'
 import { registerMissionControlSkills, type SkillsRegistryFace } from './mdcontrol-skills.ts'
-import { gateMountSummary, registerPlanStatusGate } from './plan-status-gate.ts'
 import { lawGateMountSummary, registerLawGate } from './law/host-adapter.ts'
 
 /** Plugin config row from cordis.patch.yml (`assetsDir: ./assets` today). */
@@ -104,28 +102,22 @@ export function apply(ctx: Context, config: MissionControlConfig = {}): void {
     return registerMissionControlSkills(skills, logger)
   })
 
-  // M3-WI13 reinforcement gate: one tools/pre-execute listener denying
-  // plan-status `completed` edits without run-state closure evidence (plan
-  // 1852-3; semantics in ./plan-status-gate.ts header). Auto-disposed with
-  // the plugin context; the explicit effect parks the disposer for
+  // tools/pre-execute law gate (age-autonomy M2-WI12 plan 0815-1, extended
+  // WI21/WI22): policy-driven evaluate via the bundled law kernel, recording
+  // to the observation-log face. The solo pre-execute listener since WI22
+  // retired the M3-WI13 plan-status gate (its protection semantics moved
+  // into the kernel rule `legacy-plan-freeze`); auto-disposed with the
+  // plugin context, the explicit effect parks the disposer for
   // dispose-on-unload parity with the HTTP routes.
-  const disposeGate = registerPlanStatusGate(ctx, logger)
-  ctx.effect(() => disposeGate, 'mdcontrol: tools/pre-execute plan-status gate')
-
-  // age-autonomy M2-WI12 (plan 0815-1 Phase 3): policy-driven law gate —
-  // observe-only evaluate via the bundled law kernel, recording to the
-  // observation-log face. Independent listener + disposer beside the
-  // plan-status gate (no shared mutable state).
   const disposeLawGate = registerLawGate(ctx, logger)
   ctx.effect(() => disposeLawGate, 'mdcontrol: tools/pre-execute law gate')
 
   ctx.logger(LOGGER_NAME).info('mission-control mounted', {
     scope: 'mdcontrol',
-    phase: 'M3-WI13 + M2-WI12(law)',
+    phase: 'M3-WI13(retired WI22) + M2-WI12..WI22(law)',
     assetsDir: config.assetsDir ?? './assets',
     routes: 'run/status/list (M2-WI10) + draft/analyze (M3-WI12)',
     skills: 'mission-control-run/draft/analyze (M3-WI12)',
-    planStatusGate: gateMountSummary(),
     lawGate: lawGateMountSummary(),
     httpDispatcher: disposeHttp ? '/mdcontrol/api' : 'absent (webServer not provided)',
     guard: 'single-engine-activity-per-projectRoot, run+draft shared slot (1447-1 + 1852-2 adjudications)',

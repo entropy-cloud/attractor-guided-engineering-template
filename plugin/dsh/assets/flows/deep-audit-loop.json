@@ -3,7 +3,7 @@
   "maxTotalSteps": 50,
   "maxCycleVisits": 6,
   "pingPongWindow": 6,
-  "entry": "CHECK_OPEN_AUDITS",
+  "entry": "MULTI_AUDIT",
 
   "markerAliases": {
     "ok": "clean",
@@ -20,19 +20,6 @@
   },
 
   "steps": {
-    "CHECK_OPEN_AUDITS": {
-      "when": "openAudits().length > 0",
-      "otherwise": { "goto": "MULTI_AUDIT" },
-      "type": "agent",
-      "promptPath": "prompts/draft-from-audit.md",
-      "onUnknownMaxRetries": 2,
-      "transitions": {
-        "created": { "done": "completed" },
-        "nothing": { "goto": "MULTI_AUDIT" }
-      },
-      "onError": { "goto": "MULTI_AUDIT" }
-    },
-
     "MULTI_AUDIT": {
       "when": "multiAuditPrompt != ''",
       "otherwise": { "goto": "OPEN_AUDIT" },
@@ -48,26 +35,13 @@
 
     "OPEN_AUDIT": {
       "when": "openAuditPrompt != ''",
-      "otherwise": { "goto": "SCAN_NEW_RESULTS" },
+      "otherwise": { "done": "completed" },
       "type": "agent",
       "promptPath": "prompts/open-audit.md",
       "onUnknownMaxRetries": 2,
       "transitions": {
-        "clean": { "goto": "SCAN_NEW_RESULTS" },
-        "issues": { "goto": "SCAN_NEW_RESULTS" }
-      },
-      "onError": { "goto": "SCAN_NEW_RESULTS" }
-    },
-
-    "SCAN_NEW_RESULTS": {
-      "when": "openAudits().length > 0",
-      "otherwise": { "done": "completed" },
-      "type": "agent",
-      "promptPath": "prompts/draft-from-audit.md",
-      "onUnknownMaxRetries": 2,
-      "transitions": {
-        "created": { "done": "completed" },
-        "nothing": { "done": "completed" }
+        "clean": { "done": "completed" },
+        "issues": { "done": "completed" }
       },
       "onError": { "done": "completed" }
     }

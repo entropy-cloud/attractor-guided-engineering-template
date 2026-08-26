@@ -499,16 +499,19 @@ export function buildRunSkeleton(runDir) {
 // The global audits dir: home of the human/AGENTS.md §8 manual audits and the
 // 00-audit-execution-guide.md index. Mission auto-generated audits (from
 // MULTI_AUDIT/OPEN_AUDIT) are NOT written here — they are isolated per mission
-// (see resolveAuditsDir) to prevent openAudits() cross-mission contamination.
+// (see resolveAuditsDir) so one mission's audit prose never mixes with
+// another's. (The retired audit-listing scan that once read these dirs was
+// retired by age-autonomy M2-WI22 — auditsDir now only feeds where the
+// deep-audit prompts write their reports.)
 const GLOBAL_AUDITS_DIR = "docs/audits";
 
 /**
  * Derive a per-mission auditsDir when the mission hasn't set an explicit one.
  * Mirrors plansDir's structure with the `plans` path segment swapped for
  * `audits` (docs/plans/{user}/{mission} → docs/audits/{user}/{mission}) so a
- * mission's auto-generated audit files co-locate with its plans, and
- * openAudits() only scans this mission's open audits (no cross-mission
- * contamination — the same class of bug that made plansDir per-mission).
+ * mission's auto-generated audit files co-locate with its plans (per-mission
+ * isolation — the same class of concern that made plansDir per-mission; the
+ * retired audit-listing scan was its original consumer, M2-WI22).
  * Creates the directory so MULTI_AUDIT/OPEN_AUDIT can write to it immediately.
  *
  * Resolution:
@@ -694,8 +697,9 @@ export function resolveConfig(args = {}) {
   const mission = loadMission(missionFile, projectRoot);
 
   // Per-mission audit isolation (see resolveAuditsDir). Mutates the resolved
-  // mission so both main.js delegates.vars.auditsDir and flow-loader's
-  // openAudits() (which read mission.auditsDir) see the derived path.
+  // mission so main.js delegates.vars.auditsDir (and any consumer reading
+  // mission.auditsDir — historically the retired flow-loader audit-listing key, now
+  // the audit-report write paths) sees the derived path.
   mission.auditsDir = resolveAuditsDir(mission.auditsDir, mission.plansDir, projectRoot);
 
   // mdr-fix-2: per-mission promptsDir override. Resolved to an absolute path

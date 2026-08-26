@@ -3,34 +3,35 @@
  * M2-WI12, plan docs/plans/age-autonomy/2026-08-25-0815-1 Phase 3).
  *
  * What it does: per pending file-write tool call (write / edit /
- * str_replace_editor create|str_replace|insert — the same extraction family
- * as plan-status-gate.ts), discover the nearest ancestor mission context
- * with an `autonomyPolicy`, load + validate the policy through the bundled
- * law kernel copy (assets/src/law-policy.mjs — engine-side placement ruling,
- * 0815-1 Phase 1), resolve the actor from `exec.agent` (Explore conclusion:
- * `Agent.id: SessionId` is available, role is NOT inferable on this face →
- * structural-subset posture with an `unverified-writer` note; role inference
- * is M3 supervisor scope), evaluate the law kernel, and record every
- * observation to the observation-log face (`_tmp/law-observations.jsonl`,
- * one JSON line per matched gate) + a logger one-liner.
+ * str_replace_editor create|str_replace|insert — the extraction family the
+ * retired plan-status-gate established, M3-WI13), discover the nearest
+ * ancestor mission context with an `autonomyPolicy`, load + validate the
+ * policy through the bundled law kernel copy (assets/src/law-policy.mjs —
+ * engine-side placement ruling, 0815-1 Phase 1), resolve the actor from
+ * `exec.agent` (Explore conclusion: `Agent.id: SessionId` is available, role
+ * is NOT inferable on this face → structural-subset posture with an
+ * `unverified-writer` note; role inference is M3 supervisor scope), evaluate
+ * the law kernel, and record every observation to the observation-log face
+ * (`_tmp/law-observations.jsonl`, one JSON line per matched gate) + a logger
+ * one-liner.
  *
  * Posture: gate modes come from the policy (observe | enforce — the kernel
- * records observe would-denies without blocking; the 0815-2/3 + WI21 batches
- * register enforce faces). The enforce-deny return path rides the policy, not
- * this adapter (02 §6 rolling discipline).
- * Any internal failure fails OPEN (allow + warn, plan-status-gate D1
- * lineage): a gate crash must never break the host tool pipeline.
+ * records observe would-denies without blocking; the 0815-2/3 + WI21 + WI22
+ * batches register enforce faces). The enforce-deny return path rides the
+ * policy, not this adapter (02 §6 rolling discipline).
+ * Any internal failure fails OPEN (allow + warn, the M3-WI13 D1 lineage):
+ * a gate crash must never break the host tool pipeline.
  *
- * Coexistence: an independent `tools/pre-execute` listener with its own
- * disposer next to plan-status-gate — no shared mutable state; the only
- * caches are policy snapshots keyed by ancestor dir (staleness accepted for
- * M2 observe-only; document-reload discipline lands with enforce stages).
+ * Solo listener since WI22 retired the run-state plan-status gate: this is
+ * the ONLY tools/pre-execute mount in the service; the only caches are
+ * policy snapshots keyed by ancestor dir (staleness accepted for M2
+ * observe-only; document-reload discipline lands with enforce stages).
  */
 import { appendFileSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { evaluateGates } from '../../assets/src/law-core.mjs'
 import { loadPolicyFile, policyAgentNames, resolveMaxAuditRounds } from '../../assets/src/law-policy.mjs'
-import { isLawProtectedPath } from '../../assets/src/law-rules.mjs'
+import { isLawProtectedPath, LEGACY_TERMINAL_PLAN_STATUSES, legacyPlanStatusOf } from '../../assets/src/law-rules.mjs'
 import type { Context } from '@deepseek-ai/cordis'
 import type { PreToolDecision, ToolExecution } from '@deepseek-ai/dsh-tools'
 
@@ -366,6 +367,20 @@ export function readPlanRecordsUnder(dir: string, io: LawGateIo, cap = 200): Arr
 
 // ── observation sink ────────────────────────────────────────────────────────
 
+/**
+ * Cheap pre-check for the legacy-plan-freeze corpus walk (M2-WI22): does
+ * either face of this call touch a legacy TERMINAL `> Plan Status:` line?
+ * The shared kernel matcher decides; the adapter only schedules IO.
+ */
+function legacyFreezeFaceActive(proposedContent: string, disk: string | null): boolean {
+  const proposed = legacyPlanStatusOf(proposedContent);
+  if (proposed !== null && LEGACY_TERMINAL_PLAN_STATUSES.includes(proposed)) return true;
+  if (disk === null) return false;
+  const current = legacyPlanStatusOf(disk);
+  return current !== null && LEGACY_TERMINAL_PLAN_STATUSES.includes(current);
+}
+
+
 export interface LawObservationRecord {
   ts: string
   face: 'dsh-pre-execute'
@@ -421,6 +436,18 @@ export function evaluateLawCall(
       ? readPlanRecordsUnder(lawCtx.plansDir, io)
       : null
 
+  // legacy-plan-freeze face (M2-WI22): terminal-line carries/rewrites need
+  // the same corpus for the approved-project exception. Terminal-line writes
+  // are rare (once per plan lifecycle), so the walk fires only on the
+  // terminal-face pre-check — the judgment itself stays inside the rule
+  // (legacyPlanStatusOf is the one shared matcher).
+  const freezePlans =
+    lawCtx.plansDir !== '' && legacyFreezeFaceActive(proposedContent, disk)
+      ? readPlanRecordsUnder(lawCtx.plansDir, io)
+      : null
+
+  const corpus = protectedPlans ?? freezePlans
+
   const out = evaluateGates(
     {
       type: 'write',
@@ -442,7 +469,7 @@ export function evaluateLawCall(
         projectRoot: lawCtx.projectRoot,
         plansRoots: discoverPlansRoots(resolve(targetPath), io, rootsCache),
         ...(roadmapText !== null ? { roadmapText } : {}),
-        ...(protectedPlans !== null ? { plans: protectedPlans } : {}),
+        ...(corpus !== null ? { plans: corpus } : {}),
       },
     },
   )

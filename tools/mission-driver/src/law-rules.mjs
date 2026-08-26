@@ -1,6 +1,7 @@
 // AGE rule-law hard-gate rules (age-autonomy M2-WI14/WI15/WI16, plan
 // docs/plans/age-autonomy/2026-08-25-0815-2; supporting gates
-// M2-WI17..WI20, plan docs/plans/age-autonomy/2026-08-25-0815-3).
+// M2-WI17..WI20, plan docs/plans/age-autonomy/2026-08-25-0815-3; guardrails
+// + P8 M2-WI21 and legacy-plan-freeze M2-WI22, plans 0950-1/0950-2).
 //
 // Placement ruling (0815-1 Phase 1 extended): rules live engine-side in the
 // zero-npm law kernel family; this module is imported by law-policy.mjs (NOT
@@ -23,6 +24,7 @@
 //     rule's domain — allow with a format note.
 
 import { registerRule } from "./law-core.mjs";
+import { PLAN_STATUS_RE, normalizeLegacyStatus } from "./ledger-dualread.mjs";
 import {
   activePlans,
   computeBasisHash,
@@ -1375,3 +1377,115 @@ function lawSelfProtectionRule(action, currentFileState, ctx = {}) {
 }
 
 registerRule("law-self-protection", lawSelfProtectionRule, { structural: true });
+
+// ── legacy-plan-freeze (M2-WI22, plan-status-gate 保护语义收编) ──────────────
+//
+// The run-state plan-status gate (dsh-plugin M3-WI13) retired with WI22: its
+// three faces split — the "deny legacy `> Plan Status: completed` writes"
+// protection semantics land HERE as a law structural rule; the run-state
+// evidence faces (F1/F2/F3) are abolished (ledger receipts + claims are the
+// only completion evidence, 01 §5.2); the pre-execute mount is the law
+// adapter's (0815-1). Glyph tolerance is inherited verbatim from the shared
+// PLAN_STATUS_RE (bold/case/optional-"Plan"/trailing-space forms), fenced
+// code blocks never count (the dual-read read-seam discipline), and the
+// value is normalized through normalizeLegacyStatus — one matcher, zero
+// second regex implementations (01 §5.2 "不得各自带正则").
+//
+// Domain: .md writes under the injected plans roots (ctx.plansRoots — the
+// path-guardrail passive-scan union). Deny face = the proposedContent
+// carries a legacy TERMINAL status line (introduce or keep — the frozen
+// corpus never re-enters an AI write) OR the current state has one and the
+// write rewrites/deletes it (rewrite-to-non-terminal = un-freeze attempt).
+// Exceptions = the P8 literal three legs (human actor role / CI deployment
+// face / approved project via activePlanReferencing); corpus not injected
+// → fail-closed deny (the protection face never opens on unobservable
+// facts — same posture as P8). Recorded miss: the `write` tool face has no
+// disk snapshot, so delete-the-line escapes via full-file write without a
+// prior state are unobservable here (the edit/str_replace faces carry the
+// disk text; CI + git attribution own the write-tool residual).
+
+const LEGACY_TERMINAL_SET = new Set(["completed", "cancelled", "superseded", "deferred"]);
+
+export const LEGACY_TERMINAL_PLAN_STATUSES = [...LEGACY_TERMINAL_SET];
+
+/**
+ * First legacy `> Plan Status:` value of a text, fence-skipped and
+ * normalized — the shared PLAN_STATUS_RE glyph tolerance, env-free.
+ * @returns {string | null}
+ */
+export function legacyPlanStatusOf(text) {
+  if (typeof text !== "string") return null;
+  const split = splitLedgerSections(text);
+  for (let i = 0; i < split.lines.length; i++) {
+    if (split.fenced[i]) continue;
+    const m = split.lines[i].match(PLAN_STATUS_RE);
+    if (m) return normalizeLegacyStatus(m[1].trim());
+  }
+  return null;
+}
+
+function isLegacyTerminal(status) {
+  return status !== null && LEGACY_TERMINAL_SET.has(status);
+}
+
+function legacyPlanFreezeRule(action, currentFileState, ctx = {}) {
+  if (!toPosixPath(action.path).endsWith(".md")) {
+    return { verdict: "allow", reason: "legacy-plan-freeze: not a .md write — outside domain" };
+  }
+  const roots = Array.isArray(ctx.plansRoots) ? ctx.plansRoots.filter((r) => typeof r === "string" && r !== "") : null;
+  if (roots === null || roots.length === 0) {
+    return {
+      verdict: "allow",
+      reason: "legacy-plan-freeze: plans roots not injected on this face — domain membership not verifiable, fail-open (02 §6; the DSH adapter and gate-check CLI inject ctx.plansRoots)",
+    };
+  }
+  const inDomain = roots.some((root) => isUnderRoot(action.path, root));
+  if (!inDomain) {
+    return { verdict: "allow", reason: "legacy-plan-freeze: .md write outside every registered plans root — outside domain (non-plan documents with status-looking lines are not gated)" };
+  }
+
+  const proposedStatus = legacyPlanStatusOf(action.proposedContent);
+  const currentText = currentTextOf(currentFileState);
+  const currentStatus = currentText !== null ? legacyPlanStatusOf(currentText) : null;
+
+  const carriesTerminal = isLegacyTerminal(proposedStatus);
+  const unFreeze = isLegacyTerminal(currentStatus) && proposedStatus !== currentStatus;
+  if (!carriesTerminal && !unFreeze) {
+    return {
+      verdict: "allow",
+      reason: `legacy-plan-freeze: no legacy terminal status line in play (proposed=${JSON.stringify(proposedStatus)}) — legacy corpus freeze inert for this write`,
+    };
+  }
+
+  const actor = action.actor;
+  const actorRole = actor && typeof actor.role === "string" ? actor.role : null;
+  const path = toPosixPath(action.path);
+  const face = carriesTerminal
+    ? `the proposed content carries a legacy terminal status line (Plan Status: ${proposedStatus})`
+    : `the current file holds Plan Status: ${currentStatus} (terminal) and this write rewrites or deletes that line (un-freeze attempt)`;
+  if (actorRole === "human") {
+    return {
+      verdict: "allow",
+      reason: `legacy-plan-freeze: legacy terminal-line write by a human actor on ${path} (02 §4.7 literal exception ① — human)`,
+    };
+  }
+  const reference = activePlanReferencing(action.path, ctx);
+  if (reference !== null) {
+    return {
+      verdict: "allow",
+      reason: `legacy-plan-freeze: ${face}, covered by the approved-project exception — active plan ${reference.plan} line ${reference.line} names this target (02 §4.7 literal exception ③)`,
+    };
+  }
+  if (!Array.isArray(ctx.plans)) {
+    return {
+      verdict: "deny",
+      reason: `legacy-plan-freeze: ${face}, and the plan corpus is not injected on this face — the approved-project exception cannot be evaluated; the frozen legacy corpus fails closed. Legal channels: human actor (role=human), CI (writes outside the pre-execute pipeline), or an approved project (an active plan declaring this path as a target — inject ctx.plans)`,
+    };
+  }
+  return {
+    verdict: "deny",
+    reason: `legacy-plan-freeze: ${face} — legacy terminal plans are frozen for AI writes; the dual-read corpus stays legacy forever and restart work needs a new plan (01 §5.1). Legal channels: human actor (role=human), CI (writes outside the pre-execute pipeline), or an approved project (an active plan whose body declares this path as a target)${actorRole === null ? "; actor role not verifiable on this face (id-only/absent actor — unverified-writer posture, the human exception cannot be claimed)" : ` (actor role ${actorRole} is not in the exception set)`}`,
+  };
+}
+
+registerRule("legacy-plan-freeze", legacyPlanFreezeRule, { structural: true });

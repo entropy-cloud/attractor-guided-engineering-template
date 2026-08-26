@@ -92,9 +92,11 @@ describe("context-map — buildInjectionMap(mission-driver)", () => {
 
 describe("context-map — listPrompts", () => {
   const { prompts } = listPrompts(TOOL_ROOT);
-  it("returns the prompt library (≥12 prompts, includes execute)", () => {
+  it("returns the prompt library (≥11 prompts, includes execute; draft-from-audit retired M2-WI22)", () => {
 
-    assert.ok(prompts.length >= 12, `expected ≥12 prompts, got ${prompts.length}`);
+    assert.ok(prompts.length >= 11, `expected ≥11 prompts, got ${prompts.length}`);
+    assert.ok(!prompts.find((p) => p.name === "draft-from-audit"),
+      "draft-from-audit.md was deleted with the legacy open-audit channel (age-autonomy M2-WI22)");
     const execute = prompts.find((p) => p.name === "execute");
     assert.ok(execute, "execute prompt present");
     assert.ok(execute.summary.length > 0, "execute has a summary");

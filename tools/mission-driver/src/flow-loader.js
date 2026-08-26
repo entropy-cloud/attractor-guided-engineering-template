@@ -34,18 +34,13 @@ const DRAFT_STATUSES = [
   "in draft",
   "in-draft",
 ].map(normalizeLegacyStatus);
-// LEGACY-ONLY open-audit channel (0635-3 Phase 1 Decision 6.4 adjudication):
-// `> Audit Status:` / `> Audit Type:` headers exist only in legacy external
-// `docs/audits/` files. New-format open audit state is expressed by roadmap
-// `## Deep Audit Record` dispatch/accepted pairing instead. This channel stays
-// (existing open audits must remain visible to the engine) until the M2
-// law/audit track (WI20/WI22) retires it — the ONLY sanctioned remaining
-// holder of an audit-status regex in engine src.
-const AUDIT_STATUS_RE = /^>\s*\*{0,2}Audit\s+Status\*{0,2}:\s*\*{0,2}(.+?)\*{0,2}\s*$/m;
-// WI4 Phase 5 — `> Audit Type:` header declared by the deep-audit-loop subflow's
-// MULTI/OPEN_AUDIT prompts (`multi-dimensional`, `open-ended`) and by plan-
-// level closure audit records (`plan`, `closure`). See `_isMissionLevelAudit`.
-const AUDIT_TYPE_RE = /^>\s*\*{0,2}Audit\s+Type\*{0,2}:\s*\*{0,2}(.+?)\*{0,2}\s*$/m;
+// RETIRED (age-autonomy M2-WI22, plan docs/plans/age-autonomy/2026-08-25-0950-2):
+// the legacy external-audit channel — the `> Audit Status:` header scan, its
+// mission-level classifier, and the audit-listing expression-registry key —
+// is deleted from this module. Open audit state lives in roadmap `## Deep
+// Audit Record` dispatch/accepted pairing (M1-WI8 inline lifecycle);
+// `docs/audits/` files are prose-only history. The engine's optional-chained
+// consumers of the removed key degrade to [] (no open audits) by design.
 
 // ── Pure scanning helpers (return arrays, no side effects) ──
 
@@ -108,67 +103,6 @@ function _scanPlansByStatus(plansDir, statuses, defaultVerifyKeys) {
   return results;
 }
 
-function _scanOpenAuditsList(auditsDir) {
-  const results = [];
-  if (!existsSync(auditsDir)) return results;
-  const files = _walkMarkdown(auditsDir).sort();
-  for (const f of files) {
-    const content = readFileSync(f, "utf8");
-    const m = content.match(AUDIT_STATUS_RE);
-    const status = m ? normalizeLegacyStatus(m[1]) : "";
-    if (status === "open") {
-      // WI4 (Phase 5 decision: Option A, design §5.4) — only count mission-level
-      // audits so the audit-gate's openAudits() input reflects actual mission-
-      // level outstanding work. Plan-level closure audits (e.g. manually stored
-      // `*closure-audit*` records or files with `> Audit Type: plan|closure`)
-      // must NOT inflate the mission's open-audit count, which would otherwise
-      // force the engine into N extra no-op audit rounds before the
-      // maxAuditRounds cap finally ends the run.
-      if (_isMissionLevelAudit(f, content)) {
-        results.push(f);
-      }
-    }
-  }
-  return results;
-}
-
-// WI4 Phase 5 — classify an audit markdown file as mission-level vs plan-level.
-//
-// Mission-level audits are produced by the `deep-audit-loop` subflow's MULTI/
-// OPEN_AUDIT steps (`prompts/multi-audit.md` and `prompts/open-audit.md`).
-// Those prompts declare `> Audit Type: multi-dimensional` and
-// `> Audit Type: open-ended` respectively.
-//
-// Plan-level closure audits (per `prompts/closure-audit.md`) edit the plan
-// file directly and do NOT normally land in `docs/audits/`, but a user may
-// store a non-trivial closure audit as a separate file (filename guidance:
-// `*closure-audit*.md`). Such files must NOT be counted as open mission-level
-// audits — they are about a single plan, not the mission.
-//
-// Rules (in order):
-//   1. `> Audit Type:` header wins if present:
-//        - type matches /plan|closure/i → plan-level (exclude)
-//        - anything else → mission-level (include; forward-compatible with
-//          future mission-level types like `security`, `performance`)
-//   2. No `> Audit Type:` header → fall back to filename pattern:
-//        - matches /[ -]closure-audit|[ -]plan-audit/i → plan-level (exclude)
-//        - matches /[ -]multi-audit|[ -]open-audit/i → mission-level (include)
-//   3. No signal at all → include by default (preserves backward compat for
-//      pre-WI4 audit files that never declared a type; defaulting to exclude
-//      would silently drop open audits and cause premature mission completion).
-function _isMissionLevelAudit(filePath, content) {
-  const typeMatch = content.match(AUDIT_TYPE_RE);
-  if (typeMatch) {
-    const t = (typeMatch[1] || "").trim().toLowerCase();
-    if (/\b(plan|closure)\b/.test(t)) return false;
-    return true;
-  }
-  const base = basename(filePath).toLowerCase();
-  if (/[ _-]closure-audit|[ _-]plan-audit/.test(base)) return false;
-  if (/[ _-]multi-audit|[ _-]open-audit/.test(base)) return true;
-  return true;
-}
-
 // ── Expression functions (pre-registered, callable from flow expressions) ──
 
 export function createExpressionFunctions(config) {
@@ -186,9 +120,9 @@ export function createExpressionFunctions(config) {
     draftPlans: () => _scanPlansByStatus(
       resolve(projectRoot, mission.plansDir), DRAFT_STATUSES, defaultVerifyKeys
     ),
-    openAudits: () => _scanOpenAuditsList(
-      resolve(projectRoot, mission.auditsDir || "audits")
-    ),
+    // (M2-WI22) The legacy audit-listing key is removed here — roadmap Deep
+    // Audit Record pairing owns audit-round state; guard suite in
+    // test/audit-convergence.test.js.
     // testTargets() reads target-specs.json (written by load-targets step)
     // so a flow can `forEach: "testTargets()"`. Tolerant: missing/unparseable → [].
     testTargets: () => _readTargetSpecs(config.runDir),
@@ -392,4 +326,4 @@ export function loadSubFlow(name) {
   return loadFlowFile(filePath, projectPromptDirs);
 }
 
-export { SCRIPT_REGISTRY, TOOL_ROOT, _scanOpenAuditsList, _isMissionLevelAudit };
+export { SCRIPT_REGISTRY, TOOL_ROOT };

@@ -1705,7 +1705,7 @@ test("corpus: new-format plans (0635-3, 0815-1, 0815-2, 0815-3) pass every regis
   }
 });
 
-test("corpus: legacy plans (0635-1/2) stay outside every supporting gate's domain under the real policy", () => {
+test("corpus: legacy plans (0635-1/2) stay outside the old gates' domains; the WI22 freeze owns them (fail-open without roots, deny with the frozen corpus)", () => {
   const real = parsePolicy(readFileSync(REAL_POLICY_FILE, "utf8"));
   const plansDir = join(REPO_ROOT, "docs", "plans", "age-autonomy");
   for (const name of [
@@ -1714,14 +1714,35 @@ test("corpus: legacy plans (0635-1/2) stay outside every supporting gate's domai
   ]) {
     const file = join(plansDir, name);
     const text = readFileSync(file, "utf8");
-    const out = evaluateGates(
+    // Face 1 (no plansRoots injected): every OLD gate stays dual-read
+    // out-of-domain and the freeze fail-opens — same-content write allows.
+    const bare = evaluateGates(
       { type: "write", path: file, proposedContent: text },
       { policy: real.policy, ctx: { plansDir } },
     );
-    assert.equal(out.decision, "allow", name);
-    for (const o of out.observations) {
-      assert.match(o.reason, /domain \(dual-read transition\)/, `${name}: ${o.rule} → ${o.reason}`);
+    assert.equal(bare.decision, "allow", `${name}: ${bare.reason}`);
+    for (const o of bare.observations) {
+      if (o.rule === "legacy-plan-freeze") {
+        assert.match(o.reason, /plans roots not injected .* fail-open/, `${name}: ${o.reason}`);
+      } else {
+        assert.match(o.reason, /domain \(dual-read transition\)/, `${name}: ${o.rule} → ${o.reason}`);
+      }
     }
+    // Face 2 (full ctx + the real plan corpus): the freeze now owns the
+    // legacy corpus — same-content rewrites of terminal legacy plans deny
+    // (no active plan references them; the corpus is frozen, M2-WI22).
+    const records = readdirSync(plansDir)
+      .filter((f) => f.endsWith(".md"))
+      .map((f) => ({ text: readFileSync(join(plansDir, f), "utf8"), path: join(plansDir, f) }));
+    const frozen = evaluateGates(
+      { type: "write", path: file, proposedContent: text },
+      {
+        policy: real.policy,
+        ctx: { plansDir, plansRoots: [join(REPO_ROOT, "docs", "plans"), plansDir], plans: records },
+      },
+    );
+    assert.equal(frozen.decision, "deny", `${name}: expected the WI22 freeze to deny`);
+    assert.match(frozen.reason, /gate legacy-plan-freeze \(legacy-plan-freeze\) denied: .*legacy terminal status line/, `${name}: ${frozen.reason}`);
   }
 });
 
@@ -2227,7 +2248,7 @@ test("p8: self-referential consistency — the rule's own landing rides the appr
   assert.match(hostOnly.observations[0].reason, /approved-project exception — active plan .*2026-08-25-0950-1.* names this target/);
 });
 
-test("p8-corpus: the 10-plan frontmatter corpus + 00-guide pass the REAL 17-gate enforce policy with the full ctx — no false kills", () => {
+test("p8-corpus: the 10-plan frontmatter corpus + 00-guide pass the REAL 18-gate enforce policy with the full ctx — no false kills", () => {
   const real = parsePolicy(readFileSync(REAL_POLICY_FILE, "utf8"));
   assert.equal(real.ok, true);
   const plansDir = join(REPO_ROOT, "docs", "plans", "age-autonomy");
@@ -2264,4 +2285,158 @@ test("p8-corpus: the 10-plan frontmatter corpus + 00-guide pass the REAL 17-gate
   // outside {{plansDir}} the plan-structure gate does not match at all; the
   // action-face guardrails still ran through the loop assertions above
   assert.equal(guideOut.observations.find((o) => o.rule === "plan-structure"), undefined);
+});
+
+/* ── 24. legacy-plan-freeze (M2-WI22 — the retired plan-status-gate's
+ *      protection semantics collected into the law kernel, 0950-2 Phase 1) */
+
+import {
+  LEGACY_TERMINAL_PLAN_STATUSES,
+  legacyPlanStatusOf,
+} from "../assets/src/law-rules.mjs";
+
+const FREEZE_POLICY = {
+  gates: [{ id: "legacy-plan-freeze", match: "action:write", rule: "legacy-plan-freeze", mode: "enforce" }],
+};
+
+const FREEZE_ROOTS = ["/r/docs/plans", "/r/docs/plans/demo"];
+const FREEZE_CORPUS = [{ text: LEGAL_PLAN, path: "/r/docs/plans/demo/x.md" }];
+
+function freeze(path, content, { current, actor, roots = FREEZE_ROOTS, plans = FREEZE_CORPUS, projectRoot = "/r" } = {}) {
+  return evaluateGates(
+    { type: "write", path, proposedContent: content, ...(actor ? { actor } : {}) },
+    {
+      policy: FREEZE_POLICY,
+      ...(current !== undefined ? { currentFileState: current === null ? undefined : { text: current } } : {}),
+      // roots/plans: `null` = deliberately NOT injected (the fail-open /
+      // fails-closed faces); undefined = the corpus defaults.
+      ctx: {
+        ...(roots !== null ? { plansRoots: roots } : {}),
+        ...(plans !== null ? { plans } : {}),
+        projectRoot,
+      },
+    },
+  );
+}
+
+const legacyDoc = (status) => `# Plan\n\n> Plan Status: ${status}\n\n## Phase 1 — Work\n\n- [ ] item\n`;
+
+test("freeze: matcher helpers — glyph tolerance inherited from the shared PLAN_STATUS_RE, fence-skipped", () => {
+  assert.equal(legacyPlanStatusOf("> Plan Status: completed"), "completed");
+  assert.equal(legacyPlanStatusOf("> **Plan Status: Completed**"), "completed");
+  assert.equal(legacyPlanStatusOf("> plan status : SUPERSEDED  "), "superseded");
+  assert.equal(legacyPlanStatusOf("> **Status: deferred**"), "deferred");
+  // charset-restricted capture is load-bearing (ledger-dualread): annotation
+  // forms (`cancelled（…）`, the guide's `> Status: additive (…)`) are NOT
+  // statuses — the freeze only sees bare status values
+  assert.equal(legacyPlanStatusOf("> Plan Status: cancelled（disposition）"), null);
+  assert.equal(legacyPlanStatusOf("> Status: additive (annotation)"), null);
+  assert.equal(legacyPlanStatusOf("> Plan Status: in progress"), "in progress");
+  assert.deepEqual(LEGACY_TERMINAL_PLAN_STATUSES.sort(), ["cancelled", "completed", "deferred", "superseded"]);
+  // fenced template examples never count (dual-read read-seam discipline)
+  assert.equal(legacyPlanStatusOf("# G\n\n```\n> Plan Status: completed\n```\n"), null);
+  // prose mid-line mentions never count (line-anchored)
+  assert.equal(legacyPlanStatusOf("- live count of `> Plan Status: completed` header lines\n"), null);
+});
+
+test("freeze: every terminal value denies in-domain; non-terminal statuses stay writable", () => {
+  for (const v of LEGACY_TERMINAL_PLAN_STATUSES) {
+    const out = freeze("/r/docs/plans/demo/old.md", legacyDoc(v));
+    assert.equal(out.decision, "deny", v);
+    assert.match(out.reason, /gate legacy-plan-freeze \(legacy-plan-freeze\) denied: .*legacy terminal status line \(Plan Status: /);
+    assert.match(out.reason, /Legal channels: human actor \(role=human\), CI \(writes outside the pre-execute pipeline\), or an approved project/);
+  }
+  for (const v of ["active", "in progress", "draft", "planned", "held"]) {
+    const out = freeze("/r/docs/plans/demo/old.md", legacyDoc(v));
+    assert.equal(out.decision, "allow", v);
+    assert.match(out.observations[0].reason, /no legacy terminal status line in play/);
+  }
+});
+
+test("freeze: un-freeze attempts (rewrite to non-terminal, delete the line) and keep-identical rewrites all deny", () => {
+  const rewrite = freeze("/r/docs/plans/demo/old.md", legacyDoc("active"), { current: legacyDoc("completed") });
+  assert.equal(rewrite.decision, "deny");
+  assert.match(rewrite.reason, /rewrites or deletes that line \(un-freeze attempt\)/);
+  const deleted = freeze("/r/docs/plans/demo/old.md", "# Plan\n\n## Phase 1 — Work\n\n- [ ] item\n", { current: legacyDoc("completed") });
+  assert.equal(deleted.decision, "deny");
+  assert.match(deleted.reason, /un-freeze attempt/);
+  // frozen corpus: even a byte-identical rewrite of a terminal legacy plan denies
+  const identical = freeze("/r/docs/plans/demo/old.md", legacyDoc("completed"), { current: legacyDoc("completed") });
+  assert.equal(identical.decision, "deny");
+  assert.match(identical.reason, /carries a legacy terminal status line/);
+});
+
+test("freeze: exception channels — human allows, approved project allows with file+line, missing corpus fails closed", () => {
+  const human = freeze("/r/docs/plans/demo/old.md", legacyDoc("completed"), { actor: { id: "ses-h", role: "human" } });
+  assert.equal(human.decision, "allow");
+  assert.match(human.observations[0].reason, /legacy terminal-line write by a human actor .*02 §4\.7 literal exception ①/);
+  const activeRef = `---\nstatus: active\nmission: demo\nwork-item: M1-WI1\nverify: [test]\n---\n# Plan\n\n## Phase 1 — Repair\n\nTargets: docs/plans/demo/old.md 定稿\n\n- [ ] item\n`;
+  const approved = freeze("/r/docs/plans/demo/old.md", legacyDoc("completed"), {
+    plans: [{ text: activeRef, path: "/r/docs/plans/demo/wi22.md" }],
+  });
+  assert.equal(approved.decision, "allow");
+  assert.match(approved.observations[0].reason, /approved-project exception — active plan \/r\/docs\/plans\/demo\/wi22\.md line 11 names this target/);
+  const noCorpus = freeze("/r/docs/plans/demo/old.md", legacyDoc("completed"), { plans: null });
+  assert.equal(noCorpus.decision, "deny");
+  assert.match(noCorpus.reason, /plan corpus is not injected on this face .* fails closed/);
+});
+
+test("freeze: out-of-domain faces — non-plan .md, non-.md, missing roots, frontmatter plans stay inert", () => {
+  const outside = freeze("/r/docs/notes/old.md", legacyDoc("completed"));
+  assert.equal(outside.decision, "allow");
+  assert.match(outside.observations[0].reason, /outside every registered plans root — outside domain/);
+  const notMd = freeze("/r/docs/plans/demo/old.txt", legacyDoc("completed"));
+  assert.equal(notMd.decision, "allow");
+  assert.match(notMd.observations[0].reason, /not a \.md write — outside domain/);
+  const noRoots = freeze("/r/docs/plans/demo/old.md", legacyDoc("completed"), { roots: null });
+  assert.equal(noRoots.decision, "allow");
+  assert.match(noRoots.observations[0].reason, /plans roots not injected .* fail-open/);
+  const frontmatter = freeze("/r/docs/plans/demo/new.md", LEGAL_PLAN);
+  assert.equal(frontmatter.decision, "allow");
+  assert.match(frontmatter.observations[0].reason, /no legacy terminal status line in play/);
+});
+
+test("freeze: adapter face — real-policy project denies through the pre-execute pipeline and allows the approved project", () => {
+  const root = tmpProject();
+  try {
+    writeMission(root);
+    writePolicy(root, `version: 1\ngates:\n  - id: legacy-plan-freeze\n    match: "action:write"\n    rule: legacy-plan-freeze\n    mode: enforce\n`);
+    const old = writePlan(root, "docs/plans/demo/old.md", legacyDoc("completed"));
+    // corpus absent-of-reference: the mission plansDir holds only the frozen
+    // legacy plan itself (LEGAL corpus not written) → deny fires end-to-end
+    const denied = evaluateLawCall(
+      { name: "write", arguments: { file_path: old, content: legacyDoc("completed") } },
+      {},
+      fsLawGateIo,
+    );
+    assert.equal(denied.decision, "deny");
+    assert.match(denied.reason, /legacy-plan-freeze/);
+    const obs = denied.records.find((r) => r.rule === "legacy-plan-freeze");
+    assert.ok(obs, "freeze observation recorded");
+    assert.equal(obs.mode, "enforce");
+    assert.equal(obs.enforced, true);
+    // edit-shaped call with disk state: un-freeze attempt through the adapter
+    const unfrozen = evaluateLawCall(
+      { name: "edit", arguments: { file_path: old, old_string: "> Plan Status: completed", new_string: "> Plan Status: active" } },
+      {},
+      fsLawGateIo,
+    );
+    assert.equal(unfrozen.decision, "deny");
+    assert.match(unfrozen.reason, /un-freeze attempt/);
+    // approved project: an active plan referencing the target flips it to allow
+    writePlan(
+      root,
+      "docs/plans/demo/wi22-repair.md",
+      LEGAL_PLAN.replace("# Plan", "# Plan\n\nTargets: docs/plans/demo/old.md 修复"),
+    );
+    const approved = evaluateLawCall(
+      { name: "write", arguments: { file_path: old, content: legacyDoc("completed") } },
+      {},
+      fsLawGateIo,
+    );
+    assert.equal(approved.decision, "allow", approved.reason);
+    assert.match(approved.records.find((r) => r.rule === "legacy-plan-freeze").reason, /approved-project exception/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

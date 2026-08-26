@@ -14,8 +14,9 @@ import { splitLedgerSections, deriveCompleted } from "./ledger-sections.mjs";
 // divergent copies (plan-check.mjs's restricted status charset + flow-loader's
 // bold/case tolerance). The charset-restricted capture is load-bearing: prose
 // lines like the plan guide's `> Status: additive (…annotation…)` must NOT be
-// read as a plan status (guide files are not plans). plugin/dsh
-// plan-status-gate imports it from the bundled copy of THIS module.
+// read as a plan status (guide files are not plans). law-rules.mjs's
+// legacy-plan-freeze (M2-WI22, the retired dsh plan-status-gate's successor
+// face) imports it from the bundled copy of THIS module.
 export const PLAN_STATUS_RE = /^>\s*\*{0,2}(?:[Pp]lan\s+)?[Ss]tatus\*{0,2}\s*:\s*\*{0,2}([A-Za-z][A-Za-z /-]*)\*{0,2}\s*$/m;
 
 export function ledgerReadMode() {

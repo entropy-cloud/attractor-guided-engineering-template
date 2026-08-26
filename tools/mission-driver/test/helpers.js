@@ -88,6 +88,12 @@ export function mockSubFlows() {
       },
     },
   };
+  // LEGACY-TOPOLOGY NOTE (age-autonomy M2-WI22, plan
+  // docs/plans/age-autonomy/2026-08-25-0950-2): this private self-contained
+  // fixture predates the deep-audit-loop simplification — the real flow JSON
+  // no longer has CHECK_OPEN_AUDITS/DRAFT_FROM_AUDITS steps (entry is
+  // MULTI_AUDIT). Kept as-is: subflow-state-isolation tests consume this
+  // fixture's step-shape, not the real flow's topology.
   const deepAudit = {
     name: "deep-audit-loop", entry: "CHECK_OPEN_AUDITS", maxTotalSteps: 20,
     steps: {

@@ -449,3 +449,108 @@ Closure Audit Evidence: pending
     assert.equal(r.verification.passes.length, 1);
   });
 });
+
+/* ── duplicate append-only anchors (M2-WI22, deep-audit round-1 P2) ── */
+
+describe("duplicate-append-only-anchor structural error (M2-WI22)", () => {
+  it("plan face: a second `## Closure` block is a structural error; the first block stays the derived face", () => {
+    const dup = fullPlan() + `
+## Closure
+
+- dispatch audit ${AUDIT_ID} to ses_auditor_2
+- accepted ${AUDIT_ID}：duplicate receipt must vanish from the derived face — and now loudly
+`;
+    const r = scanPlanLedger(dup);
+    const errs = r.errors.filter((e) => e.code === "duplicate-anchor");
+    assert.equal(errs.length, 1, `exactly one duplicate-anchor error: ${JSON.stringify(r.errors)}`);
+    const lines = dup.split("\n");
+    let seenFirst = false;
+    let secondLine = -1;
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i] === "## Closure") {
+        if (seenFirst) { secondLine = i + 1; break; }
+        seenFirst = true;
+      }
+    }
+    assert.equal(errs[0].line, secondLine, "the error points at the SECOND (duplicate) heading");
+    assert.match(errs[0].message, /duplicate append-only anchor `## Closure`/);
+    assert.match(errs[0].message, /first anchored at line \d+/);
+    // first-anchoring semantics preserved: the derived face is the FIRST block
+    assert.equal(r.closure.dispatches.length, 1);
+    assert.equal(r.closure.dispatches[0].sessionId, "ses_auditor_1");
+    assert.equal(r.closure.accepted[0].id, AUDIT_ID);
+  });
+
+  it("plan face: same discipline for duplicate Draft Review Record and Verification anchors", () => {
+    for (const anchor of ["Draft Review Record", "Verification"]) {
+      const dup = fullPlan() + `\n## ${anchor}\n\n- prose that must not reach the derived face\n`;
+      const r = scanPlanLedger(dup);
+      const errs = r.errors.filter((e) => e.code === "duplicate-anchor");
+      assert.equal(errs.length, 1, anchor);
+      assert.match(errs[0].message, new RegExp(`duplicate append-only anchor \`## ${anchor}\``));
+    }
+  });
+
+  it("plan face: single anchors (the normal shape) produce zero duplicate-anchor errors", () => {
+    const r = scanPlanLedger(fullPlan());
+    assert.equal(r.errors.filter((e) => e.code === "duplicate-anchor").length, 0);
+    assert.deepEqual(r.errors, []);
+  });
+
+  it("roadmap face: a second `## Deep Audit Record` block is a structural error", () => {
+    const roadmap = (extra = "") => `# Roadmap
+
+## Progress
+
+### M1
+
+- [x] WI1 done — proof
+
+## Deep Audit Record
+
+- dispatch audit ${AUDIT_ID} to ses_auditor_1
+- accepted ${AUDIT_ID}：findings=none${extra}
+`;
+    const single = scanRoadmapLedger(roadmap());
+    assert.equal(single.errors.filter((e) => e.code === "duplicate-anchor").length, 0);
+    const dup = scanRoadmapLedger(roadmap() + `
+## Deep Audit Record
+
+- dispatch audit ${AUDIT_ID} to ses_auditor_2
+- accepted ${AUDIT_ID}：findings=none
+`);
+    const errs = dup.errors.filter((e) => e.code === "duplicate-anchor");
+    assert.equal(errs.length, 1);
+    assert.match(errs[0].message, /duplicate append-only anchor `## Deep Audit Record`/);
+    assert.match(errs[0].message, /first anchored at line \d+/);
+    assert.equal(dup.deepAuditRecord.dispatches.length, 1);
+    assert.equal(dup.deepAuditRecord.dispatches[0].sessionId, "ses_auditor_1");
+    assert.equal(dup.deepAuditRecord.accepted[0].id, AUDIT_ID);
+  });
+
+  it("corpus: every live plan and the age-autonomy roadmap carry zero duplicate-anchor errors", async () => {
+    const { readFileSync, readdirSync } = await import("node:fs");
+    const { join, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const repoRoot = join(dirname(dirname(fileURLToPath(import.meta.url))), "..", "..");
+    const plansDir = join(repoRoot, "docs", "plans");
+    const files = [];
+    const walk = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const p = join(dir, e.name);
+      return e.isDirectory() ? walk(p) : (e.name.endsWith(".md") ? [p] : []);
+    });
+    files.push(...walk(plansDir));
+    const offenders = [];
+    for (const f of files) {
+      const r = scanPlanLedger(readFileSync(f, "utf8"));
+      const dup = r.errors.filter((e) => e.code === "duplicate-anchor");
+      if (dup.length > 0) offenders.push(`${f}: ${dup.map((e) => `line ${e.line}`).join(", ")}`);
+    }
+    const roadmapPath = join(repoRoot, "docs", "backlog", "age-autonomy-implementation-roadmap.md");
+    const rr = scanRoadmapLedger(readFileSync(roadmapPath, "utf8"));
+    const roadDup = rr.errors.filter((e) => e.code === "duplicate-anchor");
+    if (roadDup.length > 0) offenders.push(`${roadmapPath}: ${roadDup.map((e) => `line ${e.line}`).join(", ")}`);
+    assert.deepEqual(offenders, [],
+      "the live corpus must carry zero duplicate append-only anchors (zero false kills)");
+  });
+});
