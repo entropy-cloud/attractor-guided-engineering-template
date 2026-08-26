@@ -163,8 +163,16 @@ agents:
     idleTtlMinutes: 30
     rotateEvery: 8
     model: { provider: zhipuai, model: glm-5.2, reasoningEffort: default }
+  # reviewer pooled (M4-WI32, plan docs/plans/age-autonomy/2026-08-27-0433-2
+  # Phase 1 Decision): mirror the drafter precedent — same-group sequential
+  # review reuses one reviewer session (04 §2.2 the group is the maximal
+  # reuse granularity; cross-group always starts fresh). Anchoring-bias
+  # residual backstopped by rotateEvery + the cross-group fresh start.
   reviewer:
-    mode: fresh
+    mode: pooled
+    poolKey: "reviewer:{groupId}"
+    idleTtlMinutes: 30
+    rotateEvery: 8
     model: { provider: zhipuai, model: glm-5.2, reasoningEffort: default }
   auditor:
     mode: fresh

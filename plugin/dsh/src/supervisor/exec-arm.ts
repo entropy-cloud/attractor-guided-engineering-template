@@ -77,6 +77,15 @@ import {
   type DispatchType,
   type PolicyFace,
 } from './dispatch-resolve.ts'
+import {
+  POOL_BANNED_DISPATCH_TYPES,
+  POOL_ROLE_OF_DISPATCH_TYPE,
+  groupScopeOf,
+  poolAgentDefOf,
+  type AgentPoolFace,
+  type PoolAgentDefFace,
+  type PoolPolicyFace,
+} from '../efficiency/agent-pool.ts'
 import type { TriggerHit } from './trigger-eval.ts'
 import type { SupervisorReceiptRecord } from './receipt.ts'
 
@@ -200,7 +209,19 @@ export interface ExecArmOptions {
    */
   onTerminalWord?: (evaluation: TerminationEvaluation) => void
   /**
-   * M3-WI30 dual-entry same-injection: the declared-face terminal entry
+   * M4-WI32: the mount's agent pool (role pools + the session-role mutex
+   * registry); absent ⇒ every dispatch takes the fresh path (headless /
+   * pool-less hosts, byte-compatible pre-pool behavior).
+   */
+  pool?: AgentPoolFace
+  /**
+   * M4-WI32: the run's executor session ids (plan claim holders derived
+   * from ledger frontmatter ∪ pool executor tags) — consumed by the
+   * same-run auditor ≠ executor red line at audit dispatch time.
+   */
+  executorSessions?: string[]
+  /**
+   * M4-WI30 dual-entry same-injection: the declared-face terminal entry
    * (forwardTerminalDecision's re-scan) reads the watchdog-held detector
    * state through this seam — the SAME StagnationFact the cycle-end entry
    * injects (never a second detector; ≤ one cycle skew, converged by
@@ -226,23 +247,109 @@ function newClaimToken(runId: string, holderSessionId: string): string {
   return `attempt-${runId}-${holderSessionId}-${randomBytes(4).toString('hex')}`
 }
 
-/** Create one dispatched agent session bound to the resolved model selection. */
+/** M4-WI32: the pool face consumed here doubles as the role-tag registry. */
+type PoolFaceOf = AgentPoolFace
+
+export type DispatchAgentOutcome =
+  | { status: 'created'; sessionId: string; followup: (text: string) => void; poolNote: string | null }
+  | { status: 'refused'; reason: string }
+
+/**
+ * Create one dispatched agent session bound to the resolved model selection.
+ *
+ * M4-WI32 pool hook — INSIDE this function by design (plan Phase 2): the
+ * recovery redispatch path calls createDispatchAgent directly, so every
+ * route to a dispatched session rides the same pool/mutex discipline — no
+ * bypass hole. Routing:
+ *   - plan-review / draft-plans with a pool face + resolvable agent def →
+ *     pool.acquire (reuse / rotation / creation); a bypassed outcome falls
+ *     through to the fresh path carrying the honest note;
+ *   - closure-audit / deep-audit → ALWAYS fresh (the P7 structural ban —
+ *     the candidate session is red-line-checked against the run's executor
+ *     set before the dispatch proceeds);
+ *   - execute → fresh with the dormant-ruling note (the executor session
+ *     still gets its executor role tag — the red-line registry leg).
+ * Role tags are registered for EVERY fresh dispatch (auditor / executor /
+ * reviewer / drafter) — the registry, not the pooling, is what the mutex
+ * red lines enforce. Absent pool/dispatchType ⇒ the pre-pool fresh path,
+ * byte-compatible (headless / old callers).
+ */
 export async function createDispatchAgent(
   agents: DispatchAgentsFace,
   binding: AgentModelBinding,
-  options: { projectRoot: string; label: string },
-): Promise<{ sessionId: string; followup: (text: string) => void }> {
+  options: {
+    projectRoot: string
+    label: string
+    /** the mount's agent pool (role pools + mutex registry); absent ⇒ fresh path. */
+    pool?: PoolFaceOf
+    /** the dispatch type this acquisition serves (pool routing + role tags). */
+    dispatchType?: DispatchType
+    /** group scope for reviewer pooling ({groupId} placeholder, 04 §2.2). */
+    groupId?: string | null
+    /** run executor session ids — the same-run auditor ≠ executor red line. */
+    executorSessions?: string[]
+    /** policy face — the agent def's poolKey/idleTtlMinutes/rotateEvery read (dispatch-resolve stays untouched). */
+    policy?: PolicyFace
+  },
+): Promise<DispatchAgentOutcome> {
+  const { pool, dispatchType } = options
+  const notes: string[] = []
+
+  if (pool !== undefined && (dispatchType === 'plan-review' || dispatchType === 'draft-plans')) {
+    const def = poolAgentDefOf(options.policy as PoolPolicyFace | undefined, binding.agentName)
+    if (def !== null) {
+      const acquired = await pool.acquire({
+        agents,
+        dispatchType,
+        binding,
+        def: def as PoolAgentDefFace,
+        projectRoot: options.projectRoot,
+        groupId: options.groupId ?? null,
+        label: options.label,
+      })
+      if (acquired.status === 'refused') return { status: 'refused', reason: acquired.reason }
+      if (acquired.status === 'acquired') {
+        return { status: 'created', sessionId: acquired.sessionId!, followup: acquired.followup!, poolNote: acquired.reason }
+      }
+      notes.push(acquired.reason) // bypassed — fresh path below, honest note carried
+    }
+  }
+  if (dispatchType !== undefined && POOL_BANNED_DISPATCH_TYPES.includes(dispatchType)) {
+    notes.push(`P7 audit ban: ${dispatchType} structurally never enters a pool (04 §2.4; multi-audit = the deep-audit prompt-file face) — fresh independent dispatch regardless of agent mode config`)
+  } else if (dispatchType === 'execute') {
+    notes.push('executor pooling declared but dormant (2026-08-27-0433-2 baseline ruling): plan execution stays the engine-run territory — fresh session; the declaration remains consumable by M4-WI33/M5-WI37')
+  }
+
   const sessionId = `mdsup-${Date.now().toString(36)}-${randomBytes(4).toString('hex')}`
   const handle = await agents.create({
     sessionId,
     meta: { cwd: options.projectRoot, origin: 'subagent', delegationDepth: 1 },
     agentOptions: { provider: binding.provider, model: binding.model },
   })
+  const realId = String(handle.agent.id ?? sessionId)
+  const role = dispatchType !== undefined ? POOL_ROLE_OF_DISPATCH_TYPE[dispatchType] : undefined
+  if (pool !== undefined && role !== undefined) {
+    const registered = pool.registerRole(realId, role)
+    if (!registered.ok) return { status: 'refused', reason: registered.reason }
+  }
+  if (dispatchType !== undefined && POOL_BANNED_DISPATCH_TYPES.includes(dispatchType)) {
+    // final-review P2-5 red line: a same-run auditor session must differ
+    // from every executor session (claim holders ∪ pool executor tags).
+    const executors = new Set<string>([...(options.executorSessions ?? []), ...(pool?.executorSessions() ?? [])])
+    if (executors.has(realId)) {
+      return {
+        status: 'refused',
+        reason: `role mutex violation: audit candidate session ${realId} is a registered executor of this run — same-run auditor ≠ any executor (final-review P2-5); dispatch refused`,
+      }
+    }
+  }
   return {
-    sessionId: String(handle.agent.id ?? sessionId),
+    status: 'created',
+    sessionId: realId,
     followup: (text: string) => {
       handle.agent.followup({ content: [{ type: 'text', text }], source: { kind: 'user' } })
     },
+    poolNote: notes.length > 0 ? notes.join(' — ') : null,
   }
 }
 
@@ -331,9 +438,24 @@ async function dispatchAgentExit(
   // agent session first (the dispatch line carries the target session id);
   // no agents face ⇒ registration-only degradation (1411-1 posture)
   let handle: { sessionId: string; followup: (text: string) => void } | null = null
+  let poolNote: string | null = null
   if (opts.agents !== undefined) {
     try {
-      handle = await createDispatchAgent(opts.agents, resolved.resolution.binding, { projectRoot: opts.projectRoot, label: `Mission: ${dispatchType}` })
+      const agentOut = await createDispatchAgent(opts.agents, resolved.resolution.binding, {
+        projectRoot: opts.projectRoot,
+        label: `Mission: ${dispatchType}`,
+        ...(opts.pool !== undefined ? { pool: opts.pool } : {}),
+        dispatchType,
+        ...(dispatchType === 'plan-review' ? { groupId: groupScopeOf(registration.path, planText) } : {}),
+        ...(opts.executorSessions !== undefined ? { executorSessions: opts.executorSessions } : {}),
+        policy: policyOf(opts.lawCtx),
+      })
+      if (agentOut.status === 'refused') {
+        opts.receipt({ kind: 'exception', runId, plan: hit.target, event: `dispatch-refused:${dispatchType}`, detail: agentOut.reason })
+        return { action: dispatchType, status: 'refused', detail: agentOut.reason }
+      }
+      handle = { sessionId: agentOut.sessionId, followup: agentOut.followup }
+      poolNote = agentOut.poolNote
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err)
       opts.receipt({ kind: 'exception', runId, plan: hit.target, event: `dispatch-failed:${dispatchType}`, detail })
@@ -370,7 +492,7 @@ async function dispatchAgentExit(
       runId,
       plan: registration.path,
       event: `dispatch:${dispatchType}`,
-      detail: `${id} to ${sessionId}${enforcement.status === 'downgraded' ? ' (single-model downgrade, honest lineage)' : ''}`,
+      detail: `${id} to ${sessionId}${enforcement.status === 'downgraded' ? ' (single-model downgrade, honest lineage)' : ''}${poolNote !== null ? ` — pool: ${poolNote}` : ''}`,
     })
     return { action: dispatchType, status: 'dispatched', detail: `${id} to ${sessionId}` }
   }
@@ -552,14 +674,25 @@ export async function dispatchDraftPlans(hit: TriggerHit, opts: ExecArmOptions):
   const roadmapPath = opts.lawCtx.roadmapPath
   if (opts.agents !== undefined) {
     try {
-      const handle = await createDispatchAgent(opts.agents, resolved.resolution.binding, { projectRoot: opts.projectRoot, label: 'Mission: draft-plans' })
+      const agentOut = await createDispatchAgent(opts.agents, resolved.resolution.binding, {
+        projectRoot: opts.projectRoot,
+        label: 'Mission: draft-plans',
+        ...(opts.pool !== undefined ? { pool: opts.pool } : {}),
+        dispatchType: 'draft-plans',
+        policy: policyOf(opts.lawCtx),
+      })
+      if (agentOut.status === 'refused') {
+        opts.receipt({ kind: 'exception', runId, plan: null, event: 'dispatch-refused:draft-plans', detail: agentOut.reason })
+        return { action: 'draft-plans', status: 'refused', detail: agentOut.reason }
+      }
+      const handle = { sessionId: agentOut.sessionId, followup: agentOut.followup }
       handle.followup(dispatchPromptOf({ dispatchType: 'draft-plans', target: roadmapPath, registeredId: null, runId }))
       opts.receipt({
         kind: 'observation',
         runId,
         plan: null,
         event: 'dispatch:draft-plans',
-        detail: `drafter ${resolved.resolution.agentName} → session ${handle.sessionId}`,
+        detail: `drafter ${resolved.resolution.agentName} → session ${handle.sessionId}${agentOut.poolNote !== null ? ` — pool: ${agentOut.poolNote}` : ''}`,
         occurrenceKey: hit.occurrence.key,
       })
       return { action: 'draft-plans', status: 'dispatched', detail: `drafter session ${handle.sessionId}` }
@@ -603,7 +736,18 @@ export async function reclaimClaim(hit: TriggerHit, opts: ExecArmOptions): Promi
   }
   if (opts.agents !== undefined) {
     try {
-      const handle = await createDispatchAgent(opts.agents, resolved.resolution.binding, { projectRoot: opts.projectRoot, label: 'Mission: execute' })
+      const agentOut = await createDispatchAgent(opts.agents, resolved.resolution.binding, {
+        projectRoot: opts.projectRoot,
+        label: 'Mission: execute',
+        ...(opts.pool !== undefined ? { pool: opts.pool } : {}),
+        dispatchType: 'execute',
+        policy: policyOf(opts.lawCtx),
+      })
+      if (agentOut.status === 'refused') {
+        opts.receipt({ kind: 'exception', runId, plan: planPath, event: 'dispatch-refused:execute', detail: agentOut.reason })
+        return { action: 'reclaim-claim', status: 'refused', detail: agentOut.reason }
+      }
+      const handle = { sessionId: agentOut.sessionId, followup: agentOut.followup }
       const claim = newClaimToken(runId, handle.sessionId)
       const expires = new Date((opts.clock?.() ?? Date.now()) + DEFAULT_CLAIM_TTL_MS).toISOString()
       const issued = writePlanClaim({ planPath, claim, expires, lawCtx: opts.lawCtx, io, now: opts.clock })

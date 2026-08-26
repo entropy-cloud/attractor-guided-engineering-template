@@ -91,6 +91,7 @@ import {
 } from './exec-arm.ts'
 import type { TriggerHit } from './trigger-eval.ts'
 import { runRecoveryScan, type RecoveryAgentsFace } from './recovery.ts'
+import { createAgentPool, executorSessionsOf, type AgentPoolFace } from '../efficiency/agent-pool.ts'
 import { discoverLawContext, fsLawGateIo, type LawGateIo, type MissionLawContext } from '../law/host-adapter.ts'
 import { parseFrontmatter } from '../../assets/src/ledger-frontmatter.mjs'
 import { fsMeterWriterIo } from './writer.ts'
@@ -305,6 +306,19 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
   const stagnationDetector: StagnationDetectorState = initialStagnationState()
   let stagnationFact: StagnationFact | null = null
 
+  // M4-WI32 (04 §2): the mount's agent pool — role pools (drafter per
+  // project root, reviewer per group scope) + the session-role mutex
+  // registry + the attemptId generation face the recovery scan reads.
+  // In-memory performance cache (P2): restart starts empty by design; the
+  // timers ride the injected timers face and the whole pool is torn down
+  // idempotently on stop() (the heartbeat-timer lifecycle precedent — the
+  // service mount parks stop through ctx.effect).
+  const pool: AgentPoolFace = createAgentPool({ timers, clock, logger })
+  // the run's executor session set, refreshed per cycle from the scanned
+  // snapshot (claim holders ∪ pool executor tags) — the auditor ≠ executor
+  // red-line input (final-review P2-5).
+  let runExecutorSessions: string[] = []
+
   // terminal-receipt chain: durable record first, then the A8 best-effort
   // delivery, then the declared hooks (1411-2/1411-3 consumption seam), then
   // — with continuous mode ON — ONE immediate re-evaluation cycle (M3-WI28
@@ -462,6 +476,8 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
       now,
       runId: 'mdsupervisor',
       ...(options.dispatchAgents !== undefined ? { agents: options.dispatchAgents } : {}),
+      pool,
+      executorSessions: runExecutorSessions,
       receipt,
       receiptLines,
       logger,
@@ -507,6 +523,9 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
         logger.info?.(`[mdsupervisor] cycle ${trigger}: no governing law context under ${projectRoot} — idle`)
         return null
       }
+      // M4-WI32: refresh the run's executor session set from the fresh
+      // scan (claim holders derived from frontmatter ∪ pool executor tags)
+      runExecutorSessions = executorSessionsOf(snapshot.plans, { runId: 'mdsupervisor', pool })
       // M3-WI29 recovery duty (03 §6): the restart-labeled cycle runs the
       // stale-disposition scan BEFORE the normal trigger evaluation —
       // un-concluded dispatch occurrences are resumed (original session
@@ -525,6 +544,8 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
             snapshot,
             agents: options.dispatchAgents as RecoveryAgentsFace | undefined,
             handled: recoveryHandled,
+            pool,
+            executorSessions: runExecutorSessions,
             io: execIo,
             clock,
             now,
@@ -680,6 +701,9 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
     stopWatchers = []
     debounceTimer?.()
     debounceTimer = null
+    // M4-WI32: pool teardown (idempotent) — idle-TTL timers cleared,
+    // members revoked; memory cache dies with the mount (P2 posture)
+    pool.dispose()
     logger.info?.(`[mdsupervisor] watchdog stopped (idempotent dispose)`, { scans: state.scans })
   }
 

@@ -74,6 +74,7 @@ import {
   type PolicyFace,
 } from './dispatch-resolve.ts'
 import { createDispatchAgent, dispatchPromptOf, type DispatchAgentsFace } from './exec-arm.ts'
+import { groupScopeOf, type AgentPoolFace } from '../efficiency/agent-pool.ts'
 import type { SupervisorSnapshot } from './decision-core.ts'
 import type { SupervisorReceiptRecord } from './receipt.ts'
 
@@ -235,6 +236,15 @@ export interface RecoveryScanOptions {
   agents: RecoveryAgentsFace | undefined
   /** per-mount handled-occurrence set (one action per occurrence per mount). */
   handled: Set<string>
+  /**
+   * M4-WI32: the mount's agent pool — the attemptId generation face
+   * (04 §2.3): a LIVE session whose pooled attempt is stale (rotated /
+   * TTL-disposed / revoked) is NOT resumed — cross-generation means
+   * redispatch. Absent ⇒ the WI29 liveness-only judgment (unchanged).
+   */
+  pool?: AgentPoolFace
+  /** run executor session ids — the auditor ≠ executor red line on redispatch. */
+  executorSessions?: string[]
   io?: MeterWriterIo
   clock?: () => number
   now?: () => string
@@ -282,6 +292,14 @@ export async function runRecoveryScan(options: RecoveryScanOptions): Promise<Rec
     }
     const liveness = sessionLivenessOf(options.agents, face.sessionId)
 
+    // M4-WI32 generation face (04 §2.3): same generation (current pool
+    // member) → resume is legal; cross-generation (rotated / TTL-disposed /
+    // revoked attempt) → redispatch EVEN when the host session is live —
+    // the old attempt is explicitly revoked, never resumed. A session the
+    // pool never knew (fresh audits / pre-pool reviewers) has no generation
+    // face: the WI29 liveness judgment alone decides (unchanged).
+    const staleGeneration = options.pool !== undefined && options.pool.attemptStale(face.sessionId)
+
     if (liveness === 'undecidable') {
       options.handled.add(occurrenceKey)
       receipt({
@@ -295,7 +313,7 @@ export async function runRecoveryScan(options: RecoveryScanOptions): Promise<Rec
       continue
     }
 
-    if (liveness === 'live') {
+    if (liveness === 'live' && !staleGeneration) {
       const handle = options.agents!.get(face.sessionId)!
       try {
         handle.followup({
@@ -327,6 +345,11 @@ export async function runRecoveryScan(options: RecoveryScanOptions): Promise<Rec
     }
 
     // dead → redispatch (new dispatch line, same occurrence; old line stays)
+    // stale-generation live → the SAME redispatch face: the explicitly
+    // revoked attempt must never be resumed (04 §2.3 cross-generation leg)
+    if (staleGeneration) {
+      options.pool!.revoke(face.sessionId, `recovery: cross-generation attempt of session ${face.sessionId} — explicitly revoked, redispatched (04 §2.3)`)
+    }
     try {
       const outcome = await redispatchOccurrence(face, options, io, runId)
       options.handled.add(occurrenceKey)
@@ -380,11 +403,31 @@ async function redispatchOccurrence(
   }
 
   // new session first (the line carries its id); agents face is present —
-  // liveness was decidable — so this is the full (non-degraded) path
-  const handle = await createDispatchAgent(options.agents!, resolved.resolution.binding, {
-    projectRoot: options.projectRoot,
-    label: `Mission recovery: ${face.dispatchType}`,
-  })
+  // liveness was decidable — so this is the full (non-degraded) path.
+  // M4-WI32: this direct createDispatchAgent call rides the pool hook
+  // inside it (plan Phase 2 — no bypass hole): a plan-review redispatch
+  // re-enters the reviewer:{groupId} pool; audits stay structurally fresh.
+  let handle: { sessionId: string; followup: (text: string) => void }
+  try {
+    const agentOut = await createDispatchAgent(options.agents!, resolved.resolution.binding, {
+      projectRoot: options.projectRoot,
+      label: `Mission recovery: ${face.dispatchType}`,
+      ...(options.pool !== undefined ? { pool: options.pool } : {}),
+      dispatchType: face.dispatchType,
+      ...(face.dispatchType === 'plan-review' ? { groupId: groupScopeOf(face.target, text) } : {}),
+      ...(options.executorSessions !== undefined ? { executorSessions: options.executorSessions } : {}),
+      policy: policyOf(options.lawCtx),
+    })
+    if (agentOut.status === 'refused') {
+      receipt({ kind: 'exception', runId, plan: face.section === 'Deep Audit Record' ? null : face.target, event: 'recovery-redispatch-refused', detail: agentOut.reason })
+      return { target: face.target, occurrenceType: face.occurrenceType, action: 'redispatch', status: 'refused', detail: agentOut.reason }
+    }
+    handle = { sessionId: agentOut.sessionId, followup: agentOut.followup }
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    receipt({ kind: 'exception', runId, plan: face.section === 'Deep Audit Record' ? null : face.target, event: 'recovery-redispatch-failed', detail })
+    return { target: face.target, occurrenceType: face.occurrenceType, action: 'redispatch', status: 'failed', detail }
+  }
 
   // id: deep-audit REUSES the paid round (01 §3.1 no double increment);
   // plan-level dispatches take the next iteration counter (fresh unique id)
