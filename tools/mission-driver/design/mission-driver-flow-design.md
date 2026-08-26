@@ -67,7 +67,7 @@ Steady-state cycle: `REVIEW_PLANS -> EXEC_PLANS -> DRAFT_PLANS -> REVIEW_PLANS -
 
 Entry point is now `REVIEW_PLANS` (right after `CHECK`), not `EXEC_PLANS`. This ensures that on resume (restart with `draft` plans left over from a previous run), the backlog is reviewed and promoted to `active` *before* `DRAFT_PLANS` gets a chance to create duplicate plans for the same roadmap items. On a fresh start with empty queues, `REVIEW_PLANS` runs with `draftPlans() -> []`, the engine short-circuits the empty forEach to `all_complete` without invoking the AI, and the flow falls through to `EXEC_PLANS` -> `DRAFT_PLANS` normally.
 
-> **WI4 — DRAFT_PLANS exit change**: the `done` exit was removed; the AI can no longer unilaterally declare the mission complete. Mission completion is decided by the engine's audit-gate: when `DRAFT_PLANS` emits `nothing` AND `auditRound >= maxAuditRounds` AND `activePlans()`/`openAudits()` are both empty, the run completes via the audit-gate (emits a `transition` event with `via: "audit_gate"`). In all other `nothing` cases the flow goes to `DEEP_AUDIT` as before. See `step-execution-and-audit-count-design.md` §4.2.
+> **WI4 — DRAFT_PLANS exit change**: the `done` exit was removed; the AI can no longer unilaterally declare the mission complete. Mission completion is decided by the engine's audit-gate: when `DRAFT_PLANS` emits `nothing` AND `auditRound >= maxAuditRounds` AND `activePlans()`/`openAudits()` are both empty, the run completes via the audit-gate (emits a `transition` event with `via: "audit_gate"`). In all other `nothing` cases the flow goes to `DEEP_AUDIT` as before. See `step-execution-and-audit-count-design.md` §4.2. *(M2-WI22 note: the engine gate is unchanged, but its `openAudits()` leg is retired — the expression key is deleted from the registry, so production runs see `[]` (no open audits) from the optional-chained consumer; the gate reduces to the `activePlans()` leg.)*
 
 ### Step Descriptions
 
@@ -90,7 +90,7 @@ Entry point is now `REVIEW_PLANS` (right after `CHECK`), not `EXEC_PLANS`. This 
 - Review loop completes within a single step, no engine-level PLAN_AUDIT step.
 - On failure to pass: degraded mode, still outputs `created`, plan proceeds to execution, downstream closure/deep audit provides fallback.
 - Independence guarantee: review sub-agent is an independent session (different task_id), cannot see coordinator context.
-- **Exits (post-WI4, mdc-1)**: `created` → REVIEW_PLANS; `nothing` → DEEP_AUDIT, OR audit-gate short-circuit to `completed` when `auditRound >= 1 && openAudits().length === 0 && activePlans().length === 0` (mdc-1 clean short-circuit — engine decision, not AI; `maxAuditRounds` remains the safety ceiling in the `run()` entry gate). The legacy `done` exit was removed in WI4 — the AI can no longer unilaterally declare the mission complete. `onMaxRetries` was changed to `done: "failed"` (retry exhaustion = failure, not escape into audit).
+- **Exits (post-WI4, mdc-1; openAudits leg retired M2-WI22 — the registry key is gone, production `openAudits()` reads as `[]`)**: `created` → REVIEW_PLANS; `nothing` → DEEP_AUDIT, OR audit-gate short-circuit to `completed` when `auditRound >= 1 && openAudits().length === 0 && activePlans().length === 0` (mdc-1 clean short-circuit — engine decision, not AI; `maxAuditRounds` remains the safety ceiling in the `run()` entry gate). The legacy `done` exit was removed in WI4 — the AI can no longer unilaterally declare the mission complete. `onMaxRetries` was changed to `done: "failed"` (retry exhaustion = failure, not escape into audit).
 
 **REVIEW_PLANS** (`type: "group"`, `maxRounds: 1`)
 - Pure mechanical step: `scan-reviewed-plans` script finds `reviewed` plans -> `PROMOTE_EACH_PLAN` promotes each to `active` via `plan-promote` subflow.
@@ -101,7 +101,7 @@ Entry point is now `REVIEW_PLANS` (right after `CHECK`), not `EXEC_PLANS`. This 
 
 **Exit Mechanism**
 - `EXEC_PLANS` `done` -> `DRAFT_PLANS` `nothing` -> `AUDIT` -> `DRAFT_PLANS` -> ...
-- WI4 (post-change) + mdc-1: when `DRAFT_PLANS` emits `nothing` and `auditRound >= 1 && openAudits().length === 0 && activePlans().length === 0`, the engine's audit-gate short-circuits the run to `completed` without entering another DEEP_AUDIT round (mdc-1 clean short-circuit; `auditRound >= maxAuditRounds` still fires independently in the `run()` entry gate as the safety ceiling).
+- WI4 (post-change) + mdc-1 (openAudits leg retired M2-WI22): when `DRAFT_PLANS` emits `nothing` and `auditRound >= 1 && openAudits().length === 0 && activePlans().length === 0`, the engine's audit-gate short-circuits the run to `completed` without entering another DEEP_AUDIT round (mdc-1 clean short-circuit; `auditRound >= maxAuditRounds` still fires independently in the `run()` entry gate as the safety ceiling).
 - Engine's `maxCycleVisits` (default 30) or `maxTotalSteps` (default 500) triggers natural termination.
 - When all active plans executed, no roadmap backlog, no new audit findings, the loop idles until `maxCycleVisits`.
 - `EXEC_PLANS` is a group (`maxRounds: 1`), no internal loop -- re-scanning relies on main flow returning from `DRAFT_PLANS`/`AUDIT`.
@@ -201,42 +201,27 @@ flowchart TD
 
 ## 6. deep-audit-loop Subflow
 
+> **RETIRED open-audit channel + topology simplification (2026-08-26, age-autonomy M2-WI22, plan `docs/plans/age-autonomy/2026-08-25-0950-2`)**: the legacy external-audit channel is retired — `flow-loader.js` no longer exports an `openAudits()` expression (the `> Audit Status:` header scan and its mission-level classifier are deleted; open audit state lives in the roadmap `## Deep Audit Record` dispatch/accepted pairing, M1-WI8). The subflow dropped the two scan/draft step nodes (`CHECK_OPEN_AUDITS`, `SCAN_NEW_RESULTS`; the shared `DRAFT_FROM_AUDITS` prompt `prompts/draft-from-audit.md` was deleted with them). `entry` now goes straight to `MULTI_AUDIT`; `OPEN_AUDIT` terminates directly (`otherwise`/`transitions`/`onError` all → `done: completed`). Equivalence pinned on the engine `when` semantics (a missing `when` means the condition blocks are skipped and the step EXECUTES): with zero open records the deleted nodes' `otherwise` arms took exactly those paths. The historical description below is retained as the pre-WI22 record.
+
 ```mermaid
 flowchart TD
-    COA["CHECK_OPEN_AUDITS<br/>script"] -->|ok| DFA["DRAFT_FROM_AUDITS<br/>AI agent"]
-    COA -->|empty| MA
-
     MA["MULTI_AUDIT<br/>when: multiAuditPrompt"] -->|clean/issues| OA
     MA -->|when false / onError| OA
 
-    OA["OPEN_AUDIT<br/>when: openAuditPrompt"] -->|clean/issues| SNR
-    OA -->|when false / onError| SNR
-
-    SNR["SCAN_NEW_RESULTS<br/>script"] -->|ok| DFA
-    SNR -->|empty| DONE
-
-    DFA -->|created/nothing| DONE
+    OA["OPEN_AUDIT<br/>when: openAuditPrompt"] -->|clean/issues| DONE
+    OA -->|when false / onError| DONE
 ```
 
-### Flow Logic (Linear, No Loop)
+### Flow Logic (post-WI22: Linear, No Loop)
 
-1. **CHECK_OPEN_AUDITS** (script): Scans `auditsDir` for result files with `Audit Status: open` (leftover unprocessed results from previous runs).
-   - `ok` (found) -> DRAFT_FROM_AUDITS processes them directly.
-   - `empty` (none) -> enter audit phase.
-2. **MULTI_AUDIT** (when `multiAuditPrompt` is non-empty): Multi-dimensional audit, writes result file (`Audit Status: open`). **No data dependency** with OPEN_AUDIT; clean/issues both proceed to next step.
-3. **OPEN_AUDIT** (when `openAuditPrompt` is non-empty): Open-ended audit, writes result file. Independent from MULTI_AUDIT.
-4. **SCAN_NEW_RESULTS** (script): Scans again for `open` results (newly written).
-   - `ok` -> DRAFT_FROM_AUDITS.
-   - `empty` (both audits not configured or wrote nothing) -> done:completed.
-5. **DRAFT_FROM_AUDITS**: Reads `planGuide` + audit result files. Findings are priority-graded `[P0]`/`[P1]`/`[P2]` (mdc-1). Drafts remediation plans only for `P0`+`P1` findings and marks their source audits `planned`. `P2`-only audits get no plan — their `P2` items move to the follow-up backlog and the audit is closed as `Audit Status: triaged` (a terminal, non-open status `openAudits()` does not count), so a cosmetic-only round does not keep the mission in the audit loop.
+1. **MULTI_AUDIT** (when `multiAuditPrompt` is non-empty): Multi-dimensional audit, writes result file. **No data dependency** with OPEN_AUDIT; clean/issues both proceed to next step.
+2. **OPEN_AUDIT** (when `openAuditPrompt` is non-empty): Open-ended audit, writes result file. Independent from MULTI_AUDIT. All three exit faces (clean/issues via transitions, when-false via otherwise, onError) terminate `done: completed`.
 
 ### Design Rationale
 
-- **Audit and drafting separated**: Audit steps read only their own `multiAuditPrompt` / `openAuditPrompt`, not planGuide; the drafting step reads planGuide + audit results.
-- **Priority gate (mdc-1)**: only `P0`+`P1` warrant a plan; `P2` (e.g. doc line-number rot, wording) is triaged to the backlog. Without this, every audit that found any nit wrote an `open` report that became a full remediation plan (+ closure audit + full build-verify), which — combined with `P2` findings regenerating each round — made runs always burn `maxAuditRounds`. See `docs/requirements/mission-driver-convergence-and-cost-optimization.md`.
 - **MULTI_AUDIT / OPEN_AUDIT fully independent**: Sequential execution, no append handoff, no marker-driven branching. Each independently configured (`prompts.multiAudit` / `prompts.openAudit`); skipped if empty.
-- **Script-driven**: The `scan-open-audits` script checks `Audit Status` to decide whether plan drafting is needed, not relying on AI marker output.
-- **Linear, no loop**: Two scan points (CHECK_OPEN_AUDITS + SCAN_NEW_RESULTS), no infinite loop risk.
+- **Linear, no loop**: A fixed two-step pass (post-WI22; pre-WI22 it was two scan points + a drafting node), no infinite loop risk.
+- Historical (pre-WI22) rationale — scan-driven drafting, the mdc-1 P0/P1/P2 priority gate, `Audit Status: triaged` closure — retired with the channel: audit findings now land in plans/roadmap directly, and no expression function reads `> Audit Status:` lines.
 
 ---
 

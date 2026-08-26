@@ -5,6 +5,8 @@
 **Status**: proposal (analysis + recommended solution, no code change yet)
 **Related**: `mission-driver-flow-design.md`, `flow-engine-design.md`
 
+> **M2-WI22 retirement note (2026-08-26, plan `docs/plans/age-autonomy/2026-08-25-0950-2`)**: the openAudits channel described throughout this proposal (`flow-loader.js` `openAudits()` / `_scanOpenAuditsList`, the `> Audit Status:` header scan, and the `draft-from-audit.md` drafting path) is RETIRED. The engine audit-gate `_shouldCompleteOnAuditQuota` and the WI4/WI1 count semantics remain live engine code (zero diff), but their `openAudits()` leg now reads `[]` — the expression key is deleted from the registry and open audit state lives in the roadmap `## Deep Audit Record` pairing. Sections below are the pre-retirement analysis record.
+
 ---
 
 ## 0. 问题概述

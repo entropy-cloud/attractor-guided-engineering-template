@@ -1,6 +1,8 @@
-> Audit Status: open
+> Audit Status: closed
 > Audit Type: multi-dimensional
 > Mission: mission-driver-step-audit
+
+> Disposition (2026-08-26): mechanically closed by age-autonomy M2-WI22 (plan `docs/plans/age-autonomy/2026-08-25-0950-2`) as the retirement precondition of the `openAudits()` engine channel this record was keeping non-empty. Findings were never dispatched into `mission-driver-step-audit`'s roadmap. Actual destination: F4/F5 (audit-header/filename classification contract) are superseded by the channel's retirement — their subject (`_isMissionLevelAudit` / `_scanOpenAuditsList`) no longer exists in engine src; F1–F3/F6 (design-doc status drift + doc touch-ups) remain doc-sync residuals, their openAudits/draft-from-audit mention faces synced by the same plan's Phase 3.
 
 # Multi-Dimensional Audit — `tools/mission-driver/` (mission-driver-step-audit)
 

@@ -87,7 +87,7 @@ Top-level flow steps never use `append` transitions. Each step is self-contained
 
 The flow engine includes a lightweight expression evaluator (`src/expression.mjs`) used for:
 
-- **`when` conditions**: String expressions like `"multiAuditPrompt != ''"` or `"openAudits().length > 0"`. Also supports backward-compatible object syntax `{var, present/empty/eq/ne}`.
+- **`when` conditions**: String expressions like `"multiAuditPrompt != ''"`. Also supports backward-compatible object syntax `{var, present/empty/eq/ne}`. (`"openAudits().length > 0"` retired M2-WI22 — the expression key is deleted from the registry.)
 - **`forEach` sources**: Expression function calls like `"activePlans()"` replace script+variable patterns. When the forEach string contains expression syntax (parens, operators), it's evaluated; otherwise treated as a variable name.
 
 Expressions are evaluated with scoped access to flow vars (from mission.json + runtime) and pre-registered functions. They come from trusted flow JSON (developer-authored), never from AI output.
@@ -98,7 +98,7 @@ Expressions are evaluated with scoped access to flow vars (from mission.json + r
 |----------|---------|-------------|
 | `activePlans()` | `string[]` | Plan file paths with status: active |
 | `draftPlans()` | `string[]` | Plan file paths with status matching any draft/active variant |
-| `openAudits()` | `string[]` | Audit result file paths with `Audit Status: open` |
+| ~~`openAudits()`~~ | — | RETIRED (M2-WI22): the legacy `> Audit Status:` header scan is deleted; open audit state lives in the roadmap `## Deep Audit Record` pairing |
 
 These eliminate dedicated scan-script steps. For example, `forEach: "activePlans()"` replaces the two-step pattern (script scan -> set items var -> forEach reads items).
 
@@ -199,10 +199,11 @@ EXECUTE -> CLOSURE_SCRIPT_CHECK (plan-check.mjs) -> CLOSURE_AUDIT (AI closure) -
 
 deep-audit-loop subflow (`deep-audit-loop.json`, triggered when DRAFT_PLANS has nothing to draft):
 ```
-CHECK_OPEN_AUDITS -> MULTI_AUDIT -> OPEN_AUDIT -> SCAN_NEW_RESULTS -> DRAFT_FROM_AUDITS
+MULTI_AUDIT -> OPEN_AUDIT
 ```
+(Pre-WI22 this was CHECK_OPEN_AUDITS -> MULTI_AUDIT -> OPEN_AUDIT -> SCAN_NEW_RESULTS -> DRAFT_FROM_AUDITS; the open-audit scan channel was retired M2-WI22 — plan `docs/plans/age-autonomy/2026-08-25-0950-2`.)
 
-**Audit steps are independent**: MULTI_AUDIT and OPEN_AUDIT run sequentially with no data dependency. Each is conditionally executed via `when` (skipped if the corresponding prompt is not configured in mission.json). A script scans audit result files for `Audit Status: open` to determine if plan drafting is needed.
+**Audit steps are independent**: MULTI_AUDIT and OPEN_AUDIT run sequentially with no data dependency. Each is conditionally executed via `when` (skipped if the corresponding prompt is not configured in mission.json); OPEN_AUDIT terminates directly (`done: completed`).
 
 ### 6.2 Exit Mechanism
 

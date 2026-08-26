@@ -257,7 +257,7 @@ Subflow steps spawn a child `FlowEngine` that runs a separate flow definition lo
 forEach is a **universal step modifier** — it works on ALL step types (`agent`, `tool`, `script`, `group`, `subflow`), not just subflows. It is orthogonal to step type: the engine evaluates the expression first, then executes the underlying step once per item.
 
 - Expression is evaluated via the expression engine with access to flow vars and pre-registered functions
-- Examples: `forEach: "activePlans()"`, `forEach: "draftPlans()"`, `forEach: "openAudits()"`
+- Examples: `forEach: "activePlans()"`, `forEach: "draftPlans()"` (`forEach: "openAudits()"` retired M2-WI22 — the expression key is deleted from the registry)
 - Backward compat: plain variable names (no expression chars) read from flowVars as before
 - For each item, injects `forEachItem`, `forEachIndex`, `forEachTotal` into template vars
 - For `subflow` type: creates an isolated child engine per item (existing behavior)
@@ -401,8 +401,8 @@ tools/mission-driver/
 │   ├── closure-audit.md
 │   ├── build-verify.md
 │   ├── multi-audit.md
-│   ├── draft-from-audit.md
 │   ├── open-audit.md
+│   # (draft-from-audit.md deleted M2-WI22 with the CHECK_OPEN_AUDITS/SCAN_NEW_RESULTS nodes that loaded it)
 ├── flows/
 │   └── mission-driver.json           # Main flow definition (DSL)
 ├── test/
@@ -448,7 +448,7 @@ flowchart TD
 
 ### 6.3 deep-audit-loop Sub-flow
 
-> The authoritative source is `tools/mission-driver/flows/deep-audit-loop.json`. The sub-flow has steps: CHECK_OPEN_AUDITS, MULTI_AUDIT, OPEN_AUDIT, SCAN_NEW_RESULTS, DRAFT_FROM_AUDITS. See `mission-driver-flow-design.md` Section 6 for the full mermaid diagram.
+> The authoritative source is `tools/mission-driver/flows/deep-audit-loop.json`. Post-M2-WI22 the sub-flow has steps: MULTI_AUDIT, OPEN_AUDIT (the open-audit scan channel and its CHECK_OPEN_AUDITS / SCAN_NEW_RESULTS / DRAFT_FROM_AUDITS steps were retired — plan `docs/plans/age-autonomy/2026-08-25-0950-2`; `OPEN_AUDIT` terminates directly via `done: completed`). See `mission-driver-flow-design.md` Section 6 for the current mermaid diagram.
 
 ### 6.4 Error Recovery
 
