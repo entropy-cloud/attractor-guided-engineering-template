@@ -52,11 +52,18 @@ import {
 } from './mdcontrol-routes.ts'
 import { registerMissionControlSkills, type SkillsRegistryFace } from './mdcontrol-skills.ts'
 import { lawGateMountSummary, registerLawGate } from './law/host-adapter.ts'
+import { mountSupervisor } from './supervisor/service.ts'
 
 /** Plugin config row from cordis.patch.yml (`assetsDir: ./assets` today). */
 export interface MissionControlConfig {
   /** Root of the bundled engine copy (flows/ prompts/ agents/ src/). */
   assetsDir?: string
+  /**
+   * Supervisor row (age-autonomy M3-WI25): the project root the watchdog
+   * observes + the heartbeat interval. Absent projectRoot = idle posture
+   * (mount-log note, never a mount failure).
+   */
+  supervisor?: { projectRoot?: string; heartbeatMs?: number }
 }
 
 /** The published `mdcontrol` cordis service face. */
@@ -84,7 +91,21 @@ export function apply(ctx: Context, config: MissionControlConfig = {}): void {
     info: (message: string, fields?: Record<string, unknown>) => ctx.logger(LOGGER_NAME).info(message, fields ?? {}),
     warn: (message: string, fields?: Record<string, unknown>) => ctx.logger(LOGGER_NAME).warn(message, fields ?? {}),
   }
-  const { guard, ...routes } = createMdControlRoutes({ ctx, logger })
+
+  // Supervisor mount (age-autonomy M3-WI25): second cordis service
+  // publication in this same bundle (`mdsupervisor`), watchdog + five-duty
+  // seam; mounted BEFORE the routes so its status read face threads into
+  // mdcontrol.status. Idle posture without a configured projectRoot.
+  const supervisor = mountSupervisor(ctx, {
+    projectRoot: config.supervisor?.projectRoot,
+    heartbeatMs: config.supervisor?.heartbeatMs,
+    logger,
+  })
+  if (supervisor.watchdog !== null) {
+    ctx.effect(() => supervisor.dispose, 'mdsupervisor: watchdog (heartbeat/event edges, observe-only)')
+  }
+
+  const { guard, ...routes } = createMdControlRoutes({ ctx, logger, supervisorStatus: supervisor.statusFace })
 
   new MdControlService(ctx, routes, guard)
 
@@ -114,11 +135,15 @@ export function apply(ctx: Context, config: MissionControlConfig = {}): void {
 
   ctx.logger(LOGGER_NAME).info('mission-control mounted', {
     scope: 'mdcontrol',
-    phase: 'M3-WI13(retired WI22) + M2-WI12..WI22(law)',
+    phase: 'M3-WI13(retired WI22) + M2-WI12..WI22(law) + M3-WI25(supervisor seam)',
     assetsDir: config.assetsDir ?? './assets',
     routes: 'run/status/list (M2-WI10) + draft/analyze (M3-WI12)',
     skills: 'mission-control-run/draft/analyze (M3-WI12)',
     lawGate: lawGateMountSummary(),
+    supervisor:
+      supervisor.watchdog !== null
+        ? 'mdsupervisor mounted (M3-WI25: watchdog observe-only + meter writer seam + receipt face; dispatch no-op until 1411-2)'
+        : 'idle — no projectRoot configured (M3-WI25)',
     httpDispatcher: disposeHttp ? '/mdcontrol/api' : 'absent (webServer not provided)',
     guard: 'single-engine-activity-per-projectRoot, run+draft shared slot (1447-1 + 1852-2 adjudications)',
   })

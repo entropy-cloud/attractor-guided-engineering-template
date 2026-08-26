@@ -138,6 +138,13 @@ export interface MdControlStatusResult {
   runState: Record<string, unknown> | null
   /** In-memory terminal record (error path survives even without run-state). */
   terminal: NativeRunTerminal | null
+  /**
+   * Supervisor read face (age-autonomy M3-WI25): mounted watchdog status +
+   * recent receipts; null when no supervisor is mounted at this root. An
+   * existing-route extension — zero new route face (03-supervisor §2
+   * receipt: "账本/monitor/status 可查").
+   */
+  supervisor: Record<string, unknown> | null
 }
 
 export interface MdControlListPayload {
@@ -335,6 +342,11 @@ export interface CreateMdControlRoutesOptions {
   guard?: ActiveRunGuard
   logger?: MdControlLogger
   now?: () => string
+  /**
+   * Supervisor status read hook (age-autonomy M3-WI25): threaded into the
+   * `mdcontrol.status` result (existing-route extension, zero new route).
+   */
+  supervisorStatus?: () => Record<string, unknown> | null
 }
 
 /**
@@ -348,6 +360,7 @@ export function createMdControlRoutes({
   guard = new ActiveRunGuard(),
   logger,
   now = () => new Date().toISOString(),
+  supervisorStatus,
 }: CreateMdControlRoutesOptions): MdControlRoutes & { guard: ActiveRunGuard } {
   const records = new Map<string, LiveRunRecord>()
   const drafts = new Map<string, LiveDraftRecord>()
@@ -480,6 +493,7 @@ export function createMdControlRoutes({
         live: record !== null && record.terminal === null,
         runState,
         terminal: record?.terminal ?? null,
+        supervisor: supervisorStatus !== undefined ? supervisorStatus() : null,
       }
     },
 
