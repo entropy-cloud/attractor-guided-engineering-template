@@ -377,3 +377,55 @@ export function writeRoadmapAuditRounds(opts: WriteAuditRoundsOptions): MachineF
   }
   return atomicFieldWrite(opts.roadmapPath, (text) => setFrontmatterFields(text, { set: { 'audit-rounds': opts.auditRounds } }), opts)
 }
+
+// ── held-plan human disposition (age-autonomy M3-WI28, 01 §5.1 T6/disposition) ──
+
+export interface UnlockPlanOptions extends MachineFieldWriteOptions {
+  planPath: string
+}
+
+/**
+ * held→active unlock (01 §5.1 T6 shape, zero rule changes — writer-identity's
+ * existing enforcement reads exactly this form): ONE atomic frontmatter write
+ * resets failures to 0, removes the hold reason, and carries NO claim (claims
+ * exist only while claimed-by-dispatch — a fresh activation gets its claim
+ * from the next executor dispatch; a residual stale pair is cleared in the
+ * same write, 01 §4.1 "active 外禁携 claim" hygiene). Routed through
+ * mdcontrol.unlock (M3-WI28) with the role-bearing supervisor actor — the
+ * pre-write law self-check is the enforcement face.
+ */
+export function unlockPlan(opts: UnlockPlanOptions): MachineFieldWriteResult {
+  return atomicFieldWrite(
+    opts.planPath,
+    (text) => setFrontmatterFields(text, { set: { status: 'active', failures: 0 }, remove: ['hold', 'claim', 'claim-expires'] }),
+    opts,
+  )
+}
+
+export type PlanDisposition = 'cancelled' | 'superseded' | 'deferred'
+
+export const PLAN_DISPOSITIONS: readonly PlanDisposition[] = ['cancelled', 'superseded', 'deferred']
+
+export interface DisposePlanOptions extends MachineFieldWriteOptions {
+  planPath: string
+  disposition: PlanDisposition
+}
+
+/**
+ * held→terminal disposition (01 §5.1 supervisor legal edge:
+ * draft/active/held→cancelled|superseded|deferred): ONE atomic frontmatter
+ * write lands the terminal status and removes the hold reason (hold is only
+ * legal while held, 01 §4.1) plus any residual claim pair. After the write
+ * the terminal freeze (plan-completed 02 §4.3) guards the basis domain —
+ * restart work means a NEW plan, never a resurrection.
+ */
+export function disposePlan(opts: DisposePlanOptions): MachineFieldWriteResult {
+  if (!PLAN_DISPOSITIONS.includes(opts.disposition)) {
+    return { status: 'malformed', proposed: null, reason: `disposition must be cancelled|superseded|deferred (got ${JSON.stringify(opts.disposition)})` }
+  }
+  return atomicFieldWrite(
+    opts.planPath,
+    (text) => setFrontmatterFields(text, { set: { status: opts.disposition }, remove: ['hold', 'claim', 'claim-expires'] }),
+    opts,
+  )
+}

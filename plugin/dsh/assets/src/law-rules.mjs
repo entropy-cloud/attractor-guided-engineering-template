@@ -394,7 +394,7 @@ function writerIdentityRule(action, currentFileState) {
     const unlockReviewer = actorId !== null && paired.some((d) => d.sessionId === actorId);
     return {
       verdict: "allow",
-      reason: `writer-identity: held→active with failures reset${unlockReviewer ? ` by the new review's dispatched reviewer ${actorId}` : " — supervisor-unlock writer identity has no receipt syntax on this face (mdcontrol.unlock routing is M3), not claiming verification (unverified-writer posture)"}`,
+      reason: `writer-identity: held→active with failures reset${unlockReviewer ? ` by the new review's dispatched reviewer ${actorId}` : " — supervisor unlock arrives via mdcontrol.unlock (M3-WI28, role=supervisor writer); this face has no receipt syntax to verify the unlock writer, not claiming verification (unverified-writer posture)"}`,
     };
   }
 
@@ -404,7 +404,7 @@ function writerIdentityRule(action, currentFileState) {
     const isSupervisor = actorRole === "supervisor";
     return {
       verdict: "allow",
-      reason: `writer-identity: ${oldStatus}→${newStatus} disposition${isReviewer ? ` by registered reviewer ${actorId}` : isSupervisor ? " by the supervisor" : " — disposition writer identity is role-dependent with no receipt syntax (supervisor routing is M3), not claiming verification (unverified-writer posture)"}`,
+      reason: `writer-identity: ${oldStatus}→${newStatus} disposition${isReviewer ? ` by registered reviewer ${actorId}` : isSupervisor ? " by the supervisor" : " — disposition writer identity is role-dependent with no receipt syntax (supervisor dispositions arrive via mdcontrol.unlock, M3-WI28), not claiming verification (unverified-writer posture)"}`,
     };
   }
 

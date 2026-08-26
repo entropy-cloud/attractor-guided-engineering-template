@@ -45,12 +45,30 @@ export interface MountSupervisorOptions {
   projectRoot?: string
   heartbeatMs?: number
   logger?: WatchdogLogger
+  /**
+   * M3-WI28 (03 §4 opt-in): pre-enable continuous mode — the headless
+   * deployment's EXPLICIT declaration (bundle config `supervisor.continuous:
+   * true`); default off. In-memory: restart clears it (the per-root flag
+   * lives on the watchdog, mdcontrol.continuous toggles it at runtime).
+   */
+  continuous?: boolean
 }
 
 export interface MountedSupervisor {
   service: SupervisorService | null
   watchdog: WatchdogFace | null
   statusFace: () => WatchdogStatusFace | null
+  /**
+   * M3-WI28: continuous-mode control face over the mounted watchdog (null
+   * when mounted idle) — structurally satisfies mdcontrol-routes'
+   * ContinuousControlFace (the route's toggle/query hook).
+   */
+  continuous: {
+    readonly projectRoot: string
+    enabled(): boolean
+    set(enabled: boolean): void
+    setReceiptTarget(sessionId: string | null): void
+  } | null
   dispose: () => void
 }
 
@@ -76,6 +94,7 @@ export function mountSupervisor(ctx: Context, options: MountSupervisorOptions = 
       service: null,
       watchdog: null,
       statusFace: () => null,
+      continuous: null,
       dispose: () => {},
     }
   }
@@ -90,6 +109,7 @@ export function mountSupervisor(ctx: Context, options: MountSupervisorOptions = 
     heartbeatMs: options.heartbeatMs,
     io: fsLawGateIo,
     logger: logs,
+    ...(options.continuous !== undefined ? { continuous: options.continuous } : {}),
     ...(dispatchAgents !== undefined && dispatchAgents !== null ? { dispatchAgents } : {}),
   })
   watchdog.start()
@@ -97,17 +117,26 @@ export function mountSupervisor(ctx: Context, options: MountSupervisorOptions = 
   const service = new SupervisorService(ctx, watchdog)
   logger.info?.('[mdsupervisor] supervisor mounted', {
     scope: 'mdsupervisor',
-    phase: 'M3-WI26 (trigger execution + dispatch wiring) — trigger duty live when the policy carries a triggers: section; meter writer (Q4 ③ sole-writer); restart recovery-scan seam (WI29); receipt face (A8)',
+    phase: 'M3-WI28 (continuous-mode opt-in: mdcontrol.continuous route + queue chain edge + terminal receipt wiring) — dispatch decisions stay observation receipts until continuous mode is explicitly enabled',
     projectRoot: options.projectRoot,
     heartbeatMs: options.heartbeatMs ?? 30000,
     service: 'mdsupervisor (second publication, same bundle/isolate realm)',
     dispatchFace: dispatchAgents !== undefined && dispatchAgents !== null ? 'dsh-agents' : 'registration-only (no agents service composed)',
+    continuous: options.continuous === true
+      ? 'pre-enabled via bundle config supervisor.continuous (explicit headless declaration, 03 §4)'
+      : 'off by default — BEHAVIOR TIGHTENING (03 §4 opt-in, M3-WI28): hosts whose policy carries a triggers: section now need an explicit mdcontrol.continuous enable to run unattended dispatch; existing hosts silently degrade to observation receipts (mount log + CONTEXT.md changelog pin discoverability)',
   })
 
   return {
     service,
     watchdog,
     statusFace: () => watchdog.statusFace(),
+    continuous: {
+      projectRoot: options.projectRoot,
+      enabled: () => watchdog.isContinuous(),
+      set: (enabled: boolean) => watchdog.setContinuous(enabled),
+      setReceiptTarget: (sessionId: string | null) => watchdog.setReceiptTarget(sessionId),
+    },
     dispose: () => watchdog.stop(),
   }
 }

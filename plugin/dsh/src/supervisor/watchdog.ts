@@ -46,10 +46,21 @@
  * across restarts the same scan re-derives the same word (no new store).
  * The declared R3 trigger exit reaches the same state through the exec arm's
  * onTerminalWord callback — dual entry, one core.
+ *
+ * M3-WI28 continuous mode (03 §4): per-root in-memory opt-in flag, default
+ * OFF — while off, dispatch decisions downgrade to observation receipts
+ * (applyContinuousGate, ./decision-core.ts); meter/receipt decisions stay
+ * ungated. With the flag ON, every terminal event through the onTerminal
+ * seam chains ONE immediate re-evaluation cycle (03 §3 edge 2: run 终态 →
+ * 立即评估 → 派发下一个; single-flight guarded, heartbeat stays the misfire
+ * backstop). The flag clears on restart (ActiveRunGuard precedent); the
+ * mdcontrol.continuous route (mdcontrol-routes.ts) toggles it and registers
+ * the enabling session as the run-terminal receipt target.
  */
 import { dirname, join } from 'node:path'
 import { watch, type FSWatcher } from 'node:fs'
 import {
+  applyContinuousGate,
   decide,
   policyFaceOf,
   scanSupervisorSnapshot,
@@ -152,6 +163,8 @@ export type WatchdogStatusFace = {
   receipts: SupervisorReceiptRecord[]
   /** M3-WI27: the reached terminal word + rule (null while the run continues). */
   terminal: WatchdogTerminalState | null
+  /** M3-WI28: continuous-mode opt-in flag (03 §4; default false, restart clears). */
+  continuous: boolean
 }
 
 export interface WatchdogOptions {
@@ -174,6 +187,15 @@ export interface WatchdogOptions {
   dispatchAgents?: DispatchAgentsFace
   /** delivery target session for terminal/exception receipts (A8 opt-in face). */
   receiptSessionId?: string
+  /**
+   * M3-WI28 continuous-mode initial state (03 §4 opt-in): default OFF —
+   * dispatch decisions stay observation receipts until the per-root flag is
+   * explicitly enabled (mdcontrol.continuous route, or this bundle-config
+   * pre-enable `supervisor.continuous: true` for headless deployments — an
+   * equally explicit declaration). In-memory: restart clears it (the
+   * ActiveRunGuard precedent).
+   */
+  continuous?: boolean
   /** test/observation seam invoked inside every cycle before decide(). */
   beforeDecide?: (snapshot: SupervisorSnapshot | null) => Promise<void> | void
 }
@@ -195,6 +217,19 @@ export interface WatchdogFace {
    * never reclaimed mid-run.
    */
   noteActivity(sessionId: string, at?: number): void
+  /**
+   * M3-WI28 continuous-mode opt-in (03 §4): set the per-root in-memory flag.
+   * Immediate effect — the next cycle (heartbeat/event/chained) runs in the
+   * new posture. Dispatch decisions are observation receipts while OFF.
+   */
+  setContinuous(enabled: boolean): void
+  /** M3-WI28: current continuous flag (default false; restart clears it). */
+  isContinuous(): boolean
+  /**
+   * M3-WI28: register the run-terminal receipt delivery target (A8
+   * best-effort; the continuous-enabling session is the default target).
+   */
+  setReceiptTarget(sessionId: string | null): void
 }
 
 export function createWatchdog(options: WatchdogOptions): WatchdogFace {
@@ -237,8 +272,24 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
   // idempotence; no new store).
   let terminalState: WatchdogTerminalState | null = null
 
+  // M3-WI28 continuous-mode flag (03 §4 opt-in): per-root in-memory state,
+  // default off, restart clears (ActiveRunGuard precedent). The gate itself
+  // is applyContinuousGate (decision-core) — dispatch decisions downgrade to
+  // observation receipts while off; meter/receipt decisions stay ungated.
+  let continuousEnabled = options.continuous === true
+  // M3-WI28: run-terminal receipt delivery target — mutable so the
+  // continuous-enabling session can register itself (mdcontrol.continuous
+  // followup); A8 best-effort delivery, dead sessions tolerated.
+  let receiptTargetSessionId = options.receiptSessionId
+
   // terminal-receipt chain: durable record first, then the A8 best-effort
-  // delivery, then the declared hooks (1411-2/1411-3 consumption seam)
+  // delivery, then the declared hooks (1411-2/1411-3 consumption seam), then
+  // — with continuous mode ON — ONE immediate re-evaluation cycle (M3-WI28
+  // queue chain edge, 03 §3 edge 2: 终态回执链「一个 run 终态 → 立即评估 →
+  // 派发下一个」). Single-flight guarded: a chain edge arriving mid-scan
+  // coalesces into the pending slot; the mission terminal word keeps its
+  // stop-dispatch priority (suppressed hits never dispatch on chained
+  // cycles); the heartbeat edge stays the misfire backstop.
   const emitTerminalEvent = (event: Omit<SupervisorTerminalEvent, 'ts'>): SupervisorTerminalEvent => {
     const stamped: SupervisorTerminalEvent = { ts: now(), ...event }
     receipt({
@@ -248,10 +299,10 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
       event: `${stamped.kind}:${stamped.status}`,
       ...(stamped.detail !== undefined ? { detail: stamped.detail } : {}),
     })
-    if (options.receiptSessionId !== undefined) {
+    if (receiptTargetSessionId !== undefined) {
       const outcome = deliverReceiptLine(
         options.agents,
-        options.receiptSessionId,
+        receiptTargetSessionId,
         `[mdsupervisor] ${stamped.kind} ${stamped.runId ?? stamped.plan ?? ''}: ${stamped.status}`,
       )
       if (!outcome.delivered) {
@@ -273,6 +324,7 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
         })
       }
     }
+    if (continuousEnabled) void cycle('manual')
     return stamped
   }
 
@@ -429,7 +481,10 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
         return null
       }
       renewDueClaims(snapshot)
-      const decisions = decide(snapshot, policyFaceOf(ctx!), clock)
+      // M3-WI28 continuous gate (03 §4 opt-in): dispatch decisions downgrade
+      // to observation receipts while the per-root flag is off; meter-write
+      // and receipt decisions pass ungated (applyContinuousGate).
+      const decisions = applyContinuousGate(decide(snapshot, policyFaceOf(ctx!), clock), continuousEnabled)
       state.scans += 1
       state.lastScanAt = now()
       state.lastDecisions = decisions.length
@@ -542,6 +597,16 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
     noteActivity(sessionId: string, at?: number) {
       activity.set(sessionId, at ?? clock())
     },
+    setContinuous(enabled: boolean) {
+      continuousEnabled = enabled
+      logger.info?.(`[mdsupervisor] continuous mode ${enabled ? 'on' : 'off'} — execute posture ${enabled ? 'granted (1411-2 exec arm live for dispatch decisions)' : 'suppressed to WI25 observation (03 §4 opt-in)'}`, { projectRoot })
+    },
+    isContinuous() {
+      return continuousEnabled
+    },
+    setReceiptTarget(sessionId) {
+      receiptTargetSessionId = sessionId === null ? undefined : sessionId
+    },
     statusFace: () => ({
       mounted: state.started,
       mountedAt: state.mountedAt,
@@ -550,6 +615,7 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
       lastScanAt: state.lastScanAt,
       lastDecisions: state.lastDecisions,
       terminal: terminalState,
+      continuous: continuousEnabled,
       receipts: readReceipts(
         {
           appendLine: () => {},

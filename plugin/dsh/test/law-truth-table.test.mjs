@@ -774,7 +774,7 @@ test("gate2: held→active unlock writer degrades to the unverified-writer note 
     { id: "ses-supervisor-route" },
   );
   assert.equal(out.decision, "allow");
-  assert.match(out.observations[0].reason, /supervisor-unlock writer identity has no receipt syntax on this face \(mdcontrol\.unlock routing is M3\), not claiming verification/);
+  assert.match(out.observations[0].reason, /supervisor unlock arrives via mdcontrol\.unlock \(M3-WI28, role=supervisor writer\); this face has no receipt syntax to verify the unlock writer, not claiming verification/);
 });
 
 test("gate2: review lease — third party denied, the open reviewer/supervisor/engine allowed, no-actor degrades to a note", () => {

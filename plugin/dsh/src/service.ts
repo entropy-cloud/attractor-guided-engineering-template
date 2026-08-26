@@ -61,9 +61,12 @@ export interface MissionControlConfig {
   /**
    * Supervisor row (age-autonomy M3-WI25): the project root the watchdog
    * observes + the heartbeat interval. Absent projectRoot = idle posture
-   * (mount-log note, never a mount failure).
+   * (mount-log note, never a mount failure). `continuous` (M3-WI28, 03 §4
+   * opt-in) pre-enables continuous mode — the headless deployment's explicit
+   * declaration; default off (dispatch decisions stay observation receipts
+   * until mdcontrol.continuous opts in).
    */
-  supervisor?: { projectRoot?: string; heartbeatMs?: number }
+  supervisor?: { projectRoot?: string; heartbeatMs?: number; continuous?: boolean }
 }
 
 /** The published `mdcontrol` cordis service face. */
@@ -96,16 +99,23 @@ export function apply(ctx: Context, config: MissionControlConfig = {}): void {
   // publication in this same bundle (`mdsupervisor`), watchdog + five-duty
   // seam; mounted BEFORE the routes so its status read face threads into
   // mdcontrol.status. Idle posture without a configured projectRoot.
+  // M3-WI28: the continuous control face threads into mdcontrol.continuous.
   const supervisor = mountSupervisor(ctx, {
     projectRoot: config.supervisor?.projectRoot,
     heartbeatMs: config.supervisor?.heartbeatMs,
+    continuous: config.supervisor?.continuous,
     logger,
   })
   if (supervisor.watchdog !== null) {
-    ctx.effect(() => supervisor.dispose, 'mdsupervisor: watchdog (heartbeat/event edges, observe-only)')
+    ctx.effect(() => supervisor.dispose, 'mdsupervisor: watchdog (heartbeat/event edges, continuous-mode opt-in gate)')
   }
 
-  const { guard, ...routes } = createMdControlRoutes({ ctx, logger, supervisorStatus: supervisor.statusFace })
+  const { guard, ...routes } = createMdControlRoutes({
+    ctx,
+    logger,
+    supervisorStatus: supervisor.statusFace,
+    supervisorContinuous: supervisor.continuous ?? undefined,
+  })
 
   new MdControlService(ctx, routes, guard)
 
@@ -135,14 +145,14 @@ export function apply(ctx: Context, config: MissionControlConfig = {}): void {
 
   ctx.logger(LOGGER_NAME).info('mission-control mounted', {
     scope: 'mdcontrol',
-    phase: 'M3-WI13(retired WI22) + M2-WI12..WI22(law) + M3-WI25(supervisor seam)',
+    phase: 'M3-WI28 + M3-WI25..27(supervisor) + M2-WI12..WI22(law) + M2-WI10/M3-WI12(routes)',
     assetsDir: config.assetsDir ?? './assets',
-    routes: 'run/status/list (M2-WI10) + draft/analyze (M3-WI12)',
+    routes: 'run/status/list (M2-WI10) + draft/analyze (M3-WI12) + continuous (M3-WI28)',
     skills: 'mission-control-run/draft/analyze (M3-WI12)',
     lawGate: lawGateMountSummary(),
     supervisor:
       supervisor.watchdog !== null
-        ? 'mdsupervisor mounted (M3-WI25: watchdog observe-only + meter writer seam + receipt face; dispatch no-op until 1411-2)'
+        ? `mdsupervisor mounted (M3-WI28: continuous-mode opt-in — mdcontrol.continuous toggles the per-root execute/observe posture; queue chain edge + terminal receipt wiring)`
         : 'idle — no projectRoot configured (M3-WI25)',
     httpDispatcher: disposeHttp ? '/mdcontrol/api' : 'absent (webServer not provided)',
     guard: 'single-engine-activity-per-projectRoot, run+draft shared slot (1447-1 + 1852-2 adjudications)',

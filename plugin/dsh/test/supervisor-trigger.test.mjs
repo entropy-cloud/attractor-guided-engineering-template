@@ -638,11 +638,16 @@ function e2ePlan(root, rel, { status = "active", ticked = true, claim = null, ex
 }
 
 function makeWatchdog(root, fakeAgents, clock = () => NOW_MS) {
+  // M3-WI28 behavior tightening (03 §4 opt-in): these exec-arm e2e cases
+  // assert the EXECUTE posture, so they pre-enable continuous mode — the
+  // explicit in-code declaration the tightening now requires of every
+  // unattended-dispatch host.
   return createWatchdog({
     projectRoot: root,
     timers: { setInterval: () => () => {}, setTimeout: () => () => {} },
     clock,
     logger: {},
+    continuous: true,
     ...(fakeAgents !== null ? { dispatchAgents: fakeAgents.service } : {}),
   });
 }

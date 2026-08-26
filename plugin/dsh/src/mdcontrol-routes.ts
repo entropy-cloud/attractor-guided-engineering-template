@@ -3,7 +3,11 @@
  * mdcontrol.status / mdcontrol.list (dsh-plugin M2-WI10, plan
  * `2026-08-23-1621-2` Phase 1) + mdcontrol.draft / mdcontrol.analyze
  * (M3-WI12, plan `2026-08-23-1852-2` Phase 2 — collects the 1621-2
- * §Deferred adjudication).
+ * §Deferred adjudication) + mdcontrol.continuous / mdcontrol.unlock
+ * (age-autonomy M3-WI28, plan `docs/plans/age-autonomy/2026-08-26-1954-1`:
+ * continuous-mode opt-in — per-root toggle of the watchdog execute/observe
+ * posture, 03 §4; unlock — the held-plan human disposition face over the
+ * supervisor writer, 01 §5.1 T6/disposition edges).
  *
  * ── Exposure surface (plan Phase 1 Decision 1) ──────────────────────────────
  * better-sidebar precedent shape (`src/index.ts` buildApi + `src/wire.ts`):
@@ -73,7 +77,7 @@
  * terminal status.
  */
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
-import { basename, join, resolve } from 'node:path'
+import { basename, isAbsolute, join, relative, resolve } from 'node:path'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import {
   beginNativeDraft,
@@ -84,6 +88,9 @@ import {
   type NativeRunTerminal,
 } from './engine-bridge.ts'
 import { resolveAgentsService } from './native-executor.ts'
+import { discoverLawContext, fsLawGateIo } from './law/host-adapter.ts'
+import { parseFrontmatter } from '../assets/src/ledger-frontmatter.mjs'
+import { disposePlan, unlockPlan, type PlanDisposition } from './supervisor/writer.ts'
 
 // ── Wire errors (better-sidebar SidebarError pattern) ───────────────────────
 
@@ -203,13 +210,71 @@ export interface MdControlAnalyzeResult {
   text: string
 }
 
-/** The five routes (M2-WI10 ×3 + M3-WI12 ×2). */
+export interface MdControlContinuousPayload {
+  projectRoot: string
+  /**
+   * Omitted = status query. true/false toggles the per-root in-memory flag
+   * with immediate effect (next cycle); the watchdog toggle is refused when
+   * no supervisor is mounted (bad-request).
+   */
+  enabled?: boolean
+  /**
+   * When enabling: register this session as the run-terminal receipt
+   * delivery target (A8 best-effort — dead sessions tolerated).
+   */
+  followup?: { sessionId: string }
+}
+
+export interface MdControlContinuousResult {
+  projectRoot: string
+  enabled: boolean
+  /** execute while enabled, observe while off (03 §4 opt-in posture). */
+  posture: 'observe' | 'execute'
+  /** false when no watchdog is mounted at this root (no supervisor.projectRoot config). */
+  mounted: boolean
+}
+
+export interface MdControlUnlockPayload {
+  projectRoot: string
+  /** target plan (absolute, or relative to the project root). */
+  planPath: string
+  action: 'unlock' | 'dispose'
+  /** terminal disposition — required for action "dispose", illegal otherwise. */
+  disposition?: 'cancelled' | 'superseded' | 'deferred'
+}
+
+export interface MdControlUnlockResult {
+  planPath: string
+  action: 'unlock' | 'dispose'
+  result: 'written' | 'denied'
+  /** writer/law denial reason, when result === 'denied' (structured passthrough). */
+  reason?: string
+}
+
+/**
+ * Supervisor continuous-mode control face (age-autonomy M3-WI28, 03 §4):
+ * the per-root opt-in flag lives on the mounted watchdog — in-memory state,
+ * restart clears it (the ActiveRunGuard precedent; recovery re-scan
+ * re-evaluates idempotently). Structurally satisfied by the object
+ * mountSupervisor returns; absent = no mounted watchdog at any root.
+ */
+export interface ContinuousControlFace {
+  /** the mounted watchdog's project root (the flag's owner). */
+  readonly projectRoot: string
+  enabled(): boolean
+  set(enabled: boolean): void
+  setReceiptTarget(sessionId: string | null): void
+}
+
+/** The seven routes (M2-WI10 ×3 + M3-WI12 ×2 + M3-WI28 ×2). */
 export interface MdControlRoutes {
   'mdcontrol.run'(payload: unknown): Promise<MdControlRunResult>
   'mdcontrol.status'(payload: unknown): Promise<MdControlStatusResult>
   'mdcontrol.list'(payload: unknown): Promise<MdControlListResult>
   'mdcontrol.draft'(payload: unknown): Promise<MdControlDraftResult>
   'mdcontrol.analyze'(payload: unknown): Promise<MdControlAnalyzeResult>
+  'mdcontrol.continuous'(payload: unknown): Promise<MdControlContinuousResult>
+  'mdcontrol.unlock'(payload: unknown): Promise<MdControlUnlockResult>
 }
 
 // ── Active-run guard (1447-1 adjudication, see file header) ─────────────────
@@ -347,6 +412,13 @@ export interface CreateMdControlRoutesOptions {
    * `mdcontrol.status` result (existing-route extension, zero new route).
    */
   supervisorStatus?: () => Record<string, unknown> | null
+  /**
+   * Supervisor continuous-mode control hook (age-autonomy M3-WI28): owns the
+   * per-root opt-in flag on the mounted watchdog. Absent = no mounted
+   * watchdog (idle posture) — the toggle face degrades to bad-request, the
+   * query face answers mounted:false.
+   */
+  supervisorContinuous?: ContinuousControlFace
 }
 
 /**
@@ -361,6 +433,7 @@ export function createMdControlRoutes({
   logger,
   now = () => new Date().toISOString(),
   supervisorStatus,
+  supervisorContinuous,
 }: CreateMdControlRoutesOptions): MdControlRoutes & { guard: ActiveRunGuard } {
   const records = new Map<string, LiveRunRecord>()
   const drafts = new Map<string, LiveDraftRecord>()
@@ -618,6 +691,113 @@ export function createMdControlRoutes({
       // Synchronous single-turn job (1852-2 Phase 1 Decision 3): the result
       // carries the postmortem outcome verbatim; no guard occupation.
       return runNativeAnalyze({ ctx, projectRoot: root, targetRunDir: target.runDir, targetRunId: target.runId })
+    },
+
+    async 'mdcontrol.continuous'(payload) {
+      const projectRoot = requireString(payload, 'projectRoot')
+      const p = payload as MdControlContinuousPayload | null
+      if (p?.enabled !== undefined && typeof p.enabled !== 'boolean') {
+        throw new MdControlError('bad-request', '"enabled", when set, must be a boolean')
+      }
+      const rawFollowup = p?.followup
+      if (rawFollowup !== undefined) {
+        if (typeof rawFollowup !== 'object' || rawFollowup === null || typeof rawFollowup.sessionId !== 'string' || rawFollowup.sessionId === '') {
+          throw new MdControlError('bad-request', '"followup", when set, must be { sessionId: string }')
+        }
+      }
+      const root = resolve(projectRoot)
+
+      // Status query (omitted enabled): answers even without a mounted
+      // watchdog — enabled=false / posture=observe / mounted=false is the
+      // honest idle state (03 §4 default-off).
+      if (p?.enabled === undefined) {
+        if (supervisorContinuous !== undefined && resolve(supervisorContinuous.projectRoot) !== root) {
+          throw new MdControlError(
+            'bad-request',
+            `supervisor mounted at ${resolve(supervisorContinuous.projectRoot)} — this host supervises exactly that root (got ${root})`,
+          )
+        }
+        const enabled = supervisorContinuous !== undefined && supervisorContinuous.enabled()
+        return { projectRoot: root, enabled, posture: enabled ? 'execute' : 'observe', mounted: supervisorContinuous !== undefined }
+      }
+
+      // Toggle: requires a mounted watchdog at exactly this root. The flag
+      // is per-root in-memory state on the watchdog (restart clears it; the
+      // recovery scan re-evaluates idempotently) — 03 §4 opt-in: existing
+      // hosts (policies with a triggers: section) need this EXPLICIT enable
+      // to run unattended dispatch.
+      if (supervisorContinuous === undefined) {
+        throw new MdControlError(
+          'bad-request',
+          'no watchdog mounted — configure the bundle row supervisor.projectRoot before toggling continuous mode (03 §4 opt-in)',
+        )
+      }
+      if (resolve(supervisorContinuous.projectRoot) !== root) {
+        throw new MdControlError(
+          'bad-request',
+          `supervisor mounted at ${resolve(supervisorContinuous.projectRoot)} — continuous mode is per supervised root (got ${root})`,
+        )
+      }
+      supervisorContinuous.set(p.enabled)
+      // Enabling session registers as the run-terminal receipt target
+      // (M3-WI28: A8 best-effort delivery, dead sessions tolerated).
+      if (p.enabled && rawFollowup !== undefined) supervisorContinuous.setReceiptTarget(rawFollowup.sessionId)
+      logger?.info?.('mdcontrol.continuous toggled', { projectRoot: root, enabled: p.enabled })
+      return { projectRoot: root, enabled: p.enabled, posture: p.enabled ? 'execute' : 'observe', mounted: true }
+    },
+
+    async 'mdcontrol.unlock'(payload) {
+      const projectRoot = requireString(payload, 'projectRoot')
+      const planPath = requireString(payload, 'planPath')
+      const p = payload as MdControlUnlockPayload | null
+      const action = p?.action
+      if (action !== 'unlock' && action !== 'dispose') {
+        throw new MdControlError('bad-request', '"action" must be "unlock" or "dispose"')
+      }
+      const rawDisposition = p?.disposition
+      if (action === 'unlock') {
+        if (rawDisposition !== undefined) {
+          throw new MdControlError('bad-request', '"disposition" is only valid with action "dispose"')
+        }
+      } else if (rawDisposition !== 'cancelled' && rawDisposition !== 'superseded' && rawDisposition !== 'deferred') {
+        throw new MdControlError('bad-request', 'action "dispose" requires "disposition": cancelled|superseded|deferred')
+      }
+
+      const root = resolve(projectRoot)
+      const lawCtx = discoverLawContext(join(root, 'missions'), fsLawGateIo)
+      if (lawCtx === null || lawCtx.plansDir === '') {
+        throw new MdControlError('bad-request', `no governing law context under ${root} (missions/ with a plansDir-carrying mission required)`)
+      }
+      const target = isAbsolute(planPath) ? planPath : resolve(root, planPath)
+      const rel = relative(resolve(lawCtx.plansDir), target)
+      if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) {
+        throw new MdControlError('bad-request', `plan ${target} is not under the governed plansDir ${lawCtx.plansDir}`)
+      }
+      const text = fsLawGateIo.readTextFile(target)
+      if (text === null) {
+        throw new MdControlError('bad-request', `plan ${target} not found`)
+      }
+      const parsed = parseFrontmatter(text)
+      if (!parsed.ok || parsed.range === null) {
+        throw new MdControlError('bad-request', `plan ${target} is not a frontmatter ledger (outside the unlock domain)`)
+      }
+      const status = (parsed.fm as Record<string, unknown>).status
+      if (status !== 'held') {
+        throw new MdControlError('bad-request', `plan status is ${JSON.stringify(status ?? null)}, not "held" — unlock/dispose is the held-plan human disposition face (01 §5.1)`)
+      }
+
+      // Route → supervisor writer (1411-1 pipeline: pre-write law self-check
+      // with the role-bearing supervisor actor + baseHash CAS + tmp+rename;
+      // a law deny lands NOTHING on disk and is passed through structured).
+      const write =
+        action === 'unlock'
+          ? unlockPlan({ planPath: target, lawCtx })
+          : disposePlan({ planPath: target, lawCtx, disposition: rawDisposition as PlanDisposition })
+      if (write.status === 'written') {
+        logger?.info?.('mdcontrol.unlock written', { planPath: target, action })
+        return { planPath: target, action, result: 'written' }
+      }
+      return { planPath: target, action, result: 'denied', reason: `${write.status}: ${write.reason ?? ''}` }
     },
   }
 

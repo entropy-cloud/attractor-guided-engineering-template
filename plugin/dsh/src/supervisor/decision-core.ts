@@ -345,6 +345,39 @@ export function decide(
 export { triggerDuty }
 export type { TriggerHit }
 
+// ── continuous-mode posture gate (age-autonomy M3-WI28, 03 §4 opt-in) ───────
+
+/**
+ * The continuous-mode opt-in gate (03 §4: "绝不使存量用户意外获得无人值守
+ * 行为"): while the per-root continuous flag is OFF, DISPATCH-type
+ * execute-posture decisions are downgraded to observe posture — the watchdog
+ * then records them as observation receipts only (the WI25 posture). The
+ * flag is per-root in-memory state on the watchdog (restart clears it, the
+ * ActiveRunGuard precedent); headless deployments pre-enable it through the
+ * bundle config row `supervisor.continuous: true` (an equally explicit
+ * declaration). meter-write and receipt decisions are NOT gated — their
+ * faces are bookkeeping (claim reclaim/failure metering) and terminal
+ * reporting, not unattended AI dispatch. Behavior tightening (plan Phase 1
+ * Decision 2): hosts whose policy already carries a `triggers:` section now
+ * need an EXPLICIT enable to recover unattended dispatch — the tightening
+ * direction is 03 §4's opt-in discipline.
+ */
+export function applyContinuousGate(
+  decisions: SupervisorDecision[],
+  continuousEnabled: boolean,
+): SupervisorDecision[] {
+  if (continuousEnabled) return decisions
+  return decisions.map((d) =>
+    d.type === 'dispatch' && d.posture === 'execute'
+      ? {
+          ...d,
+          posture: 'observe' as const,
+          note: `${d.note !== undefined ? `${d.note} — ` : ''}continuous mode off: dispatch downgraded to observation (03 §4 opt-in gate, M3-WI28)`,
+        }
+      : d,
+  )
+}
+
 function legacyDecide(
   snapshot: SupervisorSnapshot,
   policy: SupervisorPolicyFace,
