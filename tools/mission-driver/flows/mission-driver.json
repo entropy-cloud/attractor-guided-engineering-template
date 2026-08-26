@@ -5,6 +5,7 @@
   "maxValidationRetries": 2,
   "pingPongWindow": 6,
   "maxAuditRounds": 3,
+  "maxFailures": 3,
   "auditEntry": "DEEP_AUDIT",
   "reconcileOnTerminal": true,
   "entry": "CHECK",

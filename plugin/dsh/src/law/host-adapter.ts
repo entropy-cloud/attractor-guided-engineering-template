@@ -30,7 +30,7 @@
 import { appendFileSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { evaluateGates } from '../../assets/src/law-core.mjs'
-import { loadPolicyFile, policyAgentNames, resolveMaxAuditRounds } from '../../assets/src/law-policy.mjs'
+import { loadPolicyFile, policyAgentNames, resolveMaxAuditRounds, resolveMaxFailures } from '../../assets/src/law-policy.mjs'
 import { isLawProtectedPath, LEGACY_TERMINAL_PLAN_STATUSES, legacyPlanStatusOf } from '../../assets/src/law-rules.mjs'
 import type { Context } from '@deepseek-ai/cordis'
 import type { PreToolDecision, ToolExecution } from '@deepseek-ai/dsh-tools'
@@ -189,6 +189,8 @@ export interface MissionLawContext {
   commands: Record<string, string>
   /** policy-limits-first / mission-flow-fallback budget (0815-1 ruling). */
   maxAuditRounds: number
+  /** policy-limits-first / mission-flow-fallback circuit-breaker bound (M3-WI27, mirrors maxAuditRounds). */
+  maxFailures: number
 }
 
 function toPosix(p: string): string {
@@ -282,6 +284,7 @@ function loadLawContextAt(ancestor: string, io: LawGateIo): MissionLawContext | 
     // override is the fallback. The engine flows JSON fallback channel stays
     // engine-side — the M3 supervisor resolves it at its dispatch point.
     const maxAuditRounds = resolveMaxAuditRounds(loaded.policy, mission)
+    const maxFailures = resolveMaxFailures(loaded.policy, mission)
     return {
       projectRoot: ancestor,
       policy: loaded.policy as MissionLawContext['policy'],
@@ -290,6 +293,7 @@ function loadLawContextAt(ancestor: string, io: LawGateIo): MissionLawContext | 
       agentNames: policyAgentNames(loaded.policy),
       commands,
       maxAuditRounds,
+      maxFailures,
     }
   }
   return null

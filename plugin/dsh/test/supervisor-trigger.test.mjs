@@ -6,8 +6,9 @@
  * Coverage matrix:
  *   - the SEVEN policy triggers × positive/negative (mechanical-verification /
  *     closure-audit / plan-review / reclaim-claim / nothing→deep-audit /
- *     draft-plans / terminal partial/blocked — the terminal exit only produces
- *     the forwarded decision object; R1–R4 execution = 1411-3, boundary note)
+ *     draft-plans / terminal partial/blocked — the terminal declared face
+ *     executes through the SAME R1–R4 core since M3-WI27: compound value
+ *     normalized, core continue defers, receipt + stop-dispatch)
  *   - dual domain: per-plan predicates judge every plan record; pure mission
  *     predicates judge once (02 §3)
  *   - predicate form matrix: cmp string ops (= == !=), cmp fail-soft on
@@ -360,7 +361,7 @@ test("T7+: findings=none ∧ 0/0 ∧ roadmap.unchecked → terminal partial/bloc
   const hit = hits.find((h) => h.action === "terminal:partial/blocked");
   assert.ok(hit, "terminal decision object produced");
   assert.equal(hit.type, "receipt");
-  assert.match(hits[hits.indexOf(hit)].reason, /1411-3/, "boundary note: execution forwarded to 1411-3 (R1–R4 = WI27)");
+  assert.match(hits[hits.indexOf(hit)].reason, /M3-WI27/, "boundary note: the declared face executes through the R1–R4 core (M3-WI27)");
 });
 
 test("T7−: roadmap all checked → no terminal hit", () => {
@@ -470,9 +471,9 @@ test("out-of-domain plans (no frontmatter) are skipped by per-plan evaluation", 
 // Phase 3 — end-to-end wiring (execution arm through the watchdog loop)
 // (plan `2026-08-26-1411-2` Phase 3 Proof: fixture full chain with SAFE
 // fixture commands (echo/false — never the real test face), reclaim/renewal
-// clock boundaries, dual-driver idempotency, and the terminal forwarding
-// boundary — R1–R4 execution belongs to 1411-3/WI27, this suite only pins
-// the decision-object production).
+// clock boundaries, dual-driver idempotency, and the terminal declared face —
+// R1–R4 execution landed with M3-WI27: the e2e cases below pin the
+// normalization + receipt + stop-dispatch behavior of the SAME core).
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -825,7 +826,7 @@ test("e2e nothing→deep-audit: terminal-claim record → DAR dispatch + audit-r
   }
 });
 
-test("e2e deep-audit budget gate: audit-rounds ≥ max → no dispatch, R1 receipt recorded (1411-3 boundary)", async () => {
+test("e2e deep-audit budget gate: audit-rounds ≥ max → no dispatch, deny receipt + R1 run-terminal closure (M3-WI27 complementary faces)", async () => {
   const root = tmpProject();
   try {
     writeE2EPolicy(root, { maxAuditRounds: 1 });
@@ -837,7 +838,14 @@ test("e2e deep-audit budget gate: audit-rounds ≥ max → no dispatch, R1 recei
     await wd.runCycle("manual");
     assert.equal(fake.state.creates.length, 0, "budget exhausted → no agent dispatch");
     const receipts = readReceipts({ appendLine: () => {}, readTextFile: (p) => readFileSync(p, "utf8") }, root);
-    assert.ok(receipts.some((r) => r.event === "deep-audit-budget-exhausted" && /1411-3/.test(r.detail ?? "")), "R1 boundary recorded: terminal closure belongs to 1411-3");
+    assert.ok(receipts.some((r) => r.event === "deep-audit-budget-exhausted" && /M3-WI27/.test(r.detail ?? "")), "deny receipt: the gate denies, the watchdog terminal duty closes (complementary faces, one budget)");
+    // M3-WI27: the same cycle's R1 evaluation closes the run — quiesced (no
+    // plans) ∧ budget exhausted ∧ roadmap unchecked → partial
+    const terminalReceipt = receipts.find((r) => r.event === "run-terminal:partial");
+    assert.ok(terminalReceipt, "R1 run-terminal receipt recorded (gate denies + core closes)");
+    assert.match(terminalReceipt.detail ?? "", /R1/);
+    assert.equal(wd.statusFace().terminal?.word, "partial", "mdcontrol.status face carries the terminal word");
+    assert.equal(wd.statusFace().terminal?.rule, "R1");
     wd.stop();
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -864,7 +872,7 @@ test("e2e draft-plans: DAR findings=items → drafter dispatch (receipt occurren
   }
 });
 
-test("e2e terminal exit: findings=none ∧ 0/0 ∧ roadmap.unchecked → decision object forwarded (1411-3 boundary, never executed here)", async () => {
+test("e2e terminal exit: findings=none ∧ 0/0 ∧ roadmap.unchecked → declared face executes through the R1–R4 core (M3-WI27: normalize + receipt + stop-dispatch)", async () => {
   const root = tmpProject();
   try {
     writeE2EPolicy(root);
@@ -874,10 +882,26 @@ test("e2e terminal exit: findings=none ∧ 0/0 ∧ roadmap.unchecked → decisio
     await wd.runCycle("manual");
     assert.equal(fake.state.creates.length, 0, "terminal exits dispatch nothing");
     const receipts = readReceipts({ appendLine: () => {}, readTextFile: (p) => readFileSync(p, "utf8") }, root);
-    const fwd = receipts.find((r) => r.event === "terminal-decision:partial/blocked");
-    assert.ok(fwd, "terminal decision object recorded for 1411-3 (R1–R4 execution = WI27 — boundary note pinned)");
-    assert.match(fwd.detail ?? "", /1411-3/);
+    // the declared compound value partial/blocked normalized to a concrete
+    // word by the core (R3 ∧ held==0 → partial) — never forwarded blind
+    const terminalReceipt = receipts.find((r) => r.event === "run-terminal:partial");
+    assert.ok(terminalReceipt, "run-terminal receipt recorded (declared face → same R1–R4 core)");
+    assert.match(terminalReceipt.detail ?? "", /R3/);
+    assert.match(terminalReceipt.detail ?? "", /normalized|declared/);
+    assert.equal(wd.statusFace().terminal?.word, "partial");
+    assert.equal(wd.statusFace().terminal?.source, "declared-face");
+    // stop-dispatch: a later cycle suppresses every execute-posture hit
+    const suppressedCreateCount = fake.state.creates.length;
+    await wd.runCycle("heartbeat");
+    assert.equal(fake.state.creates.length, suppressedCreateCount, "post-terminal cycles dispatch nothing (循环停派)");
     wd.stop();
+    // cross-restart idempotence (Phase 1 Decision 2 residual): a fresh
+    // watchdog over the same ledger re-derives the SAME word — no store
+    const wd2 = makeWatchdog(root, fake);
+    await wd2.runCycle("recovery");
+    assert.equal(wd2.statusFace().terminal?.word, "partial", "restart re-scan re-derives the same terminal word (idempotent, no new store)");
+    assert.equal(fake.state.creates.length, suppressedCreateCount, "a restarted terminal run still dispatches nothing");
+    wd2.stop();
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

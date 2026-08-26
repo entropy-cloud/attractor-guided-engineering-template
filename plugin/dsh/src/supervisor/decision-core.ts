@@ -43,9 +43,9 @@
  *     module keeps the pure decide() contract stable.
  *   - 1411-2 reclaim trigger: flip decision 1's posture to 'execute' (the
  *     writer face in ./writer.ts clears/re-issues the claim).
- *   - 1411-3 terminal evaluation: R1–R4 over snapshot.derived × policy
- *     (audit-rounds/maxAuditRounds faces are already carried in the
- *     snapshot); the declared seam is `TerminalDuty` below.
+ *   - 1411-3 terminal evaluation: R1–R4 over snapshot.derived × policy —
+ *     IMPLEMENTED in ./terminal-rules.ts (M3-WI27; the declared `TerminalDuty`
+ *     seam below now has its implementation there — dual entry, one core).
  *   - sustain duty: `SustainDuty` below (agent idle ∧ ledger has work →
  *     followup/redispatch) — implementation = 1411-2.
  *
@@ -126,6 +126,8 @@ export interface SupervisorSnapshot {
 /** The resolved policy face decide() consumes (extends with 1411-2). */
 export interface SupervisorPolicyFace {
   maxAuditRounds: number
+  /** circuit-breaker bound, policy-limits-first / mission-flow-fallback (M3-WI27). */
+  maxFailures?: number
   /** policy `triggers:` section — present ⇒ decide() runs the trigger duty (M3-WI26). */
   triggers?: Array<{ when: string; dispatch?: string; action?: string; terminal?: string }>
   /** mission default verify keys (commands.* ∩ the standard key order — verify-runner same source). */
@@ -168,7 +170,7 @@ export interface TriggerDuty {
   (snapshot: SupervisorSnapshot, policy: SupervisorPolicyFace, clock: () => number): SupervisorDecision[]
 }
 
-/** terminal duty (03 §8 R1–R4 terminal rule set) — 1411-3. */
+/** terminal duty (03 §8 R1–R4 terminal rule set) — implemented in ./terminal-rules.ts (M3-WI27). */
 export interface TerminalDuty {
   (snapshot: SupervisorSnapshot, policy: SupervisorPolicyFace, clock: () => number): SupervisorDecision[]
 }
@@ -302,6 +304,7 @@ export function policyFaceOf(lawCtx: MissionLawContext): SupervisorPolicyFace {
   const policy = lawCtx.policy as { triggers?: Array<{ when: string; dispatch?: string; action?: string; terminal?: string }> }
   return {
     maxAuditRounds: lawCtx.maxAuditRounds,
+    ...(lawCtx.maxFailures !== undefined ? { maxFailures: lawCtx.maxFailures } : {}),
     ...(Array.isArray(policy.triggers) && policy.triggers.length > 0 ? { triggers: policy.triggers } : {}),
     ...(Object.keys(lawCtx.commands).length > 0 ? { defaultVerifyKeys: defaultVerifyKeys(lawCtx.commands) } : {}),
   }

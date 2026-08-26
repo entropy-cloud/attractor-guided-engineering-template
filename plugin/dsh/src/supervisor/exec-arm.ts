@@ -28,9 +28,12 @@
  *   6. reclaim-claim — writer clear/re-issue (claim-validity ④⑤ dispatcher
  *      face) + execute re-dispatch; full resume-or-redispatch semantics stay
  *      with WI29 (this arm re-issues only when an agents face is present).
- *   7. terminal — the decision object is FORWARDED to 1411-3 (R1–R4
- *      execution boundary, plan Non-Goals): recorded as a receipt, never
- *      executed here.
+ *   7. terminal — the R3 DECLARED face (M3-WI27): the decision object is
+ *      executed by re-running the SAME R1–R4 evaluation core over a fresh
+ *      snapshot (./terminal-rules.ts — dual entry, one implementation); the
+ *      declared compound value normalizes to the core's concrete word, a
+ *      core `continue` defers the declared terminal, and an executing word
+ *      lands the terminal receipt + the watchdog stop-dispatch face.
  *
  * Claim TTL renewal (P2-1 ruling, plan Phase 3): renewal WRITES THE LEDGER
  * (claim-expires extended through the writer, bounded window) — a TTL
@@ -49,6 +52,8 @@ import { join } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { defaultVerifyKeys, resolveVerifyPlan, runVerifyCommands } from '../../assets/src/verify-runner.mjs'
 import { scanPlanLedger, scanRoadmapLedger } from '../../assets/src/ledger-sections.mjs'
+import { scanSupervisorSnapshot } from './decision-core.ts'
+import { evaluateTermination, normalizeDeclaredTerminal, type TerminationEvaluation } from './terminal-rules.ts'
 import type { LawGateIo, MissionLawContext } from '../law/host-adapter.ts'
 import {
   appendSectionLines,
@@ -57,6 +62,7 @@ import {
   writePlanClaim,
   type MeterWriterIo,
 } from './writer.ts'
+import { recordPlanFailure } from './failures.ts'
 import {
   dispatchAlreadyRegistered,
   enforceDistinctModel,
@@ -185,6 +191,12 @@ export interface ExecArmOptions {
   receiptLines?: () => string[]
   /** verify command runner seam (tests inject; default = runVerifyCommands). */
   verifyRunner?: typeof runVerifyCommands
+  /**
+   * M3-WI27 terminal face: an EXECUTING terminal word calls back into the
+   * watchdog's stop-dispatch state (receipt + mdcontrol.status exposure);
+   * absent ⇒ this arm writes the terminal receipt itself.
+   */
+  onTerminalWord?: (evaluation: TerminationEvaluation) => void
   logger?: { info?: (m: string, f?: Record<string, unknown>) => void; warn?: (m: string, f?: Record<string, unknown>) => void }
 }
 
@@ -395,7 +407,10 @@ export async function runMechanicalVerification(hit: TriggerHit, opts: ExecArmOp
       event: 'mechanical-verification-failed',
       detail: failed.map((r: { key: string; exitCode: number | null }) => `${r.key} exit=${r.exitCode ?? 'null'}`).join('; '),
     })
-    return { action: 'mechanical-verification', status: 'failed', detail: `verify red: ${failed.map((r: { key: string }) => r.key).join(', ')} — no pass lines written (failures metering = 1411-3)` }
+    // M3-WI27 metering (02 §4.6): one verification-red bucket count per red
+    // run — through the 1411-1 writer (plan frontmatter failures).
+    recordPlanFailure({ planPath, bucket: 'verification-red', lawCtx: opts.lawCtx, io, receipt: opts.receipt, runId })
+    return { action: 'mechanical-verification', status: 'failed', detail: `verify red: ${failed.map((r: { key: string }) => r.key).join(', ')} — no pass lines written (failure attributed: verification-red, 02 §4.6)` }
   }
   const write = appendSectionLines({
     path: planPath,
@@ -465,7 +480,7 @@ export async function dispatchDeepAudit(hit: TriggerHit, opts: ExecArmOptions): 
       runId,
       plan: null,
       event: 'deep-audit-budget-exhausted',
-      detail: `audit-rounds=${rounds} ≥ maxAuditRounds=${max} — new deep-audit dispatch denied (R1 terminal closure = 1411-3/WI27)`,
+      detail: `audit-rounds=${rounds} ≥ maxAuditRounds=${max} — new deep-audit dispatch denied (R1 terminal closure = the watchdog terminal duty, M3-WI27; this gate only denies — complementary faces, one budget)`,
     })
     return { action: 'deep-audit', status: 'skipped', detail: `budget exhausted (${rounds} ≥ ${max}) — R1 territory, recorded via receipt` }
   }
@@ -565,6 +580,12 @@ export async function reclaimClaim(hit: TriggerHit, opts: ExecArmOptions): Promi
     opts.receipt({ kind: 'exception', runId, plan: planPath, event: 'reclaim-clear-failed', detail: `writer ${cleared.status}: ${cleared.reason ?? ''}` })
     return { action: 'reclaim-claim', status: 'failed', detail: `claim clear ${cleared.status}` }
   }
+  // M3-WI27 metering (02 §4.6): a reclaimed expired claim = one
+  // claim-expired-no-output count (the plan stayed active past TTL without
+  // completing — output-less by definition). 'noop' cleared nothing: no count.
+  if (cleared.status === 'written') {
+    recordPlanFailure({ planPath, bucket: 'claim-expired-no-output', lawCtx: opts.lawCtx, io, receipt: opts.receipt, runId })
+  }
   const resolved = resolveOrRefuse('execute', opts, planAgentOf(io.readTextFile(planPath)))
   if (!resolved.ok) {
     opts.receipt({ kind: 'exception', runId, plan: planPath, event: 'dispatch-refused:execute', detail: resolved.reason })
@@ -578,6 +599,9 @@ export async function reclaimClaim(hit: TriggerHit, opts: ExecArmOptions): Promi
       const issued = writePlanClaim({ planPath, claim, expires, lawCtx: opts.lawCtx, io, now: opts.clock })
       if (issued.status !== 'written') {
         opts.receipt({ kind: 'exception', runId, plan: planPath, event: 'reclaim-reissue-failed', detail: `writer ${issued.status}: ${issued.reason ?? ''}` })
+        // M3-WI27 metering: the executor dispatch errored at re-issue — one
+        // executor-error count (02 §4.6 bucket).
+        recordPlanFailure({ planPath, bucket: 'executor-error', lawCtx: opts.lawCtx, io, receipt: opts.receipt, runId })
         return { action: 'reclaim-claim', status: 'failed', detail: `claim re-issue ${issued.status}` }
       }
       handle.followup(dispatchPromptOf({ dispatchType: 'execute', target: planPath, registeredId: null, runId }))
@@ -586,6 +610,9 @@ export async function reclaimClaim(hit: TriggerHit, opts: ExecArmOptions): Promi
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err)
       opts.receipt({ kind: 'exception', runId, plan: planPath, event: 'reclaim-failed', detail })
+      // M3-WI27 metering: agent-session creation / dispatch run error — one
+      // executor-error count (02 §4.6 bucket).
+      recordPlanFailure({ planPath, bucket: 'executor-error', lawCtx: opts.lawCtx, io, receipt: opts.receipt, runId })
       return { action: 'reclaim-claim', status: 'failed', detail }
     }
   }
@@ -593,16 +620,35 @@ export async function reclaimClaim(hit: TriggerHit, opts: ExecArmOptions): Promi
   return { action: 'reclaim-claim', status: 'degraded', detail: 'cleared; re-dispatch deferred (WI29)' }
 }
 
-/** Exit 7: terminal decision object — forwarded to 1411-3, never executed here. */
-export function forwardTerminalDecision(hit: TriggerHit, opts: ExecArmOptions): ExecOutcome {
-  opts.receipt({
-    kind: 'observation',
-    runId: opts.runId ?? 'mdsupervisor',
-    plan: null,
-    event: `terminal-decision:${hit.trigger.exitValue}`,
-    detail: `${hit.reason} — decision object forwarded (R1–R4 execution = 1411-3/M3-WI27)`,
+/**
+ * Exit 7: the R3 declared terminal face — executed through the SAME R1–R4
+ * core (M3-WI27, plan 1411-3 Phase 3; dual entry, one implementation). The
+ * declared lexeme (`partial|blocked|partial/blocked`) never forwards blind:
+ * the core normalizes the compound value to a concrete word, and a core
+ * `continue` ALWAYS defers the declared terminal.
+ */
+export async function forwardTerminalDecision(hit: TriggerHit, opts: ExecArmOptions): Promise<ExecOutcome> {
+  const runId = opts.runId ?? 'mdsupervisor'
+  const snapshot = scanSupervisorSnapshot({ projectRoot: opts.projectRoot, lawCtx: opts.lawCtx, io: opts.io, clock: opts.clock, now: opts.now })
+  if (snapshot === null) {
+    opts.receipt({ kind: 'observation', runId, plan: null, event: `terminal-decision:${hit.trigger.exitValue}`, detail: `${hit.reason} — no governing law context; decision object recorded only` })
+    return { action: `terminal:${hit.trigger.exitValue}`, status: 'forwarded', detail: 'recorded (no law context)' }
+  }
+  const evaluation = evaluateTermination(snapshot, {
+    maxAuditRounds: opts.lawCtx.maxAuditRounds,
+    maxFailures: opts.lawCtx.maxFailures ?? 3,
   })
-  return { action: `terminal:${hit.trigger.exitValue}`, status: 'forwarded', detail: 'decision object recorded for 1411-3' }
+  const normalized = normalizeDeclaredTerminal(hit.trigger.exitValue, evaluation)
+  if (!normalized.executes) {
+    opts.receipt({ kind: 'observation', runId, plan: null, event: `terminal-declaration-deferred:${hit.trigger.exitValue}`, detail: normalized.reason })
+    return { action: `terminal:${hit.trigger.exitValue}`, status: 'skipped', detail: 'core says continue — declared terminal deferred (dual-entry same-source)' }
+  }
+  if (opts.onTerminalWord !== undefined) {
+    opts.onTerminalWord(evaluation)
+  } else {
+    opts.receipt({ kind: 'terminal', runId, plan: null, event: `run-terminal:${normalized.word}`, detail: normalized.reason })
+  }
+  return { action: `terminal:${normalized.word}`, status: 'forwarded', detail: normalized.reason }
 }
 
 // ── claim TTL renewal (P2-1 ruling: renewal WRITES the ledger, bounded) ─────

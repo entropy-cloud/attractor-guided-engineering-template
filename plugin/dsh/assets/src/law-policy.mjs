@@ -492,6 +492,32 @@ export function resolveMaxAuditRounds(policy, missionConfig) {
   return 0;
 }
 
+/**
+ * Resolve the effective maxFailures (age-autonomy M3-WI27, plan
+ * `docs/plans/age-autonomy/2026-08-26-1411-3` Phase 1 — the final-review
+ * P2-3 "maxFailures default into mission config" closure): policy
+ * `limits.maxFailures` is authoritative, mission config (`flow.maxFailures`,
+ * the flows JSON / mission-level flow override channel — same seam as
+ * maxAuditRounds) is the fallback — one authority + one fallback per
+ * constraint, mirroring resolveMaxAuditRounds. Both absent → 3 (the
+ * circuit-breaker default: three attributed failures per plan before held;
+ * unlike maxAuditRounds, a nonzero default is meaningful without any audit
+ * concept — the failure buckets count executor/verification/claim expiry
+ * events, which exist in every deployment). The schema-reserved sentence in
+ * missions/autonomy.policy.yml's header is redeemed by this function.
+ */
+export function resolveMaxFailures(policy, missionConfig) {
+  const limits = policy && isPlainObject(policy.limits) ? policy.limits : null;
+  if (limits !== null && typeof limits.maxFailures === "number" && Number.isInteger(limits.maxFailures) && limits.maxFailures >= 0) {
+    return limits.maxFailures;
+  }
+  const flow = missionConfig && isPlainObject(missionConfig.flow) ? missionConfig.flow : null;
+  if (flow !== null && typeof flow.maxFailures === "number" && Number.isInteger(flow.maxFailures) && flow.maxFailures >= 0) {
+    return flow.maxFailures;
+  }
+  return 3;
+}
+
 // ── requireDistinctModel static satisfiability (02 §4.9, check-policy face) ─
 
 /**

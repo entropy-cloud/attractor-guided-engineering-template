@@ -8,8 +8,11 @@
 # limits precedence: policy is authoritative, mission config (engine
 # flow.maxAuditRounds) is the fallback — one authority + one fallback per
 # constraint. maxAuditRounds here matches flows/mission-driver.json (3) so the
-# two channels agree until consumers switch (M2/M3 plans). maxFailures is
-# schema-reserved; default semantics land with M3/WI27.
+# two channels agree until consumers switch (M2/M3 plans). maxFailures
+# semantics landed with M3/WI27 (failure attribution buckets + circuit
+# breaker, 02 §4.6; dual-source resolveMaxFailures in law-policy.mjs: this
+# limits row authoritative / flows/mission-driver.json top-level maxFailures
+# fallback / both absent default 3 — the two channels agree at 3/3).
 version: 1
 limits:
   maxAuditRounds: 3

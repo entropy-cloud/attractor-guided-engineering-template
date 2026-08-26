@@ -334,6 +334,37 @@ export function writePlanFailures(opts: WriteFailuresOptions): MachineFieldWrite
   return atomicFieldWrite(opts.planPath, (text) => setFrontmatterFields(text, { set: { failures: opts.failures } }), opts)
 }
 
+export interface HoldPlanOptions extends MachineFieldWriteOptions {
+  planPath: string
+  /** hold reason (01 §4.1: required while status is held; free-form string). */
+  hold: string
+  /** failures value re-pinned in the SAME write (circuit-breaker evidence, 01 §5.1 T5). */
+  failures?: number
+}
+
+/**
+ * Circuit-breaker hold (02 §4.6: failures ≥ maxFailures → held; writer face =
+ * the supervisor's legal T5 edge per 01 §5.1): status→held + hold reason
+ * (+ failures re-pin) in ONE atomic frontmatter write; a live claim pair is
+ * cleared in the same write (claim-validity ⑤ — claims exist only while
+ * active). writer-identity passes the draft/active→held T5 edge for the
+ * role-bearing supervisor actor with zero rule changes.
+ */
+export function holdPlan(opts: HoldPlanOptions): MachineFieldWriteResult {
+  if (typeof opts.hold !== 'string' || opts.hold.trim() === '') {
+    return { status: 'malformed', proposed: null, reason: `hold must be a non-empty string (got ${JSON.stringify(opts.hold)})` }
+  }
+  return atomicFieldWrite(
+    opts.planPath,
+    (text) =>
+      setFrontmatterFields(text, {
+        set: { status: 'held', hold: opts.hold, ...(opts.failures !== undefined ? { failures: opts.failures } : {}) },
+        remove: ['claim', 'claim-expires'],
+      }),
+    opts,
+  )
+}
+
 export interface WriteAuditRoundsOptions extends MachineFieldWriteOptions {
   roadmapPath: string
   auditRounds: number

@@ -35,6 +35,17 @@
  * loop routes them through the execution arm (./exec-arm.ts — M3-WI26): the
  * arm is fail-soft, one arm exception is an exception receipt and the loop
  * continues.
+ *
+ * M3-WI27 terminal wiring (03 §8): after the decision execution, every cycle
+ * runs the circuit breaker (02 §4.6, ./failures.ts) and then the R1–R4
+ * evaluation core (./terminal-rules.ts) over a fresh scan — a terminal word
+ * lands the run-terminal receipt + the A8 best-effort delivery + the
+ * onTerminal hooks, exposes through statusFace().terminal (the
+ * mdcontrol.status passthrough), and suppresses every subsequent
+ * execute-posture hit for this mission run (stop-dispatch). Sticky per mount;
+ * across restarts the same scan re-derives the same word (no new store).
+ * The declared R3 trigger exit reaches the same state through the exec arm's
+ * onTerminalWord callback — dual entry, one core.
  */
 import { dirname, join } from 'node:path'
 import { watch, type FSWatcher } from 'node:fs'
@@ -45,6 +56,8 @@ import {
   type SupervisorDecision,
   type SupervisorSnapshot,
 } from './decision-core.ts'
+import { evaluateTermination, type TerminationEvaluation } from './terminal-rules.ts'
+import { applyCircuitBreaker } from './failures.ts'
 import {
   appendReceipt,
   deliverReceiptLine,
@@ -114,9 +127,20 @@ export interface SupervisorTerminalEvent {
   kind: 'run-terminal' | 'plan-terminal'
   status: string
   plan: string | null
+  /** structured reasons (M3-WI27 run-terminal face; the R1–R4 evaluation lines). */
+  detail?: string
 }
 
 export type OnTerminalHook = (event: SupervisorTerminalEvent) => void
+
+/** The reached terminal state (03 §8; sticky per mount, re-derived across restarts). */
+export interface WatchdogTerminalState {
+  word: 'completed' | 'partial' | 'blocked'
+  rule: 'R1' | 'R2' | 'R3' | 'R4' | null
+  at: string
+  source: 'cycle' | 'declared-face'
+  reasons: string[]
+}
 
 export type WatchdogStatusFace = {
   mounted: boolean
@@ -126,6 +150,8 @@ export type WatchdogStatusFace = {
   lastScanAt: string | null
   lastDecisions: number
   receipts: SupervisorReceiptRecord[]
+  /** M3-WI27: the reached terminal word + rule (null while the run continues). */
+  terminal: WatchdogTerminalState | null
 }
 
 export interface WatchdogOptions {
@@ -204,6 +230,75 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
   let stopWatchers: Array<() => void> = []
   let debounceTimer: (() => void) | null = null
   let debouncePending = false
+
+  // M3-WI27 terminal state (03 §8): sticky per mount — once reached, the
+  // mission run's dispatch is suppressed; across restarts the state
+  // re-derives from the ledger (same scan → same word, Phase 1 truth-table
+  // idempotence; no new store).
+  let terminalState: WatchdogTerminalState | null = null
+
+  // terminal-receipt chain: durable record first, then the A8 best-effort
+  // delivery, then the declared hooks (1411-2/1411-3 consumption seam)
+  const emitTerminalEvent = (event: Omit<SupervisorTerminalEvent, 'ts'>): SupervisorTerminalEvent => {
+    const stamped: SupervisorTerminalEvent = { ts: now(), ...event }
+    receipt({
+      kind: 'terminal',
+      runId: stamped.runId,
+      plan: stamped.plan,
+      event: `${stamped.kind}:${stamped.status}`,
+      ...(stamped.detail !== undefined ? { detail: stamped.detail } : {}),
+    })
+    if (options.receiptSessionId !== undefined) {
+      const outcome = deliverReceiptLine(
+        options.agents,
+        options.receiptSessionId,
+        `[mdsupervisor] ${stamped.kind} ${stamped.runId ?? stamped.plan ?? ''}: ${stamped.status}`,
+      )
+      if (!outcome.delivered) {
+        receipt({
+          kind: 'delivery-failure',
+          runId: stamped.runId,
+          plan: stamped.plan,
+          event: 'receipt-delivery',
+          detail: outcome.error ?? 'delivery failed',
+        })
+      }
+    }
+    for (const hook of terminalHooks) {
+      try {
+        hook(stamped)
+      } catch (err) {
+        logger.warn?.(`[mdsupervisor] onTerminal hook threw (isolated, loop unaffected)`, {
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+    return stamped
+  }
+
+  const setTerminal = (evaluation: TerminationEvaluation, source: WatchdogTerminalState['source']): void => {
+    if (terminalState !== null || evaluation.decision === 'continue') return
+    terminalState = {
+      word: evaluation.decision,
+      rule: evaluation.rule,
+      at: now(),
+      source,
+      reasons: evaluation.reasons,
+    }
+    // receipt chain: durable record + A8 best-effort delivery + the declared
+    // hooks — one event, all three faces (emitTerminalEvent)
+    emitTerminalEvent({
+      kind: 'run-terminal',
+      runId: null,
+      status: evaluation.decision,
+      plan: null,
+      detail: `rule ${evaluation.rule} (${source}): ${evaluation.reasons.join('; ')} — dispatch suppressed for this mission run (03 §8)`,
+    })
+    logger.info?.(`[mdsupervisor] terminal ${evaluation.decision} via ${evaluation.rule} (${source}) — dispatch suppressed`, {
+      projectRoot,
+      reasons: evaluation.reasons,
+    })
+  }
 
   const receipt = (record: Omit<SupervisorReceiptRecord, 'ts'>): void => {
     const receiptIo: ReceiptIo = {
@@ -295,6 +390,9 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
       receipt,
       receiptLines,
       logger,
+      // M3-WI27: an executing terminal word from the declared face (R3
+      // trigger exit) feeds the same stop-dispatch state — dual entry, one core
+      onTerminalWord: (evaluation) => setTerminal(evaluation, 'declared-face'),
     }
     try {
       const outcome = await executeTriggerHit(hit, opts)
@@ -335,9 +433,46 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
       state.scans += 1
       state.lastScanAt = now()
       state.lastDecisions = decisions.length
+      if (terminalState !== null) {
+        // stop-dispatch (循环停派, 03 §8): the mission run reached a terminal
+        // word — execute-posture hits are suppressed (log-only, no receipt
+        // flood; the suppression itself was receipted at setTerminal time)
+        for (const decision of decisions) {
+          if (isTriggerHit(decision)) {
+            logger.info?.(`[mdsupervisor] ${trigger}: suppressed ${decision.action} (terminal ${terminalState.word} via ${terminalState.rule})`, {
+              target: decision.target,
+            })
+          } else {
+            executeDecision(decision, trigger)
+          }
+        }
+        return snapshot
+      }
       for (const decision of decisions) {
         if (isTriggerHit(decision)) await executeHit(decision, trigger)
         else executeDecision(decision, trigger)
+      }
+      // post-execution faces (M3-WI27): the circuit breaker (02 §4.6) trips
+      // held plans FIRST, then the R1–R4 terminal duty (03 §8) evaluates over
+      // a FRESH scan of the post-write ledger — the sequential core is the
+      // R1/R2/R4 entry (and the direct R3 face); the declared R3 trigger exit
+      // may already have set the terminal state through the exec arm above
+      // (dual entry, one core). R1's budget face complements the
+      // audit-rounds-overflow deny gate: the gate denies new audit dispatch,
+      // this core closes the run once quiescent.
+      const breaker = applyCircuitBreaker({ lawCtx: ctx!, io: execIo, clock, receipt })
+      if (breaker.held.length > 0) {
+        logger.info?.(`[mdsupervisor] ${trigger}: circuit breaker — ${breaker.detail}`)
+      }
+      if (terminalState === null) {
+        const post = scanSupervisorSnapshot({ projectRoot, lawCtx: ctx, io, clock, now })
+        if (post !== null) {
+          const evaluation = evaluateTermination(post, {
+            maxAuditRounds: ctx!.maxAuditRounds,
+            maxFailures: ctx!.maxFailures ?? 3,
+          })
+          if (evaluation.decision !== 'continue') setTerminal(evaluation, 'cycle')
+        }
       }
       return snapshot
     } finally {
@@ -414,6 +549,7 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
       scans: state.scans,
       lastScanAt: state.lastScanAt,
       lastDecisions: state.lastDecisions,
+      terminal: terminalState,
       receipts: readReceipts(
         {
           appendLine: () => {},
@@ -427,41 +563,7 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
       return () => terminalHooks.delete(hook)
     },
     emitTerminal(event) {
-      const stamped: SupervisorTerminalEvent = { ts: now(), ...event }
-      // receipt record first (durable), then the best-effort delivery (A8),
-      // then the declared hooks (1411-2/1411-3 consumption seam)
-      receipt({
-        kind: 'terminal',
-        runId: stamped.runId,
-        plan: stamped.plan,
-        event: `${stamped.kind}:${stamped.status}`,
-      })
-      if (options.receiptSessionId !== undefined) {
-        const outcome = deliverReceiptLine(
-          options.agents,
-          options.receiptSessionId,
-          `[mdsupervisor] ${stamped.kind} ${stamped.runId ?? stamped.plan ?? ''}: ${stamped.status}`,
-        )
-        if (!outcome.delivered) {
-          receipt({
-            kind: 'delivery-failure',
-            runId: stamped.runId,
-            plan: stamped.plan,
-            event: 'receipt-delivery',
-            detail: outcome.error ?? 'delivery failed',
-          })
-        }
-      }
-      for (const hook of terminalHooks) {
-        try {
-          hook(stamped)
-        } catch (err) {
-          logger.warn?.(`[mdsupervisor] onTerminal hook threw (isolated, loop unaffected)`, {
-            error: err instanceof Error ? err.message : String(err),
-          })
-        }
-      }
-      return stamped
+      return emitTerminalEvent(event)
     },
   }
 }

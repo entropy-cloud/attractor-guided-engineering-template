@@ -487,7 +487,7 @@ export function triggerDuty(
         target,
         reason:
           exit === 'terminal'
-            ? `trigger[${index}] ${trig.when} → terminal ${exitValue} — decision object forwarded to 1411-3 (R1–R4 execution boundary, plan Non-Goals)`
+            ? `trigger[${index}] ${trig.when} → terminal ${exitValue} — declared face; executed through the R1–R4 core (M3-WI27: compound value normalized, core continue defers)`
             : `trigger[${index}] ${trig.when} → ${exit} ${exitValue} (${domain} domain)`,
         trigger: { index, when: trig.when, exit, exitValue, domain },
         occurrence: { key, type: occurrenceType },
