@@ -55,6 +55,8 @@ verify: [test, verify-age]
 
 ## Phase 1 — 裁定：指纹/活动/振荡判定 + 阈值配置
 
+> Status: completed（2026-08-27）
+
 Targets: `plugin/dsh/src/supervisor/`（检测器新模块 stagnation.ts + watchdog 周期接线）、`tools/mission-driver/src/law-policy.mjs`（LIMITS_FIELDS + resolve 函数）、`missions/autonomy.policy.yml`（limits 行）、`flows/mission-driver.json`（回退键——数据键，engine.js 零 diff）
 
 Skill: none
@@ -62,20 +64,22 @@ Skill: none
 - Item Types: `Decision | Add | Proof`
 - Prereqs: 1411-2、1411-3、1954-2
 
-- [ ] `Decision` **双入口同注入（1411-3「两入口同一实现」契约保持）**：检测器产出为 watchdog 持有状态（`StagnationFact | null` 单点）；**两入口同读该状态**——看门循环周期末端求值（既有入口）与 policy terminal 声明面（exec-arm `forwardTerminalDecision` 重扫快照入口，exec-arm.ts:637-640）均注入同一检测器状态，非仅周期入口。备选：声明面入口不注入（依赖 R3 先于 R4 的顺序 + 下一周期收敛）——否决：制造双入口单周期分歧面（声明面 continue 而周期面 blocked），违背 1411-3 成文契约「两入口同一实现 + 交叉用例钉漂移」。残险：无（声明面重扫快照时检测器状态经回调透传，跨入口时序差 ≤ 一周期由幂等重评收敛——真值表交叉用例钉住）。
-- [ ] `Decision` **指纹域与活动信号判定形状**：per-cycle 指纹 = 排序后 (planPath → basisHash) 序列 + roadmap 文本 hash 的聚合 hash；**指纹域 = basisHash 域（frontmatter + Phase + Closure Findings）——Draft Review Record / Verification / Closure 区追加在域外，dispatch/pass 行追加不重置指纹**（测试语义钉住：评审派发后指纹不变属预期；移动指纹的只有 status 翻转 / 勾选 / Closure Findings 追加 / roadmap 变更）。一轮「停滞」= 指纹与上轮相同 ∧ 活动窗口（默认 = 一个心跳周期）内 noteActivity 零命中；连续 N 轮停滞 → `StagnationFact {rounds, threshold}` 注入。**活动信号必须参与**（03 §7 字面）：指纹不变但有活动 = 不计停滞轮（长任务未落盘不误判）；轮数计数在有活动轮清零重积。承载 = 内存 ring buffer（scratch 纪律，03 §6「归零成文接受」；重启后重新累积——保守向）。备选 A：指纹落盘跨重启保续——否决：scratch 面扩持久 store 违 03 §6 纪律且重启后重积无害。备选 B：指纹只看 roadmap——否决：plans 是主推进面，roadmap 只在收口写。残险：AI 空转但周期性改文件（指纹变而无效进展）——往返检测腿 + failures 熔断兜底（成文）。
-- [ ] `Decision` **往返检测形状与出口归并**：per-plan 状态向量历史（每周期采 plan frontmatter status 快照入 ring buffer）；振荡 = 同一 plan 在两态（如 active↔held）间 ≥ K 次翻转且无终态进展（终态 = completed 派生 / cancelled 等写终态）。命中 → `StagnationFact` **饱和注入**（`{rounds: threshold, threshold}`——等效满足 R4 条件）→ 同一 R4 出口（blocked + 回执）。备选：振荡独立出口/独立终态词——否决：03 §7 字面「停滞检测收口」+ 03 §8 终态词表封闭（R1–R4 单出口纪律）。K 取值：**K = 2 个完整往返**（4 次翻转）——K 与 N 同源配置裁定见下项。残险：合法多次 held→active 解锁（人工处置节奏）被误判——unlock 处置（1954-1 路由）有人工回执链且连续模式 off 时 plan 状态稳定，误判面窄 + 回执可人工再处置（成文接受）。
-- [ ] `Decision` **N/K 阈值策略配置落点**：policy limits 单键 `stagnationRounds`（默认 10——30s 心跳下 ≈5 分钟无进展无活动才熔断，长 AI 步（含 10min verify 命令超时面）不误杀；成文理由 = 心跳周期 × N 的墙钟换算）；K（往返阈值）**不设独立配置键**——派生自同键（K 往返 ≈ stagnationRounds/5 下取整、下限 2），避免双键漂移与配置面膨胀。双源纪律镜像 resolveMaxFailures：policy limits 权威 / `flows/mission-driver.json` 顶层回退键 / 双缺默认 10。备选：独立 `pingPongTimes` 键——否决：02 §3 schema 面单键单义先例 + 派生关系成文即可审计。残险：默认值产品判断——plan 成文墙钟换算依据，执行期可调（policy 数据面）。
-- [ ] `Add` 检测器 + policy 面：`plugin/dsh/src/supervisor/stagnation.ts` 纯函数核心（指纹聚合 / 停滞轮数状态机 / 振荡模式判定 → `StagnationFact | null`，可注入 clock 与 activity map——确定性可测）+ watchdog 接线（检测器状态为 watchdog 持有单点；周期末端求值与 exec-arm `forwardTerminalDecision` 声明面入口同读注入——双入口同注入裁定落地，R4 注入面沿 1411-3 既有参数）；law-policy `LIMITS_FIELDS` 增 `stagnationRounds` + schema 非负整数校验 + `resolveStagnationRounds(policy, missionConfig)` 双源；`missions/autonomy.policy.yml` limits 行（含头注墙钟换算句）+ `flows/mission-driver.json` 回退键（镜像 maxFailures 先例）。
-- [ ] `Proof` 检测器单测（并入 supervisor-recovery.test.mjs 新 describe 或独立 describe 同文件）：指纹聚合确定性（同语料两次同 hash）/ **指纹域钉住**（Draft Review Record 追加不重置指纹；status 翻转重置）/ 停滞轮 N-1 不熔断、N 熔断 / 有活动轮清零重积（正例：长任务窗口）/ 振荡 ≥K 翻转饱和注入、<K 不注入 / R4 注入后 blocked 决策 + 回执沿既有终态机（1411-3 面 zero-change 断言）/ **双入口交叉用例**（声明面 forwardTerminalDecision 与周期末端同注入同结果——单周期零分歧）。
+- [x] `Decision` **双入口同注入（1411-3「两入口同一实现」契约保持）**：检测器产出为 watchdog 持有状态（`StagnationFact | null` 单点）；**两入口同读该状态**——看门循环周期末端求值（既有入口）与 policy terminal 声明面（exec-arm `forwardTerminalDecision` 重扫快照入口，exec-arm.ts:637-640）均注入同一检测器状态，非仅周期入口。备选：声明面入口不注入（依赖 R3 先于 R4 的顺序 + 下一周期收敛）——否决：制造双入口单周期分歧面（声明面 continue 而周期面 blocked），违背 1411-3 成文契约「两入口同一实现 + 交叉用例钉漂移」。残险：无（声明面重扫快照时检测器状态经回调透传，跨入口时序差 ≤ 一周期由幂等重评收敛——真值表交叉用例钉住）。**执行落地**：`ExecArmOptions.stagnationFact?: () => StagnationFact | null` 回调 seam + `forwardTerminalDecision` 注入；watchdog `executeHit` 透传 `() => stagnationFact`；交叉用例（supervisor-recovery 双入口用例）钉零单周期分歧。
+- [x] `Decision` **指纹域与活动信号判定形状**：per-cycle 指纹 = 排序后 (planPath → basisHash) 序列 + roadmap 文本 hash 的聚合 hash；**指纹域 = basisHash 域（frontmatter + Phase + Closure Findings）——Draft Review Record / Verification / Closure 区追加在域外，dispatch/pass 行追加不重置指纹**（测试语义钉住：评审派发后指纹不变属预期；移动指纹的只有 status 翻转 / 勾选 / Closure Findings 追加 / roadmap 变更）。一轮「停滞」= 指纹与上轮相同 ∧ 活动窗口（默认 = 一个心跳周期）内 noteActivity 零命中；连续 N 轮停滞 → `StagnationFact {rounds, threshold}` 注入。**活动信号必须参与**（03 §7 字面）：指纹不变但有活动 = 不计停滞轮（长任务未落盘不误判）；轮数计数在有活动轮清零重积。承载 = 内存 ring buffer（scratch 纪律，03 §6「归零成文接受」；重启后重新累积——保守向）。备选 A：指纹落盘跨重启保续——否决：scratch 面扩持久 store 违 03 §6 纪律且重启后重积无害。备选 B：指纹只看 roadmap——否决：plans 是主推进面，roadmap 只在收口写。残险：AI 空转但周期性改文件（指纹变而无效进展）——往返检测腿 + failures 熔断兜底（成文）。**执行落地**：`stagnation.ts` `computeLedgerFingerprint`（computeBasisHash 同源 + roadmap sha256 全文）+ `observeStagnation` 纯转移；域钉住 / 活动参与 / 清零重积各有测试正例。
+- [x] `Decision` **往返检测形状与出口归并**：per-plan 状态向量历史（每周期采 plan frontmatter status 快照入 ring buffer）；振荡 = 同一 plan 在两态（如 active↔held）间 ≥ K 次翻转且无终态进展（终态 = completed 派生 / cancelled 等写终态）。命中 → `StagnationFact` **饱和注入**（`{rounds: threshold, threshold}`——等效满足 R4 条件）→ 同一 R4 出口（blocked + 回执）。备选：振荡独立出口/独立终态词——否决：03 §7 字面「停滞检测收口」+ 03 §8 终态词表封闭（R1–R4 单出口纪律）。K 取值：**K = 2 个完整往返**（4 次翻转）——K 与 N 同源配置裁定见下项。残险：合法多次 held→active 解锁（人工处置节奏）被误判——unlock 处置（1954-1 路由）有人工回执链且连续模式 off 时 plan 状态稳定，误判面窄 + 回执可人工再处置（成文接受）。**执行落地**：连续交替翻转计数（第三态破对重计 / 终态 disposition 重置 / 离场 plan 清行——ring 语义 O(1) 每 plan）；unit 边界 + e2e oscillation（auditRounds=0 隔离 R1–R3，纯 hash 盲腿）测试在位。
+- [x] `Decision` **N/K 阈值策略配置落点**：policy limits 单键 `stagnationRounds`（默认 10——30s 心跳下 ≈5 分钟无进展无活动才熔断，长 AI 步（含 10min verify 命令超时面）不误杀；成文理由 = 心跳周期 × N 的墙钟换算）；K（往返阈值）**不设独立配置键**——派生自同键（K 往返 ≈ stagnationRounds/5 下取整、下限 2），避免双键漂移与配置面膨胀。双源纪律镜像 resolveMaxFailures：policy limits 权威 / `flows/mission-driver.json` 顶层回退键 / 双缺默认 10。备选：独立 `pingPongTimes` 键——否决：02 §3 schema 面单键单义先例 + 派生关系成文即可审计。残险：默认值产品判断——plan 成文墙钟换算依据，执行期可调（policy 数据面）。**执行落地**：`resolveStagnationRounds` 双源 + LIMITS_FIELDS 增键（非负整数校验免费获得）+ policy.yml limits 行与头注换算句 + flows 回退键 + host-adapter 透传；六态矩阵 + schema 测试在位（0 = 显式合法值 = 检测器 off 成文）。
+- [x] `Add` 检测器 + policy 面：`plugin/dsh/src/supervisor/stagnation.ts` 纯函数核心（指纹聚合 / 停滞轮数状态机 / 振荡模式判定 → `StagnationFact | null`，可注入 clock 与 activity map——确定性可测）+ watchdog 接线（检测器状态为 watchdog 持有单点；周期末端求值与 exec-arm `forwardTerminalDecision` 声明面入口同读注入——双入口同注入裁定落地，R4 注入面沿 1411-3 既有参数）；law-policy `LIMITS_FIELDS` 增 `stagnationRounds` + schema 非负整数校验 + `resolveStagnationRounds(policy, missionConfig)` 双源；`missions/autonomy.policy.yml` limits 行（含头注墙钟换算句）+ `flows/mission-driver.json` 回退键（镜像 maxFailures 先例）。
+- [x] `Proof` 检测器单测（并入 supervisor-recovery.test.mjs 新 describe 或独立 describe 同文件）：指纹聚合确定性（同语料两次同 hash）/ **指纹域钉住**（Draft Review Record 追加不重置指纹；status 翻转重置）/ 停滞轮 N-1 不熔断、N 熔断 / 有活动轮清零重积（正例：长任务窗口）/ 振荡 ≥K 翻转饱和注入、<K 不注入 / R4 注入后 blocked 决策 + 回执沿既有终态机（1411-3 面 zero-change 断言）/ **双入口交叉用例**（声明面 forwardTerminalDecision 与周期末端同注入同结果——单周期零分歧）。
 
 Exit Criteria:
 
-- [ ] 检测器纯函数 + watchdog 接线落地；R4 注入端到端（检测 → StagnationFact → evaluateTermination blocked）；双入口同注入零单周期分歧有交叉用例
-- [ ] policy limits 新键经 `gate-check --policy` schema 校验；双源 resolve 有矩阵测试
-- [ ] `docs/logs/` 更新
+- [x] 检测器纯函数 + watchdog 接线落地；R4 注入端到端（检测 → StagnationFact → evaluateTermination blocked）；双入口同注入零单周期分歧有交叉用例
+- [x] policy limits 新键经 `gate-check --policy` schema 校验；双源 resolve 有矩阵测试
+- [x] `docs/logs/` 更新（docs/logs/2026/08-27.md Phase 1 条目）
 
 ## Phase 2 — 恢复语境补强 + 文档同步与回写
+
+> Status: completed（2026-08-27）
 
 Targets: `plugin/dsh/test/supervisor-recovery.test.mjs`（补至 WI31 门 ≥8）、`docs/design/age-autonomy/03-supervisor.md`（changelog）、`tools/mission-driver/CONTEXT.md`、`docs/architecture/dsh-plugin-packaging.md`、roadmap、`docs/logs/`
 
@@ -84,16 +88,16 @@ Skill: none
 - Item Types: `Add | Proof`
 - Prereqs: Phase 1
 
-- [ ] `Add` supervisor-recovery.test.mjs 补齐（对 WI31 门清单）：停滞指纹（N-1/N 边界）+ 往返检测 + 恢复语境变体（重启后 ring buffer 清零 → 停滞重积不误熔断）+ partial/blocked 显式区分恢复语境变体（R3∧停滞 → blocked 叠加取向沿 1411-3 区分矩阵）——文件总用例 ≥8（1954-2 份额 ≥5 + 本 plan 份额）。
-- [ ] `Add` 文档同步与回写：03-supervisor.md changelog（§7 执行面落地注记——指纹/活动/振荡三判定 + N/K 配置裁定 + scratch 纪律引用，非契约变更）；CONTEXT.md 增停滞检测段；packaging doc（src 树 stagnation.ts 条目 + test 树增量）；roadmap WI30 tick + 证据指针 + Last Updated 同步；`docs/logs/` 收口条目。
-- [ ] `Proof` 收口面：`node --test plugin/dsh/test/supervisor-recovery.test.mjs` ≥8 全绿；`pnpm --prefix tools/mission-driver test` + `./verify-age.sh` 全绿（引擎 ≥907 / 插件 ≥342 / 真值表 ≥113 只增不减；law-policy 新键 schema 回归）；`node tools/mission-driver/src/mission-check.mjs missions/age-autonomy-implementation.json .` exit 0；`git diff --stat tools/mission-driver/src/engine.js` 为空（零引擎 diff）+ 零新增 npm 依赖。
+- [x] `Add` supervisor-recovery.test.mjs 补齐（对 WI31 门清单）：停滞指纹（N-1/N 边界）+ 往返检测 + 恢复语境变体（重启后 ring buffer 清零 → 停滞重积不误熔断）+ partial/blocked 显式区分恢复语境变体（R3∧停滞 → blocked 叠加取向沿 1411-3 区分矩阵）——文件总用例 ≥8（1954-2 份额 ≥9 + 本 plan 份额 9 = 18）。**执行落地**：文件 18 例（门 ≥8 超额）——停滞 e2e（R4 blocked + stagnation-detected + run-terminal 回执）/ 活动参与 / 往返 unit + e2e（auditRounds=0 隔离 R1–R3 的 hash 盲腿）/ 重启清零 / 双入口交叉 / 区分变体（经声明面）/ 双源矩阵 + schema。
+- [x] `Add` 文档同步与回写：03-supervisor.md changelog（§7 执行面落地注记——指纹/活动/振荡三判定 + N/K 配置裁定 + scratch 纪律引用，非契约变更）；CONTEXT.md 增停滞检测段；packaging doc（src 树 stagnation.ts 条目 + test 树增量）；roadmap WI30 tick + 证据指针 + Last Updated 同步；`docs/logs/` 收口条目。
+- [x] `Proof` 收口面：`node --test plugin/dsh/test/supervisor-recovery.test.mjs` ≥8 全绿；`pnpm --prefix tools/mission-driver test` + `./verify-age.sh` 全绿（引擎 ≥907 / 插件 ≥342 / 真值表 ≥113 只增不减；law-policy 新键 schema 回归）；`node tools/mission-driver/src/mission-check.mjs missions/age-autonomy-implementation.json .` exit 0；`git diff --stat tools/mission-driver/src/engine.js` 为空（零引擎 diff）+ 零新增 npm 依赖。**实跑**：supervisor-recovery **18/18**；引擎 **910/910**；verify-age **L1+L2+L2.5 GREEN**（插件 **378/378** / 真值表 **116/116** / policy face ok 含新键 / corpus 含本 plan）；mission-check exit 0；roadmap-check exit 0；web typecheck + build 绿（dist 零漂移）+ lint:prompts OK；engine.js 空 diff + 双 package.json 零 diff。
 
 Exit Criteria:
 
-- [ ] supervisor-recovery.test.mjs ≥8 用例全绿（WI31 门清单逐项覆盖：过期 claim 回收（1954-2）/ resume-or-redispatch（1954-2）/ 停滞指纹 / 往返检测 / partial/blocked 区分变体）
-- [ ] roadmap WI30 `[x]` + 证据指针；Last Updated 同步
-- [ ] CONTEXT.md / 03 changelog / packaging doc 增量在位；`docs/logs/` 收口条目
-- [ ] `./verify-age.sh` + mission-check 全绿（L2.5 corpus 覆盖本 plan）
+- [x] supervisor-recovery.test.mjs ≥8 用例全绿（WI31 门清单逐项覆盖：过期 claim 回收（1954-2）/ resume-or-redispatch（1954-2）/ 停滞指纹 / 往返检测 / partial/blocked 区分变体）——实际 18 例全绿
+- [x] roadmap WI30 `[x]` + 证据指针；Last Updated 同步（「M3 第六片」）
+- [x] CONTEXT.md / 03 changelog / packaging doc 增量在位；`docs/logs/` 收口条目（docs/logs/2026/08-27.md 两 Phase 条目）
+- [x] `./verify-age.sh` + mission-check 全绿（L2.5 corpus 覆盖本 plan——gate-check exit 0）
 
 ## Draft Review Record
 
@@ -104,7 +108,13 @@ Exit Criteria:
 
 ## Verification
 
+- pass test 2026-08-26-130203-mission-driver basisHash=02011be78c97d3b4140431681599459b3c4e38a57d5a04b14f89160b4efae1bf exit=0
+- pass verify-age 2026-08-26-130203-mission-driver basisHash=02011be78c97d3b4140431681599459b3c4e38a57d5a04b14f89160b4efae1bf exit=0
+
 ## Closure
+
+- dispatch audit #audit-2026-08-26-130203-mission-driver-2026-08-26-1954-3-m3-wi30-stagnation-pingpong-detection-1-9e901d19 to ses_auditor_2026-08-26-1954
+- accepted #audit-2026-08-26-130203-mission-driver-2026-08-26-1954-3-m3-wi30-stagnation-pingpong-detection-1-9e901d19：独立收口审计（ses_auditor_2026-08-26-1954）通过——16 项全勾与 live 工作区逐项对账：① 检测器工件与可达性：`plugin/dsh/src/supervisor/stagnation.ts` 在库且非空壳（`computeLedgerFingerprint` 指纹域 = basisHash 域 + roadmap 全文 hash 聚合 / `observeStagnation` 纯转移——停滞腿活动参与清零重积 + 往返腿 K 饱和注入 `{rounds: threshold, threshold}` 单 R4 出口）；watchdog 周期后置接线 live（watchdog.ts :602 threshold 注入 / :614 stagnation fingerprint R4 injection 回执措辞）；exec-arm 声明面入口 live（exec-arm.ts :209 `ExecArmOptions.stagnationFact?` 回调 seam + :652 `forwardTerminalDecision` 注入）——双入口同注入（1411-3 契约）非仅周期入口，交叉用例在 supervisor-recovery.test.mjs；policy 面 live：`law-policy.mjs` :34 `LIMITS_FIELDS` 含 `stagnationRounds` + `resolveStagnationRounds`（:522-547 双源：policy 权威 / flow 回退 / 双缺默认 10）；`missions/autonomy.policy.yml` :28 `stagnationRounds: 10` + 头注墙钟换算句；`flows/mission-driver.json` :9 顶层回退键（引擎惰性数据键）；assets 双副本同步（git status 见 plugin/dsh/assets/*）。② 审计者独立复跑机械验证：`pnpm --prefix tools/mission-driver test` **910/910 pass + prompt-check OK** exit 0；`./verify-age.sh` **L1+L2+L2.5 GREEN** exit 0（真值表 116/116 / policy face ok 含新键 / corpus 含本 plan）；`node --test plugin/dsh/test/supervisor-recovery.test.mjs` **18/18** exit 0（1954-2 份额 9 + 本 plan 份额 9——WI31 门 ≥8 超额：指纹域钉住 / N-1·N 边界 e2e / 活动参与 / 往返 unit+e2e（auditRounds=0 隔离 R1–R3 hash 盲腿）/ 重启清零 / 双入口交叉 / partial/blocked 区分恢复语境变体 / 双源矩阵 + schema）。③ 不变量：`git diff --stat tools/mission-driver/src/engine.js` 为空（零引擎 diff）；双 package.json 零依赖 diff（零 npm 依赖不变量）；web/ 零改动（前端面无触碰 → 无需重建 dist）。④ 文档同步实证：03-supervisor.md changelog M3-WI30 条（:98 §7 执行面落地注记）、CONTEXT.md 守夜人停滞指纹+往返检测段、packaging doc（stagnation.ts 条目 + supervisor-recovery 18 例注记）、roadmap WI30 `[x]`（:78 全证据指针）+ Last Updated（:7「M3 第六片」）、docs/logs/2026/08-27.md 两 Phase 条目 + 收口条目。⑤ Deferred 诚实性：唯一 Deferred「TTL 未到期死会话 claim 提前回收」为真实域外残项且后继在册（Successor M5/WI37 评估），停滞指纹落地 = 兜底已就位成文；无 in-scope live 缺陷或契约漂移藏匿于 Deferred。结论：16/16 计数域全勾 + 双 pass 行 basisHash=02011be7…fae1bf 与当次 basis 绑定 + 本回执对满足 01 §5.2 完成派生公式。
 
 ## Deferred But Adjudicated
 
