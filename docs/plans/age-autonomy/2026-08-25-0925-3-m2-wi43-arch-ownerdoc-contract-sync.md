@@ -116,7 +116,12 @@ Exit Criteria:
 
 ## Verification
 
+- pass test 2026-08-26-072439-mission-driver basisHash=67c276dd9d84b5b8e7c08fa1207dce39561558b9f9a89c3d5de7c42fc4068ad9 exit=0
+
 ## Closure
+
+- dispatch audit #audit-2026-08-26-072439-mission-driver-2026-08-25-0925-3-m2-wi43-arch-ownerdoc-contract-sync-1-ca37f07e to ses_auditor_2026-08-26-072439-n3 models={exec:zhipuai/glm-5.2,aud:zhipuai/glm-5.2}
+- accepted #audit-2026-08-26-072439-mission-driver-2026-08-25-0925-3-m2-wi43-arch-ownerdoc-contract-sync-1-ca37f07e：approved——独立冷放审计通过（2026-08-26，ses_auditor_2026-08-26-072439-n3 引擎派发 subagent；单模型 exec/aud 同型按 policy `downgrade: single-model` 声明如实记录，承 0635-3/0925-1/0925-2 先例）。① 计数域 21/21 全勾、零 `- [ ]` 残留；② Phase 1 工件实证：baseline §Public Exports 三模块逐名登记（`rg -c "ledger-frontmatter|ledger-sections|ledger-dualread" docs/architecture/mission-driver-baseline.md` 逐模块 =2 ≥1）+ M1 交付进度句（0635 批次指针，Update Rule 字面形态）；③ Phase 2 工件实证：`rg "19 (allowed|files)" docs/architecture/dsh-plugin-packaging.md` 零命中、`rg "assets/src/plan-check.mjs" docs/architecture/dsh-plugin-packaging.md` 零命中（PLAN_STATUS_RE 源 :212/:279 → `assets/src/ledger-dualread.mjs`，与 `plan-status-gate.ts:57` 实况一致）、import-graph ledger 精确边落地（:130-131，monitor 边按 NOT-bundled 裁定不入图）、计数 = live **26**（19 引擎 + 3 ledger + 4 law，`ALLOWED_MODULES` = `assets/src` 实测逐名一致；plan 撰写时 22 → 0815 law 批次落地后执行时 live 26，按 Phase 2 退出判据主句「与 ALLOWED_MODULES 及实测清单一致」取 26——写 22 反制造同族新漂移，裁定已如实记入 roadmap 证据行 + `docs/logs/2026/08-26.md:54`，判据快照值与主句冲突依主句裁定，诚实非静默）；④ Phase 3 回写实证：roadmap :63 WI43 `[x]` + 证据指针 + `> Last Updated` :7 同步、WI24 未勾（in scope 口径）；⑤ 命令复跑：`pnpm --prefix tools/mission-driver test` **899/899 pass / 0 fail** + prompt-check OK、`node tools/mission-driver/src/mission-check.mjs missions/age-autonomy-implementation.json .` exit 0；⑥ 日志在册：`docs/logs/2026/08-26.md:51-55` 三 Phase 收口条目；⑦ Deferred 诚实性：唯一 deferred（roadmap 退役格式段清理）与 Non-Goals 逐字对应且条件触发已记；纯文档批次零代码/零插件面，无 anti-hollow 悬空面。结论：21/21 计数域全勾 + pass 行 basisHash=67c276dd…8ad9 绑定 + 本回执对同 id 配对满足 01 §5.2 完成派生公式。
 
 ## Deferred But Adjudicated
 
