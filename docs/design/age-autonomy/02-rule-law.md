@@ -148,6 +148,18 @@ dispatch:                                # 派发类型 → 具名 agent（提�
 - `failures ≥ maxFailures` → 该 plan 转入 held + 回执；held→active 的解锁写入必须把 `failures` 重置为 0；
 - 步数/墙钟（run 内）→ 守夜人计量熔断。
 
+**failures 归因桶（M3-WI27 增量，写者 = 守夜人 meter 面）**：`failures` 只按归因桶计数，桶枚举与计/不计规则如下（计量表语义见 01 §6 `failures` 行，互指单一来源）：
+
+| 桶 | 计（各 +1） | 依据点 |
+| --- | --- | --- |
+| `executor-error` | 执行派发的创建/换发/运行出错（agent 会话创建失败、claim 再发放写失败、执行臂异常）；策略解析拒绝属配置面，**不计** | 执行派发失败点（reclaim/execute 派发路径） |
+| `verification-red` | mechanical-verification 命令 exit ≠ 0（每次红跑计一次；红跑不写 pass 行） | 机械验证失败点 |
+| `claim-expired-no-output` | claim 到期且无产出被回收（active 越过 TTL 未完成即无产出；仅回收实际清除 claim 时计） | reclaim 回收点 |
+
+**不计清单（防计数噪音）**：守夜人自身写盘 CAS 冲突/受限重试（基础设施噪音，下轮重扫重决）；恢复扫描的观察类记录（故障已在归因点计过，重启面只观察）；双驱动幂等跳过（dedup 面拒发 = 该 occurrence 已在处理，再计即双算）。
+
+**maxFailures 双源（终审 P2-3 收口）**：policy `limits.maxFailures` 权威 / mission flow config `flow.maxFailures` 回退（`flows/mission-driver.json` 顶层键，镜像 maxAuditRounds 通道）/ 双缺默认 3——解析面 `law-policy.mjs` `resolveMaxFailures`（单权威+单回退纪律）。熔断执行（03 §7）：`failures ≥ maxFailures` → held + hold 理由 + 回执（同写清除 claim——claim 只存在于 active，02 §4.5 ⑤）；held plan 不阻塞其他可执行/可评审 plan（03 §4）；全部 held ∧ 无可执行 open plan → 经 03 §8 R1–R4 求值核心终态化 partial/blocked + 回执。
+
 ### 4.7 路径与结构护栏
 
 - plan 文件只能落在 mission 配置的 `plansDir` 域内；frontmatter 必须符合 01-file-ledger §2 的扁平子集；`work-item` 必须命中 roadmap 已登记项；roadmap 写回只能改已登记 work-item 的 checkbox。
@@ -195,4 +207,5 @@ dispatch:                                # 派发类型 → 具名 agent（提�
 
 ## Changelog
 
+- 2026-08-26（M3-WI27，plan `docs/plans/age-autonomy/2026-08-26-1411-3`）：§4.6 增量——failures 归因桶成文（`executor-error` / `verification-red` / `claim-expired-no-output` 三桶各计/不计规则 + 不计清单）+ maxFailures 双源解析（policy 权威 / mission flow 回退 / 双缺默认 3，`resolveMaxFailures`）+ 熔断执行语义注记（held 同写清 claim、单 held 不阻塞、全 held 经 03 §8 求值核心终态化）。
 - 2026-08-25（M2-WI12/WI13，plan `docs/plans/age-autonomy/2026-08-25-0815-1`）：§6 部署面表补 gate-check.mjs 与 DSH 适配层实名（supported baseline 的最小事实性增补——内核 `tools/mission-driver/src/{law-core,law-policy}.mjs`、真实实例 `missions/autonomy.policy.yml` 已落地；本文其余契约无改动）。

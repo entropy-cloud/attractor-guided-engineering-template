@@ -92,3 +92,7 @@
 - 守夜人 = 未来若门禁+守夜人覆盖引擎全部职责，引擎退役（P4 判定门）；否则引擎留任。
 - 二者共享同一账本/法律/完成定义，切换对信息层与验证层零感知。
 - **看门约束**：DSH 形态守夜人是宿主插件服务，宿主存活 = 守夜人存活，不另造 watchdog 进程；独立形态由 OS 定时器承担。
+
+## Changelog
+
+- 2026-08-26（M3-WI27，plan `docs/plans/age-autonomy/2026-08-26-1411-3`）：§8 R1–R4 执行面落地注记（非契约变更——设计基线即本文 §8，本条只记实现面）：求值核心 `plugin/dsh/src/supervisor/terminal-rules.ts` `evaluateTermination`（R1→R4 序贯、首条命中即决；R1 三岔含「active 带未过期 claim → continue」；partial/blocked 显式区分 = blocked↔R3∧held>0 ∨ R4 / partial↔R1 未全 done ∨ R3∧held==0；复合声明值 `partial/blocked` 归一单点在核心；stagnation 注入接口钉住、检测本体归 WI30）；两入口同一实现 = 看门循环周期末端求值 + policy 末条 trigger 的 terminal 声明面（1411-2 决策对象经同一核心执行，core continue 恒压声明）；终态落点 = 回执（run-terminal receipt + A8 尽力投递 + onTerminal 链）+ `mdcontrol.status` 透出（statusFace().terminal）+ 循环停派（该 mission run 的 execute-posture 命中抑制，mount 内粘滞、跨重启重扫描幂等重评、零新 store）；§7 失败熔断执行面 = `failures.ts` 三桶归因（02 §4.6 增量互指）+ `applyCircuitBreaker`（held 同写清 claim；单 held 不阻塞；全 held 经 §8 核心终态化）；R1 与 audit-rounds-overflow deny 面互补注记（门禁拒新审计派发 + 守夜人收口双面，一个预算）。
