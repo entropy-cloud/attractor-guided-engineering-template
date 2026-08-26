@@ -985,17 +985,18 @@ test("gate3-freeze: cancelled (writable terminal) plan rejects any basis change 
 
 // 0635-3 landed its closure receipts (run 2026-08-26-072439) — corpus pins
 // track the live derived state, so it moved to the completed class below.
-// 0815-1 (commit 8d3c92b) and 0815-2 (this closure's receipt pair, first
-// production writer of the models= lineage suffix) followed: no pinned corpus
+// 0815-1 (commit 8d3c92b), 0815-2 (a6fac25, first production writer of the
+// models= lineage suffix) and 0815-3 followed: no pinned corpus
 // member remains awaitingClosure — that derived state is transient by design
 // (any run's BUILD_VERIFY/CLOSURE_AUDIT step can legally close it mid-flight),
 // so its semantics stay pinned by the constructed gate3 fixtures above, never
 // by a live plan file.
-test("corpus: closed plans (0635-3, 0815-1, 0815-2, receipts bound) derive completed and allow same-content writes", () => {
+test("corpus: closed plans (0635-3, 0815-1, 0815-2, 0815-3, receipts bound) derive completed and allow same-content writes", () => {
   for (const name of [
     "2026-08-25-0635-3-m1-corpus-migration-dual-read-guides-ci.md",
     "2026-08-25-0815-1-m2-law-seam-policy-schema.md",
     "2026-08-25-0815-2-m2-three-hard-gates.md",
+    "2026-08-25-0815-3-m2-supporting-gates.md",
   ]) {
     const file = join(REPO_ROOT, "docs", "plans", "age-autonomy", name);
     const text = readFileSync(file, "utf8");
@@ -1674,7 +1675,7 @@ test("runner: runVerifyCommands executes commands.* only — exit codes, timeout
 
 /* ── 16. corpus by file class over the REAL extended policy (0815-3) ──────── */
 
-test("corpus: new-format plans (0635-3, 0815-1, 0815-2) pass every registered gate of the real policy — no false kills", () => {
+test("corpus: new-format plans (0635-3, 0815-1, 0815-2, 0815-3) pass every registered gate of the real policy — no false kills", () => {
   const real = parsePolicy(readFileSync(REAL_POLICY_FILE, "utf8"));
   assert.equal(real.ok, true);
   const plansDir = join(REPO_ROOT, "docs", "plans", "age-autonomy");
@@ -1682,6 +1683,7 @@ test("corpus: new-format plans (0635-3, 0815-1, 0815-2) pass every registered ga
     { name: "2026-08-25-0635-3-m1-corpus-migration-dual-read-guides-ci.md", completed: true },
     { name: "2026-08-25-0815-1-m2-law-seam-policy-schema.md", completed: true },
     { name: "2026-08-25-0815-2-m2-three-hard-gates.md", completed: true },
+    { name: "2026-08-25-0815-3-m2-supporting-gates.md", completed: true },
   ];
   for (const { name, completed } of corpus) {
     const file = join(plansDir, name);
