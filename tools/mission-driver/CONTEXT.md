@@ -127,7 +127,12 @@ node tools/mission-driver/src/mission-check.mjs missions/<name>.json .
 
 # dry-run
 node tools/mission-driver/src/main.js <mission-name> --step CHECK --dry-run --no-monitor
+
+# pre-commit hook 启用（一次性本地配置，CI 不依赖 hooks——同一校验面在 verify-age.sh L2.5）
+git config core.hooksPath .githooks
 ```
+
+pre-commit hook（age-autonomy M2-WI23）：对暂存区 `docs/plans/**/*.md`（gate-check 结构子集，legacy 形注记跳过）、`docs/backlog/*.md`（roadmap-check 字段集）、`missions/*.json`（mission-check，无 roadmapPath 的 base 配置跳过）逐段校验；missions/ 缺失或 node 不可用语境 fail-open + 注记（模板消费者合法面，02 §6）。CI（`.github/workflows/age-ci.yml`，M2-WI23）触发路径含账本与执法数据面（`docs/plans/**`/`docs/backlog/**`/`missions/**`/`.githooks/**`）——账本类提交不绕过 CI；单 job 跑同一 `verify-age.sh`（L1+L2+L2.5，本地=CI 同构）。
 
 
 ## 关键约束

@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+#
+# pre-commit hook — law structural-subset face on the staged trigger surface
+# (age-autonomy M2-WI23, plan docs/plans/age-autonomy/2026-08-25-0950-3 Phase 1).
+#
+# Enable (one-time, per clone):  git config core.hooksPath .githooks
+# CI does NOT depend on hooks — the same faces run in verify-age.sh L2.5.
+#
+# Sections (independent fail-fast, notes between sections):
+#   plans    — staged docs/plans/**/*.md: gate-check.mjs single-file structural
+#              face. Frontmatter-format plans must exit 0. Legacy-format plans
+#              (no leading `---` block) are skipped with a note: the
+#              legacy-plan-freeze face fails closed on the no-actor structural
+#              face by design (M2-WI22) and the human git-commit channel is a
+#              documented legal surface (02 §2 A1).
+#   roadmaps — staged docs/backlog/*.md: roadmap-check.mjs field-set face
+#              (M2-WI42 CLI), exit 0 required.
+#   missions — staged missions/*.json: mission-check.mjs. Base configs without
+#              a roadmapPath key are skipped with a note (shared defaults, not
+#              missions — monitor.js GET /api/configs filter precedent).
+#
+# Fail-open discipline (02 §6): no missions/ directory or policy/mission
+# context (template consumer / never-ran projects) → skip the section with a
+# note, exit 0. node unavailable → skip everything with a note (the hook must
+# not be more fragile than the repo's existing toolchain).
+#
+# Real-project file — NOT part of the install-age.sh template manifest
+# (template consumers have no plugin/dsh and no gate-check executable face).
+
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+fail=0
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "[pre-commit] (note) node not found — law sections skipped (fail-open: hook must not be more fragile than the toolchain)"
+  exit 0
+fi
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+
+# ---- section: plans (law structural subset) --------------------------------
+while IFS= read -r f; do
+  case "$f" in
+    docs/plans/*.md) ;;
+    *) continue ;;
+  esac
+  [ -f "$f" ] || continue
+  if [ "$(head -n 1 "$f")" != "---" ]; then
+    echo "[pre-commit][plans] (note) $f: legacy-format plan — outside structural domain (freeze face is a human/CI channel by design, M2-WI22); skipped"
+    continue
+  fi
+  if out=$(node tools/mission-driver/src/gate-check.mjs "$f" 2>&1); then
+    echo "[pre-commit][plans] ok: $f"
+  else
+    echo "[pre-commit][plans] DENY: $f"
+    printf '%s\n' "$out" | grep '"reason"' | head -1 || printf '%s\n' "$out" | head -10
+    fail=1
+    break
+  fi
+done <<< "$staged"
+
+# ---- section: roadmaps (field-set validation) ------------------------------
+while IFS= read -r f; do
+  case "$f" in
+    docs/backlog/*.md) ;;
+    *) continue ;;
+  esac
+  [ -f "$f" ] || continue
+  if out=$(node tools/mission-driver/src/roadmap-check.mjs "$f" 2>&1); then
+    echo "[pre-commit][roadmaps] ok: $f"
+  else
+    echo "[pre-commit][roadmaps] DENY: $f"
+    printf '%s\n' "$out" | head -10
+    fail=1
+    break
+  fi
+done <<< "$staged"
+
+# ---- section: missions (mission config validation; fail-open) --------------
+if [ ! -d missions ]; then
+  echo "[pre-commit][missions] (note) no missions/ directory — mission face skipped (fail-open, 02 §6 template-consumer posture)"
+else
+  while IFS= read -r f; do
+    case "$f" in
+      missions/*.json) ;;
+      *) continue ;;
+    esac
+    [ -f "$f" ] || continue
+    if ! grep -q '"roadmapPath"' "$f"; then
+      echo "[pre-commit][missions] (note) $f: no roadmapPath key — base config, not a mission; skipped"
+      continue
+    fi
+    if out=$(node tools/mission-driver/src/mission-check.mjs "$f" . 2>&1); then
+      echo "[pre-commit][missions] ok: $f"
+    else
+      echo "[pre-commit][missions] DENY: $f"
+      printf '%s\n' "$out" | head -10
+      fail=1
+      break
+    fi
+  done <<< "$staged"
+fi
+
+exit "$fail"
