@@ -985,13 +985,21 @@ test("gate3-freeze: cancelled (writable terminal) plan rejects any basis change 
 
 // 0635-3 landed its closure receipts (run 2026-08-26-072439) — corpus pins
 // track the live derived state, so it moved to the completed class below.
-test("corpus: new-format awaitingClosure plan (0815-1) evaluates to allow with the awaitingClosure note — not completed", () => {
+// 0815-1 (commit 8d3c92b) and 0815-2 (this closure's receipt pair, first
+// production writer of the models= lineage suffix) followed: no pinned corpus
+// member remains awaitingClosure — that derived state is transient by design
+// (any run's BUILD_VERIFY/CLOSURE_AUDIT step can legally close it mid-flight),
+// so its semantics stay pinned by the constructed gate3 fixtures above, never
+// by a live plan file.
+test("corpus: closed plans (0635-3, 0815-1, 0815-2, receipts bound) derive completed and allow same-content writes", () => {
   for (const name of [
+    "2026-08-25-0635-3-m1-corpus-migration-dual-read-guides-ci.md",
     "2026-08-25-0815-1-m2-law-seam-policy-schema.md",
+    "2026-08-25-0815-2-m2-three-hard-gates.md",
   ]) {
     const file = join(REPO_ROOT, "docs", "plans", "age-autonomy", name);
     const text = readFileSync(file, "utf8");
-    assert.equal(deriveCompleted(text).completed, false, name);
+    assert.equal(deriveCompleted(text).completed, true, name);
     const out = evaluateGates(
       { type: "write", path: file, proposedContent: text },
       {
@@ -1007,31 +1015,8 @@ test("corpus: new-format awaitingClosure plan (0815-1) evaluates to allow with t
     );
     assert.equal(out.decision, "allow", `${name}: ${out.reason}`);
     const pc = out.observations.find((o) => o.rule === "plan-completed");
-    assert.match(pc.reason, /awaitingClosure/, name);
+    assert.match(pc.reason, /completion formula satisfied/, name);
   }
-});
-
-test("corpus: closed plan (0635-3, receipts bound) derives completed and allows same-content writes", () => {
-  const name = "2026-08-25-0635-3-m1-corpus-migration-dual-read-guides-ci.md";
-  const file = join(REPO_ROOT, "docs", "plans", "age-autonomy", name);
-  const text = readFileSync(file, "utf8");
-  assert.equal(deriveCompleted(text).completed, true, name);
-  const out = evaluateGates(
-    { type: "write", path: file, proposedContent: text },
-    {
-      policy: {
-        gates: [
-          { id: "closure-audit-binding", match: "{{plansDir}}/**/*.md", rule: "closure-audit-binding", mode: "enforce" },
-          { id: "writer-identity", match: "{{plansDir}}/**/*.md", rule: "writer-identity", mode: "enforce" },
-          { id: "plan-completed", match: "{{plansDir}}/**/*.md", rule: "plan-completed", mode: "enforce" },
-        ],
-      },
-      ctx: { plansDir: join(REPO_ROOT, "docs", "plans", "age-autonomy") },
-    },
-  );
-  assert.equal(out.decision, "allow", `${name}: ${out.reason}`);
-  const pc = out.observations.find((o) => o.rule === "plan-completed");
-  assert.match(pc.reason, /completion formula satisfied/, name);
 });
 
 test("corpus: legacy-format plans (0635-1/2) are outside every hard gate's domain — dual-read skip, no false kill", () => {
@@ -1695,8 +1680,8 @@ test("corpus: new-format plans (0635-3, 0815-1, 0815-2) pass every registered ga
   const plansDir = join(REPO_ROOT, "docs", "plans", "age-autonomy");
   const corpus = [
     { name: "2026-08-25-0635-3-m1-corpus-migration-dual-read-guides-ci.md", completed: true },
-    { name: "2026-08-25-0815-1-m2-law-seam-policy-schema.md", completed: false },
-    { name: "2026-08-25-0815-2-m2-three-hard-gates.md", completed: false },
+    { name: "2026-08-25-0815-1-m2-law-seam-policy-schema.md", completed: true },
+    { name: "2026-08-25-0815-2-m2-three-hard-gates.md", completed: true },
   ];
   for (const { name, completed } of corpus) {
     const file = join(plansDir, name);
