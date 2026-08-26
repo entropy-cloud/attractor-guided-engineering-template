@@ -78,6 +78,13 @@ import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { seedDescriptorTurn, snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import type { Context } from '@deepseek-ai/cordis'
+import {
+  assemble,
+  commitToLedger,
+  fsAssemblerIo,
+  resolveAssemblyBlocks,
+  type AssemblyBlock,
+} from './efficiency/prompt-assembler.ts'
 
 // ── Pinned seam shapes (from the M2-WI6 interface placeholder) ──────────────
 
@@ -159,6 +166,20 @@ export interface NativeExecutorConfig {
    * ModelSelection install (reasoningEffort included).
    */
   nativeModelSelection?: { provider: string; model: string; reasoningEffort?: string }
+  /**
+   * M4-WI33 (04 §3): the run's fixedPrefix face — when the run's agent
+   * declares fixedPrefix blocks (policy `agents.<name>.fixedPrefix`, same
+   * law-policy schema), every dispatch prompt composes through the
+   * PromptAssembler: first step of the run child = FRESH (fixed prefix ++
+   * dynamic), subsequent steps on the SAME continuable session = CONTINUE
+   * (dynamic delta + changed-file resend; per-run in-memory ledger — a
+   * resumed-after-crash session gets a full FRESH resend, the conservative
+   * P2 posture). The engine-resolved prompt (already through the
+   * promptsDir → missions/prompts/ → built-in chain) IS the dynamic block,
+   * verbatim — the policy overlays the engine prompt, never replaces it
+   * (04 §7). Absent/empty ⇒ the legacy prompt path, byte-identical.
+   */
+  assemblyPrefix?: { blocks: AssemblyBlock[]; embedStamp?: string } | undefined
   onStepUpdate?: (payload: StepUpdatePayload) => void
   [key: string]: unknown
 }
@@ -377,6 +398,9 @@ export class DshNativeExecutor implements NativeExecutor {
   private readonly watchdogGraceMs: number
   private handle: AgentHandle | null = null
   private disposed = false
+  /** M4-WI33: the run child's prompt-assembly ledger (04 §3.3) — per-run memory. */
+  private readonly assemblyLedger = new Map<string, string>()
+  private assemblyStarted = false
 
   constructor({ agents, config, watchdogGraceMs = DEFAULT_WATCHDOG_GRACE_MS }: NativeExecutorOptions) {
     if (!agents || typeof agents.create !== 'function' || typeof agents.resume !== 'function') {
@@ -533,6 +557,38 @@ export class DshNativeExecutor implements NativeExecutor {
     return this.handle
   }
 
+  /**
+   * M4-WI33 (04 §3): compose the dispatch prompt through the
+   * PromptAssembler when `config.assemblyPrefix` declares fixedPrefix
+   * blocks — fixed prefix first, the engine prompt (marker included) as
+   * the dynamic suffix (04 §3.2 prefix discipline). First dispatch on the
+   * run child = FRESH; every later step on the same continuable session =
+   * CONTINUE (delta + changed files; per-run ledger). Without the
+   * declaration the engine prompt passes through byte-identical (the
+   * promptsDir resolution chain untouched — policy overlays, never
+   * replaces, 04 §7).
+   */
+  private _assemblePrompt(markedPrompt: string): string {
+    const prefix = this.config.assemblyPrefix
+    if (prefix === undefined || !Array.isArray(prefix.blocks) || prefix.blocks.length === 0) {
+      return markedPrompt
+    }
+    const mode = this.assemblyStarted ? 'CONTINUE' : 'FRESH'
+    const out = assemble(
+      mode,
+      {
+        blocks: resolveAssemblyBlocks(prefix.blocks, { projectRoot: this.config.projectRoot }),
+        ...(prefix.embedStamp !== undefined && prefix.embedStamp !== '' ? { embedStamp: prefix.embedStamp } : {}),
+      },
+      { text: markedPrompt },
+      this.assemblyLedger,
+      fsAssemblerIo,
+    )
+    commitToLedger(this.assemblyLedger, out)
+    this.assemblyStarted = true
+    return out.text
+  }
+
   private async _runAgentTurn(
     stepName: string,
     prompt: string,
@@ -551,7 +607,7 @@ export class DshNativeExecutor implements NativeExecutor {
     // Boundary prefix: run-dir identifiability only in native mode (the
     // orphan reaper matches OS cmdlines; native child agents have none).
     const runId = config.runDir ? String(config.runDir).split(/[\\/]/).filter(Boolean).pop() : null
-    const markedPrompt = `${runId ? `[MISSION_DRIVER:${runId}]` : '[MISSION_DRIVER]'} ${prompt}`
+    const markedPrompt = this._assemblePrompt(`${runId ? `[MISSION_DRIVER:${runId}]` : '[MISSION_DRIVER]'} ${prompt}`)
 
     const logFile = genLogFile(config.runDir, `native-${stepName}`)
     const promptFile = logFile ? `${logFile}.prompt` : null

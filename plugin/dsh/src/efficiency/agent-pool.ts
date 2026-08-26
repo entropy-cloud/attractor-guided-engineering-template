@@ -44,9 +44,18 @@
 import { basename } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { parseFrontmatter } from '../../assets/src/ledger-frontmatter.mjs'
+import { charterHashesDiffer } from './prompt-assembler.ts'
 import type { DispatchType } from '../supervisor/dispatch-resolve.ts'
 
 // ── faces ────────────────────────────────────────────────────────────────────
+
+/**
+ * M4-WI33: the per-member prompt-assembly hash ledger face — the caller
+ * (exec-arm through the PromptAssembler) reads/writes this Map between
+ * dispatches. Shape contract lives in prompt-assembler.ts (file path →
+ * hash8, plus the `__sends` compaction counter sentinel).
+ */
+export type MemberHashLedger = Map<string, string>
 
 /** The timer slice the pool needs (idle-TTL dispose); injectable for tests. */
 export interface PoolTimers {
@@ -117,6 +126,8 @@ export interface PoolAgentDefFace {
   poolKey?: unknown
   idleTtlMinutes?: unknown
   rotateEvery?: unknown
+  /** M4-WI33: the fixedPrefix blocks (law-policy FIXED_PREFIX shape). */
+  fixedPrefix?: unknown
 }
 
 export interface PoolPolicyFace {
@@ -229,6 +240,14 @@ interface PoolMember {
   followup: (text: string) => void
   stopIdleTimer: () => void
   disposed: boolean
+  /**
+   * M4-WI33: the per-member prompt-assembly hash ledger (04 §3.3) — what
+   * this member's session has ALREADY received (charter file → hash8 + the
+   * compaction counter). Lives and dies with the member: crash/rotation →
+   * the replacement starts empty → its first dispatch is FRESH (the
+   * conservative P2 posture — never guess in-session state).
+   */
+  sentHashes: MemberHashLedger
 }
 
 export interface PoolAcquireOutcome {
@@ -238,6 +257,13 @@ export interface PoolAcquireOutcome {
   attemptId?: string
   followup?: (text: string) => void
   reused?: boolean
+  /**
+   * M4-WI33: the serving member's prompt-assembly hash ledger — the
+   * FRESH/CONTINUE judgment input AND the commit target (the caller
+   * assembles then commits through prompt-assembler's commitToLedger).
+   * Empty map on a fresh member ⇒ FRESH; populated ⇒ CONTINUE candidate.
+   */
+  sentHashes?: MemberHashLedger
   /** honest note (acquired reuse/rotation lineage; bypassed/refused reason). */
   reason: string
 }
@@ -247,6 +273,13 @@ export interface AgentPoolFace {
    * Acquire one continuable subagent for a dispatch: pool routing (P7 ban /
    * dormant / served), config resolution, reuse-or-create, rotation, idle
    * timer re-arm. Never throws — refusals/bypasses ride the outcome.
+   *
+   * M4-WI33 charter-hash rotation leg (04 §2.2 leg 2): when the caller
+   * supplies `currentFileHashes` (the PromptAssembler's charter hash face
+   * over the agent's fixedPrefix), a reuse whose member ledger no longer
+   * matches forces member rotation — the judgment function is the ONE
+   * shared charterHashesDiffer (prompt-assembler.ts; zero second
+   * implementation). Absent/null ⇒ no hash judgment (pre-WI33 callers).
    */
   acquire(options: {
     agents: PoolAgentsFace
@@ -256,6 +289,8 @@ export interface AgentPoolFace {
     projectRoot: string
     groupId?: string | null
     label: string
+    /** current charter file hashes (prompt-assembler face; rotation judgment). */
+    currentFileHashes?: Map<string, string> | null
   }): Promise<PoolAcquireOutcome>
   /**
    * Register a session's role (the mutex registry — also tags fresh-path
@@ -358,6 +393,8 @@ export function createAgentPool(options: {
         revokeMember(poolKey, member, 'member crash-detected (agents face reports the persistent session unrecoverable — 04 §2.1 crash-recovery face)')
       } else if (rotateEvery !== null && member.served >= rotateEvery) {
         revokeMember(poolKey, member, `rotateEvery ${rotateEvery} dispatches reached — forced rotation (anti-anchoring, 04 §2.2)`)
+      } else if (o.currentFileHashes !== undefined && o.currentFileHashes !== null && charterHashesDiffer(o.currentFileHashes, member.sentHashes)) {
+        revokeMember(poolKey, member, 'charter hash change — upstream fixedPrefix file added/changed/removed forces a new member (04 §2.2 rotation leg 2, judgment via the PromptAssembler hash face, M4-WI33)')
       } else {
         member.served += 1
         member.stopIdleTimer()
@@ -369,6 +406,7 @@ export function createAgentPool(options: {
           attemptId,
           followup: member.followup,
           reused: true,
+          sentHashes: member.sentHashes,
           reason: `pool hit ${poolKey} — session ${member.sessionId} reused (generation ${member.generation}, served ${member.served}; same-generation followup, 04 §2.3)`,
         }
       }
@@ -405,6 +443,7 @@ export function createAgentPool(options: {
       },
       stopIdleTimer: () => {},
       disposed: false,
+      sentHashes: new Map<string, string>(),
     }
     created.stopIdleTimer = armIdleTimer(poolKey, created, idleTtlMinutes)
     entry.member = created
@@ -415,6 +454,7 @@ export function createAgentPool(options: {
       attemptId,
       followup: created.followup,
       reused: false,
+      sentHashes: created.sentHashes,
       reason: `pool miss ${poolKey} — member session ${realId} created (generation ${generation}${member !== null ? ', prior member rotated out' : ''})`,
     }
   }

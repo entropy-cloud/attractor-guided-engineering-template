@@ -86,6 +86,18 @@ import {
   type PoolAgentDefFace,
   type PoolPolicyFace,
 } from '../efficiency/agent-pool.ts'
+import {
+  assemble,
+  charterHashesOf,
+  commitToLedger,
+  fsAssemblerIo,
+  newLedger,
+  resolveAssemblyBlocks,
+  type AssemblerIo,
+  type AssemblerSpec,
+  type AssemblyBlock,
+  type AssemblyMode,
+} from '../efficiency/prompt-assembler.ts'
 import type { TriggerHit } from './trigger-eval.ts'
 import type { SupervisorReceiptRecord } from './receipt.ts'
 
@@ -184,6 +196,66 @@ export function dispatchPromptOf(options: {
   ].join('\n')
 }
 
+// ── M4-WI33: the assembled dispatch prompt face (04 §3) ─────────────────────
+
+/** The law-policy assembly section face (validated upstream by law-policy). */
+interface AssemblyPolicyFace {
+  assembly?: { embedStamp?: unknown; continueDelta?: unknown } | undefined
+}
+
+function fixedPrefixBlocksOf(policy: PolicyFace | undefined, agentName: string | null): AssemblyBlock[] {
+  if (policy === undefined || agentName === null) return []
+  const def = poolAgentDefOf(policy as PoolPolicyFace, agentName)
+  const blocks = def !== null ? def.fixedPrefix : undefined
+  if (!Array.isArray(blocks) || blocks.length === 0) return []
+  return blocks as AssemblyBlock[]
+}
+
+/**
+ * Assemble (or pass through) one dispatch prompt (M4-WI33, 04 §3):
+ *
+ * - the resolved agent declares fixedPrefix blocks AND the session carries
+ *   prompt-assembly material ⇒ the PromptAssembler composes
+ *   `fixedPrefixBlocks ++ [dynamicBlock]` — the thin-pointer prompt IS the
+ *   dynamic task block (marker instructions belong to the dynamic suffix,
+ *   04 §3.2). The sent hashes commit into the session's ledger (pool
+ *   member state — the per-member hash ledger lives and dies with it).
+ * - `assembly.continueDelta: false` pins every dispatch to FRESH (the
+ *   explicit full-resend posture); absent assembly section defaults to
+ *   delta-continue.
+ * - otherwise (no fixedPrefix declared) the output is the thin-pointer
+ *   prompt BYTE-IDENTICAL — deployments without assembly declarations see
+ *   zero change (the backward-compat pin).
+ * The prompt-resolution precedence chain (promptsDir → missions/prompts/
+ * → built-in) is untouched — the policy overlays the engine prompt, never
+ * replaces it (04 §7).
+ */
+export function dispatchPromptFor(options: {
+  base: { dispatchType: DispatchType; target: string; registeredId: string | null; runId: string }
+  policy: PolicyFace | undefined
+  agentName: string | null
+  assembly: DispatchPromptAssembly | null | undefined
+  placeholders?: { projectRoot?: string; plansDir?: string; roadmapPath?: string }
+  assemblerIo?: AssemblerIo
+}): string {
+  const { base, policy, agentName, assembly } = options
+  const blocks = fixedPrefixBlocksOf(policy, agentName)
+  if (assembly === null || assembly === undefined || blocks.length === 0) {
+    return dispatchPromptOf(base)
+  }
+  const continueDelta = (policy as AssemblyPolicyFace | undefined)?.assembly?.continueDelta !== false
+  const mode: AssemblyMode = continueDelta ? assembly.mode : 'FRESH'
+  const spec: AssemblerSpec = {
+    blocks: resolveAssemblyBlocks(blocks, options.placeholders ?? {}),
+    ...((policy as AssemblyPolicyFace | undefined)?.assembly?.embedStamp !== undefined
+      ? { embedStamp: String((policy as AssemblyPolicyFace)!.assembly!.embedStamp) }
+      : {}),
+  }
+  const out = assemble(mode, spec, { text: dispatchPromptOf(base) }, assembly.sentHashes, options.assemblerIo ?? fsAssemblerIo)
+  commitToLedger(assembly.sentHashes, out)
+  return out.text
+}
+
 // ── the arm ──────────────────────────────────────────────────────────────────
 
 export interface ExecArmOptions {
@@ -250,8 +322,28 @@ function newClaimToken(runId: string, holderSessionId: string): string {
 /** M4-WI32: the pool face consumed here doubles as the role-tag registry. */
 type PoolFaceOf = AgentPoolFace
 
+/**
+ * M4-WI33: the prompt-assembly material one dispatched session carries —
+ * the FRESH/CONTINUE mode (pool create ⇒ FRESH, same-member followup ⇒
+ * CONTINUE; fresh-path sessions are always FRESH) plus the per-session
+ * hash ledger (pool member state for pooled agents, a throwaway Map for
+ * one-shot sessions). Absent on the outcome ⇒ the agent declares no
+ * fixedPrefix ⇒ the caller keeps the thin-pointer prompt path unchanged.
+ */
+export interface DispatchPromptAssembly {
+  mode: AssemblyMode
+  sentHashes: Map<string, string>
+}
+
 export type DispatchAgentOutcome =
-  | { status: 'created'; sessionId: string; followup: (text: string) => void; poolNote: string | null }
+  | {
+      status: 'created'
+      sessionId: string
+      followup: (text: string) => void
+      poolNote: string | null
+      /** M4-WI33: present iff the resolved agent declares fixedPrefix blocks. */
+      promptAssembly?: DispatchPromptAssembly
+    }
   | { status: 'refused'; reason: string }
 
 /**
@@ -290,10 +382,27 @@ export async function createDispatchAgent(
     executorSessions?: string[]
     /** policy face — the agent def's poolKey/idleTtlMinutes/rotateEvery read (dispatch-resolve stays untouched). */
     policy?: PolicyFace
+    /** M4-WI33: placeholder context for fixedPrefix ref resolution (default = projectRoot). */
+    assemblyPlaceholders?: { plansDir?: string; roadmapPath?: string }
+    /** M4-WI33: injectable assembler file face (tests); default = node fs. */
+    assemblerIo?: AssemblerIo
   },
 ): Promise<DispatchAgentOutcome> {
   const { pool, dispatchType } = options
   const notes: string[] = []
+
+  // M4-WI33: the resolved agent's fixedPrefix blocks — when declared, the
+  // CURRENT charter hashes feed the pool (04 §2.2 rotation leg 2: an
+  // upstream charter change forces a new member) and the outcome carries
+  // the prompt-assembly material (mode + the session's hash ledger).
+  const charterBlocks = fixedPrefixBlocksOf(options.policy, binding.agentName)
+  let currentFileHashes: Map<string, string> | null = null
+  if (charterBlocks.length > 0) {
+    currentFileHashes = charterHashesOf(
+      { blocks: resolveAssemblyBlocks(charterBlocks, { projectRoot: options.projectRoot, ...options.assemblyPlaceholders }) },
+      options.assemblerIo ?? fsAssemblerIo,
+    )
+  }
 
   if (pool !== undefined && (dispatchType === 'plan-review' || dispatchType === 'draft-plans')) {
     const def = poolAgentDefOf(options.policy as PoolPolicyFace | undefined, binding.agentName)
@@ -306,10 +415,19 @@ export async function createDispatchAgent(
         projectRoot: options.projectRoot,
         groupId: options.groupId ?? null,
         label: options.label,
+        ...(currentFileHashes !== null ? { currentFileHashes } : {}),
       })
       if (acquired.status === 'refused') return { status: 'refused', reason: acquired.reason }
       if (acquired.status === 'acquired') {
-        return { status: 'created', sessionId: acquired.sessionId!, followup: acquired.followup!, poolNote: acquired.reason }
+        return {
+          status: 'created',
+          sessionId: acquired.sessionId!,
+          followup: acquired.followup!,
+          poolNote: acquired.reason,
+          ...(charterBlocks.length > 0
+            ? { promptAssembly: { mode: acquired.reused ? ('CONTINUE' as const) : ('FRESH' as const), sentHashes: acquired.sentHashes ?? newLedger() } }
+            : {}),
+        }
       }
       notes.push(acquired.reason) // bypassed — fresh path below, honest note carried
     }
@@ -350,6 +468,10 @@ export async function createDispatchAgent(
       handle.agent.followup({ content: [{ type: 'text', text }], source: { kind: 'user' } })
     },
     poolNote: notes.length > 0 ? notes.join(' — ') : null,
+    // M4-WI33: a fresh-path (non-pooled / bypassed) session over a
+    // fixedPrefix-declaring agent is one-shot FRESH — the throwaway ledger
+    // commits the send (hash-audit face) and dies with the dispatch.
+    ...(charterBlocks.length > 0 ? { promptAssembly: { mode: 'FRESH' as const, sentHashes: newLedger() } } : {}),
   }
 }
 
@@ -439,6 +561,7 @@ async function dispatchAgentExit(
   // no agents face ⇒ registration-only degradation (1411-1 posture)
   let handle: { sessionId: string; followup: (text: string) => void } | null = null
   let poolNote: string | null = null
+  let promptAssembly: DispatchPromptAssembly | undefined
   if (opts.agents !== undefined) {
     try {
       const agentOut = await createDispatchAgent(opts.agents, resolved.resolution.binding, {
@@ -449,6 +572,8 @@ async function dispatchAgentExit(
         ...(dispatchType === 'plan-review' ? { groupId: groupScopeOf(registration.path, planText) } : {}),
         ...(opts.executorSessions !== undefined ? { executorSessions: opts.executorSessions } : {}),
         policy: policyOf(opts.lawCtx),
+        assemblyPlaceholders: { plansDir: opts.lawCtx.plansDir, roadmapPath: opts.lawCtx.roadmapPath },
+        assemblerIo: io,
       })
       if (agentOut.status === 'refused') {
         opts.receipt({ kind: 'exception', runId, plan: hit.target, event: `dispatch-refused:${dispatchType}`, detail: agentOut.reason })
@@ -456,6 +581,7 @@ async function dispatchAgentExit(
       }
       handle = { sessionId: agentOut.sessionId, followup: agentOut.followup }
       poolNote = agentOut.poolNote
+      promptAssembly = agentOut.promptAssembly
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err)
       opts.receipt({ kind: 'exception', runId, plan: hit.target, event: `dispatch-failed:${dispatchType}`, detail })
@@ -486,7 +612,16 @@ async function dispatchAgentExit(
     return { action: dispatchType, status: 'failed', detail: `registration write ${write.status}: ${write.reason ?? ''}` }
   }
   if (handle !== null) {
-    handle.followup(dispatchPromptOf({ dispatchType, target: registration.path, registeredId: id, runId }))
+    handle.followup(
+      dispatchPromptFor({
+        base: { dispatchType, target: registration.path, registeredId: id, runId },
+        policy: policyOf(opts.lawCtx),
+        agentName: resolved.resolution.agentName,
+        assembly: promptAssembly,
+        placeholders: { projectRoot: opts.projectRoot, plansDir: opts.lawCtx.plansDir, roadmapPath: opts.lawCtx.roadmapPath },
+        assemblerIo: io,
+      }),
+    )
     opts.receipt({
       kind: 'observation',
       runId,
@@ -680,13 +815,24 @@ export async function dispatchDraftPlans(hit: TriggerHit, opts: ExecArmOptions):
         ...(opts.pool !== undefined ? { pool: opts.pool } : {}),
         dispatchType: 'draft-plans',
         policy: policyOf(opts.lawCtx),
+        assemblyPlaceholders: { plansDir: opts.lawCtx.plansDir, roadmapPath: opts.lawCtx.roadmapPath },
+        assemblerIo: opts.io ?? fsMeterWriterIo,
       })
       if (agentOut.status === 'refused') {
         opts.receipt({ kind: 'exception', runId, plan: null, event: 'dispatch-refused:draft-plans', detail: agentOut.reason })
         return { action: 'draft-plans', status: 'refused', detail: agentOut.reason }
       }
       const handle = { sessionId: agentOut.sessionId, followup: agentOut.followup }
-      handle.followup(dispatchPromptOf({ dispatchType: 'draft-plans', target: roadmapPath, registeredId: null, runId }))
+      handle.followup(
+        dispatchPromptFor({
+          base: { dispatchType: 'draft-plans', target: roadmapPath, registeredId: null, runId },
+          policy: policyOf(opts.lawCtx),
+          agentName: resolved.resolution.agentName,
+          assembly: agentOut.promptAssembly,
+          placeholders: { projectRoot: opts.projectRoot, plansDir: opts.lawCtx.plansDir, roadmapPath: opts.lawCtx.roadmapPath },
+          assemblerIo: opts.io ?? fsMeterWriterIo,
+        }),
+      )
       opts.receipt({
         kind: 'observation',
         runId,
@@ -742,6 +888,8 @@ export async function reclaimClaim(hit: TriggerHit, opts: ExecArmOptions): Promi
         ...(opts.pool !== undefined ? { pool: opts.pool } : {}),
         dispatchType: 'execute',
         policy: policyOf(opts.lawCtx),
+        assemblyPlaceholders: { plansDir: opts.lawCtx.plansDir, roadmapPath: opts.lawCtx.roadmapPath },
+        assemblerIo: io,
       })
       if (agentOut.status === 'refused') {
         opts.receipt({ kind: 'exception', runId, plan: planPath, event: 'dispatch-refused:execute', detail: agentOut.reason })
@@ -758,7 +906,16 @@ export async function reclaimClaim(hit: TriggerHit, opts: ExecArmOptions): Promi
         recordPlanFailure({ planPath, bucket: 'executor-error', lawCtx: opts.lawCtx, io, receipt: opts.receipt, runId })
         return { action: 'reclaim-claim', status: 'failed', detail: `claim re-issue ${issued.status}` }
       }
-      handle.followup(dispatchPromptOf({ dispatchType: 'execute', target: planPath, registeredId: null, runId }))
+      handle.followup(
+        dispatchPromptFor({
+          base: { dispatchType: 'execute', target: planPath, registeredId: null, runId },
+          policy: policyOf(opts.lawCtx),
+          agentName: resolved.resolution.agentName,
+          assembly: agentOut.promptAssembly,
+          placeholders: { projectRoot: opts.projectRoot, plansDir: opts.lawCtx.plansDir, roadmapPath: opts.lawCtx.roadmapPath },
+          assemblerIo: io,
+        }),
+      )
       opts.receipt({ kind: 'observation', runId, plan: planPath, event: 'reclaim-claim', detail: `claim reclaimed + re-issued to executor session ${handle.sessionId} (expires ${expires})` })
       return { action: 'reclaim-claim', status: 'dispatched', detail: `re-issued to ${handle.sessionId}` }
     } catch (err) {

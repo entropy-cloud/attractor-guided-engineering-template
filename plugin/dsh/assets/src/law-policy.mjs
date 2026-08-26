@@ -30,7 +30,13 @@ import { listRuleIds, PROPOSED_ACTION_TYPES } from "./law-core.mjs";
 import "./law-rules.mjs";
 
 export const POLICY_VERSION = 1;
-export const POLICY_TOP_LEVEL_FIELDS = ["version", "limits", "gates", "triggers", "agents", "dispatch"];
+export const POLICY_TOP_LEVEL_FIELDS = ["version", "limits", "gates", "triggers", "agents", "dispatch", "assembly"];
+export const ASSEMBLY_FIELDS = ["embedStamp", "continueDelta"];
+// 04-efficiency §3.3 / §5: the default embed stamp — `{path}` / `{hash8}`
+// (first 8 hex of sha256, algorithm source = computeBasisHash) /
+// `{content}` are the three render slots. Exported same-source for the
+// plugin-side PromptAssembler (M4-WI33).
+export const DEFAULT_EMBED_STAMP = '<file path="{path}" hash="{hash8}">{content}</file>';
 export const LIMITS_FIELDS = ["maxAuditRounds", "maxFailures", "stagnationRounds"];
 export const GATE_FIELDS = ["id", "match", "rule", "mode"];
 export const GATE_MODES = ["observe", "enforce"];
@@ -852,6 +858,34 @@ export function validatePolicy(policy, opts = {}) {
         } else if (!Object.prototype.hasOwnProperty.call(isPlainObject(policy.agents) ? policy.agents : {}, target)) {
           errors.push(`dispatch.${dtype} references undefined agent "${target}" — agents must define every dispatch target`);
         }
+      }
+    }
+  }
+
+  // assembly: section (04-efficiency §5, age-autonomy M4-WI33): the
+  // PromptAssembler policy face — embedStamp template string + continueDelta
+  // boolean, inside the restricted-YAML subset boundary (single-line quoted
+  // template string; block scalars are already subset-denied).
+  if (policy.assembly !== undefined) {
+    if (!isPlainObject(policy.assembly)) {
+      errors.push("assembly must be a mapping");
+    } else {
+      for (const k of Object.keys(policy.assembly)) {
+        if (!ASSEMBLY_FIELDS.includes(k)) errors.push(`assembly: unknown key "${k}" — legal keys: ${ASSEMBLY_FIELDS.join(", ")}`);
+      }
+      if (policy.assembly.embedStamp !== undefined) {
+        if (!isNonEmptyString(policy.assembly.embedStamp)) {
+          errors.push(`assembly.embedStamp must be a non-empty template string (got ${JSON.stringify(policy.assembly.embedStamp)})`);
+        } else {
+          for (const slot of ["{path}", "{hash8}", "{content}"]) {
+            if (!policy.assembly.embedStamp.includes(slot)) {
+              errors.push(`assembly.embedStamp must contain the ${slot} render slot (got ${JSON.stringify(policy.assembly.embedStamp)})`);
+            }
+          }
+        }
+      }
+      if (policy.assembly.continueDelta !== undefined && typeof policy.assembly.continueDelta !== "boolean") {
+        errors.push(`assembly.continueDelta must be a boolean (got ${JSON.stringify(policy.assembly.continueDelta)})`);
       }
     }
   }

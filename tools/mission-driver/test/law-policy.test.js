@@ -30,6 +30,8 @@ import {
   resolvePolicyPlaceholders,
   policyAgentNames,
   TRIGGER_PREDICATES,
+  ASSEMBLY_FIELDS,
+  DEFAULT_EMBED_STAMP,
 } from "../src/law-policy.mjs";
 import { validateMission } from "../src/mission-check.mjs";
 
@@ -93,6 +95,15 @@ describe("real instance", () => {
     assert.equal(r.policy.agents.auditor.downgrade, "single-model");
     assert.equal(r.policy.agents.drafter.mode, "pooled");
     assert.equal(r.policy.agents.drafter.poolKey, "drafter:{projectRoot}");
+    // assembly section (M4-WI33): the PromptAssembler policy face — default
+    // stamp template + continueDelta enabled; drafter carries the live
+    // fixedPrefix charter (persona text + embedded context file).
+    assert.equal(r.policy.assembly.embedStamp, DEFAULT_EMBED_STAMP);
+    assert.equal(r.policy.assembly.continueDelta, true);
+    assert.deepEqual(r.policy.agents.drafter.fixedPrefix, [
+      { kind: "text", ref: "{{projectRoot}}/AGENTS.md" },
+      { kind: "file", ref: "{{projectRoot}}/docs/context/project-context.md", maxFileBytes: 60000 },
+    ]);
   });
 });
 
@@ -345,6 +356,36 @@ describe("placeholder resolution", () => {
     });
     assert.equal(out, "/r/docs/plans/x/**/*.md vs /r/docs/backlog/r.md vs {projectRoot}");
     assert.equal(resolvePolicyPlaceholders("{{plansDir}}", {}), "{{plansDir}}");
+  });
+});
+
+describe("assembly section schema (04 §5, age-autonomy M4-WI33)", () => {
+  it("accepts the legal block and pins the field set + default stamp export", () => {
+    assert.deepEqual(ASSEMBLY_FIELDS, ["embedStamp", "continueDelta"]);
+    const ok = parsePolicy(
+      fixture(`assembly:\n  embedStamp: '<doc src="{path}" sum="{hash8}">{content}</doc>'\n  continueDelta: true\n`),
+    );
+    assert.equal(ok.ok, true, ok.errors?.join(";"));
+    assert.equal(ok.policy.assembly.embedStamp, '<doc src="{path}" sum="{hash8}">{content}</doc>');
+    assert.equal(ok.policy.assembly.continueDelta, true);
+    // the default template carries all three render slots (04 §3.3 shape)
+    assert.equal(DEFAULT_EMBED_STAMP, '<file path="{path}" hash="{hash8}">{content}</file>');
+  });
+
+  it("denies unknown keys, missing render slots, and non-boolean continueDelta", () => {
+    const unknownKey = parsePolicy(fixture("assembly:\n  resyncEvery: 4\n"));
+    assert.equal(unknownKey.ok, false);
+    assert.match(unknownKey.errors.find((e) => /unknown key "resyncEvery"/.test(e)), /legal keys: embedStamp, continueDelta/);
+    const noSlot = parsePolicy(fixture("assembly:\n  embedStamp: '<file>{content}</file>'\n"));
+    assert.equal(noSlot.ok, false);
+    assert.match(noSlot.errors.find((e) => /must contain the \{path\}/.test(e)), /render slot/);
+    assert.match(noSlot.errors.find((e) => /must contain the \{hash8\}/.test(e)), /render slot/);
+    const badDelta = parsePolicy(fixture("assembly:\n  continueDelta: maybe\n"));
+    assert.equal(badDelta.ok, false);
+    assert.match(badDelta.errors[0], /continueDelta must be a boolean/);
+    const nonMap = parsePolicy(fixture("assembly: true\n"));
+    assert.equal(nonMap.ok, false);
+    assert.match(nonMap.errors[0], /assembly must be a mapping/);
   });
 });
 

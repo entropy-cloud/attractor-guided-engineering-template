@@ -73,7 +73,7 @@ import {
   type DispatchType,
   type PolicyFace,
 } from './dispatch-resolve.ts'
-import { createDispatchAgent, dispatchPromptOf, type DispatchAgentsFace } from './exec-arm.ts'
+import { createDispatchAgent, dispatchPromptFor, type DispatchAgentsFace, type DispatchPromptAssembly } from './exec-arm.ts'
 import { groupScopeOf, type AgentPoolFace } from '../efficiency/agent-pool.ts'
 import type { SupervisorSnapshot } from './decision-core.ts'
 import type { SupervisorReceiptRecord } from './receipt.ts'
@@ -408,6 +408,7 @@ async function redispatchOccurrence(
   // inside it (plan Phase 2 — no bypass hole): a plan-review redispatch
   // re-enters the reviewer:{groupId} pool; audits stay structurally fresh.
   let handle: { sessionId: string; followup: (text: string) => void }
+  let promptAssembly: DispatchPromptAssembly | undefined
   try {
     const agentOut = await createDispatchAgent(options.agents!, resolved.resolution.binding, {
       projectRoot: options.projectRoot,
@@ -417,12 +418,15 @@ async function redispatchOccurrence(
       ...(face.dispatchType === 'plan-review' ? { groupId: groupScopeOf(face.target, text) } : {}),
       ...(options.executorSessions !== undefined ? { executorSessions: options.executorSessions } : {}),
       policy: policyOf(options.lawCtx),
+      assemblyPlaceholders: { plansDir: options.lawCtx.plansDir, roadmapPath: options.lawCtx.roadmapPath },
+      assemblerIo: io,
     })
     if (agentOut.status === 'refused') {
       receipt({ kind: 'exception', runId, plan: face.section === 'Deep Audit Record' ? null : face.target, event: 'recovery-redispatch-refused', detail: agentOut.reason })
       return { target: face.target, occurrenceType: face.occurrenceType, action: 'redispatch', status: 'refused', detail: agentOut.reason }
     }
     handle = { sessionId: agentOut.sessionId, followup: agentOut.followup }
+    promptAssembly = agentOut.promptAssembly
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err)
     receipt({ kind: 'exception', runId, plan: face.section === 'Deep Audit Record' ? null : face.target, event: 'recovery-redispatch-failed', detail })
@@ -461,7 +465,16 @@ async function redispatchOccurrence(
     return { target: face.target, occurrenceType: face.occurrenceType, action: 'redispatch', status: 'failed', detail: `registration write ${write.status}` }
   }
 
-  handle.followup(dispatchPromptOf({ dispatchType: face.dispatchType, target: face.target, registeredId: id, runId }))
+  handle.followup(
+    dispatchPromptFor({
+      base: { dispatchType: face.dispatchType, target: face.target, registeredId: id, runId },
+      policy: policyOf(options.lawCtx),
+      agentName: resolved.resolution.agentName,
+      assembly: promptAssembly,
+      placeholders: { projectRoot: options.projectRoot, plansDir: options.lawCtx.plansDir, roadmapPath: options.lawCtx.roadmapPath },
+      assemblerIo: io,
+    }),
+  )
   receipt({
     kind: 'observation',
     runId,

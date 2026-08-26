@@ -162,6 +162,16 @@ agents:
     poolKey: "drafter:{projectRoot}"
     idleTtlMinutes: 30
     rotateEvery: 8
+    # fixedPrefix charter (M4-WI33, plan docs/plans/age-autonomy/
+    # 2026-08-27-0433-3 — the PromptAssembler consumption face, 04 §3/§5):
+    # FRESH dispatches carry the persona text + the embedded context file
+    # before the dynamic task block; CONTINUE followups send only the
+    # dynamic delta + changed files (per-member hash ledger). Embedding
+    # beats forced reads — the "read project-context completely" round
+    # disappears from every drafter dispatch.
+    fixedPrefix:
+      - { kind: text, ref: "{{projectRoot}}/AGENTS.md" }
+      - { kind: file, ref: "{{projectRoot}}/docs/context/project-context.md", maxFileBytes: 60000 }
     model: { provider: zhipuai, model: glm-5.2, reasoningEffort: default }
   # reviewer pooled (M4-WI32, plan docs/plans/age-autonomy/2026-08-27-0433-2
   # Phase 1 Decision): mirror the drafter precedent — same-group sequential
@@ -194,3 +204,12 @@ dispatch:
   mechanical-verification: executor
   execute: executor
   draft-plans: drafter
+# assembly (M4-WI33, 04-efficiency §5): the PromptAssembler policy face —
+# embedStamp template (default shape below; {hash8} = first 8 hex of
+# sha256, algorithm source = computeBasisHash) + continueDelta (CONTINUE
+# followups send the dynamic delta + changed-file resend only). Policy is
+# an overlay: the promptsDir → missions/prompts/ → built-in prompt
+# resolution chain is untouched (04 §7).
+assembly:
+  embedStamp: '<file path="{path}" hash="{hash8}">{content}</file>'
+  continueDelta: true
