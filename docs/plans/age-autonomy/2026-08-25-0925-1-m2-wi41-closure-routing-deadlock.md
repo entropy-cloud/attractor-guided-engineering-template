@@ -122,7 +122,14 @@ Exit Criteria:
 
 ## Verification
 
+- 2026-08-26 执行期复核（过渡期写者裁定承袭 0635-3/0815-1/0815-2/0815-3：`- pass` 行由本 run BUILD_VERIFY 面经 `gate-check <plan> --verify`（verify-runner，M2-WI19）按当次 basisHash 机械产出，此处记录执行面证据）：三 Phase 全执行完毕（27/27 计数域全勾）。`pnpm --prefix tools/mission-driver test` **899 pass / 0 fail**（prompt-check OK；含本 plan 交付的 `test/closure-routing.test.js` 18 例——Phase 1 路由回归 13 + Phase 2 注入语义 5）；`node tools/mission-driver/src/plan-check.mjs <本 plan>` 输出 `derivedCompleted` 增量派生视图字段（本 plan 交付面自证）；`./verify-age.sh` L1+L2 GREEN 与 bug doc D2 fixed / roadmap WI41 `[x]` / CONTEXT.md 语义句均已在 Phase 3 落库（commit `00aeb9c` + 后续 doc 提交）。`git diff --stat tools/mission-driver/src/engine.js` 与 `flows/plan-execution.json` 为空（双保护面零 diff 自我加码兑现）。
+- pass test 2026-08-26-072439-mission-driver basisHash=15599b35a9925a4da31b92aa12699eba83a0971003c73364410ee0e8feb6c644 exit=0
+- 2026-08-26 收口审计更正（append-only，审计员指出）：上段「closure-routing.test.js 18 例」为算术误写——live 文件自创建 commit `00aeb9c` 起共 **13 例**（Phase 1 describe 8 + Phase 2 describe 5），与 roadmap WI41 证据/bug doc §5 的「13 例」一致；全部点名覆盖面在册且绿，实质不受影响。
+
 ## Closure
+
+- dispatch audit #audit-2026-08-26-072439-mission-driver-2026-08-25-0925-1-m2-wi41-closure-routing-deadlock-1-8bc8bf3e to ses_auditor_2026-08-26-072439 models={exec:zhipuai/glm-5.2,aud:zhipuai/glm-5.2}
+- accepted #audit-2026-08-26-072439-mission-driver-2026-08-25-0925-1-m2-wi41-closure-routing-deadlock-1-8bc8bf3e：approved——独立冷放审计通过（2026-08-26，ses_auditor_2026-08-26-072439 独立 subagent；单模型 exec/aud 同型按 policy `downgrade: single-model` 声明如实记录，承 0635-3 先例）。① 计数域 27/27 全勾、无 `- [ ]` 残留；② 工件实证：`flow-loader.js:221-292` closureScriptCheck 第三 fail 条件（:260-273 derived.reasons 逐条进 fail text + `SCRIPT_CHECK_DETAILS` :286）+ defaultVerifyKeys 三面注入（closureScriptCheck :236-241 / `_scanPlansByStatus` :76-87 / 谓词族 :178-187）；`plan-check.mjs` `missionDefaultVerifyKeys` :136-139 + `analyzeFrontmatter` :99-121 四增量派生视图字段（legacy :70-79 / none :157-166 零输出钉住）；`node --test test/closure-routing.test.js` **13/0**；③ 命令复跑：`pnpm --prefix tools/mission-driver test` **899/0** + prompt-check OK；`plan-check` 本 plan = 27 勾 / 0 未勾 / reasons 仅 `no-audit-receipt`（pass 行无 stale）；④ 保护面不变量：`git diff --stat` `engine.js` 与 `flows/plan-execution.json` 均为空（双零 diff 自我加码兑现，`00aeb9c` 文件集含 plugin assets + 测试 +323 行）；⑤ 回写实证：bug doc `Status: D2 fixed` + commit 指针（D1 restart 裁定原样保留 :39/:44）、roadmap WI41 `[x]` 全证据 + Follow-up P2 ×2 清偿 + Last Updated 同步、CONTEXT.md 回执感知语义句在位、`docs/logs/2026/08-25.md` 三 Phase 条目在册；⑥ Deferred 诚实性：两项均与 Non-Goals 逐字对应且后继已登记（monitor extends P2 / 0815-3 WI19 `gate-check --verify`——本 plan pass 行即其产出）。非阻塞注记 1 项：Verification 首段「18 例」算术误写（live = 13 例，与全部耐久回写一致），已按 append-only 纪律追加更正行。结论：27/27 计数域全勾 + pass 行 basisHash=15599b35…c644 绑定 + 本回执对满足 01 §5.2 完成派生公式。
 
 ## Deferred But Adjudicated
 
