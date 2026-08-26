@@ -493,6 +493,24 @@ export function resolveMaxAuditRounds(policy, missionConfig) {
 }
 
 // ── requireDistinctModel static satisfiability (02 §4.9, check-policy face) ─
+
+/**
+ * Compare two `model: {provider, model}` pairs for provider+model equality —
+ * the ONE shared comparison behind both the static satisfiability check
+ * (checkDistinctModelSatisfiability) and the runtime dispatch-time
+ * enforcement (age-autonomy M3/WI26 supervisor dispatch point; extracted per
+ * plan `docs/plans/age-autonomy/2026-08-26-1411-2` Phase 2 — zero second
+ * implementation). Non-object inputs never compare equal.
+ */
+export function sameModelPair(a, b) {
+  return (
+    isPlainObject(a) && isPlainObject(b) &&
+    typeof a.provider === "string" && typeof b.provider === "string" &&
+    typeof a.model === "string" && typeof b.model === "string" &&
+    a.provider === b.provider && a.model === b.model
+  );
+}
+
 /**
  * Static satisfiability check for `requireDistinctModel: true` agents
  * (age-autonomy M2-WI14): resolve the dispatch mapping
@@ -523,7 +541,7 @@ export function checkDistinctModelSatisfiability(policy) {
     if (!isPlainObject(agent) || agent.requireDistinctModel !== true) continue;
     if (agent.downgrade === "single-model") continue;
     if (!isPlainObject(agent.model)) continue;
-    if (agent.model.provider === execModel.provider && agent.model.model === execModel.model) {
+    if (sameModelPair(agent.model, execModel)) {
       errors.push(
         `agents.${target}: requireDistinctModel is unsatisfiable — dispatch.${dtype} target model {provider: ${agent.model.provider}, model: ${agent.model.model}} equals dispatch.execute target "${execTarget}" model; change the auditor model or declare the explicit "downgrade: single-model" channel (02 §4.9)`,
       );

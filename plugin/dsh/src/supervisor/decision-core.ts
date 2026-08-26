@@ -71,6 +71,8 @@ import {
   scanRoadmapLedger,
 } from '../../assets/src/ledger-sections.mjs'
 import { parseFrontmatter } from '../../assets/src/ledger-frontmatter.mjs'
+import { defaultVerifyKeys } from '../../assets/src/verify-runner.mjs'
+import { triggerDuty, type TriggerHit } from './trigger-eval.ts'
 import {
   discoverLawContext,
   fsLawGateIo,
@@ -101,6 +103,14 @@ export interface SupervisorSnapshotDerived {
   expiredClaims: ExpiredClaimFace[]
   roadmapCounts: { total: number; checked: number; unchecked: number }
   auditRounds: number
+  /**
+   * M3-WI26 trigger faces: the `_tmp/<runDir>/terminal-claim.json` action
+   * records (nothing-claim-guard's interception face — consumed records are
+   * renamed .consumed and never re-surface) and the roadmap DAR's most
+   * recent accepted findings lexeme (null = no accepted line).
+   */
+  terminalClaims: Array<{ file: string; kind: string }>
+  acceptedFindings: 'none' | 'items' | null
 }
 
 export interface SupervisorSnapshot {
@@ -116,6 +126,10 @@ export interface SupervisorSnapshot {
 /** The resolved policy face decide() consumes (extends with 1411-2). */
 export interface SupervisorPolicyFace {
   maxAuditRounds: number
+  /** policy `triggers:` section — present ⇒ decide() runs the trigger duty (M3-WI26). */
+  triggers?: Array<{ when: string; dispatch?: string; action?: string; terminal?: string }>
+  /** mission default verify keys (commands.* ∩ the standard key order — verify-runner same source). */
+  defaultVerifyKeys?: string[]
 }
 
 // ── decision types ───────────────────────────────────────────────────────────
@@ -220,6 +234,13 @@ export function scanSupervisorSnapshot(options: ScanSupervisorSnapshotOptions): 
       ? (roadmapScan.fm as Record<string, unknown> | null)
       : null
 
+  const acceptedOf = (): 'none' | 'items' | null => {
+    if (roadmapScan === null || roadmapScan.deepAuditRecord == null) return null
+    const accepted = roadmapScan.deepAuditRecord.accepted ?? []
+    const last = accepted.length > 0 ? accepted[accepted.length - 1] : null
+    return last !== null && (last.findings === 'none' || last.findings === 'items') ? last.findings : null
+  }
+
   return {
     scannedAt: (options.now ?? (() => new Date().toISOString()))(),
     projectRoot,
@@ -242,23 +263,86 @@ export function scanSupervisorSnapshot(options: ScanSupervisorSnapshotOptions): 
         roadmapFm !== null && typeof roadmapFm['audit-rounds'] === 'number'
           ? (roadmapFm['audit-rounds'] as number)
           : 0,
+      terminalClaims: terminalClaimsUnder(projectRoot, io),
+      acceptedFindings: acceptedOf(),
     },
   }
 }
 
+/**
+ * Scan the `_tmp/<runDir>/terminal-claim.json` action-record face (02 §4.4 —
+ * the same record nothing-claim-guard intercepts; consumed records are
+ * renamed `.consumed` by the exec arm and never re-surface). Fail-soft: a
+ * torn/unparseable record contributes nothing.
+ */
+function terminalClaimsUnder(projectRoot: string, io: LawGateIo): Array<{ file: string; kind: string }> {
+  const runs = io.listDirEntries(join(projectRoot, '_tmp'))
+  if (runs === null) return []
+  const out: Array<{ file: string; kind: string }> = []
+  for (const run of runs.slice(0, 50)) {
+    const dir = join(projectRoot, '_tmp', run)
+    if (!io.isDirectory(dir)) continue
+    const file = join(dir, 'terminal-claim.json')
+    const text = io.readTextFile(file)
+    if (text === null) continue
+    try {
+      const parsed = JSON.parse(text) as { kind?: unknown }
+      if (parsed !== null && typeof parsed === 'object' && typeof parsed.kind === 'string') {
+        out.push({ file, kind: parsed.kind })
+      }
+    } catch {
+      // torn record — fail-soft
+    }
+  }
+  return out
+}
+
 /** The law context the snapshot scan resolved (policy face for decide()). */
 export function policyFaceOf(lawCtx: MissionLawContext): SupervisorPolicyFace {
-  return { maxAuditRounds: lawCtx.maxAuditRounds }
+  const policy = lawCtx.policy as { triggers?: Array<{ when: string; dispatch?: string; action?: string; terminal?: string }> }
+  return {
+    maxAuditRounds: lawCtx.maxAuditRounds,
+    ...(Array.isArray(policy.triggers) && policy.triggers.length > 0 ? { triggers: policy.triggers } : {}),
+    ...(Object.keys(lawCtx.commands).length > 0 ? { defaultVerifyKeys: defaultVerifyKeys(lawCtx.commands) } : {}),
+  }
 }
 
 // ── decide (pure; the watchdog loop's judgment step, 03 §3) ─────────────────
 
 /**
  * Decide what the supervisor should do about ONE snapshot. Deterministic:
- * same (snapshot, policy, clock) → same decisions. This plan's outputs are
- * all posture 'observe' (see the interface contract above).
+ * same (snapshot, policy, clock) → same decisions.
+ *
+ * M3-WI26 integration: when the policy face carries a `triggers:` section,
+ * the TRIGGER DUTY owns the judgment (./trigger-eval.ts — execute-posture
+ * decisions the watchdog's exec arm carries out; the WI25 heuristic
+ * observations are superseded because the trigger set covers their faces:
+ * expired-claim observe → reclaim-claim action, awaitingClosure observe →
+ * mechanical-verification/closure-audit dispatches). Without a triggers
+ * section the WI25 legacy observe-only posture is byte-compatible
+ * (existing hosts without triggers gain nothing unattended).
  */
 export function decide(
+  snapshot: SupervisorSnapshot,
+  policy: SupervisorPolicyFace,
+  clock: () => number,
+): SupervisorDecision[] {
+  if (Array.isArray(policy.triggers) && policy.triggers.length > 0) {
+    return triggerDuty(
+      snapshot,
+      policy,
+      clock,
+      policy.defaultVerifyKeys !== undefined ? { defaultVerifyKeys: policy.defaultVerifyKeys } : {},
+    ) as unknown as SupervisorDecision[]
+  }
+  return legacyDecide(snapshot, policy, clock)
+}
+
+/** Re-exported for the exec arm/wiring (the TriggerDuty implementation). */
+export { triggerDuty }
+export type { TriggerHit }
+
+function legacyDecide(
   snapshot: SupervisorSnapshot,
   policy: SupervisorPolicyFace,
   clock: () => number,

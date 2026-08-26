@@ -27,10 +27,14 @@
  * observation receipts). Reclaim/redispatch execution = 1411-2 reclaim
  * trigger + WI29 full semantics — this plan only observes.
  *
- * Default posture (plan Phase 1 Decision 3): decisions of type dispatch are
- * NEVER dispatched here — every decision this plan produces is executed as
- * an observation receipt + log line. Existing hosts gain no unattended
- * progression from this loop.
+ * Default posture (plan Phase 1 Decision 3 + M3-WI26): decisions of type
+ * dispatch WITHOUT a trigger payload (policies without a `triggers:`
+ * section) are never dispatched — observation receipts only, existing hosts
+ * gain no unattended progression. When the governing policy carries a
+ * `triggers:` section, decide() emits execute-posture trigger hits and this
+ * loop routes them through the execution arm (./exec-arm.ts — M3-WI26): the
+ * arm is fail-soft, one arm exception is an exception receipt and the loop
+ * continues.
  */
 import { dirname, join } from 'node:path'
 import { watch, type FSWatcher } from 'node:fs'
@@ -45,11 +49,21 @@ import {
   appendReceipt,
   deliverReceiptLine,
   readReceipts,
+  receiptFileFor,
   type ReceiptAgentsFace,
   type ReceiptIo,
   type SupervisorReceiptRecord,
 } from './receipt.ts'
+import {
+  executeTriggerHit,
+  renewClaim,
+  type DispatchAgentsFace,
+  type ExecArmOptions,
+} from './exec-arm.ts'
+import type { TriggerHit } from './trigger-eval.ts'
 import { discoverLawContext, fsLawGateIo, type LawGateIo, type MissionLawContext } from '../law/host-adapter.ts'
+import { parseFrontmatter } from '../../assets/src/ledger-frontmatter.mjs'
+import { fsMeterWriterIo } from './writer.ts'
 
 export const DEFAULT_HEARTBEAT_MS = 30_000
 export const DEFAULT_DEBOUNCE_MS = 300
@@ -126,6 +140,12 @@ export interface WatchdogOptions {
   logger?: WatchdogLogger
   /** agents face for best-effort receipt delivery (absent = record-only). */
   agents?: ReceiptAgentsFace
+  /**
+   * agents face for the M3-WI26 execution arm (dispatch exits create agent
+   * sessions bound to the policy model selection; absent = the arm degrades
+   * to ledger registration + receipts, never a crash).
+   */
+  dispatchAgents?: DispatchAgentsFace
   /** delivery target session for terminal/exception receipts (A8 opt-in face). */
   receiptSessionId?: string
   /** test/observation seam invoked inside every cycle before decide(). */
@@ -142,6 +162,13 @@ export interface WatchdogFace {
   registerOnTerminal(hook: OnTerminalHook): () => void
   /** fire a terminal event into the receipt chain seam (test + successor face). */
   emitTerminal(event: Omit<SupervisorTerminalEvent, 'ts'>): SupervisorTerminalEvent
+  /**
+   * P2-1 activity-signal face: record holder activity (events/session tool
+   * activity) — near-expiry claims of recently-active holders renew through
+   * the writer before decide() runs, so legitimate in-flight executions are
+   * never reclaimed mid-run.
+   */
+  noteActivity(sessionId: string, at?: number): void
 }
 
 export function createWatchdog(options: WatchdogOptions): WatchdogFace {
@@ -170,6 +197,7 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
     lastDecisions: 0,
   }
   const terminalHooks = new Set<OnTerminalHook>()
+  const activity = new Map<string, number>()
   let scanning = false
   let pendingTrigger: 'heartbeat' | 'event' | 'recovery' | 'manual' | null = null
   let stopHeartbeat: (() => void) | null = null
@@ -185,13 +213,56 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
     appendReceipt(receiptIo, projectRoot, record, now)
   }
 
+  const receiptLines = (): string[] => {
+    const text = io.readTextFile(receiptFileFor(projectRoot))
+    if (text === null) return []
+    return text.split('\n').filter((l) => l.trim() !== '')
+  }
+
+  const isTriggerHit = (decision: SupervisorDecision): decision is SupervisorDecision & TriggerHit =>
+    (decision as unknown as TriggerHit).trigger !== undefined && decision.posture === 'execute'
+
+  // P2-1 renewal pre-step: near-expiry claims with recently-active holders
+  // extend through the writer BEFORE decide() (claim-validity's "未过期"
+  // face stays enforceable; bounded window per renewal). The holder is
+  // resolved by matching the claim token against recorded activity sessions
+  // (claim = attempt-<runId>-<holderSessionId>-<nonce8>).
+  const renewDueClaims = (snapshot: SupervisorSnapshot): void => {
+    if (activity.size === 0) return
+    const ctx = resolveLawCtx()
+    if (ctx === null) return
+    for (const record of snapshot.plans) {
+      const parsed = parseFrontmatter(record.text)
+      if (!parsed.ok || parsed.range === null) continue
+      const fm = parsed.fm as Record<string, unknown>
+      if (fm.status !== 'active') continue
+      const claim = fm.claim
+      if (typeof claim !== 'string') continue
+      let lastActiveAt: number | null = null
+      for (const [sessionId, at] of activity) {
+        if (claim.includes(sessionId) && (lastActiveAt === null || at > lastActiveAt)) lastActiveAt = at
+      }
+      if (lastActiveAt === null) continue
+      const outcome = renewClaim({ planPath: record.path, holderSessionId: claim, lawCtx: ctx, lastActiveAt, clock, now })
+      if (outcome.status === 'renewed' || outcome.status === 'denied' || outcome.status === 'failed') {
+        receipt({
+          kind: outcome.status === 'renewed' ? 'observation' : 'exception',
+          runId: null,
+          plan: record.path,
+          event: `claim-renewal:${outcome.status}`,
+          detail: outcome.detail,
+        })
+      }
+    }
+  }
+
   const executeDecision = (decision: SupervisorDecision, trigger: string): void => {
     if (decision.type === 'no-op') {
       logger.info?.(`[mdsupervisor] cycle ${trigger}: ${decision.action} (${decision.reason})`)
       return
     }
-    // Every decision this plan produces is observation-posture (Phase 1
-    // Decision 3): meter-writes and dispatches are recorded, never executed.
+    // WI25 legacy posture: decisions without a trigger payload stay
+    // observation receipts (policies without a triggers: section).
     receipt({
       kind: 'observation',
       runId: null,
@@ -203,6 +274,44 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
       target: decision.target,
       note: decision.note ?? null,
     })
+  }
+
+  // M3-WI26: execute-posture trigger hits run through the execution arm
+  // (fail-soft — an arm exception becomes an exception receipt, the loop
+  // itself never breaks). The arm's writer IO rides this watchdog's injected
+  // IO seam plus the default atomic-write face (LawGateIo carries no writer).
+  const execIo = { ...io, writeTextAtomic: fsMeterWriterIo.writeTextAtomic }
+  const executeHit = async (hit: SupervisorDecision & TriggerHit, trigger: string): Promise<void> => {
+    const ctx = resolveLawCtx()
+    if (ctx === null) return
+    const opts: ExecArmOptions = {
+      projectRoot,
+      lawCtx: ctx,
+      io: execIo,
+      clock,
+      now,
+      runId: 'mdsupervisor',
+      ...(options.dispatchAgents !== undefined ? { agents: options.dispatchAgents } : {}),
+      receipt,
+      receiptLines,
+      logger,
+    }
+    try {
+      const outcome = await executeTriggerHit(hit, opts)
+      logger.info?.(`[mdsupervisor] ${trigger}: exec ${outcome.action} → ${outcome.status}`, { detail: outcome.detail, target: hit.target })
+    } catch (err) {
+      receipt({
+        kind: 'exception',
+        runId: null,
+        plan: hit.target,
+        event: `exec-arm-error:${hit.action}`,
+        detail: err instanceof Error ? err.message : String(err),
+      })
+      logger.warn?.(`[mdsupervisor] ${trigger}: exec arm threw (isolated, loop unaffected)`, {
+        action: hit.action,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
   }
 
   const cycle = async (trigger: 'heartbeat' | 'event' | 'recovery' | 'manual'): Promise<SupervisorSnapshot | null> => {
@@ -221,11 +330,15 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
         logger.info?.(`[mdsupervisor] cycle ${trigger}: no governing law context under ${projectRoot} — idle`)
         return null
       }
+      renewDueClaims(snapshot)
       const decisions = decide(snapshot, policyFaceOf(ctx!), clock)
       state.scans += 1
       state.lastScanAt = now()
       state.lastDecisions = decisions.length
-      for (const decision of decisions) executeDecision(decision, trigger)
+      for (const decision of decisions) {
+        if (isTriggerHit(decision)) await executeHit(decision, trigger)
+        else executeDecision(decision, trigger)
+      }
       return snapshot
     } finally {
       scanning = false
@@ -291,6 +404,9 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
     runCycle: cycle,
     start,
     stop,
+    noteActivity(sessionId: string, at?: number) {
+      activity.set(sessionId, at ?? clock())
+    },
     statusFace: () => ({
       mounted: state.started,
       mountedAt: state.mountedAt,

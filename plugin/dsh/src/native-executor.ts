@@ -46,7 +46,14 @@
  * stderrTail=null — no subprocess stderr surface natively).
  *
  * model / parseModel are explicitly ignored (documented gap, packaging doc
- * §Behavioral differences — early phases do not map to DSH ModelSelectionRef).
+ * §Behavioral differences — early phases do not map to DSH ModelSelectionRef),
+ * EXCEPT the M3-WI26 three-field channel: config `nativeModelSelection`
+ * { provider, model, reasoningEffort? } (the supervisor dispatch resolution
+ * face, 02 §4.9) composes the create through agentOptions {provider, model}
+ * PLUS the dsh-agent ModelSelection install (reasoningEffort included —
+ * agentProvider/agentModel/reasoningEffort, the documented-gap fill; the
+ * durable descriptor seed still mirrors provider/model only — the host
+ * descriptor face carries no effort field).
  * `system` is accepted and ignored exactly like runner.js's realRun.
  *
  * executeTool is the plugin layer's OWN minimal spawn path (plan Phase 1
@@ -66,8 +73,8 @@
 import { spawn } from 'node:child_process'
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { resolve as pathResolve } from 'node:path'
-import type { AgentCancelCause, AgentHandle, AgentRegistry, AgentSetup } from '@deepseek-ai/dsh-agent'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { AgentRegistry, installModelSelection, type AgentCancelCause, type AgentHandle, type AgentSetup } from '@deepseek-ai/dsh-agent'
+import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { seedDescriptorTurn, snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import type { Context } from '@deepseek-ai/cordis'
@@ -145,6 +152,13 @@ export interface NativeExecutorConfig {
   projectRoot: string
   runDir?: string
   agent?: string
+  /**
+   * M3-WI26 three-field model selection (02 §4.9 dispatch resolution output):
+   * when present it OVERRIDES the legacy provider/model resolution and rides
+   * agents.create agentOptions {provider, model} + the dsh-agent
+   * ModelSelection install (reasoningEffort included).
+   */
+  nativeModelSelection?: { provider: string; model: string; reasoningEffort?: string }
   onStepUpdate?: (payload: StepUpdatePayload) => void
   [key: string]: unknown
 }
@@ -456,12 +470,34 @@ export class DshNativeExecutor implements NativeExecutor {
         // rotation) — fall through to a fresh create.
       }
     }
-    const provider = configString(this.config, 'nativeProvider') ?? process.env.DSH_PROVIDER ?? 'deepseek-official'
-    const model = configString(this.config, 'nativeModel')
+    // M3-WI26 three-field channel: a policy-resolved selection (02 §4.9)
+    // overrides the legacy provider/model resolution and installs the full
+    // ModelSelection face (reasoningEffort rides the agent-scoped install,
+    // not agentOptions — the create options carry provider/model only).
+    const selection = this.config.nativeModelSelection
+    const provider = selection?.provider ?? configString(this.config, 'nativeProvider') ?? process.env.DSH_PROVIDER ?? 'deepseek-official'
+    const model = selection?.model
+      ?? configString(this.config, 'nativeModel')
       ?? configString(this.config, 'model')
       ?? (process.env.DSH_MODEL && process.env.DSH_MODEL !== '' ? process.env.DSH_MODEL : undefined)
     const childId = genChildId()
     const seed = descriptorSeedOf(childId, this.config, model === undefined ? undefined : provider, model)
+    const setups: AgentSetup[] = [presetSetupOf(this.config)]
+    if (selection !== undefined && selection.provider !== '' && selection.model !== '') {
+      // reasoningEffort arrives pre-validated (law-policy REASONING_EFFORTS
+      // vocabulary, 02 §4.9); the constructor only brands it.
+      const selected = {
+        provider: selection.provider,
+        model: selection.model,
+        ...(selection.reasoningEffort !== undefined ? { reasoningEffort: ReasoningEffortId(selection.reasoningEffort) } : {}),
+      }
+      setups.push((agentCtx: Context) => {
+        installModelSelection(agentCtx, { current: selected, assembled: undefined })
+      })
+    }
+    const setup: AgentSetup = setups.length === 1 ? setups[0]! : async (agentCtx: Context) => {
+      for (const s of setups) await s(agentCtx)
+    }
     if (model === undefined) {
       // No model resolution anywhere: create WITHOUT agentOptions and let the
       // host's agent/request waterfall speak (unit fakes never read it). The
@@ -477,7 +513,7 @@ export class DshNativeExecutor implements NativeExecutor {
           seedLength: seed.length,
         },
         seed,
-        setup: presetSetupOf(this.config),
+        setup,
       })
       return this.handle
     }
@@ -492,7 +528,7 @@ export class DshNativeExecutor implements NativeExecutor {
       },
       agentOptions: { provider, model },
       seed,
-      setup: presetSetupOf(this.config),
+      setup,
     })
     return this.handle
   }

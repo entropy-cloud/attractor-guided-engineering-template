@@ -27,7 +27,9 @@
  */
 import { Service, type Context } from '@deepseek-ai/cordis'
 import { createWatchdog, type WatchdogFace, type WatchdogLogger, type WatchdogStatusFace } from './watchdog.ts'
+import type { DispatchAgentsFace } from './exec-arm.ts'
 import { fsLawGateIo } from '../law/host-adapter.ts'
+import { resolveAgentsService } from '../native-executor.ts'
 
 /** The published `mdsupervisor` cordis service face. */
 export class SupervisorService extends Service {
@@ -78,21 +80,28 @@ export function mountSupervisor(ctx: Context, options: MountSupervisorOptions = 
     }
   }
 
+  // M3-WI26: the DSH agents service (when composed on the host) is the
+  // execution arm's dispatch face — dispatch exits create agent sessions
+  // bound to the policy model selection. Absent (plain hosts / unit fakes)
+  // ⇒ the arm degrades to ledger registration + receipts, never a failure.
+  const dispatchAgents = resolveAgentsService(ctx) as DispatchAgentsFace | undefined
   const watchdog = createWatchdog({
     projectRoot: options.projectRoot,
     heartbeatMs: options.heartbeatMs,
     io: fsLawGateIo,
     logger: logs,
+    ...(dispatchAgents !== undefined && dispatchAgents !== null ? { dispatchAgents } : {}),
   })
   watchdog.start()
 
   const service = new SupervisorService(ctx, watchdog)
   logger.info?.('[mdsupervisor] supervisor mounted', {
     scope: 'mdsupervisor',
-    phase: 'M3-WI25 (seam) — five duties: sustain/trigger declared (1411-2), meter writer (Q4 ③ sole-writer), restart recovery-scan seam (WI29), receipt minimal face (A8)',
+    phase: 'M3-WI26 (trigger execution + dispatch wiring) — trigger duty live when the policy carries a triggers: section; meter writer (Q4 ③ sole-writer); restart recovery-scan seam (WI29); receipt face (A8)',
     projectRoot: options.projectRoot,
     heartbeatMs: options.heartbeatMs ?? 30000,
     service: 'mdsupervisor (second publication, same bundle/isolate realm)',
+    dispatchFace: dispatchAgents !== undefined && dispatchAgents !== null ? 'dsh-agents' : 'registration-only (no agents service composed)',
   })
 
   return {

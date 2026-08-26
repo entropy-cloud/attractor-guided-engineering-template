@@ -134,14 +134,21 @@ export interface MachineFieldWriteOptions {
 /**
  * One machine-field write through the full pipeline (read → construct → law
  * self-check → CAS → atomic rename). Pure over the IO seam.
+ *
+ * `cas` selects the comparison hash: 'basis' (default — the completion
+ * formula's computeBasisHash domain: frontmatter + Phase + Closure Findings)
+ * for frontmatter writes; 'full' (sha256 of the whole text) for body-section
+ * appends whose content (Closure / Verification / Deep Audit Record) sits
+ * OUTSIDE the basis domain.
  */
 function atomicFieldWrite(
   path: string,
   edit: (text: string) => string | null,
-  opts: MachineFieldWriteOptions,
+  opts: MachineFieldWriteOptions & { cas?: 'basis' | 'full' },
 ): MachineFieldWriteResult {
   const io = opts.io ?? fsMeterWriterIo
   const retries = opts.casRetries ?? 2
+  const casHash = (opts.cas ?? 'basis') === 'full' ? sha256Text : computeBasisHash
   for (let attempt = 0; attempt <= retries; attempt++) {
     const text = io.readTextFile(path)
     if (text === null) return { status: 'missing', proposed: null, reason: null }
@@ -150,7 +157,8 @@ function atomicFieldWrite(
     if (proposed === text) return { status: 'noop', proposed, reason: null }
 
     // pre-write law self-check — same evaluateGates the DSH gate runs, with
-    // the role-bearing supervisor actor (claim-validity / writer-identity
+    // the role-bearing supervisor actor (claim-validity / writer-identity /
+    // record-append-only / closure-audit-binding / audit-rounds-overflow
     // enforce against it with zero rule changes)
     const roadmapText = opts.lawCtx.roadmapPath !== '' ? io.readTextFile(opts.lawCtx.roadmapPath) : null
     const out = evaluateGates(
@@ -191,16 +199,93 @@ function atomicFieldWrite(
       return { status: 'denied', proposed, reason: out.reason }
     }
 
-    // baseHash CAS (computeBasisHash same-source with the completion
-    // formula): the basis must not have moved between read and rename
+    // CAS: the comparison hash must not have moved between read and rename
     const reread = io.readTextFile(path)
     if (reread === null) return { status: 'missing', proposed, reason: null }
-    if (computeBasisHash(reread) !== computeBasisHash(text)) continue
+    if (casHash(reread) !== casHash(text)) continue
 
     io.writeTextAtomic(path, proposed)
     return { status: 'written', proposed, reason: null }
   }
   return { status: 'conflict', proposed: null, reason: `basis moved across ${retries + 1} attempts — abandoned; the next watchdog cycle rescans and re-decides` }
+}
+
+// ── body-section appends (dispatch lines / pass lines; 01 §4.2/§4.4) ───────
+
+/**
+ * Append lines at the END of one append-only ledger section (level-2 h2
+ * block), creating the section at EOF when absent. Existing bytes keep their
+ * order; the insertion point walks back over trailing blank lines so the
+ * section's blank separator survives. Returns null for non-frontmatter
+ * texts (outside the writer domain).
+ */
+export function appendToSection(text: string, section: string, lines: string[]): string | null {
+  const parsed = parseFrontmatter(text)
+  if (!parsed.ok || parsed.range === null) return null
+  const normalized = text.replace(/\r\n?/g, '\n')
+  const split = normalized.split('\n')
+  const bodyStart = parsed.range.end
+  let sectionStart = -1
+  let sectionEnd = -1
+  for (let i = bodyStart; i < split.length; i++) {
+    const m = split[i]!.match(/^##(?!#)\s*(\S.*?)\s*$/)
+    if (m === null) continue
+    if (sectionStart === -1) {
+      if (m[1] === section) {
+        sectionStart = i
+        sectionEnd = split.length
+      }
+    } else {
+      sectionEnd = i
+      break
+    }
+  }
+  const block = lines
+  if (sectionStart === -1) {
+    // section absent → create at EOF (append-only: no existing content touched;
+    // a trailing newline in the source becomes the blank separator)
+    const out = [...split]
+    if (out.length === 0 || out[out.length - 1] !== '') out.push('')
+    out.push(`## ${section}`, ...block)
+    return out.join('\n')
+  }
+  let insertAt = sectionEnd
+  while (insertAt > sectionStart + 1 && split[insertAt - 1]!.trim() === '') insertAt -= 1
+  const out = [...split.slice(0, insertAt), ...block, ...split.slice(insertAt)]
+  return out.join('\n')
+}
+
+export interface SectionAppendOptions extends MachineFieldWriteOptions {
+  path: string
+  /** target level-2 section title (e.g. 'Draft Review Record', 'Verification', 'Closure', 'Deep Audit Record'). */
+  section: string
+  /** append-only lines (dispatch / pass lines per 01 §4.2 grammar). */
+  lines: string[]
+  /** frontmatter fields set in the SAME atomic write (deep-audit meter increment, 01 §3.1). */
+  setFrontmatter?: Record<string, string | number>
+}
+
+/**
+ * Append dispatch/pass lines into one append-only ledger section through the
+ * full writer pipeline (construct → law self-check → full-text CAS → atomic
+ * rename). The same-write `setFrontmatter` rides ONE atomic write (01 §3.1:
+ * the dispatching write increments audit-rounds together with the DAR line).
+ */
+export function appendSectionLines(opts: SectionAppendOptions): MachineFieldWriteResult {
+  return atomicFieldWrite(
+    opts.path,
+    (text) => {
+      let next = appendToSection(text, opts.section, opts.lines)
+      if (next === null) return null
+      if (opts.setFrontmatter !== undefined) {
+        const withFm = setFrontmatterFields(next, { set: opts.setFrontmatter })
+        if (withFm === null) return null
+        next = withFm
+      }
+      return next
+    },
+    { ...opts, cas: 'full' },
+  )
 }
 
 // ── the three machine-field write functions (03 §2 meter duty) ──────────────

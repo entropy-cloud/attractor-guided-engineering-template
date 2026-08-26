@@ -61,10 +61,13 @@ const ALLOWED_MODULES = [
   // cross-validation). law-rules.mjs (M2-WI14..16 hard gates, 0815-2, +
   // supporting gates M2-WI17..20, 0815-3) is reachable via law-policy's
   // side-effect rule registration import. verify-runner.mjs (M2-WI19
-  // mechanical-verification commands runner, 0815-3) is unreachable-allowed
-  // for now — its M2 consumer is the engine-side gate-check CLI; the M3
-  // supervisor (WI26) consumes this assets copy (same posture as the ledger
-  // modules before their 0635-3 wiring).
+  // mechanical-verification commands runner, 0815-3) is CONSUMED since M3/WI26
+  // (2026-08-26): the plugin-side supervisor execution arm imports this
+  // assets copy (plugin/dsh/src/supervisor/exec-arm.ts — mechanical-
+  // verification direct run + pass-line write). It stays unreachable from the
+  // ENGINE entry closure by design (its engine consumer is the gate-check
+  // CLI, deliberately not bundled), so the copy remains in the unreachable-
+  // allowed set with a LIVE consumer.
   // gate-check.mjs is deliberately NOT here — it is an engine-side CLI
   // (main.js family), not a bundled library face.
   "law-core.mjs", "law-policy.mjs", "law-rules.mjs", "verify-runner.mjs",

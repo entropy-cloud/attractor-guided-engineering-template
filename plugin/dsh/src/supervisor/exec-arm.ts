@@ -1,0 +1,703 @@
+/**
+ * exec-arm.ts — the supervisor execution arm (age-autonomy M3-WI26, plan
+ * `docs/plans/age-autonomy/2026-08-26-1411-2` Phase 3; 03-supervisor §3 the
+ * loop's "派发（若有）" step).
+ *
+ * One executor per trigger exit (six executed + one forwarded):
+ *   1. mechanical-verification — awaitingClosure → verify-runner direct run
+ *      (resolveVerifyPlan + runVerifyCommands over mission commands.*, the
+ *      0925-1/0950-3 Deferred collection) → all green ⇒ the writer appends
+ *      `## Verification` pass lines (basisHash same-source bound) ⇒
+ *      closure-audit dispatch follows; any failure ⇒ NO pass line + a
+ *      receipt (failure attribution metering = 1411-3). Dual-driver
+ *      idempotency: the predicate face reads the LEDGER — if the engine
+ *      BUILD_VERIFY step already wrote the pass lines, the trigger does not
+ *      fire at all (never a re-run; the intent store is never consulted).
+ *   2. plan-review — dispatch line into `## Draft Review Record` + reviewer
+ *      agent dispatch (independence is structural again — the drafter cannot
+ *      self-dispatch, follow-up P2 closure).
+ *   3. closure-audit — dispatch line into `## Closure` with the honest
+ *      `models=` lineage + auditor agent dispatch.
+ *   4. nothing→deep-audit — consumes the nothing-claim-guard trigger signal
+ *      (the terminal-claim action-record face), respects the budget gate
+ *      (audit-rounds < maxAuditRounds, resolveMaxAuditRounds same source),
+ *      registers the DAR dispatch line + increments audit-rounds in ONE
+ *      write (01 §3.3), then marks the claim record consumed.
+ *   5. draft-plans — drafter agent dispatch + the receipt occurrence
+ *      registry (the one dispatch type with no ledger grammar).
+ *   6. reclaim-claim — writer clear/re-issue (claim-validity ④⑤ dispatcher
+ *      face) + execute re-dispatch; full resume-or-redispatch semantics stay
+ *      with WI29 (this arm re-issues only when an agents face is present).
+ *   7. terminal — the decision object is FORWARDED to 1411-3 (R1–R4
+ *      execution boundary, plan Non-Goals): recorded as a receipt, never
+ *      executed here.
+ *
+ * Claim TTL renewal (P2-1 ruling, plan Phase 3): renewal WRITES THE LEDGER
+ * (claim-expires extended through the writer, bounded window) — a TTL
+ * semantics that claim-validity can actually enforce; observation-only
+ * renewal would let legitimate in-flight executions be reclaimed mid-run.
+ * Residual risk (accepted, plan): a forged activity signal could renew a
+ * claim indefinitely — bounded per-renewal window (never beyond
+ * now + MAX_RENEWAL_TTL_MS) + the WI30 stagnation fingerprint are the two
+ * backstops.
+ *
+ * Every exit is fail-soft: an exception becomes an exception receipt and the
+ * watchdog loop continues (a dispatch failure must never stop the supervisor).
+ */
+import { renameSync } from 'node:fs'
+import { join } from 'node:path'
+import { randomBytes } from 'node:crypto'
+import { defaultVerifyKeys, resolveVerifyPlan, runVerifyCommands } from '../../assets/src/verify-runner.mjs'
+import { scanPlanLedger, scanRoadmapLedger } from '../../assets/src/ledger-sections.mjs'
+import type { LawGateIo, MissionLawContext } from '../law/host-adapter.ts'
+import {
+  appendSectionLines,
+  clearPlanClaim,
+  fsMeterWriterIo,
+  writePlanClaim,
+  type MeterWriterIo,
+} from './writer.ts'
+import {
+  dispatchAlreadyRegistered,
+  enforceDistinctModel,
+  nextCounterOf,
+  nextDispatchId,
+  resolveDispatch,
+  stemOf,
+  type AgentModelBinding,
+  type DispatchResolution,
+  type DispatchType,
+  type PolicyFace,
+} from './dispatch-resolve.ts'
+import type { TriggerHit } from './trigger-eval.ts'
+import type { SupervisorReceiptRecord } from './receipt.ts'
+
+// ── agent dispatch face (the DSH agents service structural slice) ───────────
+
+export interface DispatchAgentsFace {
+  create(options: {
+    sessionId?: string
+    meta?: Record<string, unknown>
+    agentOptions?: { provider: string; model: string }
+  }): Promise<{ agent: { id: unknown; followup: (message: unknown) => void } }>
+}
+
+export type ExecReceiptSink = (record: Omit<SupervisorReceiptRecord, 'ts'> & { occurrenceKey?: string }) => void
+
+/** Prompts reference the ENGINE prompt files — one source, no second prompt. */
+const PROMPT_FILE_OF: Record<string, string> = {
+  'plan-review': 'tools/mission-driver/prompts/plan-review.md',
+  'closure-audit': 'tools/mission-driver/prompts/closure-audit.md',
+  'deep-audit': 'tools/mission-driver/prompts/multi-audit.md',
+  'draft-plans': 'tools/mission-driver/prompts/draft-from-roadmap.md',
+  execute: 'tools/mission-driver/prompts/execute.md',
+}
+
+export function dispatchPromptOf(options: {
+  dispatchType: DispatchType
+  target: string
+  registeredId: string | null
+  runId: string
+}): string {
+  const { dispatchType, target, registeredId, runId } = options
+  const promptFile = PROMPT_FILE_OF[dispatchType] ?? 'tools/mission-driver/prompts/mission-brief.md'
+  const header = `[MISSION_DRIVER:${runId}] supervisor dispatch ${dispatchType}`
+  if (dispatchType === 'plan-review') {
+    return [
+      header,
+      '',
+      `Review the drafted plan at \`${target}\` — read it completely.`,
+      `Follow the checklist of \`${promptFile}\` (same project repo).`,
+      '',
+      'Dispatch registration (already written by the supervisor — do NOT write your own dispatch line):',
+      `  ${registeredId}`,
+      "When your review concludes, append ONLY your conclusion line to the plan's `## Draft Review Record`,",
+      'reusing that exact id: `- <YYYY-MM-DD>：iteration <n>，共识 <verdict> <same-id>`.',
+      'Per the writer-identity edge table you are the legal writer for draft→active (fix minor issues in place,',
+      'then set frontmatter `status: active`) or draft→held (`hold: "<reason>"`). The drafter never reviews or promotes their own plan.',
+    ].join('\n')
+  }
+  if (dispatchType === 'closure-audit') {
+    return [
+      header,
+      '',
+      `You are the independent closure auditor for the plan at \`${target}\`.`,
+      `Follow \`${promptFile}\` (SCRIPT_CHECK_RESULT is PASS: the supervisor already ran the mechanical verification;`,
+      'the `## Verification` pass lines are on disk with the current basisHash).',
+      '',
+      'Dispatch registration (already written by the supervisor — do NOT write your own dispatch line):',
+      `  ${registeredId}`,
+      'Append ONLY your conclusion line to `## Closure` reusing that exact id:',
+      '  `- accepted <same-id>：<conclusion + key evidence>` — or append `- [ ]` rework items under `## Closure Findings` and reject.',
+      'Never write `completed`; completion is derived (01 §5.2).',
+    ].join('\n')
+  }
+  if (dispatchType === 'deep-audit') {
+    return [
+      header,
+      '',
+      `You are the mission-level deep auditor. Audit the roadmap at \`${target}\` against the live repo.`,
+      `Follow \`${promptFile}\`.`,
+      '',
+      'Dispatch registration (already written by the supervisor into the roadmap `## Deep Audit Record`):',
+      `  ${registeredId}`,
+      'Append ONLY your accepted line reusing that exact id, carrying the findings lexeme:',
+      '  `- accepted <same-id> findings=none|items：<conclusion>` (01 §3.3).',
+      'Findings land as unchecked work items / plan Closure Findings — no separate audit files.',
+    ].join('\n')
+  }
+  if (dispatchType === 'draft-plans') {
+    return [
+      header,
+      '',
+      `Draft the next 1-3 plans from the remaining roadmap items at \`${target}\`.`,
+      `Follow \`${promptFile}\` completely (context reads, plan format, sequencing).`,
+      '',
+      'Leave every drafted plan at frontmatter `status: draft` — review is dispatched by the supervisor/engine',
+      'as an INDEPENDENT reviewer; you never self-dispatch a review and never set `active` yourself.',
+    ].join('\n')
+  }
+  // execute
+  return [
+    header,
+    '',
+    `Execute the plan at \`${target}\` — the supervisor-issued claim is already in the plan frontmatter.`,
+    `Follow \`${promptFile}\`.`,
+    'Tick only what you actually completed; verification and audit dispatch are supervisor-owned.',
+  ].join('\n')
+}
+
+// ── the arm ──────────────────────────────────────────────────────────────────
+
+export interface ExecArmOptions {
+  projectRoot: string
+  lawCtx: MissionLawContext
+  io?: MeterWriterIo
+  clock?: () => number
+  now?: () => string
+  /** supervisor run id for dispatch lines / prompts. */
+  runId?: string
+  /** DSH agents face; absent ⇒ registration-only degradation (never a crash). */
+  agents?: DispatchAgentsFace
+  /** receipt sink (the watchdog's receipt fn). */
+  receipt: ExecReceiptSink
+  /** raw receipt JSONL lines feed (the draft-plans occurrence registry). */
+  receiptLines?: () => string[]
+  /** verify command runner seam (tests inject; default = runVerifyCommands). */
+  verifyRunner?: typeof runVerifyCommands
+  logger?: { info?: (m: string, f?: Record<string, unknown>) => void; warn?: (m: string, f?: Record<string, unknown>) => void }
+}
+
+export interface ExecOutcome {
+  action: string
+  status: 'dispatched' | 'verified' | 'refused' | 'skipped' | 'degraded' | 'forwarded' | 'failed'
+  detail: string
+}
+
+type PolicyFaceOf = PolicyFace
+
+function policyOf(lawCtx: MissionLawContext): PolicyFace {
+  return lawCtx.policy as unknown as PolicyFace
+}
+
+function newClaimToken(runId: string, holderSessionId: string): string {
+  return `attempt-${runId}-${holderSessionId}-${randomBytes(4).toString('hex')}`
+}
+
+/** Create one dispatched agent session bound to the resolved model selection. */
+async function createDispatchAgent(
+  agents: DispatchAgentsFace,
+  binding: AgentModelBinding,
+  options: { projectRoot: string; label: string },
+): Promise<{ sessionId: string; followup: (text: string) => void }> {
+  const sessionId = `mdsup-${Date.now().toString(36)}-${randomBytes(4).toString('hex')}`
+  const handle = await agents.create({
+    sessionId,
+    meta: { cwd: options.projectRoot, origin: 'subagent', delegationDepth: 1 },
+    agentOptions: { provider: binding.provider, model: binding.model },
+  })
+  return {
+    sessionId: String(handle.agent.id ?? sessionId),
+    followup: (text: string) => {
+      handle.agent.followup({ content: [{ type: 'text', text }], source: { kind: 'user' } })
+    },
+  }
+}
+
+function resolveOrRefuse(
+  dispatchType: DispatchType,
+  opts: ExecArmOptions,
+  planAgent: string | null,
+): { ok: true; resolution: DispatchResolution } | { ok: false; reason: string } {
+  const out = resolveDispatch({ dispatchType, policy: policyOf(opts.lawCtx), planAgent })
+  return out.ok ? { ok: true, resolution: out.resolution } : { ok: false, reason: out.reason }
+}
+
+function planAgentOf(planText: string | null): string | null {
+  if (planText === null) return null
+  const scan = scanPlanLedger(planText) as unknown as { fm: Record<string, unknown> | null }
+  const agent = scan.fm?.agent
+  return typeof agent === 'string' ? agent : null
+}
+
+function dispatchIdsOf(text: string | null, section: 'Draft Review Record' | 'Closure'): string[] {
+  if (text === null) return []
+  const scan = scanPlanLedger(text) as unknown as {
+    draftReviewRecord?: { dispatches: Array<{ id: string }> } | null
+    closure?: { dispatches: Array<{ id: string }> } | null
+  }
+  const dispatches = section === 'Draft Review Record' ? scan.draftReviewRecord?.dispatches : scan.closure?.dispatches
+  return (dispatches ?? []).map((d) => d.id)
+}
+
+interface RoadmapScanFace {
+  fm: Record<string, unknown> | null
+  deepAuditRecord: { dispatches: Array<{ id: string }>; unpairedDispatches: string[]; accepted: Array<{ id: string; findings: string | null }> } | null
+}
+
+function roadmapScanOf(text: string): RoadmapScanFace {
+  return scanRoadmapLedger(text) as unknown as RoadmapScanFace
+}
+
+/** Dispatch one AI-facing exit: dedup → resolve → enforce → register → agent. */
+async function dispatchAgentExit(
+  hit: TriggerHit,
+  dispatchType: DispatchType,
+  opts: ExecArmOptions,
+  registration: {
+    path: string
+    section: string
+    line: (id: string, sessionId: string, lineage: string) => string
+    existingIds: string[]
+    /** explicit id counter override (deep-audit: the round being consumed, 01 §3.3). */
+    counter?: number
+    setFrontmatter?: Record<string, string | number>
+  },
+): Promise<ExecOutcome> {
+  const io = opts.io ?? fsMeterWriterIo
+  const runId = opts.runId ?? 'mdsupervisor'
+  const isRoadmap = registration.path === opts.lawCtx.roadmapPath
+  const planText = isRoadmap ? null : io.readTextFile(registration.path)
+  const roadmapText = opts.lawCtx.roadmapPath !== '' ? io.readTextFile(opts.lawCtx.roadmapPath) : null
+  const dedup = dispatchAlreadyRegistered({
+    occurrenceType: hit.occurrence.type,
+    planText,
+    roadmapText,
+    receiptLines: opts.receiptLines?.() ?? [],
+    occurrenceKey: hit.occurrence.key,
+  })
+  if (dedup.already) {
+    return { action: dispatchType, status: 'skipped', detail: `occurrence already registered — ${dedup.detail}` }
+  }
+
+  const resolved = resolveOrRefuse(dispatchType, opts, planAgentOf(planText))
+  if (!resolved.ok) {
+    opts.receipt({ kind: 'exception', runId, plan: hit.target, event: `dispatch-refused:${dispatchType}`, detail: resolved.reason })
+    return { action: dispatchType, status: 'refused', detail: resolved.reason }
+  }
+  const executorResolved = resolveDispatch({ dispatchType: 'execute', policy: policyOf(opts.lawCtx) })
+  const executorBinding = executorResolved.ok ? executorResolved.resolution.binding : resolved.resolution.binding
+  const enforcement = enforceDistinctModel({ dispatchType, policy: policyOf(opts.lawCtx), resolution: resolved.resolution, executorBinding })
+  if (enforcement.status === 'refused') {
+    opts.receipt({ kind: 'exception', runId, plan: hit.target, event: `dispatch-refused:${dispatchType}`, detail: enforcement.reason })
+    return { action: dispatchType, status: 'refused', detail: enforcement.reason }
+  }
+  if (enforcement.status === 'downgraded') {
+    opts.receipt({ kind: 'observation', runId, plan: hit.target, event: `dispatch-downgraded:${dispatchType}`, detail: enforcement.reason })
+  }
+
+  // agent session first (the dispatch line carries the target session id);
+  // no agents face ⇒ registration-only degradation (1411-1 posture)
+  let handle: { sessionId: string; followup: (text: string) => void } | null = null
+  if (opts.agents !== undefined) {
+    try {
+      handle = await createDispatchAgent(opts.agents, resolved.resolution.binding, { projectRoot: opts.projectRoot, label: `Mission: ${dispatchType}` })
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err)
+      opts.receipt({ kind: 'exception', runId, plan: hit.target, event: `dispatch-failed:${dispatchType}`, detail })
+      return { action: dispatchType, status: 'failed', detail }
+    }
+  }
+  const sessionId = handle !== null ? handle.sessionId : 'ses-pending'
+
+  const id = nextDispatchId({
+    kind: registration.section === 'Draft Review Record' ? 'review' : 'audit',
+    runId,
+    stem: stemOf(registration.path),
+    counter:
+      registration.counter ??
+      nextCounterOf(registration.existingIds, `#${registration.section === 'Draft Review Record' ? 'review' : 'audit'}-${runId}-`),
+  })
+  const write = appendSectionLines({
+    path: registration.path,
+    section: registration.section,
+    lines: [registration.line(id, sessionId, enforcement.lineage)],
+    ...(registration.setFrontmatter !== undefined ? { setFrontmatter: registration.setFrontmatter } : {}),
+    lawCtx: opts.lawCtx,
+    io,
+    now: opts.clock,
+  })
+  if (write.status !== 'written') {
+    opts.receipt({ kind: 'exception', runId, plan: registration.path, event: `dispatch-registration-failed:${dispatchType}`, detail: `writer ${write.status}: ${write.reason ?? ''}` })
+    return { action: dispatchType, status: 'failed', detail: `registration write ${write.status}: ${write.reason ?? ''}` }
+  }
+  if (handle !== null) {
+    handle.followup(dispatchPromptOf({ dispatchType, target: registration.path, registeredId: id, runId }))
+    opts.receipt({
+      kind: 'observation',
+      runId,
+      plan: registration.path,
+      event: `dispatch:${dispatchType}`,
+      detail: `${id} to ${sessionId}${enforcement.status === 'downgraded' ? ' (single-model downgrade, honest lineage)' : ''}`,
+    })
+    return { action: dispatchType, status: 'dispatched', detail: `${id} to ${sessionId}` }
+  }
+  opts.receipt({
+    kind: 'observation',
+    runId,
+    plan: registration.path,
+    event: `dispatch:${dispatchType}`,
+    detail: `${id} registered (agents face absent — AI dispatch degraded to registration-only, 1411-1 posture)`,
+  })
+  return { action: dispatchType, status: 'degraded', detail: `${id} registered; no agents face to dispatch` }
+}
+
+// ── exit executors ───────────────────────────────────────────────────────────
+
+/** Exit 1: mechanical-verification (verify-runner direct run + pass-line write). */
+export async function runMechanicalVerification(hit: TriggerHit, opts: ExecArmOptions): Promise<ExecOutcome> {
+  const io = opts.io ?? fsMeterWriterIo
+  const runId = opts.runId ?? 'mdsupervisor'
+  const planPath = hit.target as string
+  const planText = io.readTextFile(planPath)
+  if (planText === null) return { action: 'mechanical-verification', status: 'failed', detail: `plan ${planPath} unreadable` }
+  const scan = scanPlanLedger(planText) as unknown as { fm: Record<string, unknown> | null }
+  const verify = scan.fm?.verify
+  const plan = resolveVerifyPlan({ verify: Array.isArray(verify) ? verify : undefined, commands: opts.lawCtx.commands })
+  if (!plan.ok || plan.keys.length === 0) {
+    opts.receipt({
+      kind: 'exception',
+      runId,
+      plan: planPath,
+      event: 'mechanical-verification-no-keys',
+      detail: `verify plan unresolvable (${plan.problems.join('; ') || 'no keys resolved'}) — nothing run, no pass lines (fail-closed, M2-WI44 posture)`,
+    })
+    return { action: 'mechanical-verification', status: 'skipped', detail: 'no resolvable verify keys' }
+  }
+  const runner = opts.verifyRunner ?? runVerifyCommands
+  const run = await runner({ keys: plan.keys, commands: opts.lawCtx.commands, projectRoot: opts.projectRoot, planText, runId } as Parameters<typeof runVerifyCommands>[0])
+  const failed = run.results.filter((r: { exitCode: number | null }) => r.exitCode !== 0)
+  if (failed.length > 0) {
+    opts.receipt({
+      kind: 'exception',
+      runId,
+      plan: planPath,
+      event: 'mechanical-verification-failed',
+      detail: failed.map((r: { key: string; exitCode: number | null }) => `${r.key} exit=${r.exitCode ?? 'null'}`).join('; '),
+    })
+    return { action: 'mechanical-verification', status: 'failed', detail: `verify red: ${failed.map((r: { key: string }) => r.key).join(', ')} — no pass lines written (failures metering = 1411-3)` }
+  }
+  const write = appendSectionLines({
+    path: planPath,
+    section: 'Verification',
+    lines: run.results.map((r: { passLine: string }) => r.passLine),
+    lawCtx: opts.lawCtx,
+    io,
+    now: opts.clock,
+  })
+  if (write.status !== 'written') {
+    opts.receipt({ kind: 'exception', runId, plan: planPath, event: 'mechanical-verification-write-failed', detail: `writer ${write.status}: ${write.reason ?? ''}` })
+    return { action: 'mechanical-verification', status: 'failed', detail: `pass-line write ${write.status}` }
+  }
+  opts.receipt({
+    kind: 'observation',
+    runId,
+    plan: planPath,
+    event: 'mechanical-verification-passed',
+    detail: `${plan.keys.join(', ')} exit=0 @ basisHash=${run.basisHash.slice(0, 8)} — pass lines on disk, closure-audit dispatch follows`,
+  })
+  // chain: dispatch closure-audit for the same plan (the trigger-2 face)
+  const closureHit: TriggerHit = { ...hit, action: 'closure-audit', trigger: { ...hit.trigger, exitValue: 'closure-audit' }, occurrence: { ...hit.occurrence, type: 'audit' } }
+  const closure = await dispatchClosureAudit(closureHit, opts)
+  return { action: 'mechanical-verification', status: 'verified', detail: `pass lines written; closure-audit: ${closure.status} (${closure.detail})` }
+}
+
+/** Exit 2: plan-review dispatch (dispatch line into ## Draft Review Record). */
+export async function dispatchPlanReview(hit: TriggerHit, opts: ExecArmOptions): Promise<ExecOutcome> {
+  const io = opts.io ?? fsMeterWriterIo
+  const planPath = hit.target as string
+  const planText = io.readTextFile(planPath)
+  return dispatchAgentExit(hit, 'plan-review', opts, {
+    path: planPath,
+    section: 'Draft Review Record',
+    line: (id, sessionId) => `- dispatch review ${id} to ${sessionId}`,
+    existingIds: dispatchIdsOf(planText, 'Draft Review Record'),
+  })
+}
+
+/** Exit 3: closure-audit dispatch (## Closure + honest models= lineage). */
+export async function dispatchClosureAudit(hit: TriggerHit, opts: ExecArmOptions): Promise<ExecOutcome> {
+  const io = opts.io ?? fsMeterWriterIo
+  const planPath = hit.target as string
+  const planText = io.readTextFile(planPath)
+  return dispatchAgentExit(hit, 'closure-audit', opts, {
+    path: planPath,
+    section: 'Closure',
+    line: (id, sessionId, lineage) => `- dispatch audit ${id} to ${sessionId}${lineage}`,
+    existingIds: dispatchIdsOf(planText, 'Closure'),
+  })
+}
+
+/** Exit 4: nothing→deep-audit (budget gate + DAR registration + meter + consume). */
+export async function dispatchDeepAudit(hit: TriggerHit, opts: ExecArmOptions): Promise<ExecOutcome> {
+  const io = opts.io ?? fsMeterWriterIo
+  const runId = opts.runId ?? 'mdsupervisor'
+  const roadmapPath = opts.lawCtx.roadmapPath
+  if (roadmapPath === '') return { action: 'deep-audit', status: 'failed', detail: 'no governing roadmap — nothing to audit' }
+  const roadmapText = io.readTextFile(roadmapPath)
+  if (roadmapText === null) return { action: 'deep-audit', status: 'failed', detail: 'roadmap unreadable' }
+  const scan = roadmapScanOf(roadmapText)
+  const rounds = typeof scan.fm?.['audit-rounds'] === 'number' ? (scan.fm['audit-rounds'] as number) : 0
+  const max = opts.lawCtx.maxAuditRounds
+  if (!(rounds < max)) {
+    opts.receipt({
+      kind: 'observation',
+      runId,
+      plan: null,
+      event: 'deep-audit-budget-exhausted',
+      detail: `audit-rounds=${rounds} ≥ maxAuditRounds=${max} — new deep-audit dispatch denied (R1 terminal closure = 1411-3/WI27)`,
+    })
+    return { action: 'deep-audit', status: 'skipped', detail: `budget exhausted (${rounds} ≥ ${max}) — R1 territory, recorded via receipt` }
+  }
+  const claimFiles = terminalClaimFilesUnder(opts.projectRoot, io)
+  const outcome = await dispatchAgentExit(hit, 'deep-audit', opts, {
+    path: roadmapPath,
+    section: 'Deep Audit Record',
+    line: (id, sessionId, lineage) => `- dispatch audit ${id} to ${sessionId}${lineage}`,
+    existingIds: (scan.deepAuditRecord?.dispatches ?? []).map((d) => d.id),
+    counter: rounds + 1,
+    setFrontmatter: { 'audit-rounds': rounds + 1 },
+  })
+  if (outcome.status === 'dispatched' || outcome.status === 'degraded') {
+    consumeTerminalClaims(claimFiles, io)
+  }
+  return outcome
+}
+
+function terminalClaimFilesUnder(projectRoot: string, io: LawGateIo): string[] {
+  const tmp = join(projectRoot, '_tmp')
+  const runs = io.listDirEntries(tmp)
+  if (runs === null) return []
+  const out: string[] = []
+  for (const run of runs) {
+    if (!io.isDirectory(join(tmp, run))) continue
+    const file = join(tmp, run, 'terminal-claim.json')
+    if (io.readTextFile(file) !== null) out.push(file)
+  }
+  return out
+}
+
+/** Consume the terminal-claim action records (rename .consumed — the trigger signal must not re-fire). */
+function consumeTerminalClaims(files: string[], io: MeterWriterIo): void {
+  for (const file of files) {
+    try {
+      renameSync(file, `${file}.consumed`)
+    } catch {
+      void io // best-effort consumption; a stale claim file re-triggers the dedup face, never a crash
+    }
+  }
+}
+
+/** Exit 5: draft-plans dispatch (drafter; receipt occurrence registry). */
+export async function dispatchDraftPlans(hit: TriggerHit, opts: ExecArmOptions): Promise<ExecOutcome> {
+  const runId = opts.runId ?? 'mdsupervisor'
+  const dedup = dispatchAlreadyRegistered({
+    occurrenceType: 'draft',
+    planText: null,
+    roadmapText: null,
+    receiptLines: opts.receiptLines?.() ?? [],
+    occurrenceKey: hit.occurrence.key,
+  })
+  if (dedup.already) return { action: 'draft-plans', status: 'skipped', detail: dedup.detail }
+  const resolved = resolveOrRefuse('draft-plans', opts, null)
+  if (!resolved.ok) {
+    opts.receipt({ kind: 'exception', runId, plan: null, event: 'dispatch-refused:draft-plans', detail: resolved.reason })
+    return { action: 'draft-plans', status: 'refused', detail: resolved.reason }
+  }
+  const roadmapPath = opts.lawCtx.roadmapPath
+  if (opts.agents !== undefined) {
+    try {
+      const handle = await createDispatchAgent(opts.agents, resolved.resolution.binding, { projectRoot: opts.projectRoot, label: 'Mission: draft-plans' })
+      handle.followup(dispatchPromptOf({ dispatchType: 'draft-plans', target: roadmapPath, registeredId: null, runId }))
+      opts.receipt({
+        kind: 'observation',
+        runId,
+        plan: null,
+        event: 'dispatch:draft-plans',
+        detail: `drafter ${resolved.resolution.agentName} → session ${handle.sessionId}`,
+        occurrenceKey: hit.occurrence.key,
+      })
+      return { action: 'draft-plans', status: 'dispatched', detail: `drafter session ${handle.sessionId}` }
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err)
+      opts.receipt({ kind: 'exception', runId, plan: null, event: 'dispatch-failed:draft-plans', detail })
+      return { action: 'draft-plans', status: 'failed', detail }
+    }
+  }
+  opts.receipt({
+    kind: 'observation',
+    runId,
+    plan: null,
+    event: 'dispatch:draft-plans',
+    detail: `drafter ${resolved.resolution.agentName} resolved (agents face absent — registration-only)`,
+    occurrenceKey: hit.occurrence.key,
+  })
+  return { action: 'draft-plans', status: 'degraded', detail: 'no agents face to dispatch' }
+}
+
+/** Exit 6: reclaim-claim (writer clear/re-issue + execute re-dispatch). */
+export async function reclaimClaim(hit: TriggerHit, opts: ExecArmOptions): Promise<ExecOutcome> {
+  const io = opts.io ?? fsMeterWriterIo
+  const runId = opts.runId ?? 'mdsupervisor'
+  const planPath = hit.target as string
+  const cleared = clearPlanClaim({ planPath, lawCtx: opts.lawCtx, io, now: opts.clock })
+  if (cleared.status !== 'written' && cleared.status !== 'noop') {
+    opts.receipt({ kind: 'exception', runId, plan: planPath, event: 'reclaim-clear-failed', detail: `writer ${cleared.status}: ${cleared.reason ?? ''}` })
+    return { action: 'reclaim-claim', status: 'failed', detail: `claim clear ${cleared.status}` }
+  }
+  const resolved = resolveOrRefuse('execute', opts, planAgentOf(io.readTextFile(planPath)))
+  if (!resolved.ok) {
+    opts.receipt({ kind: 'exception', runId, plan: planPath, event: 'dispatch-refused:execute', detail: resolved.reason })
+    return { action: 'reclaim-claim', status: 'refused', detail: resolved.reason }
+  }
+  if (opts.agents !== undefined) {
+    try {
+      const handle = await createDispatchAgent(opts.agents, resolved.resolution.binding, { projectRoot: opts.projectRoot, label: 'Mission: execute' })
+      const claim = newClaimToken(runId, handle.sessionId)
+      const expires = new Date((opts.clock?.() ?? Date.now()) + DEFAULT_CLAIM_TTL_MS).toISOString()
+      const issued = writePlanClaim({ planPath, claim, expires, lawCtx: opts.lawCtx, io, now: opts.clock })
+      if (issued.status !== 'written') {
+        opts.receipt({ kind: 'exception', runId, plan: planPath, event: 'reclaim-reissue-failed', detail: `writer ${issued.status}: ${issued.reason ?? ''}` })
+        return { action: 'reclaim-claim', status: 'failed', detail: `claim re-issue ${issued.status}` }
+      }
+      handle.followup(dispatchPromptOf({ dispatchType: 'execute', target: planPath, registeredId: null, runId }))
+      opts.receipt({ kind: 'observation', runId, plan: planPath, event: 'reclaim-claim', detail: `claim reclaimed + re-issued to executor session ${handle.sessionId} (expires ${expires})` })
+      return { action: 'reclaim-claim', status: 'dispatched', detail: `re-issued to ${handle.sessionId}` }
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err)
+      opts.receipt({ kind: 'exception', runId, plan: planPath, event: 'reclaim-failed', detail })
+      return { action: 'reclaim-claim', status: 'failed', detail }
+    }
+  }
+  opts.receipt({ kind: 'observation', runId, plan: planPath, event: 'reclaim-claim', detail: 'claim cleared; no agents face — re-dispatch deferred (full resume-or-redispatch semantics = WI29)' })
+  return { action: 'reclaim-claim', status: 'degraded', detail: 'cleared; re-dispatch deferred (WI29)' }
+}
+
+/** Exit 7: terminal decision object — forwarded to 1411-3, never executed here. */
+export function forwardTerminalDecision(hit: TriggerHit, opts: ExecArmOptions): ExecOutcome {
+  opts.receipt({
+    kind: 'observation',
+    runId: opts.runId ?? 'mdsupervisor',
+    plan: null,
+    event: `terminal-decision:${hit.trigger.exitValue}`,
+    detail: `${hit.reason} — decision object forwarded (R1–R4 execution = 1411-3/M3-WI27)`,
+  })
+  return { action: `terminal:${hit.trigger.exitValue}`, status: 'forwarded', detail: 'decision object recorded for 1411-3' }
+}
+
+// ── claim TTL renewal (P2-1 ruling: renewal WRITES the ledger, bounded) ─────
+
+export const DEFAULT_CLAIM_TTL_MS = 30 * 60 * 1000
+export const DEFAULT_RENEWAL_TTL_MS = 30 * 60 * 1000
+/** Bounded ceiling: one renewal never extends the claim beyond now + MAX. */
+export const MAX_RENEWAL_TTL_MS = 60 * 60 * 1000
+/** Renewal window: claims expiring sooner than this are renewed when the holder is active. */
+export const RENEWAL_THRESHOLD_MS = 5 * 60 * 1000
+
+export interface RenewalOutcome {
+  planPath: string
+  status: 'renewed' | 'not-due' | 'inactive-holder' | 'denied' | 'failed' | 'skipped'
+  detail: string
+}
+
+/**
+ * Renew a near-expiry claim whose holder showed activity: the P2-1 ruling —
+ * renewal lands in the LEDGER through the writer (claim-validity's
+ * "未过期" face stays enforceable), bounded to now + min(ttl, MAX_RENEWAL_TTL)
+ * per renewal. Forged infinite activity is backstopped by the bounded window
+ * + the WI30 stagnation fingerprint (accepted residual, plan Phase 3).
+ */
+export function renewClaim(options: {
+  planPath: string
+  holderSessionId: string
+  lawCtx: MissionLawContext
+  /** epoch ms of the holder's last observed activity (events/session tool face). */
+  lastActiveAt: number
+  io?: MeterWriterIo
+  clock?: () => number
+  now?: () => string
+  ttlMs?: number
+}): RenewalOutcome {
+  const now = options.clock?.() ?? Date.now()
+  const io = options.io ?? fsMeterWriterIo
+  const text = io.readTextFile(options.planPath)
+  if (text === null) return { planPath: options.planPath, status: 'failed', detail: 'plan unreadable' }
+  const scan = scanPlanLedger(text) as unknown as { fm: Record<string, unknown> | null }
+  const claim = scan.fm?.claim
+  const expires = scan.fm?.['claim-expires']
+  if (typeof claim !== 'string' || typeof expires !== 'string') {
+    return { planPath: options.planPath, status: 'skipped', detail: 'no live claim pair' }
+  }
+  const expiry = Date.parse(expires)
+  if (Number.isNaN(expiry)) return { planPath: options.planPath, status: 'skipped', detail: 'malformed expiry (fail-soft)' }
+  if (expiry <= now) return { planPath: options.planPath, status: 'not-due', detail: 'already expired — reclaim territory, not renewal' }
+  if (expiry - now > RENEWAL_THRESHOLD_MS) {
+    return { planPath: options.planPath, status: 'not-due', detail: `claim not near expiry (${Math.round((expiry - now) / 60000)}min left)` }
+  }
+  if (options.lastActiveAt < now - RENEWAL_THRESHOLD_MS) {
+    return { planPath: options.planPath, status: 'inactive-holder', detail: 'no recent holder activity — no renewal (03 §7 stagnation face)' }
+  }
+  const ttl = Math.min(options.ttlMs ?? DEFAULT_RENEWAL_TTL_MS, MAX_RENEWAL_TTL_MS)
+  const newExpires = new Date(now + ttl).toISOString()
+  const out = writePlanClaim({
+    planPath: options.planPath,
+    claim,
+    expires: newExpires,
+    lawCtx: options.lawCtx,
+    io,
+    now: options.clock,
+  })
+  if (out.status !== 'written') {
+    return { planPath: options.planPath, status: out.status === 'denied' ? 'denied' : 'failed', detail: `writer ${out.status}: ${out.reason ?? ''}` }
+  }
+  return { planPath: options.planPath, status: 'renewed', detail: `claim-expires extended to ${newExpires} (bounded window ${Math.round(ttl / 60000)}min, P2-1)` }
+}
+
+// ── the dispatcher (one trigger hit → one exit) ──────────────────────────────
+
+export async function executeTriggerHit(hit: TriggerHit, opts: ExecArmOptions): Promise<ExecOutcome> {
+  switch (hit.action) {
+    case 'mechanical-verification':
+      return runMechanicalVerification(hit, opts)
+    case 'closure-audit':
+      return dispatchClosureAudit(hit, opts)
+    case 'plan-review':
+      return dispatchPlanReview(hit, opts)
+    case 'deep-audit':
+      return dispatchDeepAudit(hit, opts)
+    case 'draft-plans':
+      return dispatchDraftPlans(hit, opts)
+    case 'reclaim-claim':
+      return reclaimClaim(hit, opts)
+    default:
+      if (hit.action.startsWith('terminal:')) return forwardTerminalDecision(hit, opts)
+      if (hit.action === 'trigger-parse-error') {
+        opts.receipt({ kind: 'exception', runId: opts.runId ?? 'mdsupervisor', plan: hit.target, event: 'trigger-parse-error', detail: `${hit.reason} (${hit.errors.join('; ')})` })
+        return { action: hit.action, status: 'skipped', detail: 'unparseable trigger recorded, inert' }
+      }
+      opts.receipt({ kind: 'exception', runId: opts.runId ?? 'mdsupervisor', plan: hit.target, event: 'unknown-trigger-action', detail: hit.action })
+      return { action: hit.action, status: 'skipped', detail: 'unknown trigger action' }
+  }
+}
+
+export { defaultVerifyKeys }
