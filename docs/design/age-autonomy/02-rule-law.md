@@ -156,7 +156,7 @@ dispatch:                                # 派发类型 → 具名 agent（提�
 | `verification-red` | mechanical-verification 命令 exit ≠ 0（每次红跑计一次；红跑不写 pass 行） | 机械验证失败点 |
 | `claim-expired-no-output` | claim 到期且无产出被回收（active 越过 TTL 未完成即无产出；仅回收实际清除 claim 时计） | reclaim 回收点 |
 
-**不计清单（防计数噪音）**：守夜人自身写盘 CAS 冲突/受限重试（基础设施噪音，下轮重扫重决）；恢复扫描的观察类记录（故障已在归因点计过，重启面只观察）；双驱动幂等跳过（dedup 面拒发 = 该 occurrence 已在处理，再计即双算）。
+**不计清单（防计数噪音）**：守夜人自身写盘 CAS 冲突/受限重试（基础设施噪音，下轮重扫重决）；恢复扫描的观察类记录（故障已在归因点计过，重启面只观察）；双驱动幂等跳过（dedup 面拒发 = 该 occurrence 已在处理，再计即双算）；**恢复 redispatch**（崩溃重派不重复计 `failures`——03 §6「不把单次崩溃计为计划失败」字面落点；恢复路径的 `recordPlanFailure` 调用点为空，重派动作本身经 observation 回执记录，M3-WI29）。
 
 **maxFailures 双源（终审 P2-3 收口）**：policy `limits.maxFailures` 权威 / mission flow config `flow.maxFailures` 回退（`flows/mission-driver.json` 顶层键，镜像 maxAuditRounds 通道）/ 双缺默认 3——解析面 `law-policy.mjs` `resolveMaxFailures`（单权威+单回退纪律）。熔断执行（03 §7）：`failures ≥ maxFailures` → held + hold 理由 + 回执（同写清除 claim——claim 只存在于 active，02 §4.5 ⑤）；held plan 不阻塞其他可执行/可评审 plan（03 §4）；全部 held ∧ 无可执行 open plan → 经 03 §8 R1–R4 求值核心终态化 partial/blocked + 回执。
 
@@ -206,6 +206,8 @@ dispatch:                                # 派发类型 → 具名 agent（提�
 - 计划质量、scope 是否诚实、closure 证据是否充分——这些是判断，由独立评审 agent 依 guide 完成（Draft Review Record / Closure 内联），门禁只保证「该审的审了」（派发+回执绑定），不保证「审得对」。
 
 ## Changelog
+
+- 2026-08-26（M3-WI29，plan `docs/plans/age-autonomy/2026-08-26-1954-2`）：§4.6 增量——不计清单补第四行「恢复 redispatch」（崩溃重派不重复计 `failures`，03 §6「不把单次崩溃计为计划失败」字面落点；恢复路径 `recordPlanFailure` 调用点为空，重派动作经 observation 回执记录）；同 plan 附带两处窄域行为增量（均真值表钉住）：§4.2 评审租约改**最末 dispatch review 行作答**（superseded 行不持约、最末行配对即租约关闭——与幂等面最新行作答单一语义面，redispatch 后 plan 写面不锁死）+ §4.6 预算闸增**同轮次崩溃重派豁免**（新 DAR dispatch 行轮次号 ∈ 现 unpaired 在飞轮次集 = 同 occurrence 重派，轮次已付不耗预算不 deny，01 §3.1）。
 
 - 2026-08-26（M3-WI27，plan `docs/plans/age-autonomy/2026-08-26-1411-3`）：§4.6 增量——failures 归因桶成文（`executor-error` / `verification-red` / `claim-expired-no-output` 三桶各计/不计规则 + 不计清单）+ maxFailures 双源解析（policy 权威 / mission flow 回退 / 双缺默认 3，`resolveMaxFailures`）+ 熔断执行语义注记（held 同写清 claim、单 held 不阻塞、全 held 经 03 §8 求值核心终态化）。
 - 2026-08-25（M2-WI12/WI13，plan `docs/plans/age-autonomy/2026-08-25-0815-1`）：§6 部署面表补 gate-check.mjs 与 DSH 适配层实名（supported baseline 的最小事实性增补——内核 `tools/mission-driver/src/{law-core,law-policy}.mjs`、真实实例 `missions/autonomy.policy.yml` 已落地；本文其余契约无改动）。
