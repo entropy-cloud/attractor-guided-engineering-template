@@ -71,8 +71,9 @@ import {
   type SupervisorDecision,
   type SupervisorSnapshot,
 } from './decision-core.ts'
-import { evaluateTermination, type TerminationEvaluation } from './terminal-rules.ts'
+import { evaluateTermination, type StagnationFact, type TerminationEvaluation } from './terminal-rules.ts'
 import { applyCircuitBreaker } from './failures.ts'
+import { initialStagnationState, observeStagnation, type StagnationDetectorState } from './stagnation.ts'
 import {
   appendReceipt,
   deliverReceiptLine,
@@ -295,6 +296,15 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
   // face).
   const recoveryHandled = new Set<string>()
 
+  // M3-WI30 (03 §7/§8): the stagnation detector's scratch state + output —
+  // the fact is the watchdog-held SINGLE POINT both R4 entries read (dual
+  // entry, one detector: cycle-end evaluation here + the declared-face
+  // exec-arm entry through the ExecArmOptions.stagnationFact callback).
+  // In-memory scratch (03 §6 归零成文接受): restart clears both — the
+  // conservative direction, at most N extra rounds before the breaker.
+  const stagnationDetector: StagnationDetectorState = initialStagnationState()
+  let stagnationFact: StagnationFact | null = null
+
   // terminal-receipt chain: durable record first, then the A8 best-effort
   // delivery, then the declared hooks (1411-2/1411-3 consumption seam), then
   // — with continuous mode ON — ONE immediate re-evaluation cycle (M3-WI28
@@ -458,6 +468,10 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
       // M3-WI27: an executing terminal word from the declared face (R3
       // trigger exit) feeds the same stop-dispatch state — dual entry, one core
       onTerminalWord: (evaluation) => setTerminal(evaluation, 'declared-face'),
+      // M3-WI30: the declared-face entry reads the SAME watchdog-held
+      // detector state — dual entry, one detector (zero single-cycle
+      // divergence between the two R4 entries).
+      stagnationFact: () => stagnationFact,
     }
     try {
       const outcome = await executeTriggerHit(hit, opts)
@@ -575,9 +589,35 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
       if (terminalState === null) {
         const post = scanSupervisorSnapshot({ projectRoot, lawCtx: ctx, io, clock, now })
         if (post !== null) {
+          // M3-WI30 detector cycle (03 §7): fingerprint (per-plan basisHash
+          // set + roadmap text hash) × activity signal (the noteActivity map,
+          // window = one heartbeat) × ping-pong (per-plan status history) —
+          // the emitted fact is the single point BOTH R4 entries inject.
+          const observed = observeStagnation(stagnationDetector, {
+            plans: post.plans,
+            roadmapText: post.roadmap !== null ? post.roadmap.text : null,
+            activityAt: activity.values(),
+            now: clock(),
+            activityWindowMs: heartbeatMs,
+            threshold: ctx!.stagnationRounds,
+          })
+          const newlyTripped = observed.fact !== null && stagnationFact === null
+          stagnationFact = observed.fact
+          if (newlyTripped) {
+            receipt({
+              kind: 'observation',
+              runId: null,
+              plan: observed.pingPongPlan,
+              event: 'stagnation-detected',
+              detail: observed.pingPongPlan !== null
+                ? `ping-pong: ${observed.pingPongPlan} oscillated between two states with no terminal progress (03 §7) — saturated R4 injection`
+                : `stagnation fingerprint ${observed.stagnantRounds}/${ctx!.stagnationRounds} rounds unchanged ∧ zero activity (03 §7) — R4 injection`,
+            })
+          }
           const evaluation = evaluateTermination(post, {
             maxAuditRounds: ctx!.maxAuditRounds,
             maxFailures: ctx!.maxFailures ?? 3,
+            ...(stagnationFact !== null ? { stagnation: stagnationFact } : {}),
           })
           if (evaluation.decision !== 'continue') setTerminal(evaluation, 'cycle')
         }

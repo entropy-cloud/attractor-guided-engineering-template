@@ -55,7 +55,7 @@ import { randomBytes } from 'node:crypto'
 import { defaultVerifyKeys, resolveVerifyPlan, runVerifyCommands } from '../../assets/src/verify-runner.mjs'
 import { scanPlanLedger, scanRoadmapLedger } from '../../assets/src/ledger-sections.mjs'
 import { scanSupervisorSnapshot } from './decision-core.ts'
-import { evaluateTermination, normalizeDeclaredTerminal, type TerminationEvaluation } from './terminal-rules.ts'
+import { evaluateTermination, normalizeDeclaredTerminal, type StagnationFact, type TerminationEvaluation } from './terminal-rules.ts'
 import type { LawGateIo, MissionLawContext } from '../law/host-adapter.ts'
 import {
   appendSectionLines,
@@ -199,6 +199,14 @@ export interface ExecArmOptions {
    * absent ⇒ this arm writes the terminal receipt itself.
    */
   onTerminalWord?: (evaluation: TerminationEvaluation) => void
+  /**
+   * M3-WI30 dual-entry same-injection: the declared-face terminal entry
+   * (forwardTerminalDecision's re-scan) reads the watchdog-held detector
+   * state through this seam — the SAME StagnationFact the cycle-end entry
+   * injects (never a second detector; ≤ one cycle skew, converged by
+   * idempotent re-evaluation — the 1411-3 cross-case contract).
+   */
+  stagnationFact?: () => StagnationFact | null
   logger?: { info?: (m: string, f?: Record<string, unknown>) => void; warn?: (m: string, f?: Record<string, unknown>) => void }
 }
 
@@ -639,6 +647,9 @@ export async function forwardTerminalDecision(hit: TriggerHit, opts: ExecArmOpti
   const evaluation = evaluateTermination(snapshot, {
     maxAuditRounds: opts.lawCtx.maxAuditRounds,
     maxFailures: opts.lawCtx.maxFailures ?? 3,
+    // M3-WI30: dual entry, one detector — the declared face injects the
+    // same watchdog-held stagnation fact the cycle-end entry reads.
+    ...(opts.stagnationFact !== undefined ? { stagnation: opts.stagnationFact() ?? undefined } : {}),
   })
   const normalized = normalizeDeclaredTerminal(hit.trigger.exitValue, evaluation)
   if (!normalized.executes) {

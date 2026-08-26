@@ -6,6 +6,7 @@
   "pingPongWindow": 6,
   "maxAuditRounds": 3,
   "maxFailures": 3,
+  "stagnationRounds": 10,
   "auditEntry": "DEEP_AUDIT",
   "reconcileOnTerminal": true,
   "entry": "CHECK",

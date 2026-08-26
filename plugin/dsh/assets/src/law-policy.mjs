@@ -31,7 +31,7 @@ import "./law-rules.mjs";
 
 export const POLICY_VERSION = 1;
 export const POLICY_TOP_LEVEL_FIELDS = ["version", "limits", "gates", "triggers", "agents", "dispatch"];
-export const LIMITS_FIELDS = ["maxAuditRounds", "maxFailures"];
+export const LIMITS_FIELDS = ["maxAuditRounds", "maxFailures", "stagnationRounds"];
 export const GATE_FIELDS = ["id", "match", "rule", "mode"];
 export const GATE_MODES = ["observe", "enforce"];
 export const TRIGGER_FIELDS = ["when", "dispatch", "action", "terminal"];
@@ -516,6 +516,37 @@ export function resolveMaxFailures(policy, missionConfig) {
     return flow.maxFailures;
   }
   return 3;
+}
+
+/**
+ * Resolve the effective stagnationRounds (age-autonomy M3-WI30, plan
+ * `docs/plans/age-autonomy/2026-08-26-1954-3` Phase 1 — the R4 stagnation
+ * N threshold's policy home): policy `limits.stagnationRounds` is
+ * authoritative, mission config (`flow.stagnationRounds`, the flows JSON /
+ * mission-level flow override channel — same seam as maxAuditRounds /
+ * maxFailures) is the fallback — one authority + one fallback per
+ * constraint, mirroring resolveMaxAuditRounds / resolveMaxFailures. Both
+ * absent → 10 (the written default: at the 30s watchdog heartbeat,
+ * 10 heartbeat cycles ≈ 5 wall-clock minutes of unchanged ledger AND zero
+ * holder activity before the R4 circuit breaker fires — long AI steps,
+ * including verify commands with 10-minute timeouts, are never false-killed;
+ * N = heartbeat period × wall-clock budget, 03-supervisor §8). 0 is a legal
+ * explicit value meaning the detector is OFF (R4 never evaluates — the
+ * conservative no-false-kill face; consumption documented in the M3-WI30
+ * detector). The K ping-pong round-trip bound is DERIVED from this same key
+ * (max(2, floor(stagnationRounds/5)) round trips) — no second config key to
+ * drift (02 §3 single-key-single-meaning precedent).
+ */
+export function resolveStagnationRounds(policy, missionConfig) {
+  const limits = policy && isPlainObject(policy.limits) ? policy.limits : null;
+  if (limits !== null && typeof limits.stagnationRounds === "number" && Number.isInteger(limits.stagnationRounds) && limits.stagnationRounds >= 0) {
+    return limits.stagnationRounds;
+  }
+  const flow = missionConfig && isPlainObject(missionConfig.flow) ? missionConfig.flow : null;
+  if (flow !== null && typeof flow.stagnationRounds === "number" && Number.isInteger(flow.stagnationRounds) && flow.stagnationRounds >= 0) {
+    return flow.stagnationRounds;
+  }
+  return 10;
 }
 
 // ── requireDistinctModel static satisfiability (02 §4.9, check-policy face) ─

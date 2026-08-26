@@ -54,7 +54,7 @@ describe("real instance", () => {
     const r = parsePolicy(REAL_POLICY);
     assert.equal(r.ok, true, r.errors?.join("; "));
     assert.equal(r.policy.version, 1);
-    assert.deepEqual(r.policy.limits, { maxAuditRounds: 3, maxFailures: 3 });
+    assert.deepEqual(r.policy.limits, { maxAuditRounds: 3, maxFailures: 3, stagnationRounds: 10 });
     assert.deepEqual(r.policy.gates, [
       // WI21: the frontmatter-tightening enforce flip this plan owns
       // (0815-1 comment hand-off) + the work-item registration increment.

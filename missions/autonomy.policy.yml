@@ -13,10 +13,19 @@
 # breaker, 02 §4.6; dual-source resolveMaxFailures in law-policy.mjs: this
 # limits row authoritative / flows/mission-driver.json top-level maxFailures
 # fallback / both absent default 3 — the two channels agree at 3/3).
+# stagnationRounds landed with M3/WI30 (03-supervisor §7/§8 stagnation
+# fingerprint + ping-pong detection): N consecutive heartbeat cycles with an
+# unchanged ledger fingerprint AND zero holder activity trip the R4 circuit
+# breaker. Wall-clock conversion: 30s heartbeat × 10 rounds ≈ 5 minutes —
+# long AI steps (verify commands run up to 10min) are never false-killed;
+# dual-source resolveStagnationRounds: this limits row authoritative /
+# flows/mission-driver.json top-level stagnationRounds fallback / both
+# absent default 10. 0 = detector OFF (R4 never evaluates).
 version: 1
 limits:
   maxAuditRounds: 3
   maxFailures: 3
+  stagnationRounds: 10
 gates:
   # Seed structural rule (0815-1) + the M2-WI21 increments: the work-item
   # registration face (composite-label grammar denies from the label alone;
