@@ -1,10 +1,12 @@
 /**
  * gate-check.mjs — law deployment face 3: pure-structure CLI (02 §6).
  *
- * Three modes (age-autonomy M2-WI12 plan
+ * Four modes (age-autonomy M2-WI12 plan
  * docs/plans/age-autonomy/2026-08-25-0815-1 Phase 3; `--verify` =
  * M2-WI19 mechanical-verification execution face, plan
- * docs/plans/age-autonomy/2026-08-25-0815-3 Phase 3):
+ * docs/plans/age-autonomy/2026-08-25-0815-3 Phase 3; `--law` =
+ * M3-WI31 full-policy enforcement face, plan
+ * docs/plans/age-autonomy/2026-08-27-0433-1 Phase 1):
  *
  *   --policy <autonomy.policy.yml>   Validate one policy file against the
  *                                    schema (structured JSON output, exit 0/1).
@@ -38,6 +40,50 @@
  *                                    dispatch). exit 0 iff every key maps to
  *                                    a non-empty command with exit code 0.
  *
+ *   <plan.md> --law                  Full-policy enforcement face (02 §6):
+ *                                    discover the owning mission (ancestor
+ *                                    walk, plansDir 判属), load its REAL
+ *                                    policy (mission `autonomyPolicy` field,
+ *                                    fallback discovery of
+ *                                    missions/autonomy.policy.yml) via
+ *                                    loadPolicyFile, and run evaluateGates
+ *                                    over the whole gate set — the same
+ *                                    policy/context posture as the DSH
+ *                                    pre-execute face (match domain
+ *                                    {{plansDir}}/{{roadmapPath}}/{{projectRoot}}
+ *                                    resolution; ctx = plansRoots / roadmapPath
+ *                                    / roadmapText / projectRoot / commands /
+ *                                    agentNames / maxAuditRounds; the P8
+ *                                    approved-project corpus is injected only
+ *                                    when the evaluation target hits a
+ *                                    protected path, mirroring the
+ *                                    single-file face's conditional read).
+ *                                    stdout JSON adds the completion-derivation
+ *                                    view (deriveCompleted / completionReasons,
+ *                                    default verify keys via plan-check.mjs
+ *                                    missionDefaultVerifyKeys — the single
+ *                                    implementation) and the engine-side plan
+ *                                    queue predicates (draftPlans /
+ *                                    activePlans / heldPlans / closedPlans /
+ *                                    openPlans / awaitingClosure over the
+ *                                    mission plansDir corpus). exit 0 iff
+ *                                    every enforce gate allows.
+ *
+ *                                    Difference from the single-file face:
+ *                                    the structural face synthesizes its own
+ *                                    structural-subset gates (no actor, no
+ *                                    policy file needed — CI/git-hook
+ *                                    posture); `--law` runs the mission's
+ *                                    actual policy gates with full mission
+ *                                    context. The trigger→closure dispatch
+ *                                    chain itself is NOT re-implemented here
+ *                                    (WI31 coverage split: the trigger
+ *                                    dispatch leg is carried by the
+ *                                    supervisor-trigger e2e suite; TS plugin
+ *                                    modules are unreachable engine-side and
+ *                                    the assets channel is engine→plugin
+ *                                    one-way — zero second implementations).
+ *
  * Bare invocation prints usage and exits 1.
  *
  * Deliberately NOT a build-bundle module (main.js CLI family, same as
@@ -46,20 +92,32 @@
  */
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { evaluateGates, expandWorkItemLabel, structuralRuleIds, workItemRegistered } from "./law-core.mjs";
-import { loadPolicyFile, policyAgentNames } from "./law-policy.mjs";
+import { loadPolicyFile, policyAgentNames, resolveMaxAuditRounds } from "./law-policy.mjs";
 import { discoverOwningMission } from "./mission-check.mjs";
 import { isLawProtectedPath } from "./law-rules.mjs";
+import { missionDefaultVerifyKeys } from "./plan-check.mjs";
 import { resolveVerifyPlan, runVerifyCommands } from "./verify-runner.mjs";
-import { scanPlanLedger, scanRoadmapLedger } from "./ledger-sections.mjs";
+import {
+  activePlans,
+  awaitingClosure,
+  closedPlans,
+  deriveCompleted,
+  draftPlans,
+  heldPlans,
+  openPlans,
+  scanPlanLedger,
+  scanRoadmapLedger,
+} from "./ledger-sections.mjs";
 
 function usage() {
   console.error("Usage:");
   console.error("  gate-check.mjs --policy <autonomy.policy.yml>    validate policy schema (exit 0/1)");
   console.error("  gate-check.mjs <plan.md>                         single-file structural-face evaluation");
   console.error("  gate-check.mjs <plan.md> --verify                run the plan's verify keys via the mission commands runner");
+  console.error("  gate-check.mjs <plan.md> --law                   run the owning mission's full policy gates + completion-derivation view (exit 0 iff all enforce gates allow)");
 }
 
 function runPolicyMode(file) {
@@ -376,6 +434,199 @@ async function runVerifyMode(file) {
   process.exit(allGreen ? 0 : 1);
 }
 
+// ── <plan.md> --law: full-policy enforcement face (02 §6, M3-WI31) ───────────
+//
+// Real-policy posture (mirrors the DSH pre-execute face host-adapter.ts
+// evaluateLawCall, engine-side): owning mission via discoverOwningMission,
+// policy via mission `autonomyPolicy` (fallback discovery of
+// missions/autonomy.policy.yml), full gate set through evaluateGates, plus
+// the completion-derivation view and the engine-side plan queue predicates.
+// The P8 approved-project corpus is injected only when the evaluation target
+// hits a protected path (mirroring runSingleFileMode's conditional read).
+
+function relativeToRoot(p, projectRoot) {
+  const rel = relative(projectRoot, p);
+  return rel !== "" && !rel.startsWith("..") ? toPosix(rel) : toPosix(p);
+}
+
+function runLawMode(file) {
+  const abs = resolve(file);
+  let text;
+  try {
+    text = readFileSync(abs, "utf8");
+  } catch (e) {
+    console.log(JSON.stringify({ file: abs, decision: "deny", error: e instanceof Error ? e.message : String(e) }, null, 2));
+    process.exit(1);
+  }
+  const owned = discoverOwningMission(abs);
+  if (owned === null) {
+    console.log(
+      JSON.stringify(
+        {
+          file: abs,
+          decision: "deny",
+          reason: "no owning mission found — walk ancestors for missions/*.json whose plansDir contains this plan (the --law face resolves the real policy through that mission)",
+        },
+        null,
+        2,
+      ),
+    );
+    process.exit(1);
+  }
+  const { mission, projectRoot, missionFile } = owned;
+
+  // Policy resolution: mission `autonomyPolicy` field → fallback discovery of
+  // missions/autonomy.policy.yml at the mission project root.
+  let policyFile = null;
+  let policySource = null;
+  if (typeof mission.autonomyPolicy === "string" && mission.autonomyPolicy !== "") {
+    policyFile = resolve(projectRoot, mission.autonomyPolicy);
+    policySource = "mission.autonomyPolicy";
+  } else {
+    const fallback = join(projectRoot, "missions", "autonomy.policy.yml");
+    if (existsSync(fallback)) {
+      policyFile = fallback;
+      policySource = "missions/autonomy.policy.yml (fallback discovery)";
+    }
+  }
+  if (policyFile === null) {
+    console.log(
+      JSON.stringify(
+        {
+          file: abs,
+          decision: "deny",
+          reason: "no autonomy policy resolvable for the owning mission — set the mission `autonomyPolicy` field or provide missions/autonomy.policy.yml (the --law face runs the real policy gates)",
+        },
+        null,
+        2,
+      ),
+    );
+    process.exit(1);
+  }
+  let loaded;
+  try {
+    loaded = loadPolicyFile(policyFile);
+  } catch (e) {
+    console.log(
+      JSON.stringify({ file: abs, decision: "deny", policyFile, error: e instanceof Error ? e.message : String(e) }, null, 2),
+    );
+    process.exit(1);
+  }
+  if (!loaded.ok) {
+    console.log(
+      JSON.stringify(
+        {
+          file: abs,
+          decision: "deny",
+          policyFile,
+          policyErrors: loaded.errors,
+          reason: "policy file failed schema validation — fix the policy first (gate-check.mjs --policy <file>)",
+        },
+        null,
+        2,
+      ),
+    );
+    process.exit(1);
+  }
+  const policy = loaded.policy;
+
+  const commands = mission.commands && typeof mission.commands === "object" && !Array.isArray(mission.commands)
+    ? Object.fromEntries(Object.entries(mission.commands).filter(([, v]) => typeof v === "string"))
+    : {};
+  const plansDir = typeof mission.plansDir === "string" && mission.plansDir !== ""
+    ? toPosix(resolve(projectRoot, mission.plansDir))
+    : "";
+  let roadmapFile = null;
+  let roadmapText = null;
+  if (typeof mission.roadmapPath === "string" && mission.roadmapPath !== "") {
+    roadmapFile = resolve(projectRoot, mission.roadmapPath);
+    try {
+      roadmapText = readFileSync(roadmapFile, "utf8");
+    } catch {
+      roadmapText = null;
+    }
+  }
+  const roadmapScan = roadmapText !== null ? scanRoadmapLedger(roadmapText) : null;
+  const plansRoots = knownPlansRoots(abs);
+  const defaultVerifyKeys = missionDefaultVerifyKeys(mission);
+  const deriveOpts = defaultVerifyKeys ? { defaultVerifyKeys } : {};
+
+  // Queue-predicate corpus: the owning mission's plans domain (the engine
+  // read face — flow-loader scans the mission plansDir, not the root union).
+  const queueRecords = plansDir !== "" ? readPlanRecords([plansDir]) : [];
+
+  // P8 approved-project corpus: injected ONLY when the evaluation target hits
+  // a protected path (single-file-face conditional-read mirror).
+  const protectedPlans = isLawProtectedPath(abs, projectRoot) ? readPlanRecords(plansRoots) : null;
+
+  const out = evaluateGates(
+    { type: "write", path: abs, proposedContent: text },
+    {
+      policy,
+      ctx: {
+        plansDir,
+        plansRoots,
+        projectRoot: toPosix(projectRoot),
+        agentNames: policyAgentNames(policy),
+        commands,
+        maxAuditRounds: resolveMaxAuditRounds(policy, mission),
+        ...deriveOpts,
+        ...(roadmapFile !== null ? { roadmapPath: toPosix(roadmapFile) } : {}),
+        ...(roadmapText !== null ? { roadmapText } : {}),
+        ...(protectedPlans !== null ? { plans: protectedPlans } : {}),
+      },
+    },
+  );
+
+  const derived = deriveCompleted(text, deriveOpts);
+  const rel = (p) => relativeToRoot(p, projectRoot);
+  // sorted for deterministic output (readPlanRecords walks in fs order)
+  const queue = (paths) => [...paths].map(rel).sort();
+  console.log(
+    JSON.stringify(
+      {
+        file: abs,
+        face: "law-policy",
+        actor: "absent (unverified-writer posture)",
+        mission: mission.name,
+        missionFile,
+        projectRoot,
+        policyFile,
+        policySource,
+        plansDir,
+        roadmapPath: roadmapFile,
+        workItem: workItemSummary(text, roadmapScan, roadmapFile),
+        gates: out.observations,
+        decision: out.decision,
+        reason: out.reason,
+        notes: out.notes,
+        derivedCompletion: {
+          status: derived.status,
+          completed: derived.completed,
+          conjuncts: derived.conjuncts,
+          reasons: derived.reasons,
+          basisHash: derived.basisHash,
+          verification: derived.verification,
+        },
+        defaultVerifyKeys,
+        queuePredicates: {
+          corpusRoot: plansDir,
+          records: queueRecords.length,
+          draftPlans: queue(draftPlans(queueRecords)),
+          activePlans: queue(activePlans(queueRecords, deriveOpts)),
+          heldPlans: queue(heldPlans(queueRecords)),
+          closedPlans: queue(closedPlans(queueRecords, deriveOpts)),
+          openPlans: queue(openPlans(queueRecords, deriveOpts)),
+          awaitingClosure: queue(awaitingClosure(queueRecords, deriveOpts)),
+        },
+      },
+      null,
+      2,
+    ),
+  );
+  process.exit(out.decision === "allow" ? 0 : 1);
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   if (argv.length === 0) {
@@ -397,6 +648,10 @@ async function main() {
   }
   if (argv.length === 2 && argv[1] === "--verify") {
     await runVerifyMode(argv[0]);
+    return;
+  }
+  if (argv.length === 2 && argv[1] === "--law") {
+    runLawMode(argv[0]);
     return;
   }
   if (argv.length > 1) {
