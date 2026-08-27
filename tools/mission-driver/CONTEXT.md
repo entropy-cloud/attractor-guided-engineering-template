@@ -102,6 +102,8 @@ sourcePaths（依赖模块源码路径，不同同事路径不同）
 
 **效率层四件套完成态（M4 收口）**（age-autonomy M4-WI36，plan `docs/plans/age-autonomy/2026-08-27-0558-3`）：M4 区块 5/5 全勾——agent 池（WI32）+ PromptAssembler 双模式组装（WI33）+ 上下文画像（WI34）+ 独立形态降级 as-built（WI35）全部落地，WI36 三门实测全绿（pool-lifecycle 13/0 · prompt-assembly 16/0 · context-profile 13/0 exit 0）；FRESH vs CONTINUE token 收益观测项缺宿主 env 按括号语义如实留档（「机制落地即收口，收益待观测」，watch-only residual 归运营自然采集）。
 
+**引擎退役判定清单（M5-WI37）**（age-autonomy，plan `docs/plans/age-autonomy/2026-08-27-1023-1`）：P4 判定门工件 `docs/design/age-autonomy/06-engine-retirement-checklist.md`（living decision-gate artifact，00 §7/§8 登记）——引擎职责覆盖矩阵 12 行（transient/循环防护/预算/熔断/reconcile/编排/draft/终态退出码/monitor/marker/L2 parity → 门禁+守夜人覆盖+证据+缺口+判定三态）+ 累积 Deferred D1–D7 裁定（跨步续用维持不交付、reasoningEffort 无载体、BUILD_VERIFY 保留、execute 腿不接线、死会话 claim 不立项、cron seam 完备、marker 删除归退役执行期）+ 总判定 = **引擎留任主后端（条件退役）** + 缺口前置清单 G1–G6；零代码变更，引擎行为零改动。
+
 ## Monitor Dashboard 前端
 
 **技术栈**: Vue 3 + Naive UI 2 + TypeScript + Vite + xterm.js + Pinia（资源监控用 Naive UI 表格，ECharts 已移除）

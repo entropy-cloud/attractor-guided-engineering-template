@@ -89,7 +89,7 @@
 | P1 | 法律：门禁族 + 三硬门 + nothing 兜底 + BUILD_VERIFY 机械化 | 零引擎 diff |
 | P2 | 守夜人：Supervisor seam + claim/乐观锁 + 连续队列 | 引擎存续 |
 | P3 | 效率层：池化 + prompt 组装 + 上下文画像 | 插件层 |
-| P4 | 引擎退役判定门（可选） | 门禁+supervisor 覆盖缺失机制后评估 |
+| P4 | 引擎退役判定门（可选） | 门禁+supervisor 覆盖缺失机制后评估 → 判定面工件 = [06-engine-retirement-checklist](./06-engine-retirement-checklist.md)（M5-WI37 在库，living decision-gate artifact：覆盖矩阵 + D1–D7 裁定 + 总判定） |
 
 **三硬门**（防净倒退，先于 Supervisor 落地）：审计回执绑定、draft→active 写者身份、完成派生公式。**WI13 证据面注意**：现 plan-status-gate 的证据来自 `_tmp` run-state 子流程文件；frontmatter 化后该证据面失效，P1 的完成门禁是「证据面重建为账本谓词」，不是把 WI13 原样泛化（否则会安静地变成 no-op）。
 
@@ -102,6 +102,7 @@
 | [03-supervisor](./03-supervisor.md) | 守夜人：五职责、连续模式、执行保证、幂等、崩溃恢复 |
 | [04-efficiency](./04-efficiency.md) | 效率层：agent 池化、prompt 组装、上下文画像 |
 | [05-usage](./05-usage.md) | 使用：DSH 形态与独立形态的入口、流程、介入点 |
+| [06-engine-retirement-checklist](./06-engine-retirement-checklist.md) | 引擎退役判定清单（P4 判定门）：职责覆盖矩阵 + 累积 Deferred 裁定记录 + 总判定与缺口前置清单（living decision-gate artifact，非 supported baseline 契约） |
 
 ## 9. 术语表
 
