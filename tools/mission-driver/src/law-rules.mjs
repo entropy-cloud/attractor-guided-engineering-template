@@ -564,6 +564,16 @@ registerRule("plan-completed", planCompletedRule, { structural: true });
 // diagnostic/log face (M5 evaluates physical removal) — this rule owns the
 // action-record face only.
 //
+// M5-WI48 (plan 2026-08-27-2122-2, R6 P1): the allow face gains the roadmap
+// unchecked dimension. When ctx.roadmapText is injected (existing ctx face,
+// gate-check/host-adapter/writer), scanRoadmapLedger counts unchecked work
+// items: >0 strengthens the Deep Audit trigger signal with a
+// `roadmapUnchecked: N` field and the reason records the mandatory-path
+// semantics (a nothing claim is never clean-close evidence while unchecked
+// items exist — deep-audit dispatch is the mandatory path). Zero unchecked =
+// signal byte-identical. Absent roadmapText = the dimension is unobservable
+// and never pretended (02 §2 structural-subset discipline).
+//
 // Enforce-posture ruling (0815-3 Phase 1 Decision): registered enforce. The
 // deny face is a narrow decidable fact (predicate counts over injected plan
 // records), not a matcher judgment call.
@@ -611,6 +621,25 @@ function nothingClaimGuardRule(action, currentFileState, ctx = {}) {
       verdict: "deny",
       reason: `nothing-claim-guard: nothing-to-draft claim denied — visible unfinished work remains (${parts.join("; ")}); finish, hold, or dispatch those plans before claiming there is nothing to draft (02 §4.4)`,
     };
+  }
+  // M5-WI48 roadmap-unchecked dimension: only observable when the roadmap
+  // text is injected; the deny face above is untouched (plan-record
+  // predicates stay the sole deny criteria — this face only strengthens the
+  // allow signal, never blocks it).
+  const roadmapText = typeof ctx.roadmapText === "string" && ctx.roadmapText.length > 0 ? ctx.roadmapText : null;
+  if (roadmapText !== null) {
+    const unchecked = scanRoadmapLedger(roadmapText).counts.unchecked;
+    if (unchecked > 0) {
+      return {
+        verdict: "allow",
+        reason: `nothing-claim-guard: nothing-to-draft claim verified (draftPlans()==0 ∧ activePlans()==0) with ${unchecked} unchecked roadmap work item(s) — Deep Audit trigger signal emitted (dispatch execution = M3/WI26); the deep-audit dispatch is the mandatory path: a nothing claim is never clean-close evidence while unchecked items exist (02 §4.4, M5-WI48)`,
+        trigger: {
+          dispatch: "deep-audit",
+          when: "terminal-claim=nothing-to-draft ∧ draftPlans()==0 ∧ activePlans()==0",
+          roadmapUnchecked: unchecked,
+        },
+      };
+    }
   }
   return {
     verdict: "allow",

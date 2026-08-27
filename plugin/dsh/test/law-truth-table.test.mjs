@@ -1105,7 +1105,7 @@ const NOTHING_POLICY = {
   gates: [{ id: "nothing-claim", match: "action:terminal-claim", rule: "nothing-claim-guard", mode: "enforce" }],
 };
 
-function terminalClaim(content, { plans, actor } = {}) {
+function terminalClaim(content, { plans, roadmapText, actor } = {}) {
   return evaluateGates(
     {
       type: "terminal-claim",
@@ -1113,7 +1113,10 @@ function terminalClaim(content, { plans, actor } = {}) {
       proposedContent: typeof content === "string" ? content : JSON.stringify(content),
       ...(actor ? { actor } : {}),
     },
-    { policy: NOTHING_POLICY, ctx: { ...(plans !== undefined ? { plans } : {}) } },
+    {
+      policy: NOTHING_POLICY,
+      ctx: { ...(plans !== undefined ? { plans } : {}), ...(roadmapText !== undefined ? { roadmapText } : {}) },
+    },
   );
 }
 
@@ -1196,6 +1199,113 @@ test("gate-nothing: draftPlans()==0 ∧ activePlans()==0 allows and emits the De
       dispatch: "deep-audit",
       when: "terminal-claim=nothing-to-draft ∧ draftPlans()==0 ∧ activePlans()==0",
     });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+/* ── 11b. M5-WI48 roadmap-unchecked dimension (plan 2026-08-27-2122-2) ────── */
+/* Three branches pinned: unchecked>0 strengthens the trigger signal with a
+   roadmapUnchecked field + mandatory-path reason; ==0 stays byte-identical;
+   absent roadmapText = the dimension is unobservable and never pretended
+   (02 §2) — the pre-extension outputs regress byte-for-byte.              */
+
+const PRE_EXTENSION_ALLOW_REASON =
+  "nothing-claim-guard: nothing-to-draft claim verified (draftPlans()==0 ∧ activePlans()==0) — Deep Audit trigger signal emitted (dispatch execution = M3/WI26)";
+
+function roadmapTextWithItems({ unchecked = [], checked = [] } = {}) {
+  const lines = ["---", "audit-rounds: 1", "---", "# Roadmap", "", "### M5 — Findings", ""];
+  for (const wi of checked) lines.push(`- [x] ${wi}`);
+  for (const wi of unchecked) lines.push(`- [ ] ${wi}`);
+  lines.push("", "## Deep Audit Record", "");
+  return lines.join("\n");
+}
+
+test("gate-nothing: M5-WI48 roadmapText with unchecked work items + empty plans → allow ∧ trigger carries roadmapUnchecked", () => {
+  const root = tmpProject();
+  try {
+    const records = fixturePlans(root).filter((r) => basename(r.path) === "done-one.md");
+    const roadmapText = roadmapTextWithItems({
+      checked: ["WI47 closed finding"],
+      unchecked: ["WI48 open finding", "WI49 open finding"],
+    });
+    const out = terminalClaim({ kind: "nothing-to-draft" }, { plans: records, roadmapText });
+    assert.equal(out.decision, "allow");
+    assert.match(out.observations[0].reason, /with 2 unchecked roadmap work item\(s\)/);
+    assert.match(out.observations[0].reason, /deep-audit dispatch is the mandatory path: a nothing claim is never clean-close evidence while unchecked items exist/);
+    // rule-level signal shape (the supervisor M3/WI26 consumption face)
+    const rule = getRule("nothing-claim-guard");
+    const verdict = rule.fn(
+      { type: "terminal-claim", path: "_tmp/run-1/terminal-claim.json", proposedContent: JSON.stringify({ kind: "nothing-to-draft" }) },
+      null,
+      { plans: records, roadmapText },
+    );
+    assert.deepEqual(verdict.trigger, {
+      dispatch: "deep-audit",
+      when: "terminal-claim=nothing-to-draft ∧ draftPlans()==0 ∧ activePlans()==0",
+      roadmapUnchecked: 2,
+    });
+    // deny face untouched: with visible draft/active work the claim still
+    // denies even when the roadmap also has unchecked items.
+    const allRecords = fixturePlans(root);
+    const denied = terminalClaim({ kind: "nothing-to-draft" }, { plans: allRecords, roadmapText });
+    assert.equal(denied.decision, "deny");
+    assert.match(denied.reason, /visible unfinished work remains/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("gate-nothing: M5-WI48 all-checked roadmapText → trigger shape unchanged field-by-field (roadmapUnchecked absent)", () => {
+  const root = tmpProject();
+  try {
+    const records = fixturePlans(root).filter((r) => basename(r.path) === "done-one.md");
+    const roadmapText = roadmapTextWithItems({ checked: ["WI47 closed finding"] });
+    const out = terminalClaim({ kind: "nothing-to-draft" }, { plans: records, roadmapText });
+    assert.equal(out.decision, "allow");
+    assert.equal(out.observations[0].reason, PRE_EXTENSION_ALLOW_REASON);
+    const rule = getRule("nothing-claim-guard");
+    const verdict = rule.fn(
+      { type: "terminal-claim", path: "_tmp/run-1/terminal-claim.json", proposedContent: JSON.stringify({ kind: "nothing-to-draft" }) },
+      null,
+      { plans: records, roadmapText },
+    );
+    assert.deepEqual(verdict.trigger, {
+      dispatch: "deep-audit",
+      when: "terminal-claim=nothing-to-draft ∧ draftPlans()==0 ∧ activePlans()==0",
+    });
+    assert.equal(verdict.reason, PRE_EXTENSION_ALLOW_REASON);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("gate-nothing: M5-WI48 roadmapText absent → current outputs byte-identical (unchecked dimension unobservable, not pretended)", () => {
+  const root = tmpProject();
+  try {
+    const records = fixturePlans(root).filter((r) => basename(r.path) === "done-one.md");
+    // plans injected, roadmapText NOT injected → the pre-extension allow face
+    // regresses byte-for-byte (no roadmapUnchecked, no unchecked wording).
+    const rule = getRule("nothing-claim-guard");
+    const verdict = rule.fn(
+      { type: "terminal-claim", path: "_tmp/run-1/terminal-claim.json", proposedContent: JSON.stringify({ kind: "nothing-to-draft" }) },
+      null,
+      { plans: records },
+    );
+    assert.equal(verdict.reason, PRE_EXTENSION_ALLOW_REASON);
+    assert.deepEqual(verdict.trigger, {
+      dispatch: "deep-audit",
+      when: "terminal-claim=nothing-to-draft ∧ draftPlans()==0 ∧ activePlans()==0",
+    });
+    // plan records not injected (structural-subset face) → the existing
+    // unverified-writer note regresses byte-for-byte even though the roadmap
+    // dimension exists in the corpus — records check takes precedence.
+    const noRecords = terminalClaim({ kind: "nothing-to-draft" });
+    assert.equal(noRecords.decision, "allow");
+    assert.equal(
+      noRecords.observations[0].reason,
+      "nothing-claim-guard: plan records not injected on this face — draftPlans()/activePlans() not observable, not claiming verification (02 §2 structural-subset discipline; the supervisor face injects ctx.plans, M3/WI26)",
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
