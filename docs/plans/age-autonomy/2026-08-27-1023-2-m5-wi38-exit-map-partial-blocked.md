@@ -49,15 +49,15 @@ Skill: none
 - Item Types: `Decision | Add`
 - Prereqs: none
 
-- [ ] Decision: 退出码选型——提案 `partial: 3, blocked: 3`（同一「终态非完成、需人工处置」类，补救路径同为 unlock/dispose 等人工裁定）。备选否决：复用 2（预算/上限保护族语义与补救路径不同——重跑 vs 人工处置，混淆 CI 判读）；分离 3/4（今日零消费面区分，monitor/status 显示终态词本身）；映射 1（非不可恢复失败，CI 语义误报）；维持 fall-through exit 0（违反 03 §8「不得静默」纪律）。残险：未来需区分两码时须再走一次独立立项——重开触发 = 出现按退出码分支的真实消费者。
-- [ ] Add: `exit-map.js` 增两行 + 头注更新（supervisor 终态词入表理由 = 前瞻防护独立形态暴露面；`skipped`/动态词 fall-through 语义不动）。
-- [ ] Add: `EXECUTION-PRINCIPLE.md` §11 表增两行（触发 = 守夜人终态词经独立形态暴露 / 状态 = `partial`|`blocked` / exit code = 3 / 含义 = 终态非完成需人工处置）+ 表首或表尾语义句（词源守夜人 R1–R4，引擎存续期不发射）。
+- [x] Decision: 退出码选型——提案 `partial: 3, blocked: 3`（同一「终态非完成、需人工处置」类，补救路径同为 unlock/dispose 等人工裁定）。备选否决：复用 2（预算/上限保护族语义与补救路径不同——重跑 vs 人工处置，混淆 CI 判读）；分离 3/4（今日零消费面区分，monitor/status 显示终态词本身）；映射 1（非不可恢复失败，CI 语义误报）；维持 fall-through exit 0（违反 03 §8「不得静默」纪律）。残险：未来需区分两码时须再走一次独立立项——重开触发 = 出现按退出码分支的真实消费者。
+- [x] Add: `exit-map.js` 增两行 + 头注更新（supervisor 终态词入表理由 = 前瞻防护独立形态暴露面；`skipped`/动态词 fall-through 语义不动）。
+- [x] Add: `EXECUTION-PRINCIPLE.md` §11 表增两行（触发 = 守夜人终态词经独立形态暴露 / 状态 = `partial`|`blocked` / exit code = 3 / 含义 = 终态非完成需人工处置）+ 表首或表尾语义句（词源守夜人 R1–R4，引擎存续期不发射）。
 
 Exit Criteria:
 
-- [ ] EXIT_MAP 新 13 键与 §11 表逐行一致（人工对照 + Phase 2 测试钉住双面）
-- [ ] `git diff --stat tools/mission-driver/src/engine.js` 为空（零引擎行为 diff）
-- [ ] EXECUTION-PRINCIPLE §11 已更新（本 Phase Targets，owner-doc 同 change 落地）
+- [x] EXIT_MAP 新 13 键与 §11 表逐行一致（人工对照 + Phase 2 测试钉住双面）
+- [x] `git diff --stat tools/mission-driver/src/engine.js` 为空（零引擎行为 diff）
+- [x] EXECUTION-PRINCIPLE §11 已更新（本 Phase Targets，owner-doc 同 change 落地）
 
 ## Phase 2 — 测试钉住 + 回写
 
@@ -67,16 +67,16 @@ Skill: none
 - Item Types: `Add | Proof`
 - Prereqs: Phase 1
 
-- [ ] Add: `exit-map.test.js` 增用例 ≥4——`partial`→3 / `blocked`→3 / 既有 11 键逐行回归（含 `single_step_done`→0 与四类 2 码族）/ `skipped` 与未映射动态词 fall-through exit 0 语义注记与头注一致性断言。
-- [ ] Proof: `pnpm --prefix tools/mission-driver test` 0 失败（944 基线只增不减）+ `./verify-age.sh` L1+L2+L2.5 GREEN（引擎契约变更零插件面破坏）。
-- [ ] Add: 03-supervisor.md §8 changelog 注记（映射纪律的独立立项兑现——M5-WI38，exit 3 选型与理由一句）；CONTEXT.md「构建与验证」或关键约束面增量句；roadmap WI38 勾选 + 行内证据注记 + `> Last Updated` 头同步；`docs/logs/2026/08-27.md` 条目。
+- [x] Add: `exit-map.test.js` 增用例 ≥4——`partial`→3 / `blocked`→3 / 既有 11 键逐行回归（含 `single_step_done`→0 与四类 2 码族）/ `skipped` 与未映射动态词 fall-through exit 0 语义注记与头注一致性断言。
+- [x] Proof: `pnpm --prefix tools/mission-driver test` 0 失败（944 基线只增不减）+ `./verify-age.sh` L1+L2+L2.5 GREEN（引擎契约变更零插件面破坏）。
+- [x] Add: 03-supervisor.md §8 changelog 注记（映射纪律的独立立项兑现——M5-WI38，exit 3 选型与理由一句）；CONTEXT.md「构建与验证」或关键约束面增量句；roadmap WI38 勾选 + 行内证据注记 + `> Last Updated` 头同步；`docs/logs/2026/08-27.md` 条目。
 
 Exit Criteria:
 
-- [ ] `exit-map.test.js` 新用例全绿且覆盖四断言面（新行/逐行回归/fall-through/头注一致）
-- [ ] roadmap WI38 `[x]` + 证据指针在册；03 §8 changelog + CONTEXT.md 增量在册
-- [ ] 双验证命令实测绿（test 0 失败 / verify-age 三段 GREEN）
-- [ ] `docs/logs/` updated
+- [x] `exit-map.test.js` 新用例全绿且覆盖四断言面（新行/逐行回归/fall-through/头注一致）
+- [x] roadmap WI38 `[x]` + 证据指针在册；03 §8 changelog + CONTEXT.md 增量在册
+- [x] 双验证命令实测绿（test 0 失败 / verify-age 三段 GREEN）
+- [x] `docs/logs/` updated
 
 ## Draft Review Record
 
@@ -85,4 +85,10 @@ Exit Criteria:
 
 ## Verification
 
+- pass test 2026-08-26-130203-mission-driver basisHash=778fb8df35897d9219a82ba4086cfcc1fee234d414f0b7154ca2ca3c07a19f24 exit=0
+- pass verify-age 2026-08-26-130203-mission-driver basisHash=778fb8df35897d9219a82ba4086cfcc1fee234d414f0b7154ca2ca3c07a19f24 exit=0
+
 ## Closure
+
+- dispatch audit #audit-2026-08-26-130203-mission-driver-2026-08-27-1023-2-m5-wi38-exit-map-partial-blocked-1-95411f18 to ses_auditor_2026-08-27-1023
+- accepted #audit-2026-08-26-130203-mission-driver-2026-08-27-1023-2-m5-wi38-exit-map-partial-blocked-1-95411f18：独立闭合审计通过（冷复核非信任勾选）。逐项实测：`src/exit-map.js` EXIT_MAP 13 键含 `partial: 3, blocked: 3`（rg 行级核对）+ 头注 supervisor 词源/fall-through carve-out 在册；`EXECUTION-PRINCIPLE.md` §11 表两新行 + 表尾语义句（词源守夜人 03 §8 R1–R4、引擎 `_result` 存续期不发射、exit 3 与 2/1 分离）逐行同步；plugin assets 副本 `plugin/dsh/assets/src/exit-map.js` 经 build-bundle 同步在库。`test/exit-map.test.js` 19 例——DOCUMENTED 表 13 键 + 「exactly 13」drift guard + M5-WI38 专项 describe（partial→3 / blocked→3 / 既有 11 键逐行回归 / fall-through + 头注一致性）。零引擎行为变更实证：`git status` 变更集不含 `src/engine.js`（零 diff）、双 package.json 零新依赖、monitor web 零触碰。回写面核验——roadmap WI38 `[x]` + 行内证据注记 + `> Last Updated`「M5 第二片」句、03-supervisor §8 changelog 独立立项兑现条、CONTEXT.md 关键约束 13 键句、`docs/logs/2026/08-27.md` 收口条目均在库。双验证本审计独立复跑实测绿：`pnpm --prefix tools/mission-driver test` 953/953 0 失败 exit=0（prompt-check OK）+ `./verify-age.sh` L1+L2+L2.5 GREEN exit=0（引擎 953 · 插件 420 · 真值表 116，947 基线 +6 只增不减）。完成公式五合取满足（status active ∧ 13 项全勾 ∧ verify 两键 pass 行 basisHash 与当前基一致 ∧ Closure dispatch/accepted 同 id 配对）；范围外注记（06 清单行 #9/G3 措辞过时归 WI37 后继 doc-sync）不属本 plan Targets，无 in-scope 缺陷藏入 Deferred。

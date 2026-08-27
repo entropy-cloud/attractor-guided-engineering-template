@@ -164,6 +164,7 @@ pre-commit hook（age-autonomy M2-WI23）：对暂存区 `docs/plans/**/*.md`（
 - `extends` 为浅合并——嵌套对象（如 `commands`）整体替换，非深度合并
 - Windows 环境：Git Bash 启动脚本
 - 监控端口默认 9300，冲突时自动 +1 重试
+- `EXIT_MAP` 现行 **13 键**冻结契约（M5-WI38，plan `2026-08-27-1023-2`）：`partial`/`blocked` → exit 3 = 新退出码类「终态非完成、需人工处置」——词源守夜人终态（03-supervisor §8 R1–R4），引擎 `_result` 存续期不发射，入表 = 前瞻防护独立形态暴露面落入「未映射词 → exit 0」通道（03 §8 终态映射纪律的独立立项变更，与 EXECUTION-PRINCIPLE §11 逐行同步、`test/exit-map.test.js` 钉住）；`skipped`/动态 done 词仍有意不映射（Node 默认 exit 0）
 - draft-robustness WI5（mdr-remediate-4 后扩展到非-forEach 分支）：subflow step 的 `subflowRuns` 在 `_executeSubflowStep` 中，无论 forEach 还是单子流程，都在子流程开始前写入 `status: "running"` placeholder（`_wfAppendSubflowRun`，镜像 `_onAgentStepUpdate` 模式但额外匹配 `visits` 以避免 re-entry 串味），forEach 每项完成后增量追加、子流程结束后由 `_wfClose` 用终态覆盖 placeholder，父进程中途被杀时 run-state 仍反映"在跑"或已完成项（不依赖 monitor fallback 扫描磁盘 `run-state-<stepName>-<visits>-<i>.json` 文件）。`_wfClose` 仍是最终真相（forEach 结束时 sort + 覆盖 placeholder）。与 step-audit mission 的 WI5（auditRound / maxAuditRounds 计数，见上方 Monitor Dashboard 段）同名但分属不同 mission。
 
 
