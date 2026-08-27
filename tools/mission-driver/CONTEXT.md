@@ -62,7 +62,7 @@ model, parseModel, agent, maxCycles, planGuide, auditsDir, contextDir, moduleDir
 sourcePaths（依赖模块源码路径，不同同事路径不同）
 ```
 
-`mission-check.mjs` 中的 `resolveExtends` 实现浅合并链。`validateMission` 仅校验 `name/roadmapPath/plansDir/commands.test`——缺失 `roadmapPath` 的文件（如 base 配置）被 monitor.js 的 `GET /api/configs` 自动过滤。
+`mission-check.mjs` 中的 `resolveExtends` 实现浅合并链。`validateMission` 仅校验 `name/roadmapPath/plansDir/commands.test`——缺失 `roadmapPath` 的文件（如 base 配置）被 monitor.js 的 `GET /api/configs` 自动过滤。monitor 三个配置读面（`readMissionConfig`/`handleListConfigs`/`handleGetRoadmap`）统一经导出面 `loadMission` 消费同一 extends 合并（零第二合并实现；display 面不传 `projectRoot` 跳过路径存在性校验，无效 mission throw → null/skip 优雅退化——age-autonomy M5-WI40 P2），继承 mission 在 dashboard configs/roadmap/plans 各 API 面显示有效合并配置。
 
 **可选 mission 字段 `promptsDir`**（mdr-fix-2）：mission 可独立覆盖整套 prompt。Prompt 解析优先级链（高→低）：`mission.promptsDir` → `missions/prompts/`（全仓库共享覆盖）→ 内置 `TOOL_ROOT/prompts/`（`flow-loader.js loadPrompt` 兜底）。主流程（`createMissionDriverFlow`）与子流程（`loadSubFlow`）均读 `config.missionPromptsDir`（`config.js` 解析为绝对路径或空串），未设置时行为与旧版完全一致。`promptsDir` 为可选字段（不在 `REQUIRED_FIELDS`），但若设置则由 `mission-check.mjs` 校验路径存在（typo fail-fast，同 `moduleDir`/`contextDir`）。
 
