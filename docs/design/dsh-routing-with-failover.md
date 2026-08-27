@@ -40,7 +40,7 @@ DSH 插件形态下，in-process child agent 有机会在**调用前 / 失败后
 | flash-godmode: complexity-dispatched 引导 | §4 tier 量化标定 |
 | routing-suite (yjh051108): junction + 路由自愈 | §9 mission wait-check 步（自愈语义） |
 | fork-to-preset: 路由 UI 完全委托 host | §5 dispatcher 接口的 UI seam |
-| model-catalog: 探测 → 换算 → 配置生成 | §4 tier 候选列表的初始化 |
+| model-catalog: 探测 → 换算 → 配置生成 | §4.2 启动时拉 DSH 模型清单校验（在线版本，替代离线探测） |
 
 ## 2. 范围与非目标
 
@@ -59,7 +59,8 @@ DSH 插件形态下，in-process child agent 有机会在**调用前 / 失败后
 - ❌ 跨 provider 的统一 ModelID 抽象（reject model-router 主形态——AGE 不绑 DSH-V4）
 - ❌ prompt-level 路由（reject routing-suite-dragonbaba——边际效益低）
 - ❌ runtime injector（reject routing-suite-yjh051108——Cordis 特有）
-- ❌ 模型目录自动发现（reject model-catalog 主体——配置生成阶段已离线做）
+- ❌ 自己配置 provider（base_url / auth / 调用形态）—— DSH 已经托管
+- ❌ 模型目录离线自动发现（reject model-catalog 主体）—— DSH Settings → Models 已是真实源
 - ❌ "per-call override" 的强 UI（adapt routed-subagent，但只做 dispatch 注解，不做 user-facing UI）
 
 ## 3. 架构总览
@@ -118,33 +119,16 @@ DSH 插件形态下，in-process child agent 有机会在**调用前 / 失败后
 
 ### 4.2 tier 候选列表配置
 
-候选身份用 `provider/model` 字符串（OpenRouter / LiteLLM 惯例）。provider 配置（base_url / auth / 调用形态）独立放在 `providers` 段，避免重复——同一 provider 的多个 model 共用同一组连接配置。
+**关键简化**：候选身份直接用 **DSH 原生 model ID**（用户在 DSH `Settings → Models` 已配好的 ModelID）。我们不重新声明 provider 配置（base_url / auth / 调用形态）—— DSH 已经托管。
 
 ```jsonc
 // missions/base.json (新增字段)
 {
   "routing": {
-    "providers": {
-      "deepseek": {
-        "kind": "openai-compat",
-        "base_url": "https://api.deepseek.com",
-        "auth_env": "DEEPSEEK_API_KEY"
-      },
-      "anthropic": {
-        "kind": "anthropic-native",
-        "base_url": "https://api.anthropic.com",
-        "auth_env": "ANTHROPIC_API_KEY"
-      },
-      "openai": {
-        "kind": "openai-native",
-        "base_url": "https://api.openai.com",
-        "auth_env": "OPENAI_API_KEY"
-      }
-    },
     "tiers": {
       "strong": {
         "candidates": [
-          "deepseek/deepseek-reasoner",
+          "deepseek/deepseek-reasoner",     // ← DSH ModelID（用户已在 DSH Settings 配置）
           "anthropic/claude-opus-4",
           "openai/gpt-5"
         ]
@@ -172,13 +156,39 @@ DSH 插件形态下，in-process child agent 有机会在**调用前 / 失败后
 }
 ```
 
-**解析约束**（必须钉住）：
-- `candidates` 字符串只切**第一个 `/`** 作为 provider/model 分隔符
-- provider 名约束**不含 `/`**
-- model 名约束**不含 `/`**（HuggingFace 风格 provider 一律走 `hf:org/model` 等带 prefix 形式，避免与分隔符冲突）
-- `providers.<name>` 必须存在；不存在 → 启动时报错，不静默跳过
+**职责分离**（必须钉住）：
 
-### 4.3 tier 选择标注
+| 关注点 | 归属 |
+| --- | --- |
+| ModelID 列表（哪些模型可用） | DSH（用户在 `Settings → Models` 配） |
+| Provider 连接配置（base_url / auth / 调用形态） | DSH（与 ModelID 绑定） |
+| "这个 tier 用哪几个 model" | 本插件（`missions/base.json:routing.tiers`） |
+| "当前哪个 model 处于什么状态" | 本插件（`.age/routing-state.json`） |
+
+**校验约束**（必须钉住）：
+- 启动时调用 DSH 模型清单 API（如 `ctx.models.list()`），遍历 `tiers.*.candidates`
+- 任一 candidate 不在 DSH 清单 → **报错退出**（不静默跳过），避免运行时才发现
+- 用户在 DSH 删除某 model 但 candidates 还引用 → 启动时报错并指出哪个 tier 哪个 model
+- provider/model 格式与 DSH 保持一致（DSH 用什么格式我们就用什么，不做转换）
+
+### 4.3 模型发现工具（CLI / UI）
+
+方便用户填写 tier 时知道 DSH 当前有哪些 model：
+
+```bash
+# standalone 形态
+mission-driver routing list-models
+# 输出:
+#   deepseek/deepseek-chat        healthy
+#   deepseek/deepseek-reasoner    healthy
+#   deepseek/deepseek-flash       cooling (58s left)
+#   anthropic/claude-sonnet-4     healthy
+#   openai/gpt-5                  quota_blocked (4h 23min left)
+```
+
+DSH plugin 形态下，UI 提供"Models" 面板 + 拖拽到 tier 的可视化配置。
+
+### 4.4 tier 选择标注
 
 dispatcher（即 step executor 在派发任务给 driver 之前）从 flow step 的 `tier` 字段读取：
 
@@ -199,9 +209,9 @@ dispatcher（即 step executor 在派发任务给 driver 之前）从 flow step 
 
 | 路径 | 形态 | 说明 |
 | --- | --- | --- |
-| **CLI flag** | standalone | `mission-driver.sh --tier strong ...` 或 step JSON 内 `{{routing.selected_model}}` 占位 |
-| **Plugin API** | DSH plugin 形态 | 在 DSH 中暴露 `routing.select(tier) → {provider, model}` 与 `routing.report_failure(...)` 函数 |
-| **Wire protocol** | 进程边界 | driver subprocess 启动时通过 `--routing-state path/to/state.json` 注入当前候选；driver 失败时通过 exit code 或 stderr 标记回传（沿用 mission-driver 现有 `<AI_STEP_RESULT>` 标记扩展） |
+| **CLI flag** | standalone | `mission-driver.sh --tier strong ...` 或 step JSON 内 `{{routing.selected_model}}` 占位（值为 DSH ModelID 字符串） |
+| **Plugin API** | DSH plugin 形态 | 在 DSH 中暴露 `routing.select(tier) → ModelId` 与 `routing.report_failure(modelId, error)` 函数；model id 透传给 `ctx.llm.call({ model: id, ... })` |
+| **Wire protocol** | 进程边界 | driver subprocess 启动时通过 `--model <ModelId>` 注入当前候选；driver 失败时通过 exit code 或 stderr 标记回传（沿用 mission-driver 现有 `<AI_STEP_RESULT>` 标记扩展） |
 
 ### 5.2 dispatcher 主流程
 
@@ -232,35 +242,25 @@ function dispatchStep(step):
 
 ```ts
 // pseudocode（参考 dsh-model-router §2.2 与 dsh-delegate-router decideRoute）
-function select(tier: string, exclude: Set<ModelId>): ModelPick | null {
+function select(tier: string, exclude: Set<ModelId>): ModelId | null {
   const tierDef = tiers[tier];
   const now = Date.now();
-  for (const id of tierDef.candidates) {       // id 是 "provider/model" 字符串
+  for (const id of tierDef.candidates) {       // id 是 DSH ModelID 字符串
     if (exclude.has(id)) continue;
     const state = registry.get(id);
     if (!state) {
       // 未观测过 → 默认健康
-      return parseCandidate(id);
+      return id;
     }
-    if (state.status === 'healthy') return parseCandidate(id);
+    if (state.status === 'healthy') return id;
     if (state.until > now) continue;            // 仍在冷却/quota 期内
-    return parseCandidate(id);                  // 冷却过期 → 重新尝试
+    return id;                                  // 冷却过期 → 重新尝试
   }
   return null;                                  // 整档不可用
 }
-
-function parseCandidate(id: string): ModelPick {
-  // 只切第一个 "/"；切完后去 providers[id.provider] 拿连接配置
-  const slash = id.indexOf('/');
-  if (slash <= 0) throw new ConfigError(`bad candidate: ${id}`);
-  const provider = id.slice(0, slash);
-  const model    = id.slice(slash + 1);
-  if (!model) throw new ConfigError(`empty model in: ${id}`);
-  const cfg = providers[provider];
-  if (!cfg) throw new ConfigError(`unknown provider: ${provider}`);
-  return { id, provider, model, ...cfg };
-}
 ```
+
+> candidates 字符串就是 DSH ModelID，**不做解析/转换**，整体作为 `ctx.models.call(modelId, ...)` 的入参传给 DSH。Provider 归属、auth、base_url 全部由 DSH 处理。
 
 ## 6. 模型 registry 与失败语义
 
@@ -438,8 +438,9 @@ monitor dashboard 增加：
 | D8 | 状态持久化到 `.age/routing-state.json` | mission-driver run-state 内嵌 / SQLite | 沿用 mission-driver 的"git + JSON"事实源原则；单独文件便于跨 mission 共享状态 |
 | D9 | 状态变更写账本 `.age/routing-ledger.jsonl` | 不写 / 写 SQLite | append-only JSONL 与 mission-driver memory 目录同形；monitor 读它做面板 |
 | D10 | 不实现 prompt-level routing | 实现 / 部分实现 | routing-suite-dragonbaba 调研结论：边际效益低，README 自承"不改模型/不换工具/不多发调用"——影响仅 1 句引导 |
-| D11 | candidates 用 `provider/model` 字符串（不拆 `{provider, model}` 对象） | 对象结构 / 完全独立 | 与 OpenRouter / LiteLLM 惯例一致；registry key / 账本 / monitor 全部统一字符串；provider 连接配置独立抽到 `providers.*` 段避免同 provider 多 model 重复配置 |
-| D12 | 解析只切第一个 `/`；provider/model 名约束不含 `/` | 支持任意 `/` / 用不同分隔符（`::` / `@`） | OpenRouter 惯例；边界情况（HF 风格 `org/model`）通过 provider-side prefix（`hf:org/model`）绕开 |
+| D11 | 配置 candidate 时直接使用 DSH 的 ModelID 字符串，不自管 provider / auth / base_url | 自管 provider 段 | DSH 已托管这些；自管是重复造轮子且会与 DSH 配置漂移 |
+| D12 | candidates 用 DSH 原生 ModelID 字符串（沿用 DSH 格式，可能是 `provider/model` 或纯 model name） | 强制某种格式 / 自定义格式 | 与 DSH 100% 一致；registry key / 账本 / monitor 全部用同一字符串，不做转换 |
+| D13 | 启动时校验：candidates 必须在 DSH 模型清单中存在 | 静默跳过 / 运行时校验 | 失败 fail-fast；DSH 删除某 model 时立刻知道哪个 tier 失效 |
 
 ## 11. 待澄清问题（实现前必须回答）
 
@@ -450,8 +451,10 @@ monitor dashboard 增加：
 | Q3 | mission 模式下挂起的 driver 进程是否能"真正 pause"（vs kill+restart）？ | pause-by-suspend-signal / kill-and-recreate | §8.4 恢复语义 |
 | Q4 | wait-check 期间 monitor 是否仍可用？SSE 心跳如何兼容？ | 独立心跳通道 / 共用 SSE | §8.5 UI 形态 |
 | Q5 | 跨 mission 的状态共享边界在哪？ | 全局 / per-project / per-user | §6.4 持久化 |
-| Q6 | tier 选择失败时（flow step 标的 tier 不存在），fallback 到哪？ | default_tier / 报错 | §4.3 fallback |
+| Q6 | tier 选择失败时（flow step 标的 tier 不存在），fallback 到哪？ | default_tier / 报错 | §4.4 fallback |
 | Q7 | "max_retries_per_step" 的语义是"尝试 N 个不同模型"还是"尝试 N 次同一模型"？ | 不同模型 | §5.2 |
+| Q8 | DSH 原生 ModelID 的格式到底是什么？纯 model name / `provider/model` / UUID？影响 candidates 字符串写法 | 需要查 DSH 模型清单 API 实际返回 | §4.2 / §4.3 / D12 |
+| Q9 | DSH 是否暴露模型清单 API（如 `ctx.models.list()`）？如果不暴露，是否需要从 `Settings → Models` UI 反向解析？ | 需要 DSH host API 调研 | §4.2 校验 / §4.3 发现工具 |
 
 ## 12. 采纳计划（与 AGE WI 对齐）
 
@@ -472,8 +475,8 @@ monitor dashboard 增加：
 | dsh-vision-router | content-type 触发 provider 改写（可叠加） | §5.3 扩展点 |
 | dsh-routed-subagent | per-call override + precheck | §5.2 dispatcher 接口 |
 | dsh-fork-to-preset | UI 完全委托 host 的 seam 设计参考 | §5.1 |
-| dsh-flash-godmode | complexity dispatch 的"显式标注"反例（避免 silent 切模） | §4.3 + D2 |
-| dsh-model-catalog | tier 候选列表的离线配置生成（前置依赖） | §4.2 |
+| dsh-flash-godmode | complexity dispatch 的"显式标注"反例（避免 silent 切模） | §4.4 + D2 |
+| dsh-model-catalog | 在线版替代：拉 DSH `ctx.models.list()` 作为真实源，不再做离线探测 | §4.2 / §4.3 |
 | dsh-routing-suite (yjh051108) | 自愈语义 + junction 思路（吸收为 wait-check 步的自愈循环） | §8 |
 | dsh-routing-suite-dragonbaba | prompt-level 路由的负价值证据（reject） | §10 D10 |
 
