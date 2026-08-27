@@ -1,0 +1,13 @@
+{
+  "extends": "base",
+  "name": "multi-plugin-dsh",
+  "description": "将 DSH 插件生态从单 plugin（plugin/dsh/）重构为多 plugin 目录（plugin/nop-xxx/），原 plugin 改名为 nop-age，新增 nop-route 插件（智能路由/重试/模型选择），并提供 sh + manifest 的统一启动加载脚本。设计文档见 docs/design/multi-plugin-dsh-architecture.md，roadmap 见 docs/backlog/multi-plugin-dsh-roadmap.md。",
+  "flowName": "mission-driver",
+  "roadmapPath": "docs/backlog/multi-plugin-dsh-roadmap.md",
+  "plansDir": "docs/plans/age-autonomy",
+  "planGuide": "docs/plans/00-plan-authoring-and-execution-guide.md",
+  "auditsDir": "docs/audits/multi-plugin-dsh",
+  "contextDir": "docs/context",
+  "moduleDir": "plugin",
+  "commitFormat": "<type>(multi-plugin-dsh): <description>"
+}
