@@ -248,6 +248,13 @@ interface PoolMember {
    * conservative P2 posture — never guess in-session state).
    */
   sentHashes: MemberHashLedger
+  /**
+   * M4-WI34: the member's host agent handle (session-events accessor for
+   * the context-profile collector — `agent.session?.events`, the
+   * native-executor precedent shape). Zero pool-semantic change: nothing
+   * else reads it; disposed members read as no-events.
+   */
+  sessionEvents: () => unknown[]
 }
 
 export interface PoolAcquireOutcome {
@@ -301,6 +308,13 @@ export interface AgentPoolFace {
   rolesOf(sessionId: string): PoolRole[]
   /** sessions carrying the executor role tag (the red-line registry leg). */
   executorSessions(): string[]
+  /**
+   * M4-WI34 (04 §4 data source 1): the live members' session-event arrays
+   * (the context-profile collector's DSH leg — tool/call events; the
+   * face-only `{id, followup}` contract gains NO member-creation change,
+   * the handle is simply retained). Disposed members contribute nothing.
+   */
+  memberSessionEvents(): unknown[][]
   /**
    * Generation judgment (04 §2.3): false = same generation (current member —
    * resume/reuse legal); true = cross-generation (revoked / rotated /
@@ -444,6 +458,10 @@ export function createAgentPool(options: {
       stopIdleTimer: () => {},
       disposed: false,
       sentHashes: new Map<string, string>(),
+      sessionEvents: () => {
+        const session = (handle.agent as { session?: { events?: unknown[] } }).session
+        return Array.isArray(session?.events) ? session.events : []
+      },
     }
     created.stopIdleTimer = armIdleTimer(poolKey, created, idleTtlMinutes)
     entry.member = created
@@ -504,6 +522,13 @@ export function createAgentPool(options: {
       const out: string[] = []
       for (const [sessionId, roles] of sessionRoles) {
         if (roles.has('executor')) out.push(sessionId)
+      }
+      return out
+    },
+    memberSessionEvents() {
+      const out: unknown[][] = []
+      for (const entry of pools.values()) {
+        if (entry.member !== null && !entry.member.disposed) out.push(entry.member.sessionEvents())
       }
       return out
     },

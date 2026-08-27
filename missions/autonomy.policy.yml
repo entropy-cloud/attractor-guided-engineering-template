@@ -172,6 +172,13 @@ agents:
     fixedPrefix:
       - { kind: text, ref: "{{projectRoot}}/AGENTS.md" }
       - { kind: file, ref: "{{projectRoot}}/docs/context/project-context.md", maxFileBytes: 60000 }
+      # context-profile block (M4-WI34, plan docs/plans/age-autonomy/
+      # 2026-08-27-0558-1 — 04 §4): expands to the profile's top-N stable
+      # files (docs/references/context-profile.json, project-owned; first
+      # start seeds from the AGENTS.md Read This First list; run-terminal
+      # mining updates it with debounce). topN default 5, DSL-overridable
+      # per agent. P8 exception = this plan active (the 0433-3 precedent).
+      - { kind: profile, ref: "{{projectRoot}}/docs/references/context-profile.json", topN: 5 }
     model: { provider: zhipuai, model: glm-5.2, reasoningEffort: default }
   # reviewer pooled (M4-WI32, plan docs/plans/age-autonomy/2026-08-27-0433-2
   # Phase 1 Decision): mirror the drafter precedent — same-group sequential

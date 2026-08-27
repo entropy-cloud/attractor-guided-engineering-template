@@ -1,7 +1,7 @@
 /**
  * prompt-assembler.ts — the efficiency-layer prompt assembler (age-autonomy
  * M4-WI33, plan `docs/plans/age-autonomy/2026-08-27-0433-3`;
- * 04-efficiency §3).
+ * 04-efficiency §3; M4-WI34 adds the profile block kind, 04 §4).
  *
  * DUAL-MODE ASSEMBLY (04 §3.1):
  *   assemble('FRESH', spec, dynamicCtx, ledger, io)
@@ -27,6 +27,14 @@
  * embed every top-level file under a dir (kind dir + per-file
  * maxFileBytes cap; an over-cap file gets an EXPLICIT exclusion note,
  * never a silent truncation).
+ *
+ * PROFILE BLOCKS (M4-WI34, 04 §4): `{ kind: profile, ref, topN? }` — the
+ * context-profile artifact's top-N stable files (reads desc, path asc)
+ * expand into per-file records riding every FILE semantic unchanged
+ * (stamp / cap / hash ledger / CONTINUE dedup). Fail-soft: a missing or
+ * unknown-version artifact renders one explicit note. Explicit DSL
+ * declaration ONLY — agents without a profile block keep byte-identical
+ * prompts (the backward-compat pin).
  *
  * HASH LEDGER, three uses (04 §3.3): ① dedup — CONTINUE skips files whose
  * hash matches the ledger; ② stale detection — a dispatch-time hash
@@ -55,7 +63,9 @@
  */
 import { createHash } from 'node:crypto'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import { DEFAULT_EMBED_STAMP, resolvePolicyPlaceholders } from '../../assets/src/law-policy.mjs'
+import { readProfileForEmbed } from './context-profile.ts'
 
 // ── faces ────────────────────────────────────────────────────────────────────
 
@@ -90,11 +100,23 @@ export const fsAssemblerIo: AssemblerIo = {
   },
 }
 
-/** One fixedPrefix block (the law-policy FIXED_PREFIX schema shape, resolved). */
+/**
+ * One fixedPrefix block (the law-policy FIXED_PREFIX schema shape, resolved).
+ * M4-WI34 adds the fourth kind `profile`: `{ kind: profile, ref, topN? }` —
+ * the ref points at the context-profile ARTIFACT; resolution pins
+ * `profileRoot` (the repo root the artifact's repo-relative entries resolve
+ * against); `filesOfBlock` expands it to the top-N stable FILE records
+ * (every downstream semantic — embedStamp, maxFileBytes cap, hash-ledger
+ * dedup/rotation — applies to each expanded file unchanged).
+ */
 export interface AssemblyBlock {
-  kind: 'text' | 'file' | 'dir'
+  kind: 'text' | 'file' | 'dir' | 'profile'
   ref: string
   maxFileBytes?: number
+  /** profile kind: the expansion bound (default 5 — law-policy schema face). */
+  topN?: number
+  /** profile kind: repo root for the artifact's repo-relative entries (set at resolution). */
+  profileRoot?: string
 }
 
 /** The assembler spec: resolved blocks + the (optional) stamp override. */
@@ -188,7 +210,13 @@ export function resolveAssemblyBlocks(
   blocks: AssemblyBlock[],
   ctx: { projectRoot?: string; plansDir?: string; roadmapPath?: string },
 ): AssemblyBlock[] {
-  return blocks.map((b) => ({ ...b, ref: resolvePolicyPlaceholders(b.ref, ctx) }))
+  return blocks.map((b) => ({
+    ...b,
+    ref: resolvePolicyPlaceholders(b.ref, ctx),
+    // M4-WI34: profile blocks carry the repo root so their repo-relative
+    // entries can resolve at expansion time (filesOfBlock)
+    ...(b.kind === 'profile' && typeof ctx.projectRoot === 'string' && ctx.projectRoot !== '' ? { profileRoot: ctx.projectRoot } : {}),
+  }))
 }
 
 interface ResolvedFile {
@@ -197,13 +225,26 @@ interface ResolvedFile {
   overCap: boolean
 }
 
-/** Materialize one block into per-file records (dir-expanded, sorted). */
+/** Materialize one block into per-file records (dir/profile-expanded, sorted). */
 function filesOfBlock(block: AssemblyBlock, io: AssemblerIo): { files: ResolvedFile[]; notes: string[] } {
   const notes: string[] = []
   const cap = typeof block.maxFileBytes === 'number' ? block.maxFileBytes : null
   const one = (path: string): ResolvedFile => {
     const content = io.readTextFile(path)
     return { path, content, overCap: content !== null && cap !== null && Buffer.byteLength(content, 'utf8') > cap }
+  }
+  if (block.kind === 'profile') {
+    // M4-WI34 (04 §4): the profile block expands to its top-N stable files
+    // (reads desc, path asc). Every expanded file rides the FILE semantics —
+    // stamp, cap, hash ledger, CONTINUE dedup — unchanged. Fail-soft: an
+    // unusable artifact (missing / unknown version / no repo root) renders
+    // ONE explicit note, never a crash (the assembler discipline).
+    if (typeof block.profileRoot !== 'string' || block.profileRoot === '') {
+      return { files: [], notes: [`[prompt-assembler] profile block ${block.ref} has no projectRoot in the assembly context — entries unresolvable (not embedded)`] }
+    }
+    const loaded = readProfileForEmbed(io, block.ref, block.topN)
+    if (!loaded.ok) return { files: [], notes: [loaded.note!] }
+    return { files: loaded.entries.map((e) => one(join(block.profileRoot!, e.path))), notes }
   }
   if (block.kind === 'dir') {
     const entries = io.listDirEntries(block.ref)

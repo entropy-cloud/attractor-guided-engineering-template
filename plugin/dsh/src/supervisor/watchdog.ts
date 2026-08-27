@@ -92,6 +92,7 @@ import {
 import type { TriggerHit } from './trigger-eval.ts'
 import { runRecoveryScan, type RecoveryAgentsFace } from './recovery.ts'
 import { createAgentPool, executorSessionsOf, type AgentPoolFace } from '../efficiency/agent-pool.ts'
+import { fsMiningIo, mineContextProfile, type MiningIo } from '../efficiency/context-profile.ts'
 import { discoverLawContext, fsLawGateIo, type LawGateIo, type MissionLawContext } from '../law/host-adapter.ts'
 import { parseFrontmatter } from '../../assets/src/ledger-frontmatter.mjs'
 import { fsMeterWriterIo } from './writer.ts'
@@ -205,6 +206,19 @@ export interface WatchdogOptions {
   continuous?: boolean
   /** test/observation seam invoked inside every cycle before decide(). */
   beforeDecide?: (snapshot: SupervisorSnapshot | null) => Promise<void> | void
+  /**
+   * M4-WI34 (04 §4): the run-terminal context-profile mining wiring —
+   * every run-terminal event on the terminal-receipt chain triggers ONE
+   * mining pass (collect pool-member session events → tally → debounce →
+   * atomic artifact write), fail-soft: a mining failure never touches the
+   * terminal receipt or the stop-dispatch state. Injectable for tests:
+   * `io` (default = fs mining io over this watchdog's read face) and
+   * `sessionEvents` (default = the mount pool's live member events).
+   */
+  profileMining?: {
+    io?: MiningIo
+    sessionEvents?: () => unknown[][]
+  }
 }
 
 export interface WatchdogFace {
@@ -319,14 +333,65 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
   // red-line input (final-review P2-5).
   let runExecutorSessions: string[] = []
 
+  // M4-WI34 (04 §4): the run-terminal mining trigger — ONE pass per
+  // run-terminal event (single-flight guarded: a trigger arriving mid-mining
+  // is dropped, the next terminal event re-mines). Fail-soft by construction:
+  // mineContextProfile never throws, and even a wiring crash is isolated
+  // below — the terminal receipt + stop-dispatch have already landed at this
+  // point in the chain, so nothing upstream can be affected. The DSH form's
+  // agents-face signal = this mount's dispatch/receipt agents faces; absent
+  // (headless) ⇒ the explicit degrade note rides the mining outcome.
+  const profileMiningIo: MiningIo = options.profileMining?.io ?? {
+    readTextFile: (p) => io.readTextFile(p),
+    writeTextAtomic: (p, content) => fsMiningIo.writeTextAtomic(p, content),
+    listDirEntries: (p) => fsMiningIo.listDirEntries(p),
+  }
+  let profileMiningInFlight = false
+  const mineProfileOnTerminal = (event: SupervisorTerminalEvent): void => {
+    if (event.kind !== 'run-terminal' || profileMiningInFlight) return
+    profileMiningInFlight = true
+    try {
+      const out = mineContextProfile({
+        io: profileMiningIo,
+        projectRoot,
+        sessionEvents: options.profileMining?.sessionEvents !== undefined ? options.profileMining.sessionEvents() : pool.memberSessionEvents(),
+        agentsFacePresent: options.dispatchAgents !== undefined || options.agents !== undefined,
+        now: now(),
+      })
+      receipt({
+        kind: out.status === 'failed' ? 'exception' : 'observation',
+        runId: event.runId,
+        plan: null,
+        event: `context-profile:${out.status}`,
+        detail: out.note,
+      })
+      logger.info?.(`[mdsupervisor] context-profile ${out.status} (run-terminal mining, 04 §4)`, { detail: out.note })
+    } catch (err) {
+      // fail-soft isolation belt: even a wiring-level crash is one receipt
+      receipt({
+        kind: 'exception',
+        runId: event.runId,
+        plan: null,
+        event: 'context-profile-error',
+        detail: err instanceof Error ? err.message : String(err),
+      })
+      logger.warn?.(`[mdsupervisor] context-profile mining threw (isolated, terminal chain unaffected)`, {
+        error: err instanceof Error ? err.message : String(err),
+      })
+    } finally {
+      profileMiningInFlight = false
+    }
+  }
+
   // terminal-receipt chain: durable record first, then the A8 best-effort
   // delivery, then the declared hooks (1411-2/1411-3 consumption seam), then
-  // — with continuous mode ON — ONE immediate re-evaluation cycle (M3-WI28
-  // queue chain edge, 03 §3 edge 2: 终态回执链「一个 run 终态 → 立即评估 →
-  // 派发下一个」). Single-flight guarded: a chain edge arriving mid-scan
-  // coalesces into the pending slot; the mission terminal word keeps its
-  // stop-dispatch priority (suppressed hits never dispatch on chained
-  // cycles); the heartbeat edge stays the misfire backstop.
+  // the M4-WI34 run-terminal mining trigger, then — with continuous mode ON
+  // — ONE immediate re-evaluation cycle (M3-WI28 queue chain edge, 03 §3
+  // edge 2: 终态回执链「一个 run 终态 → 立即评估 → 派发下一个」).
+  // Single-flight guarded: a chain edge arriving mid-scan coalesces into the
+  // pending slot; the mission terminal word keeps its stop-dispatch priority
+  // (suppressed hits never dispatch on chained cycles); the heartbeat edge
+  // stays the misfire backstop.
   const emitTerminalEvent = (event: Omit<SupervisorTerminalEvent, 'ts'>): SupervisorTerminalEvent => {
     const stamped: SupervisorTerminalEvent = { ts: now(), ...event }
     receipt({
@@ -361,6 +426,9 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
         })
       }
     }
+    // M4-WI34: the mining trigger rides the SAME chain tail (run-terminal
+    // events only; fail-soft — see mineProfileOnTerminal)
+    mineProfileOnTerminal(stamped)
     if (continuousEnabled) void cycle('manual')
     return stamped
   }

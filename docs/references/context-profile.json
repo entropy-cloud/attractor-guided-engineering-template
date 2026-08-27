@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "seededFrom": "AGENTS.md#read-this-first",
+  "updatedAt": "2026-08-27T06:00:00.000Z",
+  "entries": [
+    {
+      "path": "docs/context/ai-autonomy-policy.md",
+      "reads": 0,
+      "lastSeenAt": null
+    },
+    {
+      "path": "docs/context/codebase-map.md",
+      "reads": 0,
+      "lastSeenAt": null
+    },
+    {
+      "path": "docs/context/project-context.md",
+      "reads": 0,
+      "lastSeenAt": null
+    }
+  ]
+}

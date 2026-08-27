@@ -43,8 +43,11 @@ export const GATE_MODES = ["observe", "enforce"];
 export const TRIGGER_FIELDS = ["when", "dispatch", "action", "terminal"];
 export const AGENT_DEF_FIELDS = ["mode", "poolKey", "idleTtlMinutes", "rotateEvery", "fixedPrefix", "model", "requireDistinctModel", "downgrade"];
 export const AGENT_MODES = ["pooled", "fresh"];
-export const FIXED_PREFIX_FIELDS = ["kind", "ref", "maxFileBytes"];
-export const FIXED_PREFIX_KINDS = ["text", "file", "dir"];
+export const FIXED_PREFIX_FIELDS = ["kind", "ref", "maxFileBytes", "topN"];
+// 04-efficiency §4/§5 (age-autonomy M4-WI34): the fourth kind `profile` —
+// `{ kind: profile, ref: <context-profile artifact>, topN? }` — expands to
+// the profile's top-N stable files at assembly time (reads desc, path asc).
+export const FIXED_PREFIX_KINDS = ["text", "file", "dir", "profile"];
 export const MODEL_FIELDS = ["provider", "model", "reasoningEffort"];
 export const REASONING_EFFORTS = ["default", "minimal", "low", "medium", "high"];
 export const DOWNGRADE_VALUES = ["single-model"];
@@ -823,6 +826,15 @@ export function validatePolicy(policy, opts = {}) {
               }
               if (block.kind === "dir" && block.maxFileBytes === undefined) {
                 errors.push(`agents.${name}.fixedPrefix[${bi}]: maxFileBytes is required when kind is dir (token-blast guard, 02 §4.9)`);
+              }
+              // M4-WI34: topN is the profile-kind expansion bound (04 §4) —
+              // meaningless on the other kinds (single-key-single-meaning).
+              if (block.topN !== undefined) {
+                if (!isPositiveInt(block.topN)) {
+                  errors.push(`agents.${name}.fixedPrefix[${bi}].topN must be a positive integer (got ${JSON.stringify(block.topN)})`);
+                } else if (block.kind !== "profile") {
+                  errors.push(`agents.${name}.fixedPrefix[${bi}]: topN is only meaningful when kind is profile (04 §4)`);
+                }
               }
             });
           }

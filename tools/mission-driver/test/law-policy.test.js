@@ -100,9 +100,12 @@ describe("real instance", () => {
     // fixedPrefix charter (persona text + embedded context file).
     assert.equal(r.policy.assembly.embedStamp, DEFAULT_EMBED_STAMP);
     assert.equal(r.policy.assembly.continueDelta, true);
+    // M4-WI34 (2026-08-27-0558-1): the drafter charter grows the third block
+    // — the context-profile expansion (04 §4; topN overridable per agent).
     assert.deepEqual(r.policy.agents.drafter.fixedPrefix, [
       { kind: "text", ref: "{{projectRoot}}/AGENTS.md" },
       { kind: "file", ref: "{{projectRoot}}/docs/context/project-context.md", maxFileBytes: 60000 },
+      { kind: "profile", ref: "{{projectRoot}}/docs/references/context-profile.json", topN: 5 },
     ]);
   });
 });
@@ -232,6 +235,20 @@ describe("schema fixture matrix — every illegal shape denies with a pointed re
     assert.equal(ok.ok, true, ok.errors?.join(";"));
     const okDir = base("{ kind: dir, ref: docs/context, maxFileBytes: 50000 }");
     assert.equal(okDir.ok, true, okDir.errors?.join(";"));
+  });
+  it("validates the profile fixedPrefix kind + topN (M4-WI34, 04 §4)", () => {
+    const base = (block) =>
+      parsePolicy(fixture(`agents:\n  auditor:\n    mode: fresh\n    fixedPrefix: [ ${block} ]\n`));
+    const okProfile = base('{ kind: profile, ref: "{{projectRoot}}/docs/references/context-profile.json", topN: 5 }');
+    assert.equal(okProfile.ok, true, okProfile.errors?.join(";"));
+    const okProfileDefault = base('{ kind: profile, ref: "{{projectRoot}}/docs/references/context-profile.json" }');
+    assert.equal(okProfileDefault.ok, true, okProfileDefault.errors?.join(";"));
+    const badTopN = base('{ kind: profile, ref: x.json, topN: 0 }');
+    assert.equal(badTopN.ok, false);
+    assert.match(badTopN.errors[0], /topN must be a positive integer/);
+    const topNOnFile = base("{ kind: file, ref: x.md, topN: 5 }");
+    assert.equal(topNOnFile.ok, false);
+    assert.match(topNOnFile.errors[0], /topN is only meaningful when kind is profile/);
   });
   it("denies agents field errors: missing mode, pooled without poolKey, bad model shape", () => {
     const noMode = parsePolicy(fixture("agents:\n  auditor:\n    model: { provider: p, model: m }\n"));
