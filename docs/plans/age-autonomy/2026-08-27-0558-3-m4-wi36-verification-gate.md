@@ -51,15 +51,15 @@ Skill: none
 - Item Types: `Proof`
 - Prereqs: 0558-1（M4-WI34）与 0558-2（M4-WI35）均 derived completed——执行时以 `gate-check <plan> --law` / plan-check 派生视图核验，未收口则本 plan 保持等待（不代偿）
 
-- [ ] Proof: 门命令 1 `node plugin/dsh/test/pool-lifecycle.test.mjs` 真实复跑——≥10 例 0 失败 exit 0（在库 13 例基线，实测数记入证据）。
-- [ ] Proof: 门命令 2 `node plugin/dsh/test/prompt-assembly.test.mjs` 真实复跑——≥12 例 0 失败 exit 0（在库 16 例基线，实测数记入证据）。
-- [ ] Proof: 门命令 3 `node plugin/dsh/test/context-profile.test.mjs` 真实复跑——≥8 例 0 失败 exit 0（0558-1 交付面，实测数记入证据）。
-- [ ] Proof: 观测项（不阻断）——有宿主 env 则真实宿主连续模式跑 3 个 plan 记录 FRESH vs CONTINUE token 对比（>20% 判达标）；无 env 则如实记录缺 env 分支并引用「机制落地即收口，收益待观测」原句——两分支输出均留档，不得虚报。
+- [x] Proof: 门命令 1 `node plugin/dsh/test/pool-lifecycle.test.mjs` 真实复跑——≥10 例 0 失败 exit 0（在库 13 例基线，实测数记入证据）。（2026-08-27 实测：13 tests / 13 pass / 0 fail，exit 0——覆盖生命周期/TTL dispose/代际令牌/audit 禁入池/角色互斥/恢复互操作/headless 降级）
+- [x] Proof: 门命令 2 `node plugin/dsh/test/prompt-assembly.test.mjs` 真实复跑——≥12 例 0 失败 exit 0（在库 16 例基线，实测数记入证据）。（2026-08-27 实测：16 tests / 16 pass / 0 fail，exit 0——覆盖 FRESH/CONTINUE 字节序/hash 台账/charter 轮换/目录全文/部署面零漂移钉）
+- [x] Proof: 门命令 3 `node plugin/dsh/test/context-profile.test.mjs` 真实复跑——≥8 例 0 失败 exit 0（0558-1 交付面，实测数记入证据）。（2026-08-27 实测：13 tests / 13 pass / 0 fail，exit 0——覆盖种子化/终态挖掘/防抖/schema 版本/不进 missions//headless 降级）
+- [x] Proof: 观测项（不阻断）——有宿主 env 则真实宿主连续模式跑 3 个 plan 记录 FRESH vs CONTINUE token 对比（>20% 判达标）；无 env 则如实记录缺 env 分支并引用「机制落地即收口，收益待观测」原句——两分支输出均留档，不得虚报。（2026-08-27 实测：本机无宿主 env——`pnpm --prefix plugin/dsh run verify:e2e:continuous` fail-fast exit 1（`DSH_E2E_CONTINUOUS` 缺失，opt-in gate 拒跑，WI31 括号语义先例同型）；且 e2e-continuous.mjs 为 fixture 驱动 scratch 面（mock 模型 usage 固定 prompt_tokens:3），在库无 FRESH vs CONTINUE token 差采集面——缺 env 分支如实记录，roadmap 原句「机制落地即收口，收益待观测」，观测归运营自然采集）
 
 Exit Criteria:
 
-- [ ] 三条门命令实际输出在案（例数 + exit code）；任何一条红 = WI36 不勾（门纪律）
-- [ ] 观测项输出留档（实跑数据或缺 env 如实记录，二选一均有据）
+- [x] 三条门命令实际输出在案（例数 + exit code）；任何一条红 = WI36 不勾（门纪律）（三门全绿：13/16/13 例 0 失败 exit 0；观测项缺 env 分支在案）
+- [x] 观测项输出留档（实跑数据或缺 env 如实记录，二选一均有据）（缺 env 分支：fail-fast exit 1 输出 + 无 token 采集面注记，见上条与 roadmap WI36 行内注记）
 
 ## Phase 2 — 回写与 M4 收口核验
 
@@ -69,15 +69,15 @@ Skill: none
 - Item Types: `Proof | Add`
 - Prereqs: Phase 1
 
-- [ ] Proof: 收口核验——`node tools/mission-driver/src/roadmap-check.mjs` exit 0 且 M4 区块 5/5 全勾（WI32–WI36）；`./verify-age.sh` L1+L2+L2.5 GREEN；`pnpm --prefix tools/mission-driver test` 0 失败。
-- [ ] Add: roadmap WI36 勾选 + 行内证据注记（三门实测输出摘要 + 观测项分支记录）；`> Last Updated` 头同步（M4 收口句）。
-- [ ] Add: CONTEXT.md M4 收口注记（效率层四件套完成态一句）；`docs/logs/2026/08-27.md` 条目。
+- [x] Proof: 收口核验——`node tools/mission-driver/src/roadmap-check.mjs` exit 0 且 M4 区块 5/5 全勾（WI32–WI36）；`./verify-age.sh` L1+L2+L2.5 GREEN；`pnpm --prefix tools/mission-driver test` 0 失败。（2026-08-27 实测：roadmap-check `docs/backlog/age-autonomy-implementation-roadmap.md` exit 0（overallProgress 0.91，M4 区块 5 `[x]` / 0 `[ ]`）；`./verify-age.sh` exit 0 == L1+L2+L2.5 GREEN（引擎 944/944 · 插件 420/420 · 真值表 116/116）；`pnpm --prefix tools/mission-driver test` exit 0 = 944 tests / 944 pass / 0 fail + prompt-check OK）
+- [x] Add: roadmap WI36 勾选 + 行内证据注记（三门实测输出摘要 + 观测项分支记录）；`> Last Updated` 头同步（M4 收口句）。（WI36 行 `[x]` + 证据注记含三门 13/16/13·0 fail·exit 0 与观测项 fail-fast exit 1 缺 env 分支；头注「M4 收口：WI36 Verification Gate 三门全绿——M4 区块 5/5」段前插，历史段保留）
+- [x] Add: CONTEXT.md M4 收口注记（效率层四件套完成态一句）；`docs/logs/2026/08-27.md` 条目。（CONTEXT.md 增「效率层四件套完成态（M4 收口）」段；日志顶部 reverse-chronological 新增 M4-WI36 收口条目）
 
 Exit Criteria:
 
-- [ ] roadmap WI36 `[x]` + 证据注记；M4 区块 5/5 全勾
-- [ ] roadmap-check / verify-age / 引擎测试三项全绿复核
-- [ ] `docs/logs/` updated
+- [x] roadmap WI36 `[x]` + 证据注记；M4 区块 5/5 全勾（awk M4 区块实测 5 `[x]` / 0 `[ ]`；grep `^- \[ \]` 剩余 = M5 四项，M4 零残留）
+- [x] roadmap-check / verify-age / 引擎测试三项全绿复核（三者 exit 0 实测在案，见上 Proof 条）
+- [x] `docs/logs/` updated（`docs/logs/2026/08-27.md` 新增本 plan 收口条目，含三门实测 + 观测项分支 + 复核输出）
 
 ## Draft Review Record
 
@@ -86,7 +86,13 @@ Exit Criteria:
 
 ## Verification
 
+- pass test 2026-08-26-130203-mission-driver basisHash=327e491f8ec7a48aea2b1193eafb4d90908f8aeb34d0614541c57040dcfcb715 exit=0
+- pass verify-age 2026-08-26-130203-mission-driver basisHash=327e491f8ec7a48aea2b1193eafb4d90908f8aeb34d0614541c57040dcfcb715 exit=0
+
 ## Closure
+
+- dispatch audit #audit-2026-08-26-130203-mission-driver-2026-08-27-0558-3-m4-wi36-verification-gate-1-93654048 to ses_auditor_2026-08-27-0558-3
+- accepted #audit-2026-08-26-130203-mission-driver-2026-08-27-0558-3-m4-wi36-verification-gate-1-93654048：独立冷验证通过——三门命令真实复跑实测 13/16/13 例 0 失败 exit 0（超门限 ≥10/≥12/≥8，与 Phase 1 记录逐字一致）；观测项缺宿主 env fail-fast 分支留档属实（roadmap 明示不阻断，「机制落地即收口，收益待观测」原句在案，Deferred watch-only residual 诚实归档）；回写面核验——roadmap WI36 `[x]` + 行内证据注记 + `> Last Updated` M4 收口句 + M4 区块 5/5、CONTEXT.md 效率层四件套完成态段、docs/logs/2026/08-27.md 收口条目均在库；机械验证双命令实跑绿（`pnpm --prefix tools/mission-driver test` 944/944 prompt-check OK exit 0；`./verify-age.sh` L1+L2+L2.5 GREEN 引擎 944/插件 420/真值表 116 exit 0）+ roadmap-check exit 0（overallProgress 0.91）；零代码交付面成立，无 in-scope 缺陷或契约漂移藏入 Deferred。
 
 ## Deferred But Adjudicated
 
