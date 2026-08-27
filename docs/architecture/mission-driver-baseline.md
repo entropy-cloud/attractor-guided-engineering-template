@@ -117,7 +117,7 @@ Test seams (NOT public API; prefixed `__` and exported only for the test suite):
 
 - `src/orchestrator.js` — `__setRunnerFactoryForTest` (inject mock agent runner for draft tests; defined in the orchestration module since dsh-plugin M1-WI2 and re-exported by `main.js` as the same live binding — module-level mutable state must stay single-instance).
 - `src/draft-job.mjs` / `src/monitor.js` — `__setSpawnerForTest` (inject mock subprocess spawner).
-- `src/flow-loader.js` — `_scanOpenAuditsList`, `_isMissionLevelAudit`, plus the `SCRIPT_REGISTRY` constant.
+- `src/flow-loader.js` — the `SCRIPT_REGISTRY` constant. (The legacy audit-channel test seams formerly listed here were removed with that channel in M2-WI22; `SCRIPT_REGISTRY` is the only test-facing export left.)
 - `FlowEngine` `delegates.diagnosticHooks` (dsh-plugin M1-WI4) — not a `__`-prefixed export but governed by the same test-only rule: it overrides the run()-internal `_diag` startup-diagnostics dispatch table (defaults: real `registerActiveRun` / `sysMon` / `warnOrphans`). It exists so tests can assert call/no-call without `--experimental-test-module-mocks` (the engine commits to Node ≥ 18). Consumers outside `test/` must not inject it.
 
 Consumers must not depend on `__`-prefixed exports outside of `test/`, and must not inject `delegates.diagnosticHooks` outside of `test/`.
