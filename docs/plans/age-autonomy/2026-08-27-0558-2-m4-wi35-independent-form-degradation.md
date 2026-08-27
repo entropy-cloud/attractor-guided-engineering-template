@@ -53,17 +53,17 @@ Skill: none
 - Item Types: `Decision | Add | Proof`
 - Prereqs: 无硬依赖（建议在 0558-1 之后同组执行）
 
-- [ ] Decision: 独立形态效率承载裁定——池化降级的 as-built 机制面 = ①步内 `--session` 续用（correction/parse 共会话，既有测试已钉住——本 plan 核对引用）②前缀纪律（本 plan 审计 + 钉住）；**跨步续用不在库且本 plan 不交付**（三个 `_executeAgentStep` 调用点传 `null`，`lastSessionId` 唯一消费面 = correction）。否决备选 A = CLI 侧按角色复用 opencode session 的池——continuable 子代理 face 是 DSH 宿主独有（`PoolAgentsFace`）+ 跨 run 会话复用缺 attemptId 代际判据（04 §2.3）= 陈旧上下文风险 + 引擎 dispatch 面重构违反零引擎 diff 底线；否决备选 B = `engine.js` 最小 threading（`lastSessionId` 接进三调用点）——违反 roadmap 核心纪律 1 零引擎 diff 底线 + 会话跨步累积改变 run 语义（agent 行为面变化，超出效率层「不改契约」边界，04 §6 为已批准基线）→ 归 M5-WI37（引擎退役判定门：守夜人接管独立形态派发 ∨ 引擎 threading 二选一裁定）。残险 = 独立形态跨步 KV 缓存损失（接受——04 §6「部分存在」按 as-built 如实收窄为「步内存在、跨步未交付」）。
-- [ ] Add: 步内续用覆盖核对——逐项核对既有钉住测试与本 plan 基线清单一致（`runner-routing.test.js` `--session` 转发/剥离双分支、`step-executor.test.js` `lastSessionId`、`transitions.test.js` correction 会话传递、`parse-fallback.test.js` parse 共会话）；核对结论（引用一致 ∨ 缺面清单）记入执行日志；确有缺面才补测（已钉住面零重复造测）。
-- [ ] Add: prompt 前缀纪律审计——逐件清点 `prompts/*.md` 11 模板的 `{{var}}` 位置分类（小而稳的路径/命令/名字引用 vs 大而易变的负载注入）；审计结论（预期多数/全部无需重排）如实记入执行日志；仅当出现大易变负载前置时做语义中性后移（不改指令文本语义、不改变量集、不动 `lint:prompts` 结构校验面）。
-- [ ] Proof: 前缀纪律钉住测试——同模板两次渲染（易变变量取不同值）断言共享固定前缀字节（对全部 11 件模板；无需重排模板断言其前段零易变负载注入）；进引擎测试链（计数只增不减）。
+- [x] Decision: 独立形态效率承载裁定——池化降级的 as-built 机制面 = ①步内 `--session` 续用（correction/parse 共会话，既有测试已钉住——本 plan 核对引用）②前缀纪律（本 plan 审计 + 钉住）；**跨步续用不在库且本 plan 不交付**（三个 `_executeAgentStep` 调用点传 `null`，`lastSessionId` 唯一消费面 = correction）。否决备选 A = CLI 侧按角色复用 opencode session 的池——continuable 子代理 face 是 DSH 宿主独有（`PoolAgentsFace`）+ 跨 run 会话复用缺 attemptId 代际判据（04 §2.3）= 陈旧上下文风险 + 引擎 dispatch 面重构违反零引擎 diff 底线；否决备选 B = `engine.js` 最小 threading（`lastSessionId` 接进三调用点）——违反 roadmap 核心纪律 1 零引擎 diff 底线 + 会话跨步累积改变 run 语义（agent 行为面变化，超出效率层「不改契约」边界，04 §6 为已批准基线）→ 归 M5-WI37（引擎退役判定门：守夜人接管独立形态派发 ∨ 引擎 threading 二选一裁定）。残险 = 独立形态跨步 KV 缓存损失（接受——04 §6「部分存在」按 as-built 如实收窄为「步内存在、跨步未交付」）。（执行日志：`docs/logs/2026/08-27.md` M4-WI35 条目 ①）
+- [x] Add: 步内续用覆盖核对——逐项核对既有钉住测试与本 plan 基线清单一致（`runner-routing.test.js` `--session` 转发/剥离双分支、`step-executor.test.js` `lastSessionId`、`transitions.test.js` correction 会话传递、`parse-fallback.test.js` parse 共会话）；核对结论（引用一致 ∨ 缺面清单）记入执行日志；确有缺面才补测（已钉住面零重复造测）。（结论：引用一致零缺面——`runner-routing.test.js` :34-49/:69/:169-181、`prompt-cmdline-limit.test.js` :60/:90-91、`step-executor.test.js` :165、`transitions.test.js` :431、`parse-fallback.test.js` :164 逐项核对在库，见执行日志条目 ②）
+- [x] Add: prompt 前缀纪律审计——逐件清点 `prompts/*.md` 11 模板的 `{{var}}` 位置分类（小而稳的路径/命令/名字引用 vs 大而易变的负载注入）；审计结论（预期多数/全部无需重排）如实记入执行日志；仅当出现大易变负载前置时做语义中性后移（不改指令文本语义、不改变量集、不动 `lint:prompts` 结构校验面）。（结论：11/11 零重排——唯一大易变负载 `{{runSkeleton}}`（run-postmortem.md :28）位于 27 行固定指令前导之后非前置；其余全部为小引用（含小易变诊断 `PLAN_FILE`/`forEachItem`/`SCRIPT_CHECK_RESULT`/`SCRIPT_CHECK_DETAILS`/`targetRunDir`），见执行日志条目 ③）
+- [x] Proof: 前缀纪律钉住测试——同模板两次渲染（易变变量取不同值）断言共享固定前缀字节（对全部 11 件模板；无需重排模板断言其前段零易变负载注入）；进引擎测试链（计数只增不减）。（`tools/mission-driver/test/prompt-prefix-discipline.test.js` 15 例 0 失败——live 渲染路径 `resolveTemplateVars` 双渲染 LCP 断言 + 三类注册表 drift gate + 除 run-postmortem 外零 payload + payload 后置双断言；引擎 929→944）
 
 Exit Criteria:
 
-- [ ] 承载裁定 + 审计清单 + 核对结论成文（Decision 项 + 执行日志指针）
-- [ ] 前缀纪律钉住测试全绿；步内续用覆盖核对完成（引用一致或缺面已补）
-- [ ] `pnpm --prefix tools/mission-driver run lint:prompts` 绿（如有重排，零结构破坏）
-- [ ] `git diff --stat tools/mission-driver/src/engine.js tools/mission-driver/src/runner.js tools/mission-driver/src/executor.js` 为空
+- [x] 承载裁定 + 审计清单 + 核对结论成文（Decision 项 + 执行日志指针）
+- [x] 前缀纪律钉住测试全绿；步内续用覆盖核对完成（引用一致或缺面已补）
+- [x] `pnpm --prefix tools/mission-driver run lint:prompts` 绿（如有重排，零结构破坏）（零 prompt 编辑，OK）
+- [x] `git diff --stat tools/mission-driver/src/engine.js tools/mission-driver/src/runner.js tools/mission-driver/src/executor.js` 为空
 
 ## Phase 2 — 独立形态降级如实成文 + Proof 与回写
 
@@ -73,17 +73,17 @@ Skill: none
 - Item Types: `Add | Proof`
 - Prereqs: Phase 1
 
-- [ ] Add: 04 §6 as-built 注记——降级面 = ①步内 `--session` 续用（既有测试覆盖指针）②前缀纪律（审计结论 + 钉住测试指针）③policy fixedPrefix/assembly 组装为 DSH 形态面（独立形态薄 prompt + 步内会话续用即当前 as-built 降级）④**跨步续用未交付**（`_executeAgentStep` 三调用点传 `null` 事实注记 + M5-WI37 后继指针）；05 §4 对照行「◐」同步 as-built 注记；CONTEXT.md 独立形态降级段。
-- [ ] Add: `independentChannelOf` 残项复核注记——seam 头注「reasoningEffort 无载体归 M5 independent-form gate」原文核对（零行为改动、零 seam 编辑；如注记所指条目名与本 roadmap 编号不一致则以文字核对为准并注记）。
-- [ ] Proof: `pnpm --prefix tools/mission-driver test` 全绿 + `./verify-age.sh` L1+L2+L2.5 GREEN。
-- [ ] Add: roadmap WI35 勾选 + 行内证据指针（承载裁定 + 跨步未交付注记 + 后继指针）；`> Last Updated` 头同步；`docs/logs/2026/08-27.md` 条目。
+- [x] Add: 04 §6 as-built 注记——降级面 = ①步内 `--session` 续用（既有测试覆盖指针）②前缀纪律（审计结论 + 钉住测试指针）③policy fixedPrefix/assembly 组装为 DSH 形态面（独立形态薄 prompt + 步内会话续用即当前 as-built 降级）④**跨步续用未交付**（`_executeAgentStep` 三调用点传 `null` 事实注记 + M5-WI37 后继指针）；05 §4 对照行「◐」同步 as-built 注记；CONTEXT.md 独立形态降级段。
+- [x] Add: `independentChannelOf` 残项复核注记——seam 头注「reasoningEffort 无载体归 M5 independent-form gate」原文核对（零行为改动、零 seam 编辑；如注记所指条目名与本 roadmap 编号不一致则以文字核对为准并注记）。（核对：`dispatch-resolve.ts` :222 注记「reasoningEffort … no config.js carrier (documented residual, M5 independent-form gate)」与 roadmap M5-WI37 引擎退役判定门文字一致——seam 未写编号，按文字核对为准，注记见执行日志条目 ⑤；零 seam 编辑）
+- [x] Proof: `pnpm --prefix tools/mission-driver test` 全绿 + `./verify-age.sh` L1+L2+L2.5 GREEN。（944/944 exit 0；verify-age L1+L2+L2.5 GREEN——引擎 944/0 · 插件 420/0 · 真值表 116/0；web typecheck/build 绿 dist 零漂移 + lint:prompts OK）
+- [x] Add: roadmap WI35 勾选 + 行内证据指针（承载裁定 + 跨步未交付注记 + 后继指针）；`> Last Updated` 头同步；`docs/logs/2026/08-27.md` 条目。
 
 Exit Criteria:
 
-- [ ] 04 §6 / 05 §4 / CONTEXT.md 注记在案且与 live 行为一致（跨步未交付如实写明，非暗示在库）
-- [ ] verify-age 全绿；零引擎 diff 复核（engine/runner/executor 三文件）
-- [ ] roadmap WI35 `[x]` + 证据注记
-- [ ] `docs/logs/` updated
+- [x] 04 §6 / 05 §4 / CONTEXT.md 注记在案且与 live 行为一致（跨步未交付如实写明，非暗示在库）
+- [x] verify-age 全绿；零引擎 diff 复核（engine/runner/executor 三文件）
+- [x] roadmap WI35 `[x]` + 证据注记
+- [x] `docs/logs/` updated
 
 ## Draft Review Record
 
@@ -93,7 +93,13 @@ Exit Criteria:
 
 ## Verification
 
+- pass test 2026-08-26-130203-mission-driver basisHash=c04e63b1c98966334385d03f15fe2668997b05dbe6cb6ccb465c47c893c8f967 exit=0
+- pass verify-age 2026-08-26-130203-mission-driver basisHash=c04e63b1c98966334385d03f15fe2668997b05dbe6cb6ccb465c47c893c8f967 exit=0
+
 ## Closure
+
+- dispatch audit #audit-2026-08-26-130203-mission-driver-2026-08-27-0558-2-m4-wi35-independent-form-degradation-1-d53e6866 to ses_auditor_2026-08-27-0558-2
+- accepted #audit-2026-08-26-130203-mission-driver-2026-08-27-0558-2-m4-wi35-independent-form-degradation-1-d53e6866：独立闭环审计通过——16/16 checkbox 逐项对 live 冷核属实：① 承载裁定/审计清单/核对结论成文（执行日志 2026-08-27 M4-WI35 条目 ①-⑤ 在案）② 钉住测试 `tools/mission-driver/test/prompt-prefix-discipline.test.js` 15 例在库且进引擎链（审计独立复跑 `pnpm --prefix tools/mission-driver test` 944/944 exit 0）③ 零 prompt 编辑下 `lint:prompts` OK ④ `git status` 复核 engine.js/runner.js/executor.js 零 diff、零新增 npm 依赖 ⑤ 04 §6 / 05 §4 / CONTEXT.md as-built 注记与 live 行为一致（跨步续用未交付如实写明，非暗示在库）⑥ roadmap WI35 `[x]` + 行内证据 + Last Updated 头同步 ⑦ `./verify-age.sh` 审计独立复跑 L1+L2+L2.5 GREEN exit 0（引擎 944/0 · 插件 420/0 · 真值表 116/0；pass 行 basisHash 绑定本 plan 当前基线）。Deferred 两项（跨步续用 / reasoningEffort 载体）均为 M5-WI37 后继裁定项且成功指针在案，非活缺陷遮蔽。
 
 ## Deferred But Adjudicated
 

@@ -80,7 +80,7 @@ commit → push → 任意机器 checkout → 重跑 → 从 checkbox + frontmat
 | --- | --- | --- |
 | 交互会话内自驱 | ✅ | ✘（headless） |
 | 独立评审/审计派发 | ✅ 守夜人 | ✅ 引擎/CLI 派发 |
-| agent 池化 / prompt 缓存 | ✅ | ◐ 退化为 `--session` 续用 + 前缀纪律 |
+| agent 池化 / prompt 缓存 | ✅ | ◐ 退化为 `--session` 续用 + 前缀纪律（as-built：步内续用已钉住、跨步未交付归 M5-WI37，04 §6 注记） |
 | 连续队列（roadmap 即队列） | ✅ 守夜人 | ◐ cron/CI 逼近 |
 | 法律（门禁） | ✅ pre-execute（实时 + 身份验证） | ✅ CI/git hooks（提交边界；结构子集，无实时身份） |
 | 收尾回执 | ✅ followup | ✅ 终态 + monitor |
