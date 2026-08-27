@@ -20,7 +20,7 @@ On the dispatch line, append the ` models={exec:…,aud:…}` lineage suffix (02
 
 3. Findings as work items (the closing mechanism is the checkbox, not an audit file): every `P0`/`P1` finding lands as a NEW unchecked work item (column-0 `- [ ]`) under the owning milestone block in the roadmap (or a trailing `### M<n> — Deep Audit Findings R<round>` block if none fits), tagged `[P0]`/`[P1]` with a one-line justification. `P2` findings go to the roadmap's `## Follow-up Backlog` section (create if absent), each with `source: deep-audit round <n>`. Remediation plans are drafted from these roadmap items by the DRAFT pipeline — do not draft plans yourself here.
 
-Do NOT create files under `{{auditsDir}}/` — that location is reserved for pre-migration legacy archives (still readable by the engine's legacy channel) and rare human-authored records.
+Do NOT create files under `{{auditsDir}}/` — that location is reserved for pre-migration legacy archives (prose-only history since the legacy audit channel was retired in M2-WI22; no engine consumer) and rare human-authored records.
 
 ## Priority every finding — `[P0]` / `[P1]` / `[P2]`
 

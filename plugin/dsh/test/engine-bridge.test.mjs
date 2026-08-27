@@ -116,7 +116,11 @@ test("bootstrapNativeConfig: allowNativeDriver + embed + native default config s
   assert.equal(config.missionName, "demo");
   assert.equal(config.projectRoot, root);
   assert.ok(config.runDir && config.runDir.includes(join("_tmp", "smoke-run")));
-  assert.ok(existsSync(config.runDir), "resolveConfig created the run dir");
+  // WI49 Phase 1 item 3: config bootstrap is the READ-ONLY face — the runDir
+  // is created by orchestrateRun (the shared run entry), not by resolveConfig
+  // (which also serves read-only consumers like `list-steps` and used to leak
+  // ghost `_tmp/<ts>-mission-driver` dirs per invocation).
+  assert.ok(!existsSync(config.runDir), "resolveConfig must NOT create the run dir (ghost-dir fix)");
   assert.equal(config.mission.flowName, "native-smoke");
 
   // explicit driver override still routes through the same bootstrap

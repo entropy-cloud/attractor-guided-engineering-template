@@ -2114,14 +2114,18 @@ test("boundary: compliant mission set passes; conflict fails naming both mission
   const root = tmpProject();
   try {
     mkdirSync(join(root, "missions"), { recursive: true });
+    // WI49 Phase 5 item 4: claims are read through loadMission (extends-aware
+    // merged read), so claimant fixtures must be VALID missions — add the
+    // required commands.test to alpha/beta/gamma (raw-scan fixtures used to
+    // claim without it; unvalidatable configs still contribute zero claims).
     writeFileSync(
       join(root, "missions", "alpha.json"),
-      JSON.stringify({ name: "alpha", roadmapPath: "docs/backlog/one.md", plansDir: "docs/plans/alpha" }),
+      JSON.stringify({ name: "alpha", roadmapPath: "docs/backlog/one.md", plansDir: "docs/plans/alpha", commands: { test: "echo ok" } }),
       "utf8",
     );
     writeFileSync(
       join(root, "missions", "beta.json"),
-      JSON.stringify({ name: "beta", roadmapPath: "docs/backlog/two.md", plansDir: "docs/plans/beta" }),
+      JSON.stringify({ name: "beta", roadmapPath: "docs/backlog/two.md", plansDir: "docs/plans/beta", commands: { test: "echo ok" } }),
       "utf8",
     );
     // base-style + malformed configs contribute zero claims
@@ -2133,7 +2137,7 @@ test("boundary: compliant mission set passes; conflict fails naming both mission
 
     writeFileSync(
       join(root, "missions", "gamma.json"),
-      JSON.stringify({ name: "gamma", roadmapPath: "./docs/backlog/one.md", plansDir: "docs/plans/gamma" }),
+      JSON.stringify({ name: "gamma", roadmapPath: "./docs/backlog/one.md", plansDir: "docs/plans/gamma", commands: { test: "echo ok" } }),
       "utf8",
     );
     const conflict = checkRoadmapUniqueness(join(root, "missions"));

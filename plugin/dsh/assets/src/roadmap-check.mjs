@@ -186,5 +186,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const res = parseRoadmapMarkdown(content);
   const passed = res.fieldErrors.length === 0;
   console.log(JSON.stringify({ file, passed, fieldErrors: res.fieldErrors, phases: res.phases, overallProgress: res.overallProgress }, null, 2));
-  process.exit(passed ? 0 : 1);
+  // WI49 Phase 3: exitCode assignment (never process.exit) so the event loop
+  // drains and a piped stdout flushes large JSON payloads fully —
+  // process.exit truncated at the 64KB pipe buffer.
+  process.exitCode = passed ? 0 : 1;
 }
