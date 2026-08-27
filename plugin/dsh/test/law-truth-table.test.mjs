@@ -2171,7 +2171,9 @@ test("rwg: inert faces — non-roadmap target, no currentFileState, legacy roadm
 });
 
 test("rwg: REAL roadmap corpus smoke — an unchecked WI's checkbox flip and evidence append both allow (constructed, no file write)", () => {
-  const wiLine = REAL_ROADMAP_TEXT.split("\n").find((l) => /^- \[ \] WI\d+\b/.test(l));
+  // bold-marker WI lines (e.g. `- [ ] **WI40 …**`) are part of the real corpus shape since the
+  // roadmap's creation; the M5-WI39 write-back left the bold WI40 as the only unchecked row.
+  const wiLine = REAL_ROADMAP_TEXT.split("\n").find((l) => /^- \[ \] \**WI\d+\b/.test(l));
   assert.ok(wiLine, "an unchecked WI line present in the real roadmap");
   const flipped = REAL_ROADMAP_TEXT.replace(wiLine, wiLine.replace("- [ ]", "- [x]"));
   const appended = REAL_ROADMAP_TEXT.replace(wiLine, `${wiLine.replace("- [ ]", "- [x]")}（证据：抽验注记）`);
