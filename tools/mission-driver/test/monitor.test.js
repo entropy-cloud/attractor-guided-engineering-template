@@ -536,6 +536,8 @@ describe("Monitor — REST endpoints (Phase 2)", () => {
         name: "legacy-mission",
         flowName: "legacy-flow",
         roadmapPath: "docs/backlog/legacy.md",
+        plansDir: "docs/plans/legacy",
+        commands: { test: "npm test" },
       });
       // A run whose mission config also lacks flowName — should stay null (no error).
       makeRun(root, "2026-06-18-no-flow-mission-driver", {
@@ -546,7 +548,12 @@ describe("Monitor — REST endpoints (Phase 2)", () => {
           steps: [],
         },
       });
-      makeMission(root, "no-flow-mission", { name: "no-flow-mission" });
+      makeMission(root, "no-flow-mission", {
+        name: "no-flow-mission",
+        roadmapPath: "docs/backlog/no-flow.md",
+        plansDir: "docs/plans/no-flow",
+        commands: { test: "npm test" },
+      });
 
       const monitor = await startMonitor({ projectRoot: root, port: 0, webDir: join(root, "web") });
       try {
@@ -903,6 +910,8 @@ describe("Monitor — REST endpoints (Phase 2)", () => {
           name: n,
           description: `mission ${n}`,
           roadmapPath: `docs/${n}.md`,
+          plansDir: `docs/plans/${n}`,
+          commands: { test: "npm test" },
         });
       }
       const monitor = await startMonitor({ projectRoot: root, port: 0, webDir: join(root, "web") });
@@ -957,9 +966,9 @@ describe("Monitor — REST endpoints (Phase 2)", () => {
   it("GET /api/configs ranks missions by mtime descending (newest first)", async () => {
     const root = makeTmpProject();
     try {
-      makeMission(root, "alpha", { name: "alpha", roadmapPath: "docs/alpha.md" });
-      makeMission(root, "beta", { name: "beta", roadmapPath: "docs/beta.md" });
-      makeMission(root, "gamma", { name: "gamma", roadmapPath: "docs/gamma.md" });
+      makeMission(root, "alpha", { name: "alpha", roadmapPath: "docs/alpha.md", plansDir: "docs/plans/a", commands: { test: "npm test" } });
+      makeMission(root, "beta", { name: "beta", roadmapPath: "docs/beta.md", plansDir: "docs/plans/b", commands: { test: "npm test" } });
+      makeMission(root, "gamma", { name: "gamma", roadmapPath: "docs/gamma.md", plansDir: "docs/plans/g", commands: { test: "npm test" } });
       // Force distinct mtimes (rapid writes can share the same ms on Windows,
       // making the descending sort a no-op). gamma newest → ranks first.
       const now = Date.now() / 1000;
@@ -1393,6 +1402,8 @@ describe("Monitor — detail page fixes (FIX-1~4)", () => {
       makeMission(root, "mission-fix2", {
         name: "mission-fix2",
         plansDir: "docs/plans/t/mission-fix2",
+        roadmapPath: "docs/backlog/fix2.md",
+        commands: { test: "npm test" },
       });
 
       const monitor = await startMonitor({ projectRoot: root, port: 0, webDir: join(root, "web") });
@@ -1436,6 +1447,8 @@ describe("Monitor — detail page fixes (FIX-1~4)", () => {
       makeMission(root, "mission-fix2d", {
         name: "mission-fix2d",
         plansDir: "docs/plans/t/mission-fix2d",
+        roadmapPath: "docs/backlog/fix2d.md",
+        commands: { test: "npm test" },
       });
 
       const monitor = await startMonitor({ projectRoot: root, port: 0, webDir: join(root, "web") });
@@ -1469,6 +1482,8 @@ describe("Monitor — detail page fixes (FIX-1~4)", () => {
       makeMission(root, "mission-fix2b", {
         name: "mission-fix2b",
         plansDir: "docs/plans/t/mission-fix2b",
+        roadmapPath: "docs/backlog/fix2b.md",
+        commands: { test: "npm test" },
       });
 
       const monitor = await startMonitor({ projectRoot: root, port: 0, webDir: join(root, "web") });
@@ -1491,6 +1506,8 @@ describe("Monitor — detail page fixes (FIX-1~4)", () => {
       makeMission(root, "mission-fix2c", {
         name: "mission-fix2c",
         plansDir: "docs/plans/does/not/exist",
+        roadmapPath: "docs/backlog/fix2c.md",
+        commands: { test: "npm test" },
       });
       const monitor = await startMonitor({ projectRoot: root, port: 0, webDir: join(root, "web") });
       try {
@@ -2051,6 +2068,8 @@ describe("Monitor — POST /api/runs (itp2-5 / FSD §6)", () => {
       JSON.stringify({
         name,
         roadmapPath: "docs/roadmaps/x.md",
+        plansDir: "docs/plans/x",
+        commands: { test: "npm test" },
         flowName: "integration-test",
         targets: [{ key: "STATIC-1", summary: "static", verifyKind: "ui" }],
       }),
@@ -2137,8 +2156,9 @@ describe("Monitor — POST /api/runs (itp2-5 / FSD §6)", () => {
   it("POST /api/runs rejects a non-runnable mission (no roadmapPath, e.g. base) → 400", async () => {
     const root = makeTmpProject();
     try {
-      // base.json lacks roadmapPath — readMissionConfig returns non-null, but the
-      // roadmapPath gate must still reject it (the blocking issue from draft review).
+      // base.json lacks roadmapPath (and other required fields) — loadMission
+      // throws inside readMissionConfig → null, and the roadmapPath gate rejects
+      // either way (M5-WI40: readMissionConfig validates via loadMission).
       writeFileSync(
         join(root, "missions", "base.json"),
         JSON.stringify({ name: "base", model: "x" }),
@@ -2935,6 +2955,255 @@ describe("Monitor — memory file GET/PUT (P6 Phase 3 / FSD §3.5.2 panel 2)", (
         const res = await fetchJson(`${baseUrl(monitor)}/api/memory/unknown/_index.md`);
         assert.equal(res.status, 404);
         assert.match(res.body.error, /store/i);
+      } finally {
+        await monitor.close();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+// ── M5-WI40 (age-autonomy): monitor config read faces via shared extends merge ─
+//
+// readMissionConfig / handleListConfigs / handleGetRoadmap all go through
+// mission-check.mjs loadMission (single merge implementation, base →
+// base.local → mission). A mission inheriting roadmapPath/plansDir/commands
+// from base.json must display valid config on every API face; graceful
+// degrade (null/skip, never 500) and the no-roadmapPath base filter stay.
+
+describe("Monitor — mission config extends merge (M5-WI40 P2)", () => {
+  function seedExtendsProject(root) {
+    // base.json: shared defaults; NOT a runnable mission (no roadmapPath).
+    makeMission(root, "base", {
+      plansDir: "docs/plans/inherited",
+      commands: { test: "npm --prefix tools/mission-driver test", build: "npm run build" },
+      description: "base description",
+      flowName: "base-flow",
+      _internal: "stripped-at-merge",
+    });
+    // ext-mission.json: inherits everything except its own identity + roadmap.
+    makeMission(root, "ext-mission", {
+      extends: "base",
+      name: "ext-mission",
+      roadmapPath: "docs/roadmaps/ext.md",
+    });
+  }
+
+  it("① /api/configs lists an extends mission with merged-chain fields visible", async () => {
+    const root = makeTmpProject();
+    try {
+      seedExtendsProject(root);
+      const monitor = await startMonitor({ projectRoot: root, port: 0, webDir: join(root, "web") });
+      try {
+        const res = await fetchJson(`${baseUrl(monitor)}/api/configs`);
+        assert.equal(res.status, 200);
+        assert.equal(res.body.total, 1, "only the extends mission lists (base filtered)");
+        const row = res.body.configs[0];
+        assert.equal(row.name, "ext-mission");
+        assert.equal(row.roadmapPath, "docs/roadmaps/ext.md");
+        assert.equal(row.description, "base description", "description inherited from base");
+        assert.equal(row.flowName, "base-flow", "flowName inherited from base");
+
+        // Run-detail config face benefits too (readMissionConfig shared path):
+        // inherited plansDir/commands surface through the whitelist.
+        const runId = "2026-08-27-ext1-mission-driver";
+        makeRun(root, runId, {
+          state: { missionName: "ext-mission", runId, status: "running", steps: [] },
+        });
+        const detail = await fetchJson(`${baseUrl(monitor)}/api/runs/${runId}`);
+        assert.equal(detail.status, 200);
+        assert.equal(detail.body.config.roadmapPath, "docs/roadmaps/ext.md");
+        assert.equal(detail.body.config.plansDir, "docs/plans/inherited", "plansDir inherited via merge");
+        assert.equal(detail.body.config.commands.test, "npm --prefix tools/mission-driver test");
+      } finally {
+        await monitor.close();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("② /api/configs/:name/roadmap resolves an inherited roadmapPath", async () => {
+    const root = makeTmpProject();
+    try {
+      seedExtendsProject(root);
+      const roadmapDir = join(root, "docs", "roadmaps");
+      mkdirSync(roadmapDir, { recursive: true });
+      writeFileSync(
+        join(roadmapDir, "ext.md"),
+        ["## 阶段状态", "", "- 1. 继承链条目甲：`done`", "- 2. 继承链条目乙：`todo`", ""].join("\n"),
+      );
+      const monitor = await startMonitor({ projectRoot: root, port: 0, webDir: join(root, "web") });
+      try {
+        const res = await fetchJson(`${baseUrl(monitor)}/api/configs/ext-mission/roadmap`);
+        assert.equal(res.status, 200);
+        assert.equal(res.body.roadmapPath, "docs/roadmaps/ext.md", "own field beats nothing; resolves");
+        assert.equal(res.body.phases.length, 2);
+        assert.equal(res.body.overallProgress, 0.5);
+      } finally {
+        await monitor.close();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("③ /api/configs/:name/plans reads an inherited plansDir", async () => {
+    const root = makeTmpProject();
+    try {
+      seedExtendsProject(root);
+      const plansDir = join(root, "docs", "plans", "inherited");
+      mkdirSync(plansDir, { recursive: true });
+      writeFileSync(join(plansDir, "2026-08-27-001-plan.md"), "> Status: active\n\n## Phase\n- [ ] w\n");
+      const monitor = await startMonitor({ projectRoot: root, port: 0, webDir: join(root, "web") });
+      try {
+        const res = await fetchJson(`${baseUrl(monitor)}/api/configs/ext-mission/plans`);
+        assert.equal(res.status, 200);
+        assert.equal(res.body.plansDir, "docs/plans/inherited", "plansDir inherited from base");
+        assert.equal(res.body.plans.length, 1);
+        assert.equal(res.body.plans[0].fileName, "2026-08-27-001-plan.md");
+        assert.equal(res.body.plans[0].status, "active");
+      } finally {
+        await monitor.close();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("④ base.local.json override precedence: base.local > base, mission-own > both", async () => {
+    const root = makeTmpProject();
+    try {
+      seedExtendsProject(root);
+      // base.json sets description "base description"; base.local.json overrides it.
+      makeMission(root, "base.local", {
+        description: "local override description",
+      });
+      const monitor = await startMonitor({ projectRoot: root, port: 0, webDir: join(root, "web") });
+      try {
+        const res = await fetchJson(`${baseUrl(monitor)}/api/configs`);
+        assert.equal(res.status, 200);
+        const row = res.body.configs.find((c) => c.name === "ext-mission");
+        assert.ok(row, "extends mission lists");
+        assert.equal(row.description, "local override description", "base.local beats base");
+        assert.equal(row.roadmapPath, "docs/roadmaps/ext.md", "mission-own field beats base/base.local");
+        assert.equal(res.body.total, 1, "base.local itself is not listed (no roadmapPath)");
+      } finally {
+        await monitor.close();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("⑤ dangling extends target → graceful skip (no 500, not listed, empty roadmap face)", async () => {
+    const root = makeTmpProject();
+    try {
+      seedExtendsProject(root);
+      makeMission(root, "dangling-mission", {
+        extends: "no-such-base",
+        name: "dangling-mission",
+        roadmapPath: "docs/roadmaps/dangling.md",
+      });
+      const monitor = await startMonitor({ projectRoot: root, port: 0, webDir: join(root, "web") });
+      try {
+        const res = await fetchJson(`${baseUrl(monitor)}/api/configs`);
+        assert.equal(res.status, 200, "no 500 on dangling extends");
+        const names = res.body.configs.map((c) => c.name);
+        assert.ok(!names.includes("dangling-mission"), "dangling mission skipped from list");
+
+        const roadmapRes = await fetchJson(`${baseUrl(monitor)}/api/configs/dangling-mission/roadmap`);
+        assert.equal(roadmapRes.status, 200);
+        assert.deepEqual(roadmapRes.body, { roadmapPath: null, phases: [], overallProgress: 0 });
+
+        const plansRes = await fetchJson(`${baseUrl(monitor)}/api/configs/dangling-mission/plans`);
+        assert.equal(plansRes.status, 200);
+        assert.deepEqual(plansRes.body, { plans: [], plansDir: null });
+      } finally {
+        await monitor.close();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("⑥ base.json (no roadmapPath) stays filtered from /api/configs (regression pin)", async () => {
+    const root = makeTmpProject();
+    try {
+      seedExtendsProject(root);
+      const monitor = await startMonitor({ projectRoot: root, port: 0, webDir: join(root, "web") });
+      try {
+        const res = await fetchJson(`${baseUrl(monitor)}/api/configs`);
+        assert.equal(res.status, 200);
+        const names = res.body.configs.map((c) => c.name);
+        assert.ok(!names.includes("base"), "base.json filtered (loadMission throws: missing roadmapPath)");
+        assert.ok(!names.includes("base.local"), "base.local.json filtered");
+      } finally {
+        await monitor.close();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("⑦ no-extends mission: response shapes unchanged (backward-compat pin)", async () => {
+    const root = makeTmpProject();
+    try {
+      makeMission(root, "plain-mission", {
+        name: "plain-mission",
+        description: "plain",
+        roadmapPath: "docs/roadmaps/plain.md",
+        plansDir: "docs/plans/plain",
+        moduleDir: "tools/x",
+        flowName: "plain-flow",
+        auditsDir: "docs/audits/x",
+        contextDir: "docs/context",
+        commands: { test: "npm test", build: "npm run build" },
+        commitFormat: "feat: x",
+      });
+      const runId = "2026-08-27-plain-mission-driver";
+      makeRun(root, runId, {
+        state: { missionName: "plain-mission", runId, status: "running", steps: [] },
+      });
+      const monitor = await startMonitor({ projectRoot: root, port: 0, webDir: join(root, "web") });
+      try {
+        const list = await fetchJson(`${baseUrl(monitor)}/api/configs`);
+        assert.equal(list.status, 200);
+        assert.equal(list.body.total, 1);
+        assert.deepEqual(Object.keys(list.body.configs[0]).sort(), [
+          "description",
+          "flowName",
+          "lastRunId",
+          "lastRunStatus",
+          "moduleDir",
+          "name",
+          "roadmapPath",
+        ]);
+
+        const detail = await fetchJson(`${baseUrl(monitor)}/api/runs/${runId}`);
+        assert.equal(detail.status, 200);
+        assert.deepEqual(Object.keys(detail.body.config).sort(), [
+          "auditsDir",
+          "commands",
+          "commitFormat",
+          "contextDir",
+          "description",
+          "flowName",
+          "moduleDir",
+          "name",
+          "planGuide",
+          "plansDir",
+          "roadmapPath",
+        ]);
+        assert.equal(detail.body.config.commands.test, "npm test");
+        assert.equal(detail.body.config.workflow, undefined);
+
+        const roadmap = await fetchJson(`${baseUrl(monitor)}/api/configs/plain-mission/roadmap`);
+        assert.equal(roadmap.status, 200);
+        assert.equal(roadmap.body.roadmapPath, "docs/roadmaps/plain.md");
+        assert.deepEqual(roadmap.body.phases, []);
+        assert.equal(roadmap.body.overallProgress, 0);
       } finally {
         await monitor.close();
       }

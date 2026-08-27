@@ -36,6 +36,7 @@ import {
   listPrompts,
   listMemoryStores,
 } from "./context-map.mjs";
+import { loadMission } from "./mission-check.mjs";
 
 // Testability seam for POST /api/runs AND POST /api/missions/draft: production
 // uses the real child_process spawn; tests override this via
@@ -539,14 +540,18 @@ function handleListRuns(projectRoot, query) {
 }
 
 // Read a whitelisted mission config for display (FIX-1).
-// Returns null when the mission file is missing or unparseable (graceful degrade).
+// Goes through the shared loadMission (mission-check.mjs) so `extends` chains
+// merge exactly like the engine's config path — base → base.local → mission,
+// one merge implementation (age-autonomy M5-WI40 P2). No projectRoot is
+// passed: display faces skip path-existence validation (dangling paths stay
+// tolerable). Missing/invalid missions throw → null (graceful degrade).
 function readMissionConfig(projectRoot, missionName) {
   if (!missionName) return null;
   const safeName = basename(missionName);
   const missionFile = resolve(projectRoot, "missions", `${safeName}.json`);
   let mission;
   try {
-    mission = JSON.parse(readFileSync(missionFile, "utf8"));
+    mission = loadMission(missionFile);
   } catch {
     return null;
   }
@@ -739,7 +744,12 @@ function handleListConfigs(projectRoot, query) {
   const all = [];
   for (const f of files) {
     try {
-      const mission = JSON.parse(readFileSync(join(missionsDir, f), "utf8"));
+      // Shared extends merge (M5-WI40 P2): loadMission resolves
+      // base → base.local → mission, so missions inheriting roadmapPath/
+      // plansDir/commands from base.json list with their merged fields;
+      // invalid files (base configs, malformed JSON, dangling extends) throw
+      // and are skipped (graceful degrade).
+      const mission = loadMission(join(missionsDir, f));
       // Skip non-mission files: base configs and local overrides lack `roadmapPath`.
       if (!mission.roadmapPath) continue;
       const lastRun = findLatestRunForMission(projectRoot, mission.name);
@@ -796,7 +806,10 @@ function handleGetRoadmap(projectRoot, name) {
   const missionFile = resolve(projectRoot, "missions", `${safeName}.json`);
   let roadmapPath = null;
   try {
-    const mission = JSON.parse(readFileSync(missionFile, "utf8"));
+    // Shared extends merge (M5-WI40 P2): missions inheriting roadmapPath from
+    // base.json resolve their roadmap face; missing/invalid missions keep the
+    // empty-response shape below (no projectRoot — display tolerance).
+    const mission = loadMission(missionFile);
     roadmapPath = mission.roadmapPath || null;
   } catch {}
   if (!roadmapPath) {

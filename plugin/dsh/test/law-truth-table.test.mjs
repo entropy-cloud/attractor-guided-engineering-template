@@ -2170,19 +2170,25 @@ test("rwg: inert faces — non-roadmap target, no currentFileState, legacy roadm
   assert.match(legacy.observations[0].reason, /not a frontmatter roadmap \(legacy\/dual-read\) — WI structure not comparable/);
 });
 
-test("rwg: REAL roadmap corpus smoke — an unchecked WI's checkbox flip and evidence append both allow (constructed, no file write)", () => {
-  // bold-marker WI lines (e.g. `- [ ] **WI40 …**`) are part of the real corpus shape since the
-  // roadmap's creation; the M5-WI39 write-back left the bold WI40 as the only unchecked row.
-  const wiLine = REAL_ROADMAP_TEXT.split("\n").find((l) => /^- \[ \] \**WI\d+\b/.test(l));
-  assert.ok(wiLine, "an unchecked WI line present in the real roadmap");
-  const flipped = REAL_ROADMAP_TEXT.replace(wiLine, wiLine.replace("- [ ]", "- [x]"));
-  const appended = REAL_ROADMAP_TEXT.replace(wiLine, `${wiLine.replace("- [ ]", "- [x]")}（证据：抽验注记）`);
+test("rwg: REAL roadmap corpus smoke — a registered WI's checkbox flip and evidence append both allow (constructed, no file write)", () => {
+  // bold-marker WI lines (e.g. `- [x] **WI40 …**`) are part of the real corpus shape since the
+  // roadmap's creation. Since the M5-WI40 close-out the live roadmap is all-done (zero unchecked
+  // rows — the terminal state this smoke can no longer sample directly), so the unchecked
+  // "current" is constructed from a real checked row; the forward flip `[ ]→[x]` and the
+  // trailing evidence append stay exercised against the real corpus shape and registry
+  // (constructed texts only — no file write).
+  const doneLine = REAL_ROADMAP_TEXT.split("\n").find((l) => /^- \[x\] \**WI\d+\b/.test(l));
+  assert.ok(doneLine, "a checked WI line present in the real roadmap");
+  const wiLine = doneLine.replace("- [x]", "- [ ]");
+  const currentText = REAL_ROADMAP_TEXT.replace(doneLine, wiLine);
+  const flipped = currentText.replace(wiLine, wiLine.replace("- [ ]", "- [x]"));
+  const appended = currentText.replace(wiLine, `${wiLine.replace("- [ ]", "- [x]")}（证据：抽验注记）`);
   for (const proposed of [flipped, appended]) {
     const out = evaluateGates(
       { type: "write", path: REAL_ROADMAP_FILE, proposedContent: proposed },
       {
         policy: { gates: [{ id: "roadmap-write-guard", match: "{{roadmapPath}}", rule: "roadmap-write-guard", mode: "enforce" }] },
-        currentFileState: { text: REAL_ROADMAP_TEXT },
+        currentFileState: { text: currentText },
         ctx: { roadmapPath: REAL_ROADMAP_FILE, projectRoot: REPO_ROOT },
       },
     );
