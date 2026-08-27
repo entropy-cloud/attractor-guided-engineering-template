@@ -15,15 +15,8 @@
     "closure": "docs/skills/closure-audit-prompt.md"
   },
   "prompts": {
-    "draftFromRoadmap": "tools/mission-driver/prompts/draft-from-roadmap.md",
-    "planReview": "tools/mission-driver/prompts/plan-review.md",
-    "execute": "tools/mission-driver/prompts/execute.md",
-    "healthCheck": "tools/mission-driver/prompts/health-check.md",
-    "buildVerify": "tools/mission-driver/prompts/build-verify.md",
-    "closureAudit": "tools/mission-driver/prompts/closure-audit.md",
     "multiAudit": "tools/mission-driver/prompts/multi-audit.md",
-    "openAudit": "tools/mission-driver/prompts/open-audit.md",
-    "postmortem": "tools/mission-driver/prompts/run-postmortem.md"
+    "openAudit": "tools/mission-driver/prompts/open-audit.md"
   },
   "commands": {
     "test": "pnpm --prefix tools/mission-driver test",
