@@ -1,7 +1,7 @@
 # AGE 自主运行架构 — 使用（Usage）
 
 > Status: supported baseline（human 批准，2026-08-24）
-> 定义双形态产品在真实使用中的入口、流程、介入点与上手路径。两形态共享同一账本/法律/完成语义，差异只在执行后端与入口。带 `continuous`/`stop` 的能力行是目标形态，现役入口仍以 `docs/design/dsh-plugin-integration.md` 的 as-built 状态为准。
+> 定义双形态产品在真实使用中的入口、流程、介入点与上手路径。两形态共享同一账本/法律/完成语义，差异只在执行后端与入口。`continuous` 行已落地（M3-WI28 `mdcontrol.continuous`，opt-in 默认 off）；`mdcontrol.stop` 仍为目标形态——现役入口仍以 `docs/design/dsh-plugin-integration.md` 的 as-built 状态为准。
 
 ## 1. Purpose
 
@@ -30,8 +30,8 @@
 | `mission-control-analyze [run]` | Reflexion 事后分析 |
 | `mdcontrol.status/list` | 观察 run 与队列 |
 | `mdcontrol.stop` | 协作中断当前 run（中断即暂停，恢复=收敛式重跑） |
-| `mdcontrol.unlock <plan>` | 人工解锁 held plan；守夜人写 held→active 并清零 `failures`（目标能力） |
-| （continuous） | 开启/关闭连续模式 |
+| `mdcontrol.unlock <plan>` | 人工解锁 held plan；守夜人写 held→active 并清零 `failures`（M3-WI28 已落地：第七路由，`unlock` held→active 同写 failures=0 / `dispose` 终态 disposition，经守夜人 writer role=supervisor） |
+| `mdcontrol.continuous` | 开启/关闭连续模式（M3-WI28 已落地：第六路由，opt-in 默认 off） |
 
 ### 2.3 典型一天
 
@@ -80,7 +80,7 @@ commit → push → 任意机器 checkout → 重跑 → 从 checkbox + frontmat
 | --- | --- | --- |
 | 交互会话内自驱 | ✅ | ✘（headless） |
 | 独立评审/审计派发 | ✅ 守夜人 | ✅ 引擎/CLI 派发 |
-| agent 池化 / prompt 缓存 | ✅ | ◐ 退化为 `--session` 续用 + 前缀纪律（as-built：步内续用已钉住、跨步未交付归 M5-WI37，04 §6 注记） |
+| agent 池化 / prompt 缓存 | ✅ | ◐ 退化为 `--session` 续用 + 前缀纪律（as-built：步内续用已钉住；跨步未交付经 M5-WI37 裁定维持不交付——06 清单 §3 D1，重开触发 = 退役执行期 ∨ token 观测主因；04 §6 注记） |
 | 连续队列（roadmap 即队列） | ✅ 守夜人 | ◐ cron/CI 逼近 |
 | 法律（门禁） | ✅ pre-execute（实时 + 身份验证） | ✅ CI/git hooks（提交边界；结构子集，无实时身份） |
 | 收尾回执 | ✅ followup | ✅ 终态 + monitor |

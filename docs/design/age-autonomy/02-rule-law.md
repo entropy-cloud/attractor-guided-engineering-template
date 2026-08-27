@@ -165,6 +165,7 @@ dispatch:                                # 派发类型 → 具名 agent（提�
 - plan 文件只能落在 mission 配置的 `plansDir` 域内；frontmatter 必须符合 01-file-ledger §2 的扁平子集；`work-item` 必须命中 roadmap 已登记项；roadmap 写回只能改已登记 work-item 的 checkbox。
 - 越域写 / 非法 frontmatter / 未登记 work-item → deny；对已完成派生或可写终态 plan 的 Phase/status/机器字段写入 → deny（终态冻结）。
 - **执法层自护（P8）**：law 实现（`plugin/dsh/src/law/**`）、策略数据（`missions/autonomy.policy.yml`）、执法 CLI（`tools/mission-driver/src/{plan-check,gate-check}.mjs`）对 AI 写一律 deny；人工 / CI / 已批准立项路径为合法例外。被执法者不得改写执法者自身——法律层单点失效的唯一防线，属 A1 裁定下唯一无条件对抗级的面。
+- **as-built 放置与保护姿态注记（M5-WI39 事实性增补）**：law 实现本体（规则/策略内核 `tools/mission-driver/src/{law-core,law-policy,law-rules}.mjs`）按 0815-1 放置裁定落**引擎侧**零 npm 模块（可达链 `config.js → law-policy → law-core`，与 M1 共享账本库同裁定族）；上文字面集中的 `plugin/dsh/src/law/**` 实指宿主适配层（`host-adapter.ts`）——即 P8 路径集（`law-self-protection` `isLawProtectedPath` 四族）**不含**引擎侧内核三模块。引擎侧内核的替代保护面：① 引擎 import 闭包消费 + **build-bundle 复制通道**（`plugin/dsh/assets/src/law-*.mjs` 副本由 `ALLOWED_MODULES` 通道从 tools 源再生物化，bundle freshness 结构门钉住副本与源一致）；② **CI + 已批准立项纪律**（内核变更历 M2 0815-{1,2,3}/0950-1 批次均经 active plan 立项引用目标路径——P8「已批准立项」例外支的合法消费者；`verify-age.sh` L2.5 law gates 与 `age-ci.yml` 账本/执法数据触发路径兜底）。本注记收口 0950-1（WI21）Deferred「law 内核 P8 覆盖缺口」：字面清单不扩张（扩张 = 契约变更需独立立项），放置错位以成文注记消解。
 
 ### 4.8 评审与审计区 append-only
 
@@ -207,6 +208,7 @@ dispatch:                                # 派发类型 → 具名 agent（提�
 
 ## Changelog
 
+- 2026-08-27（M5-WI39，plan `docs/plans/age-autonomy/2026-08-27-1023-3`）：§4.7 as-built 放置与保护姿态注记（事实性增补，非契约变更）——引擎侧 law 内核三模块放置裁定（0815-1）+ 不入 P8 字面集的理由与替代保护面（import 闭包 + build-bundle freshness / CI + 已批准立项纪律）成文；收口 0950-1（WI21）Deferred「law 内核 P8 覆盖缺口」。
 - 2026-08-26（M3-WI29，plan `docs/plans/age-autonomy/2026-08-26-1954-2`）：§4.6 增量——不计清单补第四行「恢复 redispatch」（崩溃重派不重复计 `failures`，03 §6「不把单次崩溃计为计划失败」字面落点；恢复路径 `recordPlanFailure` 调用点为空，重派动作经 observation 回执记录）；同 plan 附带两处窄域行为增量（均真值表钉住）：§4.2 评审租约改**最末 dispatch review 行作答**（superseded 行不持约、最末行配对即租约关闭——与幂等面最新行作答单一语义面，redispatch 后 plan 写面不锁死）+ §4.6 预算闸增**同轮次崩溃重派豁免**（新 DAR dispatch 行轮次号 ∈ 现 unpaired 在飞轮次集 = 同 occurrence 重派，轮次已付不耗预算不 deny，01 §3.1）。
 
 - 2026-08-26（M3-WI27，plan `docs/plans/age-autonomy/2026-08-26-1411-3`）：§4.6 增量——failures 归因桶成文（`executor-error` / `verification-red` / `claim-expired-no-output` 三桶各计/不计规则 + 不计清单）+ maxFailures 双源解析（policy 权威 / mission flow 回退 / 双缺默认 3，`resolveMaxFailures`）+ 熔断执行语义注记（held 同写清 claim、单 held 不阻塞、全 held 经 03 §8 求值核心终态化）。

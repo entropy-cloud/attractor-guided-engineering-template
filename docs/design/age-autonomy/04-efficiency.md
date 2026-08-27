@@ -104,7 +104,7 @@ assembly:
 1. **步内 `--session` 续用（已钉住）**：`runner.js` `{session}` token 注入 `--session <id>`；correction retry 与 parse 内层 run 共会话（`lastSessionId` 唯一消费面）。测试覆盖：`runner-routing.test.js`（转发/剥离双分支）、`prompt-cmdline-limit.test.js`、`step-executor.test.js`、`transitions.test.js`（correction 会话传递）、`parse-fallback.test.js`（parse 共会话）。
 2. **前缀纪律（已审计 + 钉住）**：`prompts/*.md` 11 模板逐件审计（2026-08-27）——唯一大易变负载 `{{runSkeleton}}`（run-postmortem.md）位于固定指令前导之后非前置，其余 `{{var}}` 均为小引用（路径/命令/名字/单行诊断）→ **零重排**；钉住测试 `tools/mission-driver/test/prompt-prefix-discipline.test.js`（live 渲染路径双渲染共享固定前缀字节断言 + 三类变量注册表 drift gate）。
 3. **policy `fixedPrefix`/`assembly` 组装为 DSH 形态面**：池成员 charter 组装与画像取材（M4-WI32/33/34）挂 continuable 子代理（`PoolAgentsFace`），独立形态 headless run（`executor.js` → `runner.js` 直连）不经过——独立形态薄 prompt + 步内会话续用即当前 as-built 降级。
-4. **跨步续用未交付**：`engine.js` 全部三个 `_executeAgentStep` 调用点传 `null`（每 agent step 起新会话）；「部分存在」as-built 收窄为「步内存在、跨步未交付」。跨步 threading 与 CLI 侧会话池二选一裁定归 **M5-WI37**（引擎退役判定门）。
+4. **跨步续用未交付**：`engine.js` 全部三个 `_executeAgentStep` 调用点传 `null`（每 agent step 起新会话）；「部分存在」as-built 收窄为「步内存在、跨步未交付」。跨步 threading 与 CLI 侧会话池二选一裁定归 **M5-WI37**（引擎退役判定门）——已裁定：[06-engine-retirement-checklist](./06-engine-retirement-checklist.md) §3 D1 **维持 as-built 不交付**（重开触发 = 退役执行期 ∨ 独立形态 token 观测显示跨步 KV 损失成为主因）。
 
 ## 7. 与既有机制的关系
 

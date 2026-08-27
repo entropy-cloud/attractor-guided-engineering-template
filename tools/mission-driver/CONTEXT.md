@@ -104,6 +104,8 @@ sourcePaths（依赖模块源码路径，不同同事路径不同）
 
 **引擎退役判定清单（M5-WI37）**（age-autonomy，plan `docs/plans/age-autonomy/2026-08-27-1023-1`）：P4 判定门工件 `docs/design/age-autonomy/06-engine-retirement-checklist.md`（living decision-gate artifact，00 §7/§8 登记）——引擎职责覆盖矩阵 12 行（transient/循环防护/预算/熔断/reconcile/编排/draft/终态退出码/monitor/marker/L2 parity → 门禁+守夜人覆盖+证据+缺口+判定三态）+ 累积 Deferred D1–D7 裁定（跨步续用维持不交付、reasoningEffort 无载体、BUILD_VERIFY 保留、execute 腿不接线、死会话 claim 不立项、cron seam 完备、marker 删除归退役执行期）+ 总判定 = **引擎留任主后端（条件退役）** + 缺口前置清单 G1–G6；零代码变更，引擎行为零改动。
 
+**owner-doc 一致性收口（M5-WI39）**（age-autonomy，plan `docs/plans/age-autonomy/2026-08-27-1023-3`）：design+architecture 六文档清点矩阵 42 行（rg 33 命中零遗漏；三态 closed-by-evidence 11 / still-deferred 6 / superseded 1 / 已核无需动作 24，矩阵落 `docs/logs/2026/08-27.md`）——02 §4.7 引擎侧 law 内核三模块（`src/{law-core,law-policy,law-rules}.mjs`）放置裁定 + 不入 P8 字面集理由与替代保护面成文（收口 WI21 Deferred）；06 清单 #9/G3 随 WI38 收口刷新（EXIT_MAP 现行 13 键）；baseline §Public Exports 补 EXIT_MAP M5-WI38 增量登记；05 §2.2 unlock/continuous 落地注记（`mdcontrol.stop` 仍目标形态）；00 §7 P0–P4 落地注记；零代码变更。
+
 ## Monitor Dashboard 前端
 
 **技术栈**: Vue 3 + Naive UI 2 + TypeScript + Vite + xterm.js + Pinia（资源监控用 Naive UI 表格，ECharts 已移除）

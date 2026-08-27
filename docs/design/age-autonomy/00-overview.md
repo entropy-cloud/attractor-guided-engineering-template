@@ -91,6 +91,8 @@
 | P3 | 效率层：池化 + prompt 组装 + 上下文画像 | 插件层 |
 | P4 | 引擎退役判定门（可选） | 门禁+supervisor 覆盖缺失机制后评估 → 判定面工件 = [06-engine-retirement-checklist](./06-engine-retirement-checklist.md)（M5-WI37 在库，living decision-gate artifact：覆盖矩阵 + D1–D7 裁定 + 总判定） |
 
+**落地状态注记（2026-08-27，M5-WI39 事实性增补——表体是目标形态契约，注记不改契约语义）**：P0 账本改造已落地（M1，plans `2026-08-25-0635-{1,2,3}`）；P1 法律已落地（M2，plans `2026-08-25-0815-{1,2,3}` + `2026-08-25-0950-{1,2,3}`，18 gates 全 enforce）；P2 守夜人已落地（M3，plans `2026-08-26-1411-{1,2,3}` + `2026-08-26-1954-{1,2,3}` + `2026-08-27-0433-1`，「引擎存续」守关现值 = 引擎留任）；P3 效率层已落地（M4，plans `2026-08-27-0433-{2,3}` + `2026-08-27-0558-{1,2,3}`）；P4 判定门已评估（M5-WI37 总判定 = **引擎留任主后端（条件退役）**，缺口前置清单 G1–G6 见 [06-engine-retirement-checklist](./06-engine-retirement-checklist.md)；其 G3 项 EXIT_MAP `partial`/`blocked` 增补已由 M5-WI38 独立立项收口——现行 13 键）。
+
 **三硬门**（防净倒退，先于 Supervisor 落地）：审计回执绑定、draft→active 写者身份、完成派生公式。**WI13 证据面注意**：现 plan-status-gate 的证据来自 `_tmp` run-state 子流程文件；frontmatter 化后该证据面失效，P1 的完成门禁是「证据面重建为账本谓词」，不是把 WI13 原样泛化（否则会安静地变成 no-op）。
 
 ## 8. 文档地图
