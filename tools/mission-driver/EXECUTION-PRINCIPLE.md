@@ -582,6 +582,10 @@ flowchart LR
 | 某 retry 链达 maxRetries | `max_retries` | 2 | 重试上限 |
 | 检测到两步 ping-pong | `ping_pong` | 2 | 死循环保护 |
 | 未知 step / 类型 / 非法转换 | `unknown_step` / `unknown_type` / `no_transition` / `invalid_transition` | 1 | 流程定义错误 |
+| 守夜人终态词 `partial` 经独立形态暴露（03 §8 R1 预算耗尽未全 done / R3 无草无活未全勾） | `partial` | 3 | 终态非完成、需人工处置（unlock/dispose） |
+| 守夜人终态词 `blocked` 经独立形态暴露（03 §8 R3∧held>0 / R4 停滞熔断） | `blocked` | 3 | 终态非完成、需人工处置（unlock/dispose） |
+
+`partial`/`blocked` 词源守夜人终态规则（`docs/design/age-autonomy/03-supervisor.md` §8 R1–R4；M5-WI38 独立立项增补，plan `2026-08-27-1023-2`）。引擎存续期 `_result` 不发射这两个词——DSH 形态走回执不依赖退出码；入表 = 前瞻防护独立形态暴露面落入「未映射词 → exit 0」通道（不得把未完成 roadmap 静默记为 completed）。exit 3 = 新退出码类「终态非完成、需人工处置」，与 2（预算/上限保护族，补救 = 重跑）与 1（不可恢复失败）分离。`skipped` 与动态 done 词仍有意不映射（Node 默认 exit 0）。
 
 ---
 
