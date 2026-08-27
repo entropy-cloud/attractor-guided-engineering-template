@@ -56,7 +56,10 @@ describe("real instance", () => {
     const r = parsePolicy(REAL_POLICY);
     assert.equal(r.ok, true, r.errors?.join("; "));
     assert.equal(r.policy.version, 1);
-    assert.deepEqual(r.policy.limits, { maxAuditRounds: 3, maxFailures: 3, stagnationRounds: 10 });
+    // maxAuditRounds 8 = global cross-run budget (M5-WI47 correction,
+    // plan 2026-08-27-2122-1); flows keeps 3 as the per-run guard — the two
+    // domains are deliberately different values.
+    assert.deepEqual(r.policy.limits, { maxAuditRounds: 8, maxFailures: 3, stagnationRounds: 10 });
     assert.deepEqual(r.policy.gates, [
       // WI21: the frontmatter-tightening enforce flip this plan owns
       // (0815-1 comment hand-off) + the work-item registration increment.

@@ -3,16 +3,23 @@
 # {{plansDir}} / {{roadmapPath}} / {{projectRoot}}; this file is law data —
 # changes only through a plan's Add item, never ad-hoc edits; P8
 # self-protection denies AI writes here except human / CI / approved-project
-# — the WI21 plan itself is the active approved-project reference).
+# — the WI21 plan itself is the active approved-project reference; the
+# M5-WI47 plan 2026-08-27-2122-1 is the active reference for the
+# maxAuditRounds budget correction below).
 #
-# limits precedence: policy is authoritative, mission config (engine
-# flow.maxAuditRounds) is the fallback — one authority + one fallback per
-# constraint. maxAuditRounds here matches flows/mission-driver.json (3) so the
-# two channels agree until consumers switch (M2/M3 plans). maxFailures
-# semantics landed with M3/WI27 (failure attribution buckets + circuit
-# breaker, 02 §4.6; dual-source resolveMaxFailures in law-policy.mjs: this
-# limits row authoritative / flows/mission-driver.json top-level maxFailures
-# fallback / both absent default 3 — the two channels agree at 3/3).
+# limits are TWO deliberately separate counting domains for maxAuditRounds
+# (M5-WI47, plan docs/plans/age-autonomy/2026-08-27-2122-1): this row (8) is
+# the GLOBAL cross-run budget authority — the law face (audit-rounds-overflow
+# via resolveMaxAuditRounds, policy-first dual source) enforces the roadmap
+# frontmatter audit-rounds counter against it; flows/mission-driver.json
+# maxAuditRounds (3) is the PER-RUN transient guard feeding the engine
+# in-run round gate (engine reads per-run state only, never the global
+# counter — 06 checklist G7). The two values are intentionally different;
+# do NOT re-align them. maxFailures semantics landed with M3/WI27 (failure
+# attribution buckets + circuit breaker, 02 §4.6; dual-source
+# resolveMaxFailures in law-policy.mjs: this limits row authoritative /
+# flows/mission-driver.json top-level maxFailures fallback / both absent
+# default 3 — the two channels agree at 3/3).
 # stagnationRounds landed with M3/WI30 (03-supervisor §7/§8 stagnation
 # fingerprint + ping-pong detection): N consecutive heartbeat cycles with an
 # unchanged ledger fingerprint AND zero holder activity trip the R4 circuit
@@ -23,7 +30,7 @@
 # absent default 10. 0 = detector OFF (R4 never evaluates).
 version: 1
 limits:
-  maxAuditRounds: 3
+  maxAuditRounds: 8
   maxFailures: 3
   stagnationRounds: 10
 gates:
