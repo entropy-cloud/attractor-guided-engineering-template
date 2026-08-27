@@ -118,31 +118,49 @@ DSH 插件形态下，in-process child agent 有机会在**调用前 / 失败后
 
 ### 4.2 tier 候选列表配置
 
+候选身份用 `provider/model` 字符串（OpenRouter / LiteLLM 惯例）。provider 配置（base_url / auth / 调用形态）独立放在 `providers` 段，避免重复——同一 provider 的多个 model 共用同一组连接配置。
+
 ```jsonc
 // missions/base.json (新增字段)
 {
   "routing": {
+    "providers": {
+      "deepseek": {
+        "kind": "openai-compat",
+        "base_url": "https://api.deepseek.com",
+        "auth_env": "DEEPSEEK_API_KEY"
+      },
+      "anthropic": {
+        "kind": "anthropic-native",
+        "base_url": "https://api.anthropic.com",
+        "auth_env": "ANTHROPIC_API_KEY"
+      },
+      "openai": {
+        "kind": "openai-native",
+        "base_url": "https://api.openai.com",
+        "auth_env": "OPENAI_API_KEY"
+      }
+    },
     "tiers": {
       "strong": {
         "candidates": [
-          { "provider": "deepseek", "model": "deepseek-reasoner" },
-          { "provider": "anthropic", "model": "claude-opus-4" },
-          { "provider": "openai",    "model": "gpt-5" },
-          { "provider": "zhipu",    "model": "glm-z1" }
+          "deepseek/deepseek-reasoner",
+          "anthropic/claude-opus-4",
+          "openai/gpt-5"
         ]
       },
       "medium": {
         "candidates": [
-          { "provider": "deepseek", "model": "deepseek-chat" },
-          { "provider": "anthropic", "model": "claude-sonnet-4" },
-          { "provider": "openai",    "model": "gpt-4.1" }
+          "deepseek/deepseek-chat",
+          "anthropic/claude-sonnet-4",
+          "openai/gpt-4.1"
         ]
       },
       "light": {
         "candidates": [
-          { "provider": "deepseek", "model": "deepseek-flash" },
-          { "provider": "anthropic", "model": "claude-haiku-4" },
-          { "provider": "openai",    "model": "gpt-4.1-mini" }
+          "deepseek/deepseek-flash",
+          "anthropic/claude-haiku-4",
+          "openai/gpt-4.1-mini"
         ]
       }
     },
@@ -153,6 +171,12 @@ DSH 插件形态下，in-process child agent 有机会在**调用前 / 失败后
   }
 }
 ```
+
+**解析约束**（必须钉住）：
+- `candidates` 字符串只切**第一个 `/`** 作为 provider/model 分隔符
+- provider 名约束**不含 `/`**
+- model 名约束**不含 `/`**（HuggingFace 风格 provider 一律走 `hf:org/model` 等带 prefix 形式，避免与分隔符冲突）
+- `providers.<name>` 必须存在；不存在 → 启动时报错，不静默跳过
 
 ### 4.3 tier 选择标注
 
@@ -211,19 +235,30 @@ function dispatchStep(step):
 function select(tier: string, exclude: Set<ModelId>): ModelPick | null {
   const tierDef = tiers[tier];
   const now = Date.now();
-  for (const cand of tierDef.candidates) {
-    const id = `${cand.provider}/${cand.model}`;
+  for (const id of tierDef.candidates) {       // id 是 "provider/model" 字符串
     if (exclude.has(id)) continue;
     const state = registry.get(id);
     if (!state) {
       // 未观测过 → 默认健康
-      return cand;
+      return parseCandidate(id);
     }
-    if (state.status === 'healthy') return cand;
-    if (state.until > now) continue;       // 仍在冷却/quota 期内
-    return cand;                            // 冷却过期 → 重新尝试
+    if (state.status === 'healthy') return parseCandidate(id);
+    if (state.until > now) continue;            // 仍在冷却/quota 期内
+    return parseCandidate(id);                  // 冷却过期 → 重新尝试
   }
-  return null;                              // 整档不可用
+  return null;                                  // 整档不可用
+}
+
+function parseCandidate(id: string): ModelPick {
+  // 只切第一个 "/"；切完后去 providers[id.provider] 拿连接配置
+  const slash = id.indexOf('/');
+  if (slash <= 0) throw new ConfigError(`bad candidate: ${id}`);
+  const provider = id.slice(0, slash);
+  const model    = id.slice(slash + 1);
+  if (!model) throw new ConfigError(`empty model in: ${id}`);
+  const cfg = providers[provider];
+  if (!cfg) throw new ConfigError(`unknown provider: ${provider}`);
+  return { id, provider, model, ...cfg };
 }
 ```
 
@@ -294,6 +329,8 @@ dsh-model-router 用了 5 维加权；本设计用更简单的二元状态机即
   }
 }
 ```
+
+> registry key 与 candidates 字符串一致；monitor / 账本 / 日志统一使用 `provider/model` 格式。
 
 写入时机：每次状态变更 + mission 结束 + 每 60s 一次 flush（防进程被杀丢状态）。
 
@@ -401,6 +438,8 @@ monitor dashboard 增加：
 | D8 | 状态持久化到 `.age/routing-state.json` | mission-driver run-state 内嵌 / SQLite | 沿用 mission-driver 的"git + JSON"事实源原则；单独文件便于跨 mission 共享状态 |
 | D9 | 状态变更写账本 `.age/routing-ledger.jsonl` | 不写 / 写 SQLite | append-only JSONL 与 mission-driver memory 目录同形；monitor 读它做面板 |
 | D10 | 不实现 prompt-level routing | 实现 / 部分实现 | routing-suite-dragonbaba 调研结论：边际效益低，README 自承"不改模型/不换工具/不多发调用"——影响仅 1 句引导 |
+| D11 | candidates 用 `provider/model` 字符串（不拆 `{provider, model}` 对象） | 对象结构 / 完全独立 | 与 OpenRouter / LiteLLM 惯例一致；registry key / 账本 / monitor 全部统一字符串；provider 连接配置独立抽到 `providers.*` 段避免同 provider 多 model 重复配置 |
+| D12 | 解析只切第一个 `/`；provider/model 名约束不含 `/` | 支持任意 `/` / 用不同分隔符（`::` / `@`） | OpenRouter 惯例；边界情况（HF 风格 `org/model`）通过 provider-side prefix（`hf:org/model`）绕开 |
 
 ## 11. 待澄清问题（实现前必须回答）
 
