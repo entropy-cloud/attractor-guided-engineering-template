@@ -11,13 +11,14 @@
 
 ### 1.1 问题陈述
 
-当前所有 AI step 都 spawn 一个 driver 子进程（`opencode run` / `pi -p`），每个 step 只用**单一模型**。一旦该模型遇到三类失败，整个 mission 即卡死：
+当前所有 AI step 都 spawn 一个 driver 子进程（`opencode run` / `pi -p`），每个 step 只用**单一模型**。一旦该模型遇到四类失败，整个 mission 即卡死：
 
 | 失败类型 | 频率 | 当前处理 |
 | --- | --- | --- |
-| 5 小时套餐限额（429 quota） | 高（套餐必触发） | mission-driver 无感知，step 失败 → mission 退出 |
-| 临时网络/provider 故障（5xx / 连接超时） | 中 | 同上 |
-| 模型特定上下文窗口不足 / 工具不兼容 | 低 | 同上 |
+| 5 小时套餐限额（429 quota，账户级） | 高（套餐必触发） | mission-driver 无感知，step 失败 → mission 退出 |
+| Provider 凭据无效（401/403 AUTH，单 provider 级） | 中（套餐切换/凭据过期） | 同上 — **应 failover 到别的 provider** |
+| 临时网络/provider 故障（5xx / 连接超时，单 provider 级） | 中 | 同上 — **应 failover 到别的 provider** |
+| 模型特定上下文窗口不足（per model 上下文不同） | 低 | 同上 — **应 failover 到 tier 内窗口更大的 model** |
 
 DSH 插件形态下，in-process child agent 有机会在**调用前 / 失败后**做更智能的选择，但目前没有现成机制。
 
@@ -48,7 +49,7 @@ DSH 插件形态下，in-process child agent 有机会在**调用前 / 失败后
 
 - ✅ 模型 tier 分类定义与配置
 - ✅ 主派发 agent 在派发任务时声明 tier
-- ✅ 插件内部维护模型可用性状态（health / cooldown / quota_blocked）
+- ✅ 插件内部维护模型可用性状态（healthy / cooling_down / auth_blocked / quota_blocked）
 - ✅ tier 内候选链自动 failover
 - ✅ 失败语义识别（quota vs transient）
 - ✅ mission 模式下的 wait-check 步（无任何模型可用时）
@@ -84,8 +85,8 @@ DSH 插件形态下，in-process child agent 有机会在**调用前 / 失败后
 │   ║  │ (tier → pick) │←→│ (state per model id)     │  ║    │
 │   ║  └───────────────┘  │  ├─ healthy              │  ║    │
 │   ║         ↓            │  ├─ cooling_down(t_cool)│  ║    │
-│   ║  ┌───────────────┐  │  └─ quota_blocked(t_quot)│  ║    │
-│   ║  │ LLM Call      │  └──────────────────────────┘  ║    │
+│   ║  ┌───────────────┐  │  ├─ auth_blocked(t_auth) │  ║    │
+│   ║  │ LLM Call      │  │  └─ quota_blocked(t_quot)│  ║    │
 │   ║  │ Middleware    │           ↑                      ║    │
 │   ║  └───────────────┘           │ failure event       ║    │
 │   ║         ↓                    │                      ║    │
@@ -314,22 +315,43 @@ function select(tier: string, exclude: Set<ModelId>): ModelId | null {
 ### 6.1 状态机
 
 ```
-   ┌─────────────┐  success     ┌─────────┐
-   │ cooling_down│─────────────→│ healthy │
-   │  (短冷却)    │              └─────────┘
-   └─────────────┘                  ↑   │
-        ↑  ↓ cooldown 过期重试失败   │   │ success
-        │                            │   │
-        │   ┌─────────────┐  success │   │
-        │   │ quota_block │──────────┘   │
-        │   │  (5h 限额)   │              │
-        │   └─────────────┘              │
-        │        ↑                       │
-        │        │ quota 错误            │
-        │        │                       │
-        └────────┴───────────────────────┘
-                transient 错误
+                    success
+        ┌──────────────────────────────────┐
+        ↓                                  │
+   ┌─────────┐    success      ┌────────────────┐
+   │ healthy │←────────────────│ auth_block     │
+   └─────────┘                 │  (30min 凭据冷却)│
+        │                      └────────────────┘
+        │ transient/cooldown 过期↑    │ auth 错误
+        │ ←─────────────────────┘    │
+        ↓
+   ┌──────────────┐  冷却过期重试   ┌──────────────┐
+   │ cooling_down │────────────────│  (下一轮)     │
+   │  (60s 短冷却) │                └──────────────┘
+   └──────────────┘
+        ↑   │
+        │   │ transient 错误
+        │   ↓
+        │
+   ┌──────────────┐  quota 错误
+   │ quota_block  │
+   │  (5h 配额)    │
+   └──────────────┘
 ```
+
+**状态语义**：
+
+| 状态 | 含义 | 进入条件 | 退出条件 |
+| --- | --- | --- | --- |
+| `healthy` | 未观测过或最近一次调用成功 | 启动 / success | 任何 failure |
+| `cooling_down` | 短暂冷却（瞬时错误 / 上下文超限） | transient 类错误 | `until < now` 或 success |
+| `auth_blocked` | 凭据错误冷却（AUTH / INVALID_CREDENTIAL） | auth 类错误 | `until < now` 或 success |
+| `quota_blocked` | 账户配额耗尽 | `QUOTA` 类错误 | `until < now` 或 success |
+
+**为什么分三档冷却**：user-fixable vs system-recoverable vs transient —— 修复期望时长差异 100 倍级。
+- 60s：网络/provider 瞬时问题，自动恢复
+- 1800s：用户需要时间修复凭据
+- 18000s：账户配额等系统周期恢复（典型 5h package）
 
 ### 6.2 失败分类（关键算法）
 
@@ -345,39 +367,48 @@ function select(tier: string, exclude: Set<ModelId>): ModelId | null {
 
 **DSH adapter 已分类的 `LlmError.code` 集合**：
 
-| Adapter code | 含义 | 本插件处理 |
-| --- | --- | --- |
-| `QUOTA` | 账户配额/余额耗尽（终端性） | `quota_blocked` → 长冷却（默认 5h） |
-| `RATE_LIMIT` | 429 但非配额耗尽（瞬时限流） | `cooling_down` → 短冷却（默认 60s） |
-| `SERVER` | provider 5xx | `cooling_down` → 短冷却 |
-| `TIMEOUT` | 读超时（idle watchdog） | `cooling_down` → 短冷却 |
-| `TRANSPORT` | fetch failed / 连接错误 | `cooling_down` → 短冷却 |
-| `EMPTY_RESPONSE` | 正常完成但无内容 | `cooling_down` → 短冷却（DSH 自述"safe to retry"） |
-| `ABORTED` | 调用方中止 | 不计入（用户主动取消） |
-| `AUTH` | 401/403（认证失败） | **不计入** — 配置问题，换 model 无效 |
-| `INVALID_CREDENTIAL` | 凭据格式错 | **不计入** — 同上 |
-| `CONTEXT_WINDOW_EXCEEDED` | context 超限 | **不计入** — 换 model 也救不了，是 prompt 问题 |
-| `INVALID_REQUEST` | 400 通用 / 413 | **不计入** — 调用方错 |
-| 其他 `HTTP_<status>` | 未识别 | 保守处理：`cooling_down` 短冷却 + 写账本警示 |
+| Adapter code | 含义 | 跨 provider 是否独立？ | 本插件处理 |
+| --- | --- | --- | --- |
+| `QUOTA` | 账户配额/余额耗尽（终端性） | ❌ 账户绑定，同 provider 下其他 model 也不行 | `quota_blocked` → 长冷却（默认 5h） |
+| `RATE_LIMIT` | 429 但非配额耗尽（瞬时限流） | ✅ 不同 provider 独立 quota pool | `cooling_down` → 短冷却（默认 60s） |
+| `SERVER` | provider 5xx | ✅ | `cooling_down` → 短冷却 |
+| `TIMEOUT` | 读超时（idle watchdog） | ✅ | `cooling_down` → 短冷却 |
+| `TRANSPORT` | fetch failed / 连接错误 | ✅ | `cooling_down` → 短冷却 |
+| `EMPTY_RESPONSE` | 正常完成但无内容 | ✅ | `cooling_down` → 短冷却（DSH 自述"safe to retry"） |
+| `AUTH` | 401/403（认证失败） | ✅ **每个 provider 独立凭据**（`ConfigurableProviderView.apiKeyEnv` 按 provider 分开） | `auth_blocked` → 中冷却（默认 1800s = 30min） |
+| `INVALID_CREDENTIAL` | 凭据格式错 | ✅ 同上 | `auth_blocked` → 中冷却 |
+| `CONTEXT_WINDOW_EXCEEDED` | prompt 超 model 上下文 | ✅ **不同 model 窗口不同**（claude-opus 200k / deepseek-chat 8k / gpt-4.1 1M） | `cooling_down` → 短冷却（下次选 tier 内窗口更大的 model） |
+| `INVALID_REQUEST` | 400 通用 / 413 | ⚠️ 多数是调用方 bug（换 provider 也失败），但 413 可能是 provider-specific limit | 不计入（保守） |
+| `ABORTED` | 调用方中止 | n/a | 不计入（用户主动取消） |
+| 其他 `HTTP_<status>` | 未识别 | — | 保守处理：`cooling_down` 短冷却 + 写账本警示 |
+
+**新增 `auth_blocked` 状态的原因**：AUTH 失败介于 transient 与 quota 之间——
+- 60s 太短：用户还没改完凭据就触发重试
+- 5h 太长：用户改完凭据要等 5h 才能验证
+
+30min 是经验值：够长避免 spam、够短让"修了凭据 → 30min 后自动恢复"成立。
 
 **路由失败分类的代码骨架**：
 
 ```ts
 import { HarnessError, QUOTA_EXCEEDED_CODE } from '@deepseek-ai/dsh-llm';
 
-type FailureKind = 'quota' | 'transient' | 'non_retryable' | 'aborted';
+type FailureKind = 'quota' | 'transient' | 'auth' | 'non_retryable' | 'aborted';
 
 function classify(error: unknown): FailureKind {
   if (error instanceof HarnessError) {
     switch (error.code) {
       case QUOTA_EXCEEDED_CODE:                      return 'quota';
+      case 'AUTH':
+      case 'INVALID_CREDENTIAL':                     return 'auth';
       case 'RATE_LIMIT':
       case 'SERVER':
       case 'TIMEOUT':
       case 'TRANSPORT':
-      case 'EMPTY_RESPONSE':                         return 'transient';
+      case 'EMPTY_RESPONSE':
+      case 'CONTEXT_WINDOW_EXCEEDED':                return 'transient';
       case 'ABORTED':                                return 'aborted';
-      // AUTH / INVALID_CREDENTIAL / CONTEXT_WINDOW_EXCEEDED / INVALID_REQUEST
+      // INVALID_REQUEST / 其他 HTTP_xxx
       default:                                       return 'non_retryable';
     }
   }
@@ -398,6 +429,14 @@ function onFailure(model: ModelId, error: unknown): void {
         last_error_at: now,
       });
       break;
+    case 'auth':
+      registry.set(model, {
+        status: 'auth_blocked',
+        until: now + authCooldownMs,
+        last_error_kind: 'auth',
+        last_error_at: now,
+      });
+      break;
     case 'transient':
       registry.set(model, {
         status: 'cooling_down',
@@ -408,7 +447,6 @@ function onFailure(model: ModelId, error: unknown): void {
       break;
     case 'non_retryable':
     case 'aborted':
-      // 不动 registry — 换 model 也救不了，或用户主动取消
       ledger.append({ kind: 'non_retryable', model, error: String(error) });
       break;
   }
@@ -417,9 +455,23 @@ function onFailure(model: ModelId, error: unknown): void {
 
 > 关键：路由字段是 `error.code`，**绝不**解析 `error.message` 文本。DSH adapter 已把 provider 文本归一化为 code，本插件只用 code 即可。
 
+**配置文件同步新增 `auth_cooldown_seconds`**：
+
+```jsonc
+{
+  "routing": {
+    "short_cooldown_seconds":  60,
+    "auth_cooldown_seconds":   1800,   // ← 新增：AUTH / INVALID_CREDENTIAL 中冷却
+    "quota_cooldown_seconds":  18000,  // 5h = 18000s
+    "max_retries_per_step":    2,
+    "wait_check_interval_seconds": 300
+  }
+}
+```
+
 ### 6.3 健康度评分（轻量版）
 
-dsh-model-router 用了 5 维加权；本设计用更简单的二元状态机即可（healthy / cooling_down / quota_blocked）。如果未来需要更细粒度（比如"半健康"），再升级。
+dsh-model-router 用了 5 维加权；本设计用更简单的**四态状态机**（healthy / cooling_down / auth_blocked / quota_blocked）。如果未来需要更细粒度（比如"半健康"），再升级。
 
 简化设计：
 - 不维护滑窗 / TTL
@@ -526,7 +578,7 @@ wait-check 期间**必须**把 mission 状态持久化（不仅是 in-memory）�
 
 monitor dashboard 增加：
 - mission 卡片显示 `⏸ WAIT_CHECK（strong tier, 5min 后回查, 已 23min）`
-- 每个 model 行显示状态徽章：🟢 healthy / 🟡 cooling / 🔴 quota_blocked
+- 每个 model 行显示状态徽章：🟢 healthy / 🟡 cooling / 🟠 auth_blocked / 🔴 quota_blocked
 - 提供"立即回查"按钮（手动触发一次 select）
 - 提供"STOP mission"按钮（唯一中断方式）
 
@@ -561,7 +613,9 @@ monitor dashboard 增加：
 | D10 | 不实现 prompt-level routing | 实现 / 部分实现 | routing-suite-dragonbaba 调研结论：边际效益低，README 自承"不改模型/不换工具/不多发调用"——影响仅 1 句引导 |
 | D11 | 配置 candidate 时直接使用 DSH 的 ModelID 字符串，不自管 provider / auth / base_url | 自管 provider 段 | DSH 已托管这些；自管是重复造轮子且会与 DSH 配置漂移 |
 | D12 | candidates 用 DSH 原生 ModelID 字符串（沿用 DSH 格式，可能是 `provider/model` 或纯 model name） | 强制某种格式 / 自定义格式 | 与 DSH 100% 一致；registry key / 账本 / monitor 全部用同一字符串，不做转换 |
-| D13 | 启动时校验：candidates 必须在 DSH 模型清单中存在 | 静默跳过 / 运行时校验 | 失败 fail-fast；DSH 删除某 model 时立刻知道哪个 tier 失效 |
+| D13 | 启动时校验：candidate 的 provider 必须在 DSH active provider 列表里；model 不存在只 warn（DSH README 明说 catalog advisory） | 严格白名单 / 完全不校验 | DSH 的语义是"未列出的 model 仍可能可用"——严格白名单会误伤 |
+| D14 | AUTH / INVALID_CREDENTIAL 触发 failover，并新增 `auth_blocked` 状态（默认 30min 冷却） | 不 failover / 用 quota 冷却（5h） | DSH 每个 provider 凭据独立；failover 是正确动作；30min 是 user-fixable 的合理窗口（短于 quota 长于 transient） |
+| D15 | `CONTEXT_WINDOW_EXCEEDED` 也触发 failover（短冷却），让选模函数下次选 tier 内窗口更大的 model | 不 failover / 永久屏蔽 model | tier 内不同 model 上下文窗口差异显著（8k vs 1M），failover 经常能救 |
 
 ## 11. 待澄清问题（实现前必须回答）
 
