@@ -9,11 +9,6 @@
   "auditsDir": "docs/audits/age-autonomy",
   "contextDir": "docs/context",
   "autonomyPolicy": "missions/autonomy.policy.yml",
-  "audits": {
-    "multi": "docs/skills/multi-dimensional-audit-prompt.md",
-    "open": "docs/skills/open-ended-audit-prompt.md",
-    "closure": "docs/skills/closure-audit-prompt.md"
-  },
   "prompts": {
     "multiAudit": "tools/mission-driver/prompts/multi-audit.md",
     "openAudit": "tools/mission-driver/prompts/open-audit.md"

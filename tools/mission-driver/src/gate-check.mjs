@@ -126,11 +126,13 @@ function runPolicyMode(file) {
     result = loadPolicyFile(resolve(file));
   } catch (e) {
     console.log(JSON.stringify({ valid: false, file, errors: [e instanceof Error ? e.message : String(e)] }, null, 2));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   if (!result.ok) {
     console.log(JSON.stringify({ valid: false, file, errors: result.errors }, null, 2));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   const policy = result.policy;
   console.log(
@@ -151,7 +153,9 @@ function runPolicyMode(file) {
       2,
     ),
   );
-  process.exit(0);
+  // WI49 Phase 3: exitCode assignment — piped stdout must flush fully before
+  // the process ends (process.exit truncated at the 64KB pipe buffer).
+  process.exitCode = 0;
 }
 
 // ── mission-context helpers (M2-WI21: roadmap injection + plans roots) ──────
@@ -277,7 +281,8 @@ function runSingleFileMode(file) {
     text = readFileSync(abs, "utf8");
   } catch (e) {
     console.log(JSON.stringify({ file: abs, decision: "deny", error: e instanceof Error ? e.message : String(e) }, null, 2));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   // Mission context (M2-WI21): owning mission for the roadmap registry +
   // passive-scan plans roots for the path domain + projectRoot for the
@@ -337,7 +342,7 @@ function runSingleFileMode(file) {
       2,
     ),
   );
-  process.exit(out.decision === "allow" ? 0 : 1);
+  process.exitCode = out.decision === "allow" ? 0 : 1;
 }
 
 // ── <plan.md> --verify: mechanical-verification execution face (02 §5) ──────
@@ -351,7 +356,8 @@ async function runVerifyMode(file) {
     text = readFileSync(abs, "utf8");
   } catch (e) {
     console.log(JSON.stringify({ file: abs, decision: "deny", error: e instanceof Error ? e.message : String(e) }, null, 2));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   const owned = discoverOwningMission(abs);
   if (owned === null) {
@@ -366,7 +372,8 @@ async function runVerifyMode(file) {
         2,
       ),
     );
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   const { mission, projectRoot, missionFile } = owned;
   const commands = mission.commands && typeof mission.commands === "object" ? mission.commands : {};
@@ -431,7 +438,7 @@ async function runVerifyMode(file) {
       2,
     ),
   );
-  process.exit(allGreen ? 0 : 1);
+  process.exitCode = allGreen ? 0 : 1;
 }
 
 // ── <plan.md> --law: full-policy enforcement face (02 §6, M3-WI31) ───────────
@@ -456,7 +463,8 @@ function runLawMode(file) {
     text = readFileSync(abs, "utf8");
   } catch (e) {
     console.log(JSON.stringify({ file: abs, decision: "deny", error: e instanceof Error ? e.message : String(e) }, null, 2));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   const owned = discoverOwningMission(abs);
   if (owned === null) {
@@ -471,7 +479,8 @@ function runLawMode(file) {
         2,
       ),
     );
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   const { mission, projectRoot, missionFile } = owned;
 
@@ -501,7 +510,8 @@ function runLawMode(file) {
         2,
       ),
     );
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   let loaded;
   try {
@@ -510,7 +520,8 @@ function runLawMode(file) {
     console.log(
       JSON.stringify({ file: abs, decision: "deny", policyFile, error: e instanceof Error ? e.message : String(e) }, null, 2),
     );
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   if (!loaded.ok) {
     console.log(
@@ -526,7 +537,8 @@ function runLawMode(file) {
         2,
       ),
     );
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   const policy = loaded.policy;
 
@@ -624,7 +636,7 @@ function runLawMode(file) {
       2,
     ),
   );
-  process.exit(out.decision === "allow" ? 0 : 1);
+  process.exitCode = out.decision === "allow" ? 0 : 1;
 }
 
 async function main() {

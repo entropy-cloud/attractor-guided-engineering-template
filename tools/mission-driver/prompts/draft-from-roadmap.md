@@ -37,7 +37,7 @@ Read `{{planGuide}}` **completely**. It defines the plan format, status lifecycl
 
 Do not decide whether the mission is complete. Whether the mission is complete is decided by the engine based on the audit round count, not by you. You only answer one question per run: "is there a plan worth drafting right now?"
 
-In particular: mission-level audit conclusions live inline in the roadmap's `## Deep Audit Record` (and as unchecked remediation work items) — they are NOT separate files in `docs/audits/`. Legacy `docs/audits/` files with `> Audit Status: open` (pre-migration archives) are consumed by the DRAFT_FROM_AUDIT path, not by you. The engine decides based on the audit round count whether to enter another deep-audit round or to complete the mission; you cannot influence that decision from this step.
+In particular: mission-level audit conclusions live inline in the roadmap's `## Deep Audit Record` (and as unchecked remediation work items) — they are NOT separate files in `docs/audits/`. Legacy `docs/audits/` files with `> Audit Status: open` (pre-migration archives) are no longer consumed by any path. The engine decides based on the audit round count whether to enter another deep-audit round or to complete the mission; you cannot influence that decision from this step.
 
 ## Result Markers
 

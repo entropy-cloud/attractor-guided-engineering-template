@@ -265,5 +265,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     ...(defaultVerifyKeys ? { defaultVerifyKeys } : {}),
   });
   console.log(JSON.stringify(res, null, 2));
-  process.exit(res.passed ? 0 : 1);
+  // WI49 Phase 3: exitCode assignment (never process.exit) so a piped stdout
+  // flushes before exit (64KB pipe-buffer truncation guard).
+  process.exitCode = res.passed ? 0 : 1;
 }

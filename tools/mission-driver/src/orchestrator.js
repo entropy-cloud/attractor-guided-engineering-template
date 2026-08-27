@@ -19,7 +19,7 @@
  * spawner.mjs — that is the M2 bundling boundary.
  */
 
-import { existsSync, readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, readdirSync, statSync, mkdirSync } from "node:fs";
 import { resolve, dirname, relative, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveConfig, inferModuleName } from "./config.js";
@@ -576,6 +576,17 @@ export async function orchestrateAnalyze({ config }) {
  *   marker?: string|null, history?: string[], exitCode?: number|undefined}>}
  */
 export async function orchestrateRun({ config, executor }) {
+  // WI49 Phase 1 item 3: create the runDir HERE, not in resolveConfig.
+  // resolveConfig is also the read-only config face for `list-steps`, whose
+  // mkdir side effect used to leak a ghost `_tmp/<ts>-mission-driver` dir per
+  // read-only invocation. This is the single shared run entry: the CLI shell
+  // (main.js cmdRunMission) and the plugin host (engine-bridge
+  // runNativeMission / beginNativeMission) both pass through here, so both
+  // keep getting a runDir. Recursive mkdir on an existing dir (monitor
+  // handleStartRun pre-creates and passes --run-dir) is a no-op.
+  if (config.runDir) {
+    try { mkdirSync(config.runDir, { recursive: true }); } catch {}
+  }
   const g = config.mission;
   const flow = createMissionDriverFlow({
     flowName: g.flowName,

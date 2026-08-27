@@ -29,6 +29,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
+import { checkRoadmapUniqueness, loadMission } from "../src/mission-check.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MISSION_CHECK = resolve(__dirname, "..", "src", "mission-check.mjs");
@@ -132,6 +133,58 @@ describe("WI4 mission-check CLI — Case C: valid mission exits 0 with JSON stdo
     }
   });
 });
+
+// ── WI49 Phase 5: extends-aware uniqueness + audits-map removal ─────────────
+
+describe("WI49 mission-check — extends-aware checkRoadmapUniqueness", () => {
+  it("base.json carries roadmapPath + two extends missions inherit it → conflict detected via merged read", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "mc-wi49-uniq-"));
+    try {
+      // base carries a roadmapPath (plus the fields that make loadMission
+      // accept it); the children inherit it via `extends` and carry nothing
+      // raw — the old raw-JSON scan saw zero claims from the children and
+      // silently allowed two missions on one roadmap.
+      writeFileSync(join(tmp, "base.json"), JSON.stringify({
+        roadmapPath: "docs/backlog/shared.md",
+        plansDir: "docs/plans",
+        commands: { test: "echo ok" },
+      }));
+      writeFileSync(join(tmp, "child-a.json"), JSON.stringify({
+        extends: "base",
+        name: "child-a",
+      }));
+      writeFileSync(join(tmp, "child-b.json"), JSON.stringify({
+        extends: "base",
+        name: "child-b",
+      }));
+
+      const res = checkRoadmapUniqueness(tmp);
+      assert.equal(res.ok, false, "two extends-siblings sharing one inherited roadmapPath must conflict");
+      assert.equal(res.conflicts.length, 1);
+      // base.json itself is unvalidatable (no `name`) → no claim of its own;
+      // BOTH children claim the inherited roadmapPath through the merged read.
+      assert.deepEqual(res.conflicts[0].missions.sort(), ["child-a", "child-b"]);
+      assert.match(res.errors[0], /one-mission-one-roadmap violated/);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("live mission (audits map removed) still validates: mission-check exit 0 + schema fields intact", () => {
+    const repoRoot = resolve(__dirname, "..", "..", "..");
+    const missionFile = join(repoRoot, "missions", "age-autonomy-implementation.json");
+    const r = runCli(missionFile, repoRoot);
+    assert.equal(r.code, 0, `live mission must stay valid; stderr: ${r.stderr}`);
+    assert.match(r.stdout, /"valid":\s*true/);
+
+    // The dead `audits` map is gone; the LIVE `prompts` map (multiAudit /
+    // openAudit, orchestrator.js:614-615) survives untouched.
+    const mission = loadMission(missionFile, repoRoot);
+    assert.equal(mission.audits, undefined, "dead audits map removed (WI49 Phase 5 item 5)");
+    assert.deepEqual(Object.keys(mission.prompts ?? {}).sort(), ["multiAudit", "openAudit"]);
+  });
+});
+
 
 // ── Case D: pathToFileURL normalization anchor (platform-agnostic) ──────────
 

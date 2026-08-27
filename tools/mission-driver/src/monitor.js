@@ -162,7 +162,15 @@ function serveStaticFile(res, filePath, webDir) {
   }
   const ext = extname(resolvedPath).toLowerCase();
   const mime = MIME_TYPES[ext] || "application/octet-stream";
-  const content = readFileSync(resolvedPath);
+  // WI49 Phase 1 item 2: guard the read against a TOCTOU delete between the
+  // statSync check above and here — 404 instead of crashing the monitor.
+  let content;
+  try {
+    content = readFileSync(resolvedPath);
+  } catch {
+    sendJson(res, 404, { error: "not found" });
+    return;
+  }
   res.writeHead(200, { "Content-Type": mime, "Content-Length": content.length });
   res.end(content);
 }
@@ -170,7 +178,15 @@ function serveStaticFile(res, filePath, webDir) {
 function serveIndex(res, webDir) {
   const indexFile = resolve(webDir, "index.html");
   if (existsSync(indexFile) && statSync(indexFile).isFile()) {
-    const content = readFileSync(indexFile);
+    // WI49 Phase 1 item 2: same TOCTOU guard as serveStaticFile — a read
+    // failure after the existence check returns 404, not a crash.
+    let content;
+    try {
+      content = readFileSync(indexFile);
+    } catch {
+      sendJson(res, 404, { error: "not found" });
+      return;
+    }
     res.writeHead(200, {
       "Content-Type": "text/html; charset=utf-8",
       "Content-Length": content.length,
@@ -614,7 +630,16 @@ function handleGetLog(projectRoot, runId, step, query) {
 
   function sliceFile(fileName) {
     const filePath = join(runDir, fileName);
-    const content = readFileSync(filePath, "utf8");
+    // WI49 Phase 1 item 2: the file can vanish between the readdir/statSync
+    // above and this read (e.g. concurrent DELETE /api/runs/:runId). An
+    // unguarded throw would take down the whole monitor process (which, in
+    // engine form, shares the process with a running mission). 404 instead.
+    let content;
+    try {
+      content = readFileSync(filePath, "utf8");
+    } catch {
+      return { notFound: true };
+    }
     const allLines = content.split("\n");
     const totalLines = allLines.length;
     const endIdx = Math.max(0, totalLines - offset);
@@ -1176,6 +1201,20 @@ function handleStartRun(projectRoot, body) {
   }
   const safeMissionName = basename(body.missionName);
 
+  // Validate targets BEFORE creating the runDir (WI49 Phase 1 item 1): a 400
+  // must leave no ghost `_tmp/<ts>-mission-driver` dir behind (ghost dirs are
+  // picked up by listMissionRunDirs and render as permanent "unknown" runs).
+  if (body.targets != null) {
+    if (!Array.isArray(body.targets)) {
+      return { error: "targets must be an array", status: 400 };
+    }
+    for (const t of body.targets) {
+      if (!t || typeof t !== "object" || (!t.key && !t.scenario)) {
+        return { error: "each target must have a key or scenario", status: 400 };
+      }
+    }
+  }
+
   // Generate runDir with the same timestamp format as config.js:414-420
   // (runId = the runDir basename; the --dir flag controls the engine's runId).
   const now = new Date();
@@ -1188,14 +1227,6 @@ function handleStartRun(projectRoot, body) {
 
   // Optional UI-injected targets → {runDir}/input-targets.json (LOAD_TARGETS override).
   if (body.targets != null) {
-    if (!Array.isArray(body.targets)) {
-      return { error: "targets must be an array", status: 400 };
-    }
-    for (const t of body.targets) {
-      if (!t || typeof t !== "object" || (!t.key && !t.scenario)) {
-        return { error: "each target must have a key or scenario", status: 400 };
-      }
-    }
     writeFileSync(
       resolve(runDir, "input-targets.json"),
       JSON.stringify({ targets: body.targets }, null, 2),

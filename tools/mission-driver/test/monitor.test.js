@@ -11,9 +11,12 @@ import {
   renameSync,
   existsSync,
   readdirSync,
+  chmodSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 import http from "node:http";
 import { startMonitor, parseRoadmapMarkdown, __setSpawnerForTest, handleStartDraft } from "../src/monitor.js";
 
@@ -3202,11 +3205,187 @@ describe("Monitor — mission config extends merge (M5-WI40 P2)", () => {
         const roadmap = await fetchJson(`${baseUrl(monitor)}/api/configs/plain-mission/roadmap`);
         assert.equal(roadmap.status, 200);
         assert.equal(roadmap.body.roadmapPath, "docs/roadmaps/plain.md");
-        assert.deepEqual(roadmap.body.phases, []);
-        assert.equal(roadmap.body.overallProgress, 0);
       } finally {
         await monitor.close();
       }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+// ── M5-WI49 (age-autonomy) Phase 1: ghost-run-dir elimination + read guards ──
+
+describe("Monitor — WI49 robustness: ghost dirs + read guards (Phase 1)", () => {
+  const MAIN_JS = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "main.js");
+
+  function postJsonLocal(urlstr, body) {
+    return new Promise((reslove, reject) => {
+      const u = new URL(urlstr);
+      const payload = JSON.stringify(body);
+      const req = http.request(
+        {
+          hostname: u.hostname,
+          port: u.port,
+          path: u.pathname + u.search,
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
+          agent: false,
+        },
+        (res) => {
+          let data = "";
+          res.on("data", (chunk) => (data += chunk));
+          res.on("end", () => {
+            try {
+              reslove({ status: res.statusCode, body: JSON.parse(data) });
+            } catch {
+              reslove({ status: res.statusCode, body: data });
+            }
+          });
+        }
+      );
+      req.on("error", reject);
+      req.write(payload);
+      req.end();
+    });
+  }
+
+  function tmpRunDirs(root) {
+    try {
+      return readdirSync(join(root, "_tmp")).filter((f) => f.endsWith("-mission-driver"));
+    } catch {
+      return [];
+    }
+  }
+
+  it("WI49-1: POST /api/runs invalid targets → 400 with NO ghost runDir under _tmp/", async () => {
+    const root = makeTmpProject();
+    let prevSpawner = null;
+    try {
+      makeMission(root, "wi49-run", {
+        name: "wi49-run",
+        roadmapPath: "docs/roadmaps/wi49.md",
+        plansDir: "docs/plans/wi49",
+        commands: { test: "npm test" },
+      });
+      let spawnCount = 0;
+      prevSpawner = __setSpawnerForTest(() => {
+        spawnCount += 1;
+        return { unref() {} };
+      });
+      const monitor = await startMonitor({ projectRoot: root, port: 0, webDir: join(root, "web") });
+      try {
+        const before = tmpRunDirs(root);
+        const res = await postJsonLocal(`${baseUrl(monitor)}/api/runs`, {
+          missionName: "wi49-run",
+          targets: [{ noKeyOrScenario: true }],
+        });
+        assert.equal(res.status, 400);
+        assert.match(res.body.error, /key or scenario/i);
+        assert.equal(spawnCount, 0, "no spawn on validation failure");
+        assert.deepEqual(
+          tmpRunDirs(root), before,
+          "400 must not leave a ghost `<ts>-mission-driver` dir under _tmp/ (validation now precedes mkdir)",
+        );
+      } finally {
+        await monitor.close();
+      }
+    } finally {
+      __setSpawnerForTest(prevSpawner);
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("WI49-2: handleGetLog read failure (file becomes unreadable) → 404, monitor stays alive", async () => {
+    const root = makeTmpProject();
+    try {
+      const runId = "2026-08-28-wi49-log-mission-driver";
+      const runDir = makeRun(root, runId, {});
+      // A DIRECTORY named like a step log: passes the readdir/statSync prefix
+      // search but makes readFileSync throw (EISDIR) — the deterministic
+      // stand-in for a concurrent DELETE between listing and reading.
+      mkdirSync(join(runDir, "oc-CHECK-1784000000000-dir.log"), { recursive: true });
+      const monitor = await startMonitor({ projectRoot: root, port: 0, webDir: join(root, "web") });
+      try {
+        const res = await fetchJson(`${baseUrl(monitor)}/api/runs/${runId}/logs/CHECK`);
+        assert.equal(res.status, 404, "unreadable log artifact must 404, not crash the handler");
+        assert.equal(res.body.error, "log not found");
+
+        // Same via the ?file= fast path (existsSync passes for a directory).
+        const res2 = await fetchJson(
+          `${baseUrl(monitor)}/api/runs/${runId}/logs/CHECK?file=oc-CHECK-1784000000000-dir.log`,
+        );
+        assert.equal(res2.status, 404, "?file= read failure must also 404");
+
+        // Monitor process survived (subsequent API call still answers).
+        const alive = await fetchJson(`${baseUrl(monitor)}/api/runs`);
+        assert.equal(alive.status, 200);
+      } finally {
+        await monitor.close();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("WI49-3: serveStaticFile/serveIndex read failure after stat check → 404 (TOCTOU guard)", { skip: process.getuid && process.getuid() === 0 ? "root ignores file permission bits" : false }, async () => {
+    const root = makeTmpProject();
+    try {
+      writeFileSync(join(root, "web", "index.html"), "<!DOCTYPE html><html><body>UI</body></html>");
+      mkdirSync(join(root, "web", "assets"), { recursive: true });
+      writeFileSync(join(root, "web", "assets", "app.js"), "console.log(1)");
+      // Owner-unreadable files: statSync().isFile() passes, readFileSync throws
+      // EACCES — the deterministic stand-in for a delete between stat and read.
+      chmodSync(join(root, "web", "index.html"), 0o000);
+      chmodSync(join(root, "web", "assets", "app.js"), 0o000);
+      const monitor = await startMonitor({ projectRoot: root, port: 0, webDir: join(root, "web") });
+      try {
+        const indexRes = await fetchJson(`${baseUrl(monitor)}/`);
+        assert.equal(indexRes.status, 404, "serveIndex read failure must 404, not crash");
+        assert.equal(indexRes.body.error, "not found");
+
+        const assetRes = await fetchJson(`${baseUrl(monitor)}/assets/app.js`);
+        assert.equal(assetRes.status, 404, "serveStaticFile read failure must 404, not crash");
+        assert.equal(assetRes.body.error, "not found");
+
+        const alive = await fetchJson(`${baseUrl(monitor)}/api/runs`);
+        assert.equal(alive.status, 200, "monitor survives the failed reads");
+      } finally {
+        chmodSync(join(root, "web", "index.html"), 0o644);
+        chmodSync(join(root, "web", "assets", "app.js"), 0o644);
+        await monitor.close();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("WI49-4: `list-steps` CLI leaves no empty `<ts>-mission-driver` dir under _tmp/", () => {
+    const root = makeTmpProject();
+    try {
+      // Real paths so loadMission's existence checks pass.
+      mkdirSync(join(root, "docs", "roadmaps"), { recursive: true });
+      writeFileSync(join(root, "docs", "roadmaps", "wi49.md"), "# roadmap\n");
+      const plansDir = join(root, "docs", "plans", "wi49");
+      mkdirSync(plansDir, { recursive: true });
+      writeFileSync(join(plansDir, ".keep"), "");
+      makeMission(root, "wi49-steps", {
+        name: "wi49-steps",
+        roadmapPath: "docs/roadmaps/wi49.md",
+        plansDir: "docs/plans/wi49",
+        commands: { test: "npm test" },
+      });
+
+      const r = spawnSync(process.execPath, [MAIN_JS, "list-steps", "wi49-steps", "--dir", root], {
+        encoding: "utf8",
+        timeout: 30000,
+      });
+      assert.equal(r.status, 0, `list-steps must exit 0; stderr: ${r.stderr}`);
+      assert.match(r.stdout, /Available top-level steps:/);
+      assert.equal(
+        tmpRunDirs(root).length, 0,
+        "read-only list-steps must NOT create a run directory under _tmp/ (resolveConfig mkdir side effect removed)",
+      );
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

@@ -817,7 +817,12 @@ export function resolveConfig(args = {}) {
   const runDir = args.runDir
     ? resolve(projectRoot, "_tmp", args.runDir)
     : resolve(projectRoot, "_tmp", `${ts}-mission-driver`);
-  mkdirSync(runDir, { recursive: true });
+  // NOTE (WI49 Phase 1 item 3): the runDir is deliberately NOT created here.
+  // resolveConfig is also the read-only config face for `list-steps`; the
+  // mkdir side effect used to leave a ghost `_tmp/<ts>-mission-driver` dir
+  // per read-only invocation. Creation now happens once at the shared run
+  // entry (orchestrator.js orchestrateRun — the cmdRunMission call path in
+  // main.js AND the plugin-host engine-bridge path).
 
   // pi driver defaults: lowest-priority fallback for driverArgs/promptMode +
   // computed agentFile (engine-relative absolute path). opencode path unchanged.

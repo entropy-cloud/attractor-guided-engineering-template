@@ -152,6 +152,14 @@ export function discoverOwningMission(planAbs) {
  * unique reverse mapping). Malformed configs contribute no claim (the
  * passive-scan zero-root precedent). fail-fast load face, not a write-time
  * interception.
+ *
+ * WI49 Phase 5 item 4 (extends-aware): claims are read through `loadMission`
+ * (the ONE extends merge implementation, base → base.local → mission), so a
+ * mission INHERITING roadmapPath from its base is claimed too — the raw-JSON
+ * scan used to miss those, letting two extends-siblings silently share one
+ * roadmap. Unvalidatable configs (base fragments, malformed files) still
+ * contribute no claim. No projectRoot is passed: existence checks are not
+ * this face's business (the CLI face validates the named mission itself).
  * @param {string} missionsDir absolute path to a missions/ directory
  * @returns {{ ok: boolean, conflicts: Array<{ roadmapPath: string, missions: string[] }>, errors: string[] }}
  */
@@ -166,14 +174,14 @@ export function checkRoadmapUniqueness(missionsDir) {
   for (const entry of entries) {
     if (!entry.endsWith(".json")) continue;
     try {
-      const raw = JSON.parse(readFileSync(join(missionsDir, entry), "utf8"));
-      if (raw !== null && typeof raw === "object" && typeof raw.roadmapPath === "string" && raw.roadmapPath !== "") {
-        const resolved = toPosix(resolve(missionsDir, "..", raw.roadmapPath));
+      const mission = loadMission(join(missionsDir, entry));
+      if (mission !== null && typeof mission === "object" && typeof mission.roadmapPath === "string" && mission.roadmapPath !== "") {
+        const resolved = toPosix(resolve(missionsDir, "..", mission.roadmapPath));
         if (!claims.has(resolved)) claims.set(resolved, []);
-        claims.get(resolved).push(String(raw.name ?? entry.replace(/\.json$/, "")));
+        claims.get(resolved).push(String(mission.name ?? entry.replace(/\.json$/, "")));
       }
     } catch {
-      // malformed mission config contributes no roadmap claim
+      // malformed / unvalidatable mission config contributes no roadmap claim
     }
   }
   const conflicts = [...claims.entries()]
