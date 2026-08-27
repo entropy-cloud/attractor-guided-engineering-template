@@ -100,6 +100,7 @@ Exit Criteria:
 ## Verification
 
 - pass test 2026-08-27-220026-mission-driver basisHash=d1cab7c3912ba9f5d43dfeb30df9879e79a3b9ca1458079c9f0ebd695fb0b16f exit=0
+- pass test 2026-08-28-0058-buildverify basisHash=d1cab7c3912ba9f5d43dfeb30df9879e79a3b9ca1458079c9f0ebd695fb0b16f exit=0
 
 ## Closure
 
