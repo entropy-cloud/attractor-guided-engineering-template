@@ -132,6 +132,7 @@ dispatch:                                # 派发类型 → 具名 agent（提�
 - 机制：守夜人收到该动作后调用门禁：
   - `draftPlans()>0 ∨ activePlans()>0` → deny（存在可见未完成工作，不得声称无可起草）；
   - 否则 allow 为 **Deep Audit 触发**，由守夜人派发 mission 级 Deep Audit 并自增 `audit-rounds`（见 01 §3.3）。
+- **roadmap 未勾维度（M5-WI48 判据扩面）**：`ctx.roadmapText` 注入时（gate-check/host-adapter/writer 既有 ctx 面），上述 allow 分支经 `scanRoadmapLedger` 计数 roadmap 未勾 work item——未勾 >0 → 触发信号携带 `roadmapUnchecked: N` 强化字段（守夜人派发消费面 additive 增量）+ reason 成文强制沿语义：**deep-audit 派发为强制沿，未勾存在时 nothing claim 永非清洁收口证据**（与 03 §8 R1「未勾 → partial」收口语义互指）；未勾 ==0 → allow/触发信号/注记逐字节不变；`ctx.roadmapText` 缺席 → 未勾维度不可观测不冒充（§2 纪律），现行为不变。deny 面与 kind 判别面零改动。
 - **终态与活锁防线**：Deep Audit 结论落为 roadmap/plan 未勾项后正常继续；若审计后仍 `draftPlans()==0 ∧ activePlans()==0 ∧ roadmap 有未勾`，由 03-supervisor R3 收口 `partial/blocked`；若 `audit-rounds ≥ maxAuditRounds` 则 R1 收口——不会退回同一 drafter 无限重试。
 - 这是 M1「信 marker 不验证」缺失的机器发现点——净强于现状。
 
@@ -209,6 +210,8 @@ dispatch:                                # 派发类型 → 具名 agent（提�
 - 计划质量、scope 是否诚实、closure 证据是否充分——这些是判断，由独立评审 agent 依 guide 完成（Draft Review Record / Closure 内联），门禁只保证「该审的审了」（派发+回执绑定），不保证「审得对」。
 
 ## Changelog
+
+- 2026-08-28（M5-WI48，plan `docs/plans/age-autonomy/2026-08-27-2122-2-m5-wi48-engine-silent-completed-terminal.md`）：§4.4 增量——nothing-claim 动作面判据扩 **roadmap 未勾维度**：`ctx.roadmapText` 注入时 allow 分支计数未勾 work item（未勾 >0 → 触发信号携带 `roadmapUnchecked: N` + 强制沿语义成文；==0 逐字节不变；缺席不可观测不冒充——§2 纪律互指），deny 面与 kind 判别面零改动；03 §3/§8 引擎形态豁免与 06 G8 登记随同批成文（R6 P1 silent-completed 终态通道封堵，零引擎 diff）。
 
 - 2026-08-27（M5-WI47，plan `docs/plans/age-autonomy/2026-08-27-2122-1-m5-wi47-audit-budget-dual-face-alignment.md`）：§4.6 增量——预算闸双域语义句成文（执法域 = law 消费面 × 全局 `audit-rounds` × policy 权威值；引擎形态轮门 = per-run 瞬态防护域、不读全局计数非本闸执法面——06 G7 指针）+ policy `limits.maxAuditRounds` 3→8 全局预算校正（已消耗 6 轮 + 两轮生产性余量；flows per-run 值 3 维持不动，双域刻意分离）。
 - 2026-08-27（M5-WI39，plan `docs/plans/age-autonomy/2026-08-27-1023-3`）：§4.7 as-built 放置与保护姿态注记（事实性增补，非契约变更）——引擎侧 law 内核三模块放置裁定（0815-1）+ 不入 P8 字面集的理由与替代保护面（import 闭包 + build-bundle freshness / CI + 已批准立项纪律）成文；收口 0950-1（WI21）Deferred「law 内核 P8 覆盖缺口」。

@@ -60,20 +60,20 @@ Skill: none
 - Item Types: `Decision | Fix | Add | Proof`
 - Prereqs: 同组 plan 2122-1（06 清单 G 缺口登记机制与行 3 改判先行成文，避免两 plan 同文件编辑冲突；无代码依赖）
 
-- [ ] Decision: WI48 修法三选一裁定 = **② law `nothing-claim-guard` 判据扩 roadmap 未勾 + ③ 03/06 引擎形态豁免成文，②③ 并取**。理由：law 动作面是唯一可在零引擎 diff 前提下收紧终态真值的执法点（`ctx.roadmapText` 既有注入面 + `scanRoadmapLedger` 既有 import，扩面零新依赖），守夜人形态参照实现已证语义可行（`roadmap.unchecked` 谓词 + R1 未勾→partial）；引擎形态缺陷如实成文豁免（完成判据 = plans-only 清洁）并按 06 G 机制登记 G8（retirement-gated——与 2122-1 G7 同机制同根族）。备选否决：**① 引擎短路/轮门终态前增读 roadmap 未勾**——engine.js 语义 diff 破 age-autonomy 全程零引擎 diff 底线（R3–R6 每轮回执核验项），且引擎读全局账本正是 G 缺口机制管辖面（退役执行期统一裁定，G1/G7 同族）；**纯 ③（law 面不动只成文豁免）**——law 动作面对未勾视而不见，与 03 §4.4 trigger 语义（nothing → deep-audit 为发现浮出的强制沿）存在契约缝隙：守夜人派发消费 trigger 信号时缺未勾维度数据，DSH/gate-check 形态的终态判定面少一道可执法的真值输入。残险 = 引擎形态两条 completed 通道在豁免期内仍可静默收口（G8 在册 + 03 §8 as-built 成文——接受为已知缺口，重开触发 = 退役执行期或后端替代立项）。
-- [ ] Fix: `law-rules.mjs` `nothingClaimGuardRule` 判据扩展：kind=nothing-to-draft ∧ draft/active==0 分支内，`ctx.roadmapText` 为非空字符串时经 `scanRoadmapLedger` 计数列 0 未勾 WI 行——`unchecked > 0` → allow + trigger payload 增 `roadmapUnchecked: N` 字段 + reason 增未勾存在与强制沿句（deep-audit dispatch is the mandatory path; a nothing claim is never clean-close evidence while unchecked items exist）；`unchecked == 0` → 现行 allow/trigger/reason 逐字节不变；`ctx.roadmapText` 缺席 → 现行「plan records not injected…」注记路径不变（结构子集纪律——roadmap 未注入 = 不可观测不冒充）。deny 面（draft/active>0）与 kind 非本门面零改动。
-- [ ] Add: 真值表 `plugin/dsh/test/law-truth-table.test.mjs` +3 例——① roadmapText 携未勾 WI 的 roadmap 文本 + plans 空 → allow ∧ `trigger.roadmapUnchecked === N`；② roadmapText 全勾 → 现 trigger 形状逐字段不变（`roadmapUnchecked` 缺席）；③ roadmapText 缺席 → 现行 unverified-writer 注记逐字节回归。既有 nothing-claim 用例期望同步：fixture 携未勾 roadmap 文本者，期望更新为扩展后行为（判据扩展的预期变化，非误杀）。
-- [ ] Add: `docs/design/age-autonomy/03-supervisor.md` §4.4 trigger 语义句扩面（terminal-claim=nothing-to-draft 判据面增 `roadmap.unchecked` 维度：未勾 >0 时信号携带 `roadmapUnchecked`、deep-audit 派发为强制沿；与 R1 partial 收口语义互指）+ §8 R1 增引擎形态 as-built 豁免注记（引擎形态完成判据 = plans-only 清洁——`_shouldCompleteOnAuditQuota`/轮门终态不读全局未勾，完整 R1 语义由守夜人形态承载，06 G8 指针）+ changelog 行（M5-WI48）。
-- [ ] Fix: `docs/design/age-autonomy/02-rule-law.md` §4.4 nothing-claim 动作面判据句同步（`ctx.roadmapText` 注入时扩未勾维度 + 强制沿语义；缺席 = 不可观测注记——02 §2 纪律互指）。
-- [ ] Fix: `docs/design/age-autonomy/06-engine-retirement-checklist.md` 行 9 增 **G8** 条目（引擎形态终态真值不读全局未勾：清洁短路 plans-only 判据 + 轮门终态 direct `completed`——retirement-gated；03 §8 as-built 豁免指针）；行 8 「队列/评审/审计腿已覆盖」注记补 nothing→deep-audit 未勾维度 law 面已扩（2122-2 交付注记）。
-- [ ] Fix: `pnpm --prefix plugin/dsh run build` 同步 tools→assets 双副本（build-bundle freshness 门绿为收口判据，0815 批次先例）。
-- [ ] Proof: `pnpm --prefix tools/mission-driver test` → 0 失败（相对 969 基线只增不减）+ `node --test plugin/dsh/test/law-truth-table.test.mjs` → 116+3 例 0 失败 + `node tools/mission-driver/src/gate-check.mjs docs/plans/age-autonomy/2026-08-27-2122-2-m5-wi48-engine-silent-completed-terminal.md --law` exit 0（自指 + 全 enforce gate allow + work-item M5-WI48 对账 ok）+ `git diff --stat tools/mission-driver/src/engine.js` 为空（零引擎 diff）+ `./verify-age.sh` L1+L2+L2.5 GREEN。
+- [x] Decision: WI48 修法三选一裁定 = **② law `nothing-claim-guard` 判据扩 roadmap 未勾 + ③ 03/06 引擎形态豁免成文，②③ 并取**。理由：law 动作面是唯一可在零引擎 diff 前提下收紧终态真值的执法点（`ctx.roadmapText` 既有注入面 + `scanRoadmapLedger` 既有 import，扩面零新依赖），守夜人形态参照实现已证语义可行（`roadmap.unchecked` 谓词 + R1 未勾→partial）；引擎形态缺陷如实成文豁免（完成判据 = plans-only 清洁）并按 06 G 机制登记 G8（retirement-gated——与 2122-1 G7 同机制同根族）。备选否决：**① 引擎短路/轮门终态前增读 roadmap 未勾**——engine.js 语义 diff 破 age-autonomy 全程零引擎 diff 底线（R3–R6 每轮回执核验项），且引擎读全局账本正是 G 缺口机制管辖面（退役执行期统一裁定，G1/G7 同族）；**纯 ③（law 面不动只成文豁免）**——law 动作面对未勾视而不见，与 03 §4.4 trigger 语义（nothing → deep-audit 为发现浮出的强制沿）存在契约缝隙：守夜人派发消费 trigger 信号时缺未勾维度数据，DSH/gate-check 形态的终态判定面少一道可执法的真值输入。残险 = 引擎形态两条 completed 通道在豁免期内仍可静默收口（G8 在册 + 03 §8 as-built 成文——接受为已知缺口，重开触发 = 退役执行期或后端替代立项）。
+- [x] Fix: `law-rules.mjs` `nothingClaimGuardRule` 判据扩展：kind=nothing-to-draft ∧ draft/active==0 分支内，`ctx.roadmapText` 为非空字符串时经 `scanRoadmapLedger` 计数列 0 未勾 WI 行——`unchecked > 0` → allow + trigger payload 增 `roadmapUnchecked: N` 字段 + reason 增未勾存在与强制沿句（deep-audit dispatch is the mandatory path; a nothing claim is never clean-close evidence while unchecked items exist）；`unchecked == 0` → 现行 allow/trigger/reason 逐字节不变；`ctx.roadmapText` 缺席 → 现行「plan records not injected…」注记路径不变（结构子集纪律——roadmap 未注入 = 不可观测不冒充）。deny 面（draft/active>0）与 kind 非本门面零改动。
+- [x] Add: 真值表 `plugin/dsh/test/law-truth-table.test.mjs` +3 例——① roadmapText 携未勾 WI 的 roadmap 文本 + plans 空 → allow ∧ `trigger.roadmapUnchecked === N`；② roadmapText 全勾 → 现 trigger 形状逐字段不变（`roadmapUnchecked` 缺席）；③ roadmapText 缺席 → 现行 unverified-writer 注记逐字节回归。既有 nothing-claim 用例期望同步：fixture 携未勾 roadmap 文本者，期望更新为扩展后行为（判据扩展的预期变化，非误杀）。
+- [x] Add: `docs/design/age-autonomy/03-supervisor.md` §4.4 trigger 语义句扩面（terminal-claim=nothing-to-draft 判据面增 `roadmap.unchecked` 维度：未勾 >0 时信号携带 `roadmapUnchecked`、deep-audit 派发为强制沿；与 R1 partial 收口语义互指）+ §8 R1 增引擎形态 as-built 豁免注记（引擎形态完成判据 = plans-only 清洁——`_shouldCompleteOnAuditQuota`/轮门终态不读全局未勾，完整 R1 语义由守夜人形态承载，06 G8 指针）+ changelog 行（M5-WI48）。
+- [x] Fix: `docs/design/age-autonomy/02-rule-law.md` §4.4 nothing-claim 动作面判据句同步（`ctx.roadmapText` 注入时扩未勾维度 + 强制沿语义；缺席 = 不可观测注记——02 §2 纪律互指）。
+- [x] Fix: `docs/design/age-autonomy/06-engine-retirement-checklist.md` 行 9 增 **G8** 条目（引擎形态终态真值不读全局未勾：清洁短路 plans-only 判据 + 轮门终态 direct `completed`——retirement-gated；03 §8 as-built 豁免指针）；行 8 「队列/评审/审计腿已覆盖」注记补 nothing→deep-audit 未勾维度 law 面已扩（2122-2 交付注记）。
+- [x] Fix: `pnpm --prefix plugin/dsh run build` 同步 tools→assets 双副本（build-bundle freshness 门绿为收口判据，0815 批次先例）。
+- [x] Proof: `pnpm --prefix tools/mission-driver test` → 0 失败（相对 969 基线只增不减）+ `node --test plugin/dsh/test/law-truth-table.test.mjs` → 116+3 例 0 失败 + `node tools/mission-driver/src/gate-check.mjs docs/plans/age-autonomy/2026-08-27-2122-2-m5-wi48-engine-silent-completed-terminal.md --law` exit 0（自指 + 全 enforce gate allow + work-item M5-WI48 对账 ok）+ `git diff --stat tools/mission-driver/src/engine.js` 为空（零引擎 diff）+ `./verify-age.sh` L1+L2+L2.5 GREEN。
 
 Exit Criteria:
 
-- [ ] nothing-claim-guard 三分支行为钉住在库（未勾>0 强化信号 / ==0 逐字节不变 / 缺席注记不变）+ tools↔assets 双副本 in-sync（freshness 门绿）
-- [ ] 03 §4.4/§8 + 02 §4.4 + 06 行 9/G8 在册；`git diff --stat tools/mission-driver/src/engine.js` 为空 + 零新增 npm 依赖
-- [ ] `docs/logs/2026/08-27.md` updated
+- [x] nothing-claim-guard 三分支行为钉住在库（未勾>0 强化信号 / ==0 逐字节不变 / 缺席注记不变）+ tools↔assets 双副本 in-sync（freshness 门绿）
+- [x] 03 §4.4/§8 + 02 §4.4 + 06 行 9/G8 在册；`git diff --stat tools/mission-driver/src/engine.js` 为空 + 零新增 npm 依赖
+- [x] `docs/logs/2026/08-27.md` updated
 
 ## Phase 2 — roadmap 回写与证明
 
@@ -83,14 +83,14 @@ Skill: none
 - Item Types: `Add | Proof`
 - Prereqs: Phase 1 + 同组 plan 2122-1 已勾选 WI47
 
-- [ ] Add: roadmap WI48 行 `[ ]`→`[x]` + 行内尾部证据注记（裁定 ②+③ 并取 + law 判据扩未勾 + 03 §8 引擎形态豁免成文 + G8 登记 + 指针本 plan）；`> Last Updated` 头同步本批事实。
-- [ ] Add: `docs/logs/2026/08-27.md` 条目（裁定摘要 + 验证结果）。
-- [ ] Proof: 勾选后 `grep -c "^- \[ \]" docs/backlog/age-autonomy-implementation-roadmap.md` 实测 = 勾选前值 −1（审查时基线 3：WI47/WI48/WI49 三 plan 各持一项；本 plan 勾 WI48 后 ≥1 在册——WI47 归 2122-1、WI49 归 2122-3，非本 plan 结果面不得代勾；两 plan 若已先行勾选则相应递减、允许 0）+ `grep "^- \[ \]" docs/backlog/age-autonomy-implementation-roadmap.md | grep -c "WI48"` → **0**（WI48 退出未勾计数域；Follow-up 缩进行不在计数域）+ `node tools/mission-driver/src/roadmap-check.mjs docs/backlog/age-autonomy-implementation-roadmap.md` exit 0。
+- [x] Add: roadmap WI48 行 `[ ]`→`[x]` + 行内尾部证据注记（裁定 ②+③ 并取 + law 判据扩未勾 + 03 §8 引擎形态豁免成文 + G8 登记 + 指针本 plan）；`> Last Updated` 头同步本批事实。
+- [x] Add: `docs/logs/2026/08-27.md` 条目（裁定摘要 + 验证结果）。
+- [x] Proof: 勾选后 `grep -c "^- \[ \]" docs/backlog/age-autonomy-implementation-roadmap.md` 实测 = 勾选前值 −1（审查时基线 3：WI47/WI48/WI49 三 plan 各持一项；本 plan 勾 WI48 后 ≥1 在册——WI47 归 2122-1、WI49 归 2122-3，非本 plan 结果面不得代勾；两 plan 若已先行勾选则相应递减、允许 0）+ `grep "^- \[ \]" docs/backlog/age-autonomy-implementation-roadmap.md | grep -c "WI48"` → **0**（WI48 退出未勾计数域；Follow-up 缩进行不在计数域）+ `node tools/mission-driver/src/roadmap-check.mjs docs/backlog/age-autonomy-implementation-roadmap.md` exit 0。
 
 Exit Criteria:
 
-- [ ] WI48 `[x]` + 行内证据 + Last Updated 同步在册；勾选后 WI48 退出未勾计数域实测（未勾总数较勾选前恰 −1，余项均为他 plan 持有）
-- [ ] `docs/logs/2026/08-27.md` updated
+- [x] WI48 `[x]` + 行内证据 + Last Updated 同步在册；勾选后 WI48 退出未勾计数域实测（未勾总数较勾选前恰 −1，余项均为他 plan 持有）
+- [x] `docs/logs/2026/08-27.md` updated
 
 ## Draft Review Record
 
@@ -99,4 +99,9 @@ Exit Criteria:
 
 ## Verification
 
+- pass test 2026-08-27-220026-mission-driver basisHash=d1cab7c3912ba9f5d43dfeb30df9879e79a3b9ca1458079c9f0ebd695fb0b16f exit=0
+
 ## Closure
+
+- dispatch audit #audit-2026-08-27-220026-mission-driver-2026-08-27-2122-2-m5-wi48-engine-silent-completed-terminal-1-cb9d0e3e to ses_auditor_1 models={exec:glm-5.2,aud:glm-5.2}
+- accepted #audit-2026-08-27-220026-mission-driver-2026-08-27-2122-2-m5-wi48-engine-silent-completed-terminal-1-cb9d0e3e：审计通过——16/16 勾选项与 Exit Criteria 均与库实测一致（law-rules.mjs 双副本 roadmapUnchecked 在案、真值表 119 例 0 失败、roadmap WI48 已勾+G8 在册、engine.js 零 diff）；关键验证：gate-check --verify（pnpm --prefix tools/mission-driver test 973/973 exit 0）+ node --test plugin/dsh/test/law-truth-table.test.mjs fail 0
