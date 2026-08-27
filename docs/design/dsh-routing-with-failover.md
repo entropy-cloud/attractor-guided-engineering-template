@@ -119,7 +119,7 @@ DSH 插件形态下，in-process child agent 有机会在**调用前 / 失败后
 
 ### 4.2 tier 候选列表配置
 
-**关键简化**：候选身份直接用 **DSH 原生 model ID**（用户在 DSH `Settings → Models` 已配好的 ModelID）。我们不重新声明 provider 配置（base_url / auth / 调用形态）—— DSH 已经托管。
+**关键简化**：候选身份用 `provider/model` 字符串（用户友好的配置写法），但内部解析为 DSH 原生 `{provider, model}` 元组——因为 DSH `GenerateOptions` 接受两个独立字段。我们不重新声明 provider 配置（base_url / auth / 调用形态）—— DSH 已经托管。
 
 ```jsonc
 // missions/base.json (新增字段)
@@ -128,22 +128,22 @@ DSH 插件形态下，in-process child agent 有机会在**调用前 / 失败后
     "tiers": {
       "strong": {
         "candidates": [
-          "deepseek/deepseek-reasoner",     // ← DSH ModelID（用户已在 DSH Settings 配置）
-          "anthropic/claude-opus-4",
+          "deepseek-official/deepseek-reasoner",  // 实际 provider id 是 'deepseek-official'（不是 'deepseek'）
+          "anthropic/claude-opus-4-1",
           "openai/gpt-5"
         ]
       },
       "medium": {
         "candidates": [
-          "deepseek/deepseek-chat",
-          "anthropic/claude-sonnet-4",
+          "deepseek-official/deepseek-chat",
+          "anthropic/claude-sonnet-4-5",
           "openai/gpt-4.1"
         ]
       },
       "light": {
         "candidates": [
-          "deepseek/deepseek-flash",
-          "anthropic/claude-haiku-4",
+          "deepseek-official/deepseek-flash",
+          "anthropic/claude-haiku-4-5",
           "openai/gpt-4.1-mini"
         ]
       }
@@ -165,11 +165,51 @@ DSH 插件形态下，in-process child agent 有机会在**调用前 / 失败后
 | "这个 tier 用哪几个 model" | 本插件（`missions/base.json:routing.tiers`） |
 | "当前哪个 model 处于什么状态" | 本插件（`.age/routing-state.json`） |
 
-**校验约束**（必须钉住）：
-- 启动时调用 DSH 模型清单 API（如 `ctx.models.list()`），遍历 `tiers.*.candidates`
-- 任一 candidate 不在 DSH 清单 → **报错退出**（不静默跳过），避免运行时才发现
-- 用户在 DSH 删除某 model 但 candidates 还引用 → 启动时报错并指出哪个 tier 哪个 model
-- provider/model 格式与 DSH 保持一致（DSH 用什么格式我们就用什么，不做转换）
+**DSH ModelID 形态**（必须钉住 — 来自 DSH 源码核对）：
+
+| 来源 | 形态 |
+| --- | --- |
+| `GenerateOptions`（实际调用） | `{ provider: string, model: string }` 两个独立字段 |
+| `ctx.llm.listModels(provider)` 返回 `LlmModelInfo` | `{ provider, id, name, description?, inputModalities? }` |
+| Provider route id 示例（DSH 源码） | `anthropic` / `deepseek-official` / `openai` / `minimax-cn` |
+| `ConfigurableProviderView.provider` 注释 | `('deepseek-official', 'openai', …)` |
+
+> ⚠️ Provider route id 不一定是 `provider` 这种短名——`deepseek-official` 是真实存在的路由 id。Config 里写什么就用什么，**不**自动补全或转换。
+
+**字符串解析约束**（必须钉住）：
+- `candidates` 字符串只切**第一个 `/`** 作为 provider/model 分隔符
+- provider 名约束**不含 `/`**
+- model 名约束**不含 `/`**（HuggingFace 风格 provider 一律走 `hf:org/model` 等带 prefix 形式）
+- 切完后的 provider 不在 `ctx.llm.listProviders()` 的 active 列表里 → 启动**报错**（fail-fast）
+- 切完后的 model 在 `ctx.llm.listModels(provider)` 里不存在 → **warn 但不报错**（DSH README 明说"catalog membership is advisory"，调用未列出的 model 仍合法）
+
+**启动校验代码骨架**：
+
+```ts
+async function validateCandidates(candidates: string[]): Promise<void> {
+  const providers = new Map(ctx.llm.listProviders().map(p => [p.id, p]));
+  const modelsByProvider = new Map<string, Set<string>>();
+  for (const id of providers.keys()) {
+    const models = await ctx.llm.listModels(id);
+    modelsByProvider.set(id, new Set(models.map(m => m.id)));
+  }
+  for (const id of candidates) {
+    const slash = id.indexOf('/');
+    if (slash <= 0) throw new ConfigError(`bad candidate id (no '/' separator): ${id}`);
+    const provider = id.slice(0, slash);
+    const model    = id.slice(slash + 1);
+    if (!providers.has(provider)) {
+      throw new ConfigError(
+        `candidate '${id}': provider '${provider}' not active in DSH. `
+        + `Active providers: ${[...providers.keys()].join(', ')}`,
+      );
+    }
+    if (!modelsByProvider.get(provider)!.has(model)) {
+      logger.warn(`candidate '${id}': model not in DSH catalog (advisory — call may still work)`);
+    }
+  }
+}
+```
 
 ### 4.3 模型发现工具（CLI / UI）
 
@@ -179,14 +219,21 @@ DSH 插件形态下，in-process child agent 有机会在**调用前 / 失败后
 # standalone 形态
 mission-driver routing list-models
 # 输出:
-#   deepseek/deepseek-chat        healthy
-#   deepseek/deepseek-reasoner    healthy
-#   deepseek/deepseek-flash       cooling (58s left)
-#   anthropic/claude-sonnet-4     healthy
-#   openai/gpt-5                  quota_blocked (4h 23min left)
+#   deepseek-official/deepseek-chat      healthy
+#   deepseek-official/deepseek-reasoner  healthy
+#   deepseek-official/deepseek-flash     cooling (58s left)
+#   anthropic/claude-sonnet-4-5          healthy
+#   openai/gpt-5                         quota_blocked (4h 23min left)
 ```
 
-DSH plugin 形态下，UI 提供"Models" 面板 + 拖拽到 tier 的可视化配置。
+DSH plugin 形态下，UI 提供"Models" 面板 + 拖拽到 tier 的可视化配置。订阅 `llm/adapters-updated` 事件实时刷新。
+
+**DSH 源码相关**（实现时引用）：
+- `ctx.llm.listProviders()` → `LlmProviderInfo[]`（`packages/llm/llm/src/index.ts:446`）
+- `ctx.llm.listModels(provider)` → `LlmModelInfo[]`（`packages/llm/llm/src/index.ts:608`）
+- `ctx.llm.listConfigurableProviders()` → `LlmConfigurableProvider[]`（`packages/llm/llm/src/index.ts:517`，含 dormant provider）
+- `ctx.llm.resolveModelInfo(provider, model)` → `LlmResolvedModelInfo`（`packages/llm/llm/src/index.ts:646`，含 contextWindow / maxTokens / reasoningEffort）
+- 客户端 RPC：`ctx.remote.llm.providers()` / `.models()` / `.discoverModels()`（`packages/host/apiproxy/src/api/llm.ts`）
 
 ### 4.4 tier 选择标注
 
@@ -286,15 +333,89 @@ function select(tier: string, exclude: Set<ModelId>): ModelId | null {
 
 ### 6.2 失败分类（关键算法）
 
-| 错误信号 | 判定为 | 状态变更 | 冷却时长 |
-| --- | --- | --- | --- |
-| HTTP 429 + 错误消息含 `quota` / `rate_limit` / `quota_exceeded` / `billing` | **quota** | `quota_blocked` | `quota_cooldown_seconds`（默认 18000s = 5h） |
-| HTTP 429 但消息是 `too_many_requests`（瞬时限流） | transient | `cooling_down` | `short_cooldown_seconds`（默认 60s） |
-| HTTP 5xx / ECONNRESET / ETIMEDOUT / DNS 失败 | transient | `cooling_down` | `short_cooldown_seconds` |
-| 上下文窗口超限 / 工具不支持 | transient | `cooling_down` | `short_cooldown_seconds` |
-| 解析错误 / 内容策略拒绝 / 模型主动拒答 | **不计入** | 不变 | — |
+**不要自己写字符串匹配！** DSH 已实现稳定的失败分类器：
 
-> 关键：quota 检测要识别**特定字符串**，避免把所有 429 当 quota 处理。这是从 `dsh-model-router` 的"`KNOWN_SESSION_EVENT_TYPES` 突变"教训学到的——错误的字符串匹配会让冷却时间错配 100 倍以上。
+| 来源 | API | 用途 |
+| --- | --- | --- |
+| `packages/llm/llm/src/error.ts:28` | `QUOTA_EXCEEDED_CODE = 'QUOTA'` | 标准常量 |
+| `packages/llm/llm/src/error.ts:94` | `isQuotaExceededError(detail: string): boolean` | 5 个正则模式匹配 provider 文本 |
+| `packages/llm/llm/src/error.ts:80` | `isContextWindowExceededError(detail: string): boolean` | 4 个正则模式 |
+| `packages/llm/llm-deepseek/src/adapter.ts:333` | `httpErrorCode(status, error): string` | HTTP status → harness code 映射 |
+| `packages/llm/llm/src/error.ts:14` | `HarnessError.code` | **路由字段，不要解析 message** |
+
+**DSH adapter 已分类的 `LlmError.code` 集合**：
+
+| Adapter code | 含义 | 本插件处理 |
+| --- | --- | --- |
+| `QUOTA` | 账户配额/余额耗尽（终端性） | `quota_blocked` → 长冷却（默认 5h） |
+| `RATE_LIMIT` | 429 但非配额耗尽（瞬时限流） | `cooling_down` → 短冷却（默认 60s） |
+| `SERVER` | provider 5xx | `cooling_down` → 短冷却 |
+| `TIMEOUT` | 读超时（idle watchdog） | `cooling_down` → 短冷却 |
+| `TRANSPORT` | fetch failed / 连接错误 | `cooling_down` → 短冷却 |
+| `EMPTY_RESPONSE` | 正常完成但无内容 | `cooling_down` → 短冷却（DSH 自述"safe to retry"） |
+| `ABORTED` | 调用方中止 | 不计入（用户主动取消） |
+| `AUTH` | 401/403（认证失败） | **不计入** — 配置问题，换 model 无效 |
+| `INVALID_CREDENTIAL` | 凭据格式错 | **不计入** — 同上 |
+| `CONTEXT_WINDOW_EXCEEDED` | context 超限 | **不计入** — 换 model 也救不了，是 prompt 问题 |
+| `INVALID_REQUEST` | 400 通用 / 413 | **不计入** — 调用方错 |
+| 其他 `HTTP_<status>` | 未识别 | 保守处理：`cooling_down` 短冷却 + 写账本警示 |
+
+**路由失败分类的代码骨架**：
+
+```ts
+import { HarnessError, QUOTA_EXCEEDED_CODE } from '@deepseek-ai/dsh-llm';
+
+type FailureKind = 'quota' | 'transient' | 'non_retryable' | 'aborted';
+
+function classify(error: unknown): FailureKind {
+  if (error instanceof HarnessError) {
+    switch (error.code) {
+      case QUOTA_EXCEEDED_CODE:                      return 'quota';
+      case 'RATE_LIMIT':
+      case 'SERVER':
+      case 'TIMEOUT':
+      case 'TRANSPORT':
+      case 'EMPTY_RESPONSE':                         return 'transient';
+      case 'ABORTED':                                return 'aborted';
+      // AUTH / INVALID_CREDENTIAL / CONTEXT_WINDOW_EXCEEDED / INVALID_REQUEST
+      default:                                       return 'non_retryable';
+    }
+  }
+  // 非 HarnessError（如 driver subprocess 退出码异常）：
+  // 保守当 transient，等账本分析后再调
+  return 'transient';
+}
+
+function onFailure(model: ModelId, error: unknown): void {
+  const kind = classify(error);
+  const now = Date.now();
+  switch (kind) {
+    case 'quota':
+      registry.set(model, {
+        status: 'quota_blocked',
+        until: now + quotaCooldownMs,
+        last_error_kind: 'quota',
+        last_error_at: now,
+      });
+      break;
+    case 'transient':
+      registry.set(model, {
+        status: 'cooling_down',
+        until: now + shortCooldownMs,
+        last_error_kind: 'transient',
+        last_error_at: now,
+      });
+      break;
+    case 'non_retryable':
+    case 'aborted':
+      // 不动 registry — 换 model 也救不了，或用户主动取消
+      ledger.append({ kind: 'non_retryable', model, error: String(error) });
+      break;
+  }
+}
+```
+
+> 关键：路由字段是 `error.code`，**绝不**解析 `error.message` 文本。DSH adapter 已把 provider 文本归一化为 code，本插件只用 code 即可。
 
 ### 6.3 健康度评分（轻量版）
 
@@ -444,17 +565,17 @@ monitor dashboard 增加：
 
 ## 11. 待澄清问题（实现前必须回答）
 
-| # | 问题 | 候选答案 | 影响 |
-| --- | --- | --- | --- |
-| Q1 | "5 小时限额"的字符串匹配规则是什么？需要逐 provider 验证 | deepseek / anthropic / openai / zhipu 各自的 429 文本 | §6.2 分类正确率 |
-| Q2 | driver subprocess 失败时如何回传错误细节？现有 `<AI_STEP_RESULT>` 够不够？ | 扩展 schema 加 `error_kind` 字段 | §5.1 wire protocol |
-| Q3 | mission 模式下挂起的 driver 进程是否能"真正 pause"（vs kill+restart）？ | pause-by-suspend-signal / kill-and-recreate | §8.4 恢复语义 |
-| Q4 | wait-check 期间 monitor 是否仍可用？SSE 心跳如何兼容？ | 独立心跳通道 / 共用 SSE | §8.5 UI 形态 |
-| Q5 | 跨 mission 的状态共享边界在哪？ | 全局 / per-project / per-user | §6.4 持久化 |
-| Q6 | tier 选择失败时（flow step 标的 tier 不存在），fallback 到哪？ | default_tier / 报错 | §4.4 fallback |
-| Q7 | "max_retries_per_step" 的语义是"尝试 N 个不同模型"还是"尝试 N 次同一模型"？ | 不同模型 | §5.2 |
-| Q8 | DSH 原生 ModelID 的格式到底是什么？纯 model name / `provider/model` / UUID？影响 candidates 字符串写法 | 需要查 DSH 模型清单 API 实际返回 | §4.2 / §4.3 / D12 |
-| Q9 | DSH 是否暴露模型清单 API（如 `ctx.models.list()`）？如果不暴露，是否需要从 `Settings → Models` UI 反向解析？ | 需要 DSH host API 调研 | §4.2 校验 / §4.3 发现工具 |
+| # | 问题 | 候选答案 | 影响 | 状态 |
+| --- | --- | --- | --- | --- |
+| Q1 | "5 小时限额"的字符串匹配规则是什么？需要逐 provider 验证 | deepseek / anthropic / openai / zhipu 各自的 429 文本 | §6.2 分类正确率 | **已答** — DSH `isQuotaExceededError()` + `QUOTA_EXCEEDED_CODE` 已覆盖 |
+| Q2 | driver subprocess 失败时如何回传错误细节？现有 `<AI_STEP_RESULT>` 够不够？ | 扩展 schema 加 `error_kind` 字段 | §5.1 wire protocol | 待答 |
+| Q3 | mission 模式下挂起的 driver 进程是否能"真正 pause"（vs kill+restart）？ | pause-by-suspend-signal / kill-and-recreate | §8.4 恢复语义 | 待答 |
+| Q4 | wait-check 期间 monitor 是否仍可用？SSE 心跳如何兼容？ | 独立心跳通道 / 共用 SSE | §8.5 UI 形态 | 待答 |
+| Q5 | 跨 mission 的状态共享边界在哪？ | 全局 / per-project / per-user | §6.4 持久化 | 待答 |
+| Q6 | tier 选择失败时（flow step 标的 tier 不存在），fallback 到哪？ | default_tier / 报错 | §4.4 fallback | 待答 |
+| Q7 | "max_retries_per_step" 的语义是"尝试 N 个不同模型"还是"尝试 N 次同一模型"？ | 不同模型 | §5.2 | 待答 |
+| Q8 | DSH 原生 ModelID 的格式到底是什么？纯 model name / `provider/model` / UUID？影响 candidates 字符串写法 | 需要查 DSH 模型清单 API 实际返回 | §4.2 / §4.3 / D12 | **已答** — `{provider, model}` 元组；config 用 `provider/model` 字符串，运行时 split |
+| Q9 | DSH 是否暴露模型清单 API（如 `ctx.models.list()`）？如果不暴露，是否需要从 `Settings → Models` UI 反向解析？ | 需要 DSH host API 调研 | §4.2 校验 / §4.3 发现工具 | **已答** — `ctx.llm.listProviders()` / `.listModels(provider)` / `.listConfigurableProviders()` / `.resolveModelInfo(provider, model)`；客户端 RPC `ctx.remote.llm.{providers,models,discoverModels}`；事件 `llm/adapters-updated` |
 
 ## 12. 采纳计划（与 AGE WI 对齐）
 
@@ -470,15 +591,32 @@ monitor dashboard 增加：
 
 | 调研报告 | 本设计中的角色 | 章节 |
 | --- | --- | --- |
-| dsh-model-router | 冷却方程 + 失败字符串分类 + 候选链遍历 | §6.2 + §5.3 |
+| dsh-model-router | 冷却方程思想 + 候选链遍历（不直接抄——DSH 已分类错误，不重复正则） | §5.3 + §6.2 |
 | dsh-delegate-router | tier 二元分类灵感 + 持久账本形态 | §4.1 + §7 |
 | dsh-vision-router | content-type 触发 provider 改写（可叠加） | §5.3 扩展点 |
 | dsh-routed-subagent | per-call override + precheck | §5.2 dispatcher 接口 |
 | dsh-fork-to-preset | UI 完全委托 host 的 seam 设计参考 | §5.1 |
 | dsh-flash-godmode | complexity dispatch 的"显式标注"反例（避免 silent 切模） | §4.4 + D2 |
-| dsh-model-catalog | 在线版替代：拉 DSH `ctx.models.list()` 作为真实源，不再做离线探测 | §4.2 / §4.3 |
+| dsh-model-catalog | 在线版替代：拉 DSH `ctx.llm.listProviders()` / `listModels()` 作为真实源，不再做离线探测 | §4.2 / §4.3 + §11 Q9 |
 | dsh-routing-suite (yjh051108) | 自愈语义 + junction 思路（吸收为 wait-check 步的自愈循环） | §8 |
 | dsh-routing-suite-dragonbaba | prompt-level 路由的负价值证据（reject） | §10 D10 |
+
+## 14. DSH host API 参考（实现时直接 import）
+
+| 需求 | 导入 | 文件 |
+| --- | --- | --- |
+| Provider/model 列表 | `ctx.llm.listProviders()` / `.listModels(provider)` | `packages/llm/llm/src/index.ts:446,608` |
+| Configurable providers（含 dormant） | `ctx.llm.listConfigurableProviders()` | `packages/llm/llm/src/index.ts:517` |
+| Route 精确元数据（context/maxTokens/reasoning） | `ctx.llm.resolveModelInfo(provider, model)` | `packages/llm/llm/src/index.ts:646` |
+| 模型目录变化事件 | `ctx.on('llm/adapters-updated', ...)` | `packages/llm/llm/src/types.ts:19` |
+| 失败分类常量 | `QUOTA_EXCEEDED_CODE` / `CONTEXT_WINDOW_EXCEEDED_CODE` / `EMPTY_RESPONSE_CODE` / `INVALID_CREDENTIAL_CODE` | `packages/llm/llm/src/error.ts:25-48` |
+| 失败分类函数 | `isQuotaExceededError(detail)` / `isContextWindowExceededError(detail)` | `packages/llm/llm/src/error.ts:80,94` |
+| 错误基类（路由 code 字段） | `HarnessError.code` | `packages/llm/llm/src/error.ts:14` |
+| 客户端 RPC（standalone 走 RPC） | `ctx.remote.llm.providers()` / `.models()` / `.discoverModels()` | `packages/host/apiproxy/src/api/llm.ts` |
+
+**未直接 import 但可参考**：
+- `packages/llm/llm-deepseek/src/adapter.ts:333` 的 `httpErrorCode()` 函数 — 已知 DeepSeek adapter 已映射的 status→code 表
+- `packages/client/ui-settings-models/src/client/store.ts:70` 的 `deriveKeyRef(provider)` — provider id → env var 名（`${PROVIDER}_API_KEY`）
 
 ---
 
