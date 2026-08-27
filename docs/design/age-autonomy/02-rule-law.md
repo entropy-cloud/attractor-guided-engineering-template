@@ -148,6 +148,8 @@ dispatch:                                # 派发类型 → 具名 agent（提�
 - `failures ≥ maxFailures` → 该 plan 转入 held + 回执；held→active 的解锁写入必须把 `failures` 重置为 0；
 - 步数/墙钟（run 内）→ 守夜人计量熔断。
 
+**预算闸双域语义（M5-WI47 增量）**：本闸执法域 = law 消费面（DSH pre-execute / 守夜人 exec-arm 预算预检 / gate-check CLI）× roadmap frontmatter **全局 `audit-rounds`**（跨 run 累计，01 §2）× policy `limits.maxAuditRounds` 权威值（`resolveMaxAuditRounds` policy 优先；`flows/mission-driver.json` maxAuditRounds 为缺失回退与 per-run 防护供值——两域刻意不同值）；引擎形态 maxAuditRounds 轮门 = **per-run 瞬态防护域**（run 内轮计数，每 run 置零），不读全局计数、非本闸执法面——引擎形态全局预算执法点缺口见 06 退役清单 G7（retirement-gated，M5-WI47 立案）。
+
 **failures 归因桶（M3-WI27 增量，写者 = 守夜人 meter 面）**：`failures` 只按归因桶计数，桶枚举与计/不计规则如下（计量表语义见 01 §6 `failures` 行，互指单一来源）：
 
 | 桶 | 计（各 +1） | 依据点 |
@@ -208,6 +210,7 @@ dispatch:                                # 派发类型 → 具名 agent（提�
 
 ## Changelog
 
+- 2026-08-27（M5-WI47，plan `docs/plans/age-autonomy/2026-08-27-2122-1-m5-wi47-audit-budget-dual-face-alignment.md`）：§4.6 增量——预算闸双域语义句成文（执法域 = law 消费面 × 全局 `audit-rounds` × policy 权威值；引擎形态轮门 = per-run 瞬态防护域、不读全局计数非本闸执法面——06 G7 指针）+ policy `limits.maxAuditRounds` 3→8 全局预算校正（已消耗 6 轮 + 两轮生产性余量；flows per-run 值 3 维持不动，双域刻意分离）。
 - 2026-08-27（M5-WI39，plan `docs/plans/age-autonomy/2026-08-27-1023-3`）：§4.7 as-built 放置与保护姿态注记（事实性增补，非契约变更）——引擎侧 law 内核三模块放置裁定（0815-1）+ 不入 P8 字面集的理由与替代保护面（import 闭包 + build-bundle freshness / CI + 已批准立项纪律）成文；收口 0950-1（WI21）Deferred「law 内核 P8 覆盖缺口」。
 - 2026-08-26（M3-WI29，plan `docs/plans/age-autonomy/2026-08-26-1954-2`）：§4.6 增量——不计清单补第四行「恢复 redispatch」（崩溃重派不重复计 `failures`，03 §6「不把单次崩溃计为计划失败」字面落点；恢复路径 `recordPlanFailure` 调用点为空，重派动作经 observation 回执记录）；同 plan 附带两处窄域行为增量（均真值表钉住）：§4.2 评审租约改**最末 dispatch review 行作答**（superseded 行不持约、最末行配对即租约关闭——与幂等面最新行作答单一语义面，redispatch 后 plan 写面不锁死）+ §4.6 预算闸增**同轮次崩溃重派豁免**（新 DAR dispatch 行轮次号 ∈ 现 unpaired 在飞轮次集 = 同 occurrence 重派，轮次已付不耗预算不 deny，01 §3.1）。
 
