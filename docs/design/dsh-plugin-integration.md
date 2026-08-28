@@ -4,7 +4,19 @@
 
 ## Multi-Plugin Forward Reference (nop-* family)
 
-The multi-plugin refactor (mission `multi-plugin-dsh`, design owner `docs/design/multi-plugin-dsh-architecture.md`) has repackaged the single DSH bundle as the `nop-*` plugin family (migration landed 2026-08-28, plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-2`). Inheritance: this doc family is now the **as-built doc of the `nop-age` plugin** — directory `plugin/nop-age/`, package `nop-age`, isolate realm `nopAge` (Concept Mapping table there); the cordis service name `mdcontrol`, the `mission-control-*` skill IDs, and the `/mdcontrol/api` HTTP prefix stay verbatim (token-map carve-out, Migration Surface there). The second bundle `nop-route` is designed in that doc §nop-route Plugin; its full doc section lands with M4/M5 per its Concept Mapping row.
+The multi-plugin refactor (mission `multi-plugin-dsh`, design owner `docs/design/multi-plugin-dsh-architecture.md`) has repackaged the single DSH bundle as the `nop-*` plugin family (migration landed 2026-08-28, plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-2`). Inheritance: this doc family is now the **as-built doc of the `nop-age` plugin** — directory `plugin/nop-age/`, package `nop-age`, isolate realm `nopAge` (Concept Mapping table there); the cordis service name `mdcontrol`, the `mission-control-*` skill IDs, and the `/mdcontrol/api` HTTP prefix stay verbatim (token-map carve-out, Migration Surface there). The second bundle `nop-route` is designed in that doc §nop-route Plugin; its as-built section is §nop-route Plugin (M4) below.
+
+## nop-route Plugin (M4, landed 2026-08-28)
+
+> As-built increment (plans `docs/plans/multi-plugin-dsh/2026-08-28-1312-1` + `2026-08-28-1312-2`; design owner `docs/design/multi-plugin-dsh-architecture.md` §nop-route Plugin). The full two-bundle structural rewrite of this doc family remains M5-WI18.
+
+The second bundle is a pure decision service for upstream AI call results — classify an error, then decide Retry (same model after backoff) / Fallback (next model in the configured chain) / Transform (extract the `<AI_STEP_RESULT>` marker from a partial success) / Give-up (original error unchanged). Product surface:
+
+- **Consumption**: in-process callers `ctx.get('noproute').routes["noproute.route"](...)` (service name `noproute`, bundle `plugin/nop-route/`, isolate realm `nopRoute`), or `POST /noproute/api/<method>` when the host provides a `webServer`. No AGE preset, no skills, no UI — programmatic-only, invoked by callers that explicitly know about it (design §Interaction with Existing AGE preset).
+- **Four routes, all sync**: `noproute.route` → `RoutingDecision` (+ next model when applicable); `noproute.classify` → `ErrorClass` (8 values: 3 transient / 3 permanent / `partial:marker` / `unknown`); `noproute.pick-model` → `ModelSelection` (history-aware fallback chain); `noproute.health` → version + fallback chain + error histogram since last reset.
+- **Configuration** (bundle patch service row, mirrored in `plugin/plugin-manifest.yml`): `defaultModel` (`zhipuai-coding-plan/glm-5.2`) / `maxRetries` (`3`) / `fallbackModels` (`[zhipuai-coding-plan/glm-4.6]`).
+- **Discipline**: zero host calls (no agent dispatch — the plugin only exposes decisions); headless degradation (no `webServer` = mount-log line, cordis service stays published); deterministic pure decision modules pinned by four module-named truth tables.
+- **Cross-plugin composition** (nop-route consuming mdcontrol results) remains an explicitly designed Non-Goal — the structural prerequisite (own realm + own RPC namespace) is what landed.
 
 ## Purpose
 

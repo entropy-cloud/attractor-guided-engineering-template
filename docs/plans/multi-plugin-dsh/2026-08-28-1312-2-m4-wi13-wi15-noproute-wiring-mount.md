@@ -58,14 +58,14 @@ Skill: none
 - Item Types: `Add | Proof`
 - Prereqs: `2026-08-28-1312-1` 收口（三纯模块 + 类型在库）
 
-- [ ] Add: `src/routing-core.ts`——pure `decide(...)` 编排：组合 `classify` / `retryDecision` / `pickModel` 三纯函数 → 4 类 `RoutingDecision`（Retry〔同模型退避重试〕/ Fallback〔换模型〕/ Transform〔不可重试错误的转换错误对象，如 partial 成功提取 `<AI_STEP_RESULT>` marker〕/ Give-up〔原样返回〕，语义逐字对齐设计 §nop-route）；纯组合不重复判别逻辑（判别归三模块，编排只做策略合成与优先级）；导出 `RoutingDecision` 类型；零状态、零墙钟、零随机。
-- [ ] Add: `test/routing-core.test.mjs`——编排真值表：4 决策类各 ≥2 例 + 组合边界（可重试类但 attempt 达 `maxRetries` → 不 Retry 的走向、`partial:marker` → Transform、`permanent:*` → Transform/Give-up 分界、transient 类 × fallback 链在库/耗尽两分支）；同输入双跑 bit-identical 断言。
-- [ ] Proof: `npm --prefix plugin/nop-route test` exit 0（四测试文件全链）；用例计数落 log。
+- [x] Add: `src/routing-core.ts`——pure `decide(...)` 编排：组合 `classify` / `retryDecision` / `pickModel` 三纯函数 → 4 类 `RoutingDecision`（Retry〔同模型退避重试〕/ Fallback〔换模型〕/ Transform〔不可重试错误的转换错误对象，如 partial 成功提取 `<AI_STEP_RESULT>` marker〕/ Give-up〔原样返回〕，语义逐字对齐设计 §nop-route）；纯组合不重复判别逻辑（判别归三模块，编排只做策略合成与优先级）；导出 `RoutingDecision` 类型；零状态、零墙钟、零随机。
+- [x] Add: `test/routing-core.test.mjs`——编排真值表：4 决策类各 ≥2 例 + 组合边界（可重试类但 attempt 达 `maxRetries` → 不 Retry 的走向、`partial:marker` → Transform、`permanent:*` → Transform/Give-up 分界、transient 类 × fallback 链在库/耗尽两分支）；同输入双跑 bit-identical 断言。
+- [x] Proof: `npm --prefix plugin/nop-route test` exit 0（四测试文件全链）；用例计数落 log。
 
 Exit Criteria:
 
-- [ ] 4 决策类全覆盖且合成优先级被真值表钉死；确定性合同成立（grep 清单落 log）
-- [ ] 编排层零判别逻辑重复（模块职责边界：classify/retry/model 各自被独立调用过而非内联重写——code review 面）
+- [x] 4 决策类全覆盖且合成优先级被真值表钉死；确定性合同成立（grep 清单落 log）
+- [x] 编排层零判别逻辑重复（模块职责边界：classify/retry/model 各自被独立调用过而非内联重写——code review 面）
 
 ## Phase 2 — WI14 noproute-routes.ts 路由层 + HTTP dispatcher
 
@@ -75,14 +75,14 @@ Skill: none
 - Item Types: `Add | Proof`
 - Prereqs: Phase 1
 
-- [ ] Add: `src/noproute-routes.ts`——`createNopRouteRoutes(deps)` 返回 wire-method 全名 record（`noproute.route` / `noproute.classify` / `noproute.pick-model` / `noproute.health` 四 handler，全 sync 契约）+ `registerNopRouteHttpDispatcher(ctx, logger?)`（`ctx.get('webServer')` 缺席 = 降级 log 行非失败；在场 = `/noproute/api/<method>` 注册，mdcontrol-routes 同形）；参数校验错误以结构化 wire error 返回（mdcontrol 先例）。
-- [ ] Add: `test/noproute-routes.test.mjs`——stub `ctx` / `logger` / `webServer`：四方法各正例 + 参数缺失/畸形 deny 形状 + HTTP dispatcher 注册分支（webServer 在场注册形状 / 缺席降级 log 断言）+ health 直方图读写面（经注入的直方图状态对象）。
-- [ ] Proof: `npm --prefix plugin/nop-route test` exit 0；`./verify-age.sh` L1+L2+L2.5 全绿。
+- [x] Add: `src/noproute-routes.ts`——`createNopRouteRoutes(deps)` 返回 wire-method 全名 record（`noproute.route` / `noproute.classify` / `noproute.pick-model` / `noproute.health` 四 handler，全 sync 契约）+ `registerNopRouteHttpDispatcher(ctx, logger?)`（`ctx.get('webServer')` 缺席 = 降级 log 行非失败；在场 = `/noproute/api/<method>` 注册，mdcontrol-routes 同形）；参数校验错误以结构化 wire error 返回（mdcontrol 先例）。
+- [x] Add: `test/noproute-routes.test.mjs`——stub `ctx` / `logger` / `webServer`：四方法各正例 + 参数缺失/畸形 deny 形状 + HTTP dispatcher 注册分支（webServer 在场注册形状 / 缺席降级 log 断言）+ health 直方图读写面（经注入的直方图状态对象）。
+- [x] Proof: `npm --prefix plugin/nop-route test` exit 0；`./verify-age.sh` L1+L2+L2.5 全绿。
 
 Exit Criteria:
 
-- [ ] 四路由 handler + HTTP 前缀 + headless 降级分支全部被测试钉死
-- [ ] `git diff --stat tools/mission-driver/` 为空（引擎零 diff 自证）
+- [x] 四路由 handler + HTTP 前缀 + headless 降级分支全部被测试钉死
+- [x] `git diff --stat tools/mission-driver/` 为空（引擎零 diff 自证）
 
 ## Phase 3 — WI15 service 挂载 + manifest 增补 + 真宿主四腿 + owner docs
 
@@ -92,20 +92,20 @@ Skill: none
 - Item Types: `Add | Proof`
 - Prereqs: Phase 2
 
-- [ ] Add: `src/service.ts`——`apply(ctx, config)`：cordis `Service` 子类发布 **`noproute`**（注册名去前缀 camelCase，设计 §Naming Convention）；wire record 接线（Phase 2 工厂）；`ctx.inject(['webServer'], …)` 可选 HTTP 面 + headless 降级（`ctx.get('webServer')` 缺席 = mount-log 行，非挂载失败）；mount log 落 `nop-route` 包名与 realm；health 错误直方图为 service 层状态（route/classify 调用点累加、`health` 读取、复位语义在 service）；不使用 `ctx.inject(['agents'], …)`（设计钉死：零 dispatch）。
-- [ ] Add: service 挂载测试——stub ctx 直调 `apply`（发布形状 + mount log + headless 降级 + 直方图累加/复位三面；具体挂点形态按 nop-age 测试先例在实现期定，断言面如上钉死）。
-- [ ] Add: **M3 Deferred 收编**——`plugin/plugin-manifest.yml` 增补 nop-route 条目（`path: ./nop-route`、`realm: nopRoute`、config 镜像 bundle patch service-row config：`defaultModel` / `maxRetries` / `fallbackModels`——drift 面由四腿 dump 对照钉住）；分期注记更新（manifest 现声明全部在库 bundle）。
-- [ ] Proof: **真宿主四腿复跑（M3 Phase 3 同姿势，dual manifest 面，scratch profile `nop-route-audit`）**：① `./plugin/load-plugins.sh --dry-run`（需 `PROJECT_ROOT` export）计划命令含两条 add 且零执行；② `--no-start --profile nop-route-audit` 挂载后 `dsh web --no-open --profile nop-route-audit --dump-config | grep nop-` 同时命中 `# == nop-age`（`isolate: { nopAge: true }`）与 `# == nop-route`（`isolate: { nopRoute: true }` / `id: nop-route-service`）；③ 二次执行全 already-present（幂等）；④ `--unmount-all` → 重挂 dump 与首挂 `diff` 为空；验毕清理（`dsh plugin --profile nop-route-audit list` 空 + profile 目录删除）。
-- [ ] Add: **M2 Deferred 收编（nop-route 半边）**——`docs/architecture/dsh-plugin-packaging.md` / `docs/design/dsh-plugin-integration.md` / `docs/process/dsh-plugin-development-guide.md` 各增 §nop-route Plugin 段（as-built：目录形状、realm `nopRoute`、服务名 `noproute`、四路由、零宿主调用纪律、headless 降级；完整两 bundle 结构性改写注记归 M5-WI18）。
-- [ ] Add: roadmap WI13 / WI14 / WI15 行 `[ ]`→`[x]` + 行内证据注记（编排真值表、路由面测试、挂载 + 四腿证据摘要 + 两 Deferred 收编指针）；`> Last Updated` 头同步；roadmap-check exit 0。
-- [ ] Add: `docs/logs/2026/08-28.md` 收口条目（三 Phase 证据 + 四腿输出摘要 + scratch profile 清理证明）。
+- [x] Add: `src/service.ts`——`apply(ctx, config)`：cordis `Service` 子类发布 **`noproute`**（注册名去前缀 camelCase，设计 §Naming Convention）；wire record 接线（Phase 2 工厂）；`ctx.inject(['webServer'], …)` 可选 HTTP 面 + headless 降级（`ctx.get('webServer')` 缺席 = mount-log 行，非挂载失败）；mount log 落 `nop-route` 包名与 realm；health 错误直方图为 service 层状态（route/classify 调用点累加、`health` 读取、复位语义在 service）；不使用 `ctx.inject(['agents'], …)`（设计钉死：零 dispatch）。
+- [x] Add: service 挂载测试——stub ctx 直调 `apply`（发布形状 + mount log + headless 降级 + 直方图累加/复位三面；具体挂点形态按 nop-age 测试先例在实现期定，断言面如上钉死）。
+- [x] Add: **M3 Deferred 收编**——`plugin/plugin-manifest.yml` 增补 nop-route 条目（`path: ./nop-route`、`realm: nopRoute`、config 镜像 bundle patch service-row config：`defaultModel` / `maxRetries` / `fallbackModels`——drift 面由四腿 dump 对照钉住）；分期注记更新（manifest 现声明全部在库 bundle）。
+- [x] Proof: **真宿主四腿复跑（M3 Phase 3 同姿势，dual manifest 面，scratch profile `nop-route-audit`）**：① `./plugin/load-plugins.sh --dry-run`（需 `PROJECT_ROOT` export）计划命令含两条 add 且零执行；② `--no-start --profile nop-route-audit` 挂载后 `dsh web --no-open --profile nop-route-audit --dump-config | grep nop-` 同时命中 `# == nop-age`（`isolate: { nopAge: true }`）与 `# == nop-route`（`isolate: { nopRoute: true }` / `id: nop-route-service`）；③ 二次执行全 already-present（幂等）；④ `--unmount-all` → 重挂 dump 与首挂 `diff` 为空；验毕清理（`dsh plugin --profile nop-route-audit list` 空 + profile 目录删除）。
+- [x] Add: **M2 Deferred 收编（nop-route 半边）**——`docs/architecture/dsh-plugin-packaging.md` / `docs/design/dsh-plugin-integration.md` / `docs/process/dsh-plugin-development-guide.md` 各增 §nop-route Plugin 段（as-built：目录形状、realm `nopRoute`、服务名 `noproute`、四路由、零宿主调用纪律、headless 降级；完整两 bundle 结构性改写注记归 M5-WI18）。
+- [x] Add: roadmap WI13 / WI14 / WI15 行 `[ ]`→`[x]` + 行内证据注记（编排真值表、路由面测试、挂载 + 四腿证据摘要 + 两 Deferred 收编指针）；`> Last Updated` 头同步；roadmap-check exit 0。
+- [x] Add: `docs/logs/2026/08-28.md` 收口条目（三 Phase 证据 + 四腿输出摘要 + scratch profile 清理证明）。
 
 Exit Criteria:
 
-- [ ] `npm --prefix plugin/nop-route test` 全绿（含 service 挂载测试）；`./verify-age.sh` 全门 GREEN
-- [ ] 四腿证据在 log：dual dump 两 realm 并存、幂等、端态一致、profile 清理
-- [ ] manifest nop-route 条目在库且 config 与 bundle patch 零漂移；三 owner docs §nop-route 段在库
-- [ ] roadmap WI13–WI15 `[x]` + 证据在册；roadmap-check exit 0
+- [x] `npm --prefix plugin/nop-route test` 全绿（含 service 挂载测试）；`./verify-age.sh` 全门 GREEN
+- [x] 四腿证据在 log：dual dump 两 realm 并存、幂等、端态一致、profile 清理
+- [x] manifest nop-route 条目在库且 config 与 bundle patch 零漂移；三 owner docs §nop-route 段在库
+- [x] roadmap WI13–WI15 `[x]` + 证据在册；roadmap-check exit 0
 
 ## Draft Review Record
 
@@ -114,7 +114,12 @@ Exit Criteria:
 
 ## Verification
 
+- pass test 2026-08-28-104553-mission-driver basisHash=e98dd35728c288277b7bf139129c0eca26047e735ff4f882c709bb22c2fdfbca exit=0
+
 ## Closure
+
+- dispatch audit #audit-2026-08-28-104553-mission-driver-2026-08-28-1312-2-m4-wi13-wi15-noproute-wiring-mount-1-d0b55950 to ses_opencode_closure_audit models={exec:opencode/zhipuai-coding-plan/glm-5.2,aud:opencode/zhipuai-coding-plan/glm-5.2}
+- accepted #audit-2026-08-28-104553-mission-driver-2026-08-28-1312-2-m4-wi13-wi15-noproute-wiring-mount-1-d0b55950：审计通过——三 Phase 21 项全勾与在库状态逐面对账成立（routing-core/noproute-routes/service 三源文件 + 三测试文件在库且非空壳：service 发布 cordis `noproute`、wire record 接线、headless 降级、直方图复位均有测试钉死）；独立复跑 `npm --prefix plugin/nop-route test` 97/97 exit 0；`git diff --stat tools/mission-driver/` 为空（引擎零 diff）；manifest nop-route 条目（path/realm/config 三元组）、roadmap WI13–WI15 `[x]` + Last Updated 同步、三 owner docs §nop-route 段、`docs/logs/2026/08-28.md` 收口条目均在库；Deferred 仅剩成文后继项（owner docs 完整改写归 M5-WI18，重开触发在册）。models 对为同模型（single-model downgrade，如实记录）。
 
 ## Deferred But Adjudicated
 
