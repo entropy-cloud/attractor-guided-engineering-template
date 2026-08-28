@@ -1,5 +1,7 @@
 # plugin-manifest.yml — declared plugin list for the nop-* family launcher
-# (M3-WI6, plan docs/plans/multi-plugin-dsh/2026-08-28-0149-3; design owner
+# (M3-WI6, plan docs/plans/multi-plugin-dsh/2026-08-28-0149-3; nop-route
+# entry appended M4-WI15, plan
+# docs/plans/multi-plugin-dsh/2026-08-28-1312-2; design owner
 # docs/design/multi-plugin-dsh-architecture.md §Plugin Manifest).
 #
 # This file is the single source of truth for what plugin/load-plugins.sh
@@ -12,16 +14,19 @@
 #     location with no diagnostic)
 #   - every entry path must exist on disk and contain a cordis.patch.yml
 #
-# Staging (ruled 2026-08-28, M1 doc-audit): M3 declares nop-age ONLY — the
-# pre-flight existence assertion is incompatible with a manifest naming a
-# bundle that does not exist yet. The nop-route entry is appended when its
-# mount face lands (M4-WI15). The manifest always names only bundles that
-# exist on disk.
+# Staging (ruled 2026-08-28, M1 doc-audit; superseded by the M4-WI15
+# collection, plan docs/plans/multi-plugin-dsh/2026-08-28-1312-2): M3
+# declared nop-age ONLY — the pre-flight existence assertion is
+# incompatible with a manifest naming a bundle that does not exist yet.
+# With plugin/nop-route/ on disk (M4-WI9+), the nop-route entry is now
+# appended: the manifest declares every in-repo bundle of the family.
+# The manifest always names only bundles that exist on disk.
 #
-# The config block mirrors the live bundle patch (plugin/nop-age/cordis.patch.yml
-# service row config). The launcher does not inject this config — the mounted
-# bundle's own patch row is the runtime source; this block is the declarative
-# reference for drift checks (real-mount dump comparison, M3-WI8).
+# The config blocks mirror the live bundle patches (service-row config in
+# each bundle's cordis.patch.yml). The launcher does not inject this
+# config — the mounted bundle's own patch row is the runtime source; these
+# blocks are the declarative reference for drift checks (real-mount dump
+# comparison, M3-WI8 / M4-WI15 legs).
 schema: 1
 profile: web
 plugins:
@@ -33,3 +38,11 @@ plugins:
       supervisor:
         projectRoot: ${PROJECT_ROOT}
         continuous: false
+  - name: nop-route
+    path: ./nop-route
+    realm: nopRoute
+    config:
+      defaultModel: zhipuai-coding-plan/glm-5.2
+      maxRetries: 3
+      fallbackModels:
+        - zhipuai-coding-plan/glm-4.6
