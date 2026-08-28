@@ -1,0 +1,42 @@
+# nop-route bundle patch (nop-route decision service, M4-WI9 scaffold;
+# design owner docs/design/multi-plugin-dsh-architecture.md §nop-route
+# Plugin, plan docs/plans/multi-plugin-dsh/2026-08-28-1312-1)
+#
+# This file is the `dsh.bundle.patch` layer declared by the "dsh" manifest
+# field in package.json (same verified host shape as nop-age: app-boot
+# profile.ts `DshBundleManifest { patch: string }`; composition = each
+# bundle's patch rows in dsh.profile.bundles order → profile's own
+# cordis.patch.yml → launcher layers). Mount via the dev guide flow:
+#
+#   dsh plugin --profile web add link:/path/to/this-repo/plugin/nop-route
+#   dsh web --no-open          # bundle mounts need a restart after add
+#   dsh web --dump-config | grep -i nop-route
+#
+# MOUNT SHAPE (follows the same two verified precedents as nop-age):
+#   - the `- insert:` operation list from the dsh-better-sidebar bundle patch
+#   - the isolate-realm group from the anchored-standard preset
+#     (`cordis:group` + `group: true` + `isolate: { nopRoute: true }` —
+#     realm key per design §Isolate Realm Convention): the noproute decision
+#     service publishes into an entry-local realm instead of the
+#     process-global root realm, so it cannot collide with any other mounted
+#     instance and no host reader resolves it by accident.
+#
+# WI9 scope: the mount skeleton only — the service row targets this same
+# package (two-anchor resolution, nop-age precedent). noproute.* routes
+# (service.ts / noproute-routes.ts / routing-core.ts) belong to WI13–WI15
+# and are deliberately absent. Config values mirror design §Plugin Manifest
+# (defaultModel / maxRetries / fallbackModels).
+- insert:
+    - id: nop-route
+      name: cordis:group
+      group: true
+      isolate:
+        nopRoute: true
+      config:
+        - id: nop-route-service
+          name: nop-route
+          config:
+            defaultModel: zhipuai-coding-plan/glm-5.2
+            maxRetries: 3
+            fallbackModels:
+              - zhipuai-coding-plan/glm-4.6

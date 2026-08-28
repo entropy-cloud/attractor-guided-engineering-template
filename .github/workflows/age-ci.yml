@@ -24,6 +24,7 @@ on:
     paths:
       - 'tools/mission-driver/**'
       - 'plugin/nop-age/**'
+      - 'plugin/nop-route/**'
       - 'docs/plans/**'
       - 'docs/backlog/**'
       - 'missions/**'
@@ -34,6 +35,7 @@ on:
     paths:
       - 'tools/mission-driver/**'
       - 'plugin/nop-age/**'
+      - 'plugin/nop-route/**'
       - 'docs/plans/**'
       - 'docs/backlog/**'
       - 'missions/**'

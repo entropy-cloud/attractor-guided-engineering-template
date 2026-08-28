@@ -1,0 +1,28 @@
+{
+  "name": "nop-route",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "nop-route — routing/retry/model-selection decision service as a DSH bundle plugin (M4-WI9 scaffold)",
+  "engines": {
+    "node": "^22.19 || >=24"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "check:manifest": "node scripts/check-manifest.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/check-manifest.mjs && node --test test/*.test.mjs && tsc --noEmit"
+  },
+  "dependencies": {
+    "@deepseek-ai/cordis": "4.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.6.0",
+    "yaml": "^2.5.0"
+  }
+}

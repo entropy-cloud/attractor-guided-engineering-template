@@ -10,6 +10,9 @@
 #   L2   — plugin suite: `npm --prefix plugin/nop-age test`
 #          (L2 backend-parity matrix + WI6/WI7 unit chain: manifest check,
 #          node --test, tsc --noEmit, bundle freshness, smoke import)
+#          + nop-route suite `npm --prefix plugin/nop-route test`
+#          (multi-plugin-dsh M4-WI9: manifest check, node --test, tsc —
+#          no assets face, so no bundle freshness / smoke import legs)
 #          + launcher stub suite `node --test plugin/test/load-plugins.test.mjs`
 #          (multi-plugin-dsh M3-WI7: PATH-injected stub dsh, hermetic — the
 #          real-host launcher legs are M3-WI8 evidence, not this gate)
@@ -47,6 +50,13 @@ if [ ! -d plugin/nop-age/node_modules ]; then
   npm ci --prefix plugin/nop-age --no-audit --no-fund
 fi
 npm --prefix plugin/nop-age test
+
+echo "== L2: nop-route plugin suite (manifest check + unit chain, M4-WI9) =="
+if [ ! -d plugin/nop-route/node_modules ]; then
+  echo "(installing nop-route devDependencies)"
+  npm ci --prefix plugin/nop-route --no-audit --no-fund
+fi
+npm --prefix plugin/nop-route test
 
 echo "== L2: nop-* launcher stub suite (load-plugins.sh, M3-WI7) =="
 node --test plugin/test/load-plugins.test.mjs
