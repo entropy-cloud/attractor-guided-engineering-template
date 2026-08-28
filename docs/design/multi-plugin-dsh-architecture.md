@@ -1,6 +1,6 @@
 # Multi-Plugin DSH Architecture (nop-* Plugin Family)
 
-> **Status: AUDITED (2026-08-28)** — design doc authored 2026-08-27 as the planning anchor for the multi-plugin refactor; doc-audited 2026-08-28 against the live baseline, five deviations dispositioned (plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-1-m1-wi1-wi2-design-doc-audit-consistency.md` — M1-WI1). The technical roadmap lives in `docs/backlog/multi-plugin-dsh-roadmap.md`; concrete execution plans under `docs/plans/multi-plugin-dsh/` convert each work item into one deliverable. Nothing in this doc is implemented yet; the single-plugin form (`plugin/dsh/` — AGE Mission Control) remains the supported baseline until this work lands. Milestone notes are appended incrementally as M2–M5 land.
+> **Status: AUDITED (2026-08-28)** — design doc authored 2026-08-27 as the planning anchor for the multi-plugin refactor; doc-audited 2026-08-28 against the live baseline, five deviations dispositioned (plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-1-m1-wi1-wi2-design-doc-audit-consistency.md` — M1-WI1). The technical roadmap lives in `docs/backlog/multi-plugin-dsh-roadmap.md`; concrete execution plans under `docs/plans/multi-plugin-dsh/` convert each work item into one deliverable. Landed so far: M1 (doc audit), M2 (`plugin/dsh/` → `plugin/nop-age/` migration, plan `2026-08-28-0149-2`), M3 (`plugin-manifest.yml` + `load-plugins.sh` + dual-layer verification, plan `2026-08-28-0149-3`). nop-route (M4) and the joint two-plugin verification (M5) remain planned. Milestone notes are appended incrementally as M4–M5 land.
 
 ## Purpose
 
@@ -156,6 +156,15 @@ Script requirements:
 - No external runtime dependencies (Python or Node detection is for manifest validation only).
 - Same exit semantics as `dsh`: `0` on full success, non-zero on any failure (default behavior; `--strict` makes first failure fatal during the run).
 
+> **As-built (M3-WI7/WI8, landed 2026-08-28, plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-3`)** — deviations and verification posture:
+>
+> - **Host start form**: the literal `dsh web --no-open --profile "$PROFILE"` above is not a valid CLI form (the `web` subcommand is an alias of `--profile web` and rejects a parent `--profile`). As built: profile `web` → `dsh web --no-open`; any other profile → `dsh --profile "$PROFILE"`. The summary table prints before the host hands over the foreground.
+> - **Dry-run** invokes zero `dsh` calls at all (not even `list`) and prints `plan: dsh plugin --profile <p> add "link:<abs>"` lines; the four-class summary (`mounted` / `already-present` / `failed` / `skipped`) prints on real mount runs, with a `removed` / `already-absent` variant for `--unmount-all`.
+> - **YAML dual-channel**: python3+PyYAML probed first; on absence it degrades to `(cd plugin/nop-age && node -e 'require("yaml")…')` so `require` resolves against the bundle's pinned devDep (installed by the repo's L2 gate; `npm ci --prefix plugin/nop-age` if missing).
+> - **Deterministic tests**: `plugin/test/load-plugins.test.mjs` (18 cases, PATH-injected stub `dsh` / stub python3 / stub node — e2e PATH-injection precedent; zero real-host dependency), wired into `verify-age.sh` L2 (`node --test plugin/test/load-plugins.test.mjs`, CI-isomorphic). Real-host legs are M3-WI8 evidence, deliberately outside the L2 gate.
+> - **Static check**: `shellcheck plugin/load-plugins.sh` clean at 0.11.0 (`brew install shellcheck` prerequisite).
+> - **Real-host verification (M3-WI8, scratch profile)**: dry-run shape ✓, real mount + `--dump-config` showing `nop-age` under `isolate: { nopAge: true }` ✓, idempotent re-run all-already-present ✓, `--unmount-all` → re-mount dump byte-identical ✓, strict fail-fast on a bad-path temp manifest ✓. Booting the host with the bundle mounted hits the known bundle-import gap (`plugin/nop-age/package.json` has no `main`/`exports`, M2-WI4 residual — successor work item; the launcher itself is unaffected: `--no-start` + dump face is the verified mount evidence).
+
 ### nop-age Plugin (Migration of plugin/dsh/)
 
 `nop-age` is a verbatim migration of `plugin/dsh/`:
@@ -247,7 +256,9 @@ A future slice may allow `nop-route` to consume `mdcontrol` results (e.g. interc
 ### Installing (after this work lands)
 
 ```bash
-# Once per clone, after pulling the repo:
+# Once per clone, after pulling the repo (PROJECT_ROOT feeds the nop-age
+# supervisor.projectRoot placeholder — undefined ${VAR} is a pre-flight error):
+export PROJECT_ROOT=/path/to/this-repo
 ./plugin/load-plugins.sh                       # mounts everything in plugin-manifest.yml
 ./plugin/load-plugins.sh --profile myprofile   # alternate profile
 ./plugin/load-plugins.sh --no-start            # mount only; start DSH later yourself
@@ -352,5 +363,6 @@ The work lands when:
 
 ## Changelog
 
+- 2026-08-28 — **M3 landed** (WI6/WI7/WI8, plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-3`): `plugin/plugin-manifest.yml` in-repo declaring nop-age only (staging ruling above); `plugin/load-plugins.sh` POSIX launcher (7 flags, pre-flight enforcement, idempotent mount, dual-channel YAML validation); §Load Script as-built note added (start-command CLI form, dry-run/summary shapes, test location, L2 wiring, shellcheck, real-host evidence + known boot-import residual). Design remains AUDITED; milestone notes appended as M4–M5 land.
 - 2026-08-28 — **Doc-audit pass** (M1-WI1, plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-1-m1-wi1-wi2-design-doc-audit-consistency.md`): five live-baseline deviations dispositioned — ① migration surface rewritten as the three-face list (bundle-internal tokens incl. insert-row id, bundle-external functional references ×8, owner-docs sync face) + mandatory skill-ID/`mdcontrol`/`/mdcontrol/api` token-map carve-out; ② "engine zero diff" ruled = behavior zero diff with law-three-module path-literal updates only (alternatives rejected, residual risk → M2 grep boundary); ③ manifest staging ruled nop-age-only at M3, example annotated M4-onward end state; ④ nop-route test face unified to four module-named truth tables (naming pinned) + e2e entry, counts aligned with roadmap WI10–WI13/WI16; ⑤ install-age zero literal reference annotated as live-verified. Status DRAFT → AUDITED.
 - 2026-08-27 — Initial design. Authored as planning anchor for the multi-plugin refactor.

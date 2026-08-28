@@ -4,7 +4,7 @@
 
 ## Multi-Plugin Forward Reference (nop-* family)
 
-The multi-plugin refactor (mission `multi-plugin-dsh`, design owner `docs/design/multi-plugin-dsh-architecture.md`) has repackaged the single DSH bundle as the `nop-*` plugin family (migration landed 2026-08-28, plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-2`): this bundle is now `plugin/nop-age/` (package `nop-age`, isolate realm `nopAge`; cordis service `mdcontrol`, `mission-control-*` skill IDs, and `/mdcontrol/api` stay verbatim — token-map carve-out there), and a second bundle `nop-route` is designed in that doc §nop-route Plugin, with its dev-facing section landing at M4/M5. A unified launcher `plugin/load-plugins.sh` + `plugin/plugin-manifest.yml` replaces the per-bundle `dsh plugin add link:.../plugin/nop-age` step once M3 lands. Until then, the per-bundle mount step below is the live flow.
+The multi-plugin refactor (mission `multi-plugin-dsh`, design owner `docs/design/multi-plugin-dsh-architecture.md`) has repackaged the single DSH bundle as the `nop-*` plugin family (migration landed 2026-08-28, plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-2`): this bundle is now `plugin/nop-age/` (package `nop-age`, isolate realm `nopAge`; cordis service `mdcontrol`, `mission-control-*` skill IDs, and `/mdcontrol/api` stay verbatim — token-map carve-out there), and a second bundle `nop-route` is designed in that doc §nop-route Plugin, with its dev-facing section landing at M4/M5. The unified launcher `plugin/load-plugins.sh` + `plugin/plugin-manifest.yml` landed 2026-08-28 (M3-WI6/WI7/WI8, plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-3`) and is the live mount flow (§Unified Launcher below); the per-bundle manual `dsh plugin add` step remains as the fallback path.
 
 ## Purpose
 
@@ -16,7 +16,36 @@ The concise day-to-day procedure for developing this repository's DSH plugin (`p
 - This repo cloned; engine test suite green: `npm --prefix tools/mission-driver test`
 - Read first: `docs/design/dsh-plugin-integration.md`, `docs/architecture/dsh-plugin-packaging.md`
 
-## Setup: Enable Creator Mode and Mount the Plugin
+## Unified Launcher: load-plugins.sh (M3-WI7, landed)
+
+`plugin/load-plugins.sh` is the one-command mount flow: it reads `plugin/plugin-manifest.yml` (schema:1, currently declaring `nop-age` only — the `nop-route` entry is appended at M4-WI15), pre-flights it, and mounts every declared plugin into the profile in manifest order, idempotently. Pre-flight enforces: YAML syntax (python3+PyYAML first, degrading to `node -e` via the nop-age pinned `yaml` devDep), unknown top-level keys rejected, `${VAR}` placeholders substituted from the environment (**undefined variable = hard error**, so export `PROJECT_ROOT` first — the nop-age `supervisor.projectRoot` placeholder), and every entry path must exist with a `cordis.patch.yml`.
+
+```bash
+export PROJECT_ROOT=/path/to/this-repo   # required: manifest placeholder
+./plugin/load-plugins.sh                       # mount everything + start the host
+./plugin/load-plugins.sh --no-start            # mount only; start DSH later yourself
+./plugin/load-plugins.sh --dry-run             # print planned commands, do nothing
+./plugin/load-plugins.sh --unmount-all         # reset; then re-mount everything
+./plugin/load-plugins.sh --profile myprofile   # alternate profile
+./plugin/load-plugins.sh --skip nop-age        # skip a plugin (repeatable)
+./plugin/load-plugins.sh --strict              # abort on first failure
+```
+
+| Flag | Effect |
+| --- | --- |
+| `--profile <name>` | Override the manifest `profile:` value |
+| `--manifest <path>` | Override manifest path (default `plugin/plugin-manifest.yml`) |
+| `--no-start` | Mount only; do not start the host |
+| `--dry-run` | Print the planned `dsh plugin add` commands without executing anything (zero `dsh` calls) |
+| `--strict` | Abort on the first failure (default: continue and exit non-zero) |
+| `--skip <name>` | Skip a specific plugin by name (repeatable) |
+| `--unmount-all` | Remove every manifest entry from the profile; idempotent baseline reset |
+
+Exit code: `0` on full success, non-zero on any failure. Every run ends with a summary table (`mounted` / `already-present` / `failed` / `skipped`).
+
+As-built notes (verified against the real host, plan `2026-08-28-0149-3` Phase 3): the host start uses `dsh web --no-open` for the `web` profile and `dsh --profile <p>` for any other profile — the `dsh web` subcommand is an alias of `--profile web` and rejects a parent `--profile`. Booting a host with the bundle mounted currently hits the known bundle-import gap (no `main`/`exports` in `plugin/nop-age/package.json`, M2-WI4 residual); the mount itself is proven via `dsh --profile <p> --dump-config | grep nop-`. Deterministic regression coverage lives at `plugin/test/load-plugins.test.mjs` (stub `dsh`, no real-host dependency), wired into `verify-age.sh` L2; `shellcheck plugin/load-plugins.sh` is clean (0.11.0).
+
+## Setup: Enable Creator Mode and Mount the Plugin (manual fallback)
 
 Creator mode (one of the four presets) adds runtime inspection, in-memory plugin experimentation, and preset-authoring guidance on top of full Standard capabilities. Its trust level equals shell access — enable it deliberately, never as a default profile.
 

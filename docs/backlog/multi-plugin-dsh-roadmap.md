@@ -4,7 +4,7 @@ audit-rounds: 0
 
 # Multi-Plugin DSH Refactor Roadmap
 
-> Last Updated: 2026-08-28 (M2 WI3+WI4+WI5 `done`——plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-2`：plugin/dsh → plugin/nop-age 迁移落地〔token map + carve-out + grep 收口〕、零回归验证〔插件 423/423 · 引擎 987/987 · verify-age L1+L2+L2.5 GREEN · e2e PASS · 引擎零 diff 钉住〕、install-age 零引用证据化；M1 WI1+WI2 `done`——plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-1`：设计文档 doc-audit 五偏差处置收口〔迁移面三清单 + 技能名 carve-out / 引擎零 diff = 行为零 diff 裁定 / manifest 分期 nop-age-only / 测试面四真值表 + e2e / install-age 零引用核实，Status DRAFT→AUDITED〕+ 既有文档族六维同源一致性矩阵与三处矛盾修正〔矩阵见 `docs/logs/2026/08-28.md`〕；initial 2026-08-27)
+> Last Updated: 2026-08-28 (M3 WI6+WI7+WI8 `done`——plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-3`：`plugin/plugin-manifest.yml` 落档〔schema:1 / nop-age-only 分期 / ${VAR} 预检执法〕、`plugin/load-plugins.sh` POSIX 启动器〔7 flag + 预检四断言 + 幂等 + 摘要表，stub 测试 18/18 + shellcheck 0.11.0 零告警 + verify-age L2 增腿全绿〕、真宿主六面验证〔dry-run / 挂载 dump nopAge realm / 幂等 / unmount-all 重挂一致 / strict fail-fast / 起宿主腿命中 M2 留档 import 缺口→后继项〕；M2 WI3+WI4+WI5 `done`——plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-2`：plugin/dsh → plugin/nop-age 迁移落地〔token map + carve-out + grep 收口〕、零回归验证〔插件 423/423 · 引擎 987/987 · verify-age L1+L2+L2.5 GREEN · e2e PASS · 引擎零 diff 钉住〕、install-age 零引用证据化；M1 WI1+WI2 `done`——plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-1`：设计文档 doc-audit 五偏差处置收口〔迁移面三清单 + 技能名 carve-out / 引擎零 diff = 行为零 diff 裁定 / manifest 分期 nop-age-only / 测试面四真值表 + e2e / install-age 零引用核实，Status DRAFT→AUDITED〕+ 既有文档族六维同源一致性矩阵与三处矛盾修正〔矩阵见 `docs/logs/2026/08-28.md`〕；initial 2026-08-27)
 > Source: `docs/design/multi-plugin-dsh-architecture.md`. Architecture owns the what and the why; this file owns the ordered delivery milestones and the work-item status surface.
 
 ## Purpose
@@ -32,11 +32,11 @@ Drive the refactor from a single DSH bundle (`plugin/dsh/` — `dsh-mission-cont
 
 ### M3 — Plugin Manifest + Load Script
 
-- [ ] WI6 plugin/plugin-manifest.yml 设计 + 落档(schema:1 形态、profile 字段、plugins[] 数组、${VAR} 占位符语义)。
+- [x] WI6 plugin/plugin-manifest.yml 设计 + 落档(schema:1 形态、profile 字段、plugins[] 数组、${VAR} 占位符语义)。(plan `2026-08-28-0149-3` Phase 1：`plugin/plugin-manifest.yml` 落档——顶层键白名单 schema/profile/plugins（未知键预检 fail-fast）、恰 `nop-age` 一条〔`path: ./nop-age`、`realm: nopAge`、config 镜像 live bundle patch：assetsDir + `supervisor.projectRoot: ${PROJECT_ROOT}` + `continuous: false`〕、`${VAR}` 语义 = 已定义替换/未定义预检报错、M3 分期注记在档；双通道语法验证 python3/PyYAML 与 node〔nop-age pinned devDep〕均实测 exit 0)
 
-- [ ] WI7 plugin/load-plugins.sh POSIX sh 脚本实现(7 个 flag、Python/Node YAML 校验双降级、idempotent 重挂、strict/dry-run 语义)。
+- [x] WI7 plugin/load-plugins.sh POSIX sh 脚本实现(7 个 flag、Python/Node YAML 校验双降级、idempotent 重挂、strict/dry-run 语义)。(plan `2026-08-28-0149-3` Phase 2：`#!/bin/sh` + `set -u`、7 flag 全量、预检四断言〔YAML 双降级 / 未知顶层键 / ${VAR} 定义性 / path 存在 + cordis.patch.yml〕、`dsh plugin list` 幂等查重后 add、四类摘要表、退出语义；确定性测试 **18/18 全绿**〔`plugin/test/load-plugins.test.mjs`，PATH 注入 stub dsh/python3/node，≥12 例要求 + 6 例超额〕；`sh -n` 零错 + 零 bashism + shellcheck 0.11.0 零告警；`verify-age.sh` L2 增腿后 **L1+L2+L2.5 GREEN**〔987/987 + 423/423 + 18/18〕；as-built：启动命令 web→`dsh web --no-open`、他 profile→`dsh --profile <p>`〔设计字面形为非法 CLI，注记在档〕)
 
-- [ ] WI8 load-plugins.sh 验证脚本(shellcheck + 真 dsh 宿主下 dry-run + 真挂载 + unmount-all + 重挂一致 + strict 模式 fail-fast)。
+- [x] WI8 load-plugins.sh 验证脚本(shellcheck + 真 dsh 宿主下 dry-run + 真挂载 + unmount-all + 重挂一致 + strict 模式 fail-fast)。(plan `2026-08-28-0149-3` Phase 3 六面证据：shellcheck 0.11.0 零告警〔brew 安装〕；真宿主 dry-run 零执行且命令形状与 stub 断言一致〔PROJECT_ROOT 未定义实测 deny〕；真挂载 scratch profile `nop-load-audit`——dump-config L314-323 命中 `# == nop-age` / `isolate: { nopAge: true }` / `id: nop-age-service`、二次执行全 already-present 幂等；unmount-all → 重挂 dump **diff 为空**端态一致；strict 临时 manifest 不存在 path → 首条报错 exit 1 零 add；起宿主腿按基线预期命中 M2-WI4 残险〔bundle 无 main/exports import 缺口〕+ 设计字面 `dsh web --no-open --profile` 为非法 CLI 形——两者均注记在设计文档 §Load Script as-built，包入口缺口需独立后继项；scratch profile 验毕清理、`web` profile 未触碰)
 
 ### M4 — nop-route Plugin (NEW)
 
