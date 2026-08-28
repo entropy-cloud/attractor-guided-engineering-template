@@ -1,6 +1,6 @@
 # Multi-Plugin DSH Architecture (nop-* Plugin Family)
 
-> **Status: DRAFT (2026-08-27)** — design doc authored as the planning anchor for the multi-plugin refactor. The technical plan lives in `docs/backlog/multi-plugin-dsh-roadmap.md`; concrete execution plans under `docs/plans/multi-plugin-dsh/` convert each work item into one deliverable. Nothing in this doc is implemented yet; the single-plugin form (`plugin/dsh/` — AGE Mission Control) remains the supported baseline until this work lands.
+> **Status: AUDITED (2026-08-28)** — design doc authored 2026-08-27 as the planning anchor for the multi-plugin refactor; doc-audited 2026-08-28 against the live baseline, five deviations dispositioned (plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-1-m1-wi1-wi2-design-doc-audit-consistency.md` — M1-WI1). The technical roadmap lives in `docs/backlog/multi-plugin-dsh-roadmap.md`; concrete execution plans under `docs/plans/multi-plugin-dsh/` convert each work item into one deliverable. Nothing in this doc is implemented yet; the single-plugin form (`plugin/dsh/` — AGE Mission Control) remains the supported baseline until this work lands. Milestone notes are appended incrementally as M2–M5 land.
 
 ## Purpose
 
@@ -35,7 +35,7 @@ The pattern is the same across the host: each bundle declares its own isolate re
 
 ## Non-Goals
 
-- Rewriting the engine. The plugin family is purely a packaging and naming change; the engine (`tools/mission-driver/`) stays untouched.
+- Rewriting the engine. The plugin family is a packaging and naming change; engine **behavior** is zero-diff. The only permitted change under `tools/mission-driver/` is path-literal updates in the three law modules (`src/law-rules.mjs` `LAW_PROTECTED_FAMILIES` prefix + section comment, `src/law-core.mjs` header comment, `test/law-policy.test.js` gate-match assertion) — ruled 2026-08-28, see §nop-age Plugin → Migration Surface. Rejected: literal zero-diff (the P8 `law-self-protection` family and the `autonomy.policy.yml` gate match track the bundle directory — stale literals strand `plugin/nop-age/src/law/**` outside the protection set and leave the engine suite red, self-contradicting roadmap WI4's own verification face) and a dual-prefix transition (the old prefix would point at a deleted directory — a dead entry with no consumer). Residual risk: the M2 plan must pin the engine diff boundary as a grep list — the law three modules only, zero touches elsewhere under `tools/mission-driver/`.
 - Replacing the existing host API chain. The new plugin family uses the same six host-call surface that `docs/architecture/dsh-plugin-packaging.md` §Dependency and Version Risk enumerates.
 - Implementing a plugin auto-discovery mechanism that scans `plugin/*/` at startup. Discovery is explicit through `plugin-manifest.yml` — this avoids accidental activation of in-progress work and keeps the launch deterministic.
 - A general-purpose plugin loader that takes plugins from arbitrary sources (npm/git). The scope is "host the multi-plugin family in-tree", not "build a plugin marketplace". External sources remain a user concern handled by `dsh plugin --profile <p> add <source>` directly.
@@ -52,16 +52,17 @@ plugin/
 ├── nop-age/                    # renamed from plugin/dsh/ (MIGRATE)
 │   ├── package.json            # name: nop-age (was: dsh-mission-control)
 │   ├── cordis.patch.yml        # isolate: { nopAge: true } (was: missionControl)
-│   ├── scripts/                # unchanged content
-│   ├── src/                    # unchanged content; service name 'mdcontrol' stays
-│   ├── test/                   # unchanged content
-│   ├── assets/                 # unchanged content
-│   └── preset/age/             # moved from plugin/dsh/preset/age/
+│   ├── scripts/                # content tokens updated (comments/error strings — Migration Surface face (a))
+│   ├── src/                    # comment/mount-log tokens only; service name 'mdcontrol' stays
+│   ├── test/                   # fixture paths/assertions token-updated (Migration Surface face (a))
+│   ├── assets/                 # REBUILT via build-bundle from the updated engine law modules (committed artifacts)
+│   └── preset/age/             # moved from plugin/dsh/preset/age/; comment/prompt tokens per face (a)
 ├── nop-route/                  # NEW bundle
 │   ├── package.json            # name: nop-route
 │   ├── cordis.patch.yml        # isolate: { nopRoute: true }
 │   ├── scripts/
-│   │   └── check-manifest.mjs  # copy/adapt from nop-age
+│   │   ├── check-manifest.mjs  # copy/adapt from nop-age
+│   │   └── e2e-noproute.mjs    # WI16 e2e entry — in-process runtime boot + four-route calls (npm run verify:e2e)
 │   ├── src/
 │   │   ├── service.ts          # exports apply(ctx, config); publishes `noproute` service
 │   │   ├── noproute-routes.ts  # wire-method record + HTTP dispatcher registration
@@ -70,9 +71,10 @@ plugin/
 │   │   ├── retry-policy.ts     # pure retryDecision(error, attempt): RetryAction
 │   │   └── error-classifier.ts # pure classify(error): ErrorClass
 │   └── test/
-│       ├── routing-core.test.mjs
-│       ├── model-selector.test.mjs
-│       └── retry-policy.test.mjs
+│       ├── error-classifier.test.mjs  # truth table ≥10 cases (WI10)
+│       ├── retry-policy.test.mjs      # truth table ≥10 cases (WI11)
+│       ├── model-selector.test.mjs    # truth table ≥10 cases (WI12)
+│       └── routing-core.test.mjs      # orchestration truth table (WI13)
 └── (legacy plugin/dsh/ is REMOVED after migration; preserved in git history only)
 ```
 
@@ -121,6 +123,7 @@ plugins:
 - `plugins[]` is the ordered list. Order matters: the script mounts them top-to-bottom (first-listed = first-mounted).
 - `${VAR}` placeholders are substituted from the environment at script invocation time.
 - Unknown top-level keys are a hard error (fail-fast validation in `load-plugins.sh` pre-flight).
+- **Staging (ruled 2026-08-28)**: the manifest example above shows the **M4-onward end-state form**. M3 delivers `plugin/plugin-manifest.yml` declaring **nop-age only** — the pre-flight "asserts every plugin path exists" check is incompatible with a manifest naming a bundle that does not exist yet (`nop-route` lands at M4). The `nop-route` entry is appended when its mount face lands (M4-WI15). Pre-flight existence semantics stay exact per stage: the manifest always names only bundles that exist on disk.
 
 ### Load Script
 
@@ -158,12 +161,45 @@ Script requirements:
 `nop-age` is a verbatim migration of `plugin/dsh/`:
 
 - `package.json`: `name` field changes from `dsh-mission-control` to `nop-age`; everything else (dependencies, scripts, type) unchanged.
-- `cordis.patch.yml`: `isolate: { nopAge: true }` (was `missionControl`); service row name changes from `dsh-mission-control` to `nop-age`; config row id changes from `mdcontrol-service` to `nop-age-service`.
+- `cordis.patch.yml`: `isolate: { nopAge: true }` (was `missionControl`); insert row `id: mission-control` → `nop-age`; service row name changes from `dsh-mission-control` to `nop-age`; config row id changes from `mdcontrol-service` to `nop-age-service`; header comment (package name + `plugin/dsh` mount example) updates with them.
 - `src/service.ts`: no functional change; the mount-log strings are updated to reference `nop-age` instead of `dsh-mission-control`. The published cordis service name `mdcontrol` stays — that is the stable API.
 - `preset/age/`: same directory, same files; `preset.yml` may add a tag line referencing the new package name.
 - All other source files (`src/native-executor.ts`, `src/mdcontrol-routes.ts`, `src/mdcontrol-skills.ts`, `src/law/host-adapter.ts`, `src/supervisor/*.ts`, `src/efficiency/*.ts`) remain functionally unchanged.
 
-A pure mechanical migration (`mv plugin/dsh plugin/nop-age` followed by a 4-token find-and-replace in three files). No semantic change. All tests must remain green.
+#### Migration Surface (doc-audit 2026-08-28 — supersedes the earlier "mv + 4-token replace in three files" sketch)
+
+The migration is still purely mechanical — `mv plugin/dsh plugin/nop-age` plus literal token updates, no semantic change — but the surface has three faces:
+
+**(a) Bundle-internal token face** (inside `plugin/nop-age/` after the move):
+
+| Where | Tokens |
+| --- | --- |
+| `package.json` + `package-lock.json` | `name: dsh-mission-control` → `nop-age` (lockfile name rows follow) |
+| `cordis.patch.yml` | header comment; insert row `id: mission-control`; isolate key `missionControl`; config row `id: mdcontrol-service`; service row `name: dsh-mission-control` |
+| `src/service.ts` | header comment (`isolate: { missionControl: true }`); mount-log strings |
+| `preset/age/` | `agent.cordis.yml` comments (`dsh-mission-control`, `missionControl`); `age-mode.mjs` prompt text ("exposed by the dsh-mission-control bundle"); `preset.yml` display name unchanged — "Mission Control" is the product name, not a package token |
+| `scripts/*.mjs` | comments + error/usage strings embedding `plugin/dsh` (host-harness, e2e-demo, e2e-preset, e2e-continuous, verify-native, migrate-ledger, build-bundle) |
+| `test/*` + `test/fixtures/*` | fixture paths and assertions embedding `plugin/dsh` / `dsh-mission-control` (bundle-scaffold, age-preset, law-truth-table, `*.cordis.yml` fixtures) |
+| `assets/src/law-*.mjs` | carries the same `plugin/dsh/src/law/` literals as the engine (`law-rules.mjs:1391`, `law-core.mjs:8`) — NOT hand-edited: `assets/` is the committed build output of `scripts/build-bundle.mjs`; rebuild after the engine law-module update (face (b) items 1–2) and commit the regenerated tree (freshness gate) |
+
+**Token-map carve-out (mandatory).** The skill IDs `mission-control-run` / `mission-control-draft` / `mission-control-analyze`, the `/mdcontrol/api` HTTP prefix, and the cordis service registration name `mdcontrol` are NOT migration tokens — they stay verbatim after the rename (roadmap M5-WI17 requires the three skills intact; the service name is the stable API, §Naming Convention). A bare `mission-control` token replacement would corrupt the skill IDs; the M2 plan's token map must carry this carve-out explicitly.
+
+**(b) Bundle-external functional-reference face** — live references outside the bundle that break on rename (grep-verified 2026-08-28):
+
+1. `tools/mission-driver/src/law-rules.mjs:1391` — `LAW_PROTECTED_FAMILIES` prefix `"plugin/dsh/src/law/"` (section comment `:1367` same).
+2. `tools/mission-driver/src/law-core.mjs:8` — header comment naming `plugin/dsh/src/law/`.
+3. `missions/autonomy.policy.yml:124` — gate match `{{projectRoot}}/plugin/dsh/src/law/**` (rule `law-self-protection`, P8).
+4. `tools/mission-driver/test/law-policy.test.js:86` — asserts that match.
+5. `verify-age.sh` — comments (`:10`, `:16`), L2 install/test commands (`:42`-`:46` `npm ci --prefix plugin/dsh` / `npm --prefix plugin/dsh test`), law truth-table path (`:73`).
+6. `.github/workflows/age-ci.yml:26`/`:36` — `plugin/dsh/**` trigger paths.
+7. `missions/age-autonomy-implementation.json:25` — `verify-e2e` command `pnpm --prefix plugin/dsh run verify:e2e` (plus a prose mention in `description`).
+8. `.githooks/pre-commit:28` — comment mentioning `plugin/dsh`.
+
+**Engine zero-diff semantics (ruled 2026-08-28).** Roadmap WI4's "引擎零 diff" means engine **behavior** zero diff, not literal zero diff: the law-module path literals above (items 1–4) MUST update with the migration — the P8 protection family and the policy gate match track the bundle directory; stale literals mean the protection set no longer covers `plugin/nop-age/src/law/**` and the engine suite goes red. No other file under `tools/mission-driver/` may change (items 5–8 are repo-infrastructure references, not engine code). The M2 plan pins this boundary as a grep-enforced diff list.
+
+**(c) Owner-docs path sync face**: `tools/mission-driver/CONTEXT.md` (14 `plugin/dsh` hits), `docs/architecture/dsh-plugin-packaging.md` (17), `docs/process/dsh-plugin-development-guide.md` (7) — as-built statements are rewritten at M2 close, not before. `install-age.sh` / `install-age.manifest`: zero literal `plugin/dsh` references (grep-verified 2026-08-28; re-checked at M2-WI5).
+
+No semantic change anywhere. All tests must remain green.
 
 ### nop-route Plugin (NEW)
 
@@ -186,7 +222,7 @@ The plugin exposes these routes:
 Design invariants:
 
 - **No engine diff.** `nop-route` does not touch `tools/mission-driver/`. It lives entirely in the plugin layer.
-- **Pure decision functions.** `routing-core.ts`, `model-selector.ts`, `retry-policy.ts`, `error-classifier.ts` are pure functions with deterministic output for given inputs. Determinism is the verification contract — `test/nop-route-*.test.mjs` runs them with fake clocks and asserts bit-identical decisions across runs.
+- **Pure decision functions.** `routing-core.ts`, `model-selector.ts`, `retry-policy.ts`, `error-classifier.ts` are pure functions with deterministic output for given inputs. Determinism is the verification contract — the four module-named truth-table files (`error-classifier` / `retry-policy` / `model-selector` / `routing-core`, each `.test.mjs`) run them with fake clocks and assert bit-identical decisions across runs. Test-file naming pinned 2026-08-28 (doc-audit): **module-named**, matching the nop-age in-bundle test convention (`supervisor-core.test.mjs`, `mdcontrol-routes.test.mjs`, …); a `nop-route-*.test.mjs` prefix was rejected as redundant inside a bundle directory already named `nop-route`.
 - **Headless degradation.** When the host does not provide `webServer` (no `/noproute/api` HTTP surface), the plugin logs the absent-webServer posture and continues mounting the cordis service for in-process consumers.
 - **Six-call discipline.** The plugin consumes zero host calls (it does not dispatch child agents); it only exposes a decision service. This keeps the plugin within the same blast-radius envelope as `docs/architecture/dsh-plugin-packaging.md` §Dependency and Version Risk (zero host call consumption = zero call-dispatch coupling).
 
@@ -249,12 +285,13 @@ After `load-plugins.sh` runs successfully, DSH sessions gain:
 
 ## Behavioral Differences From Single-Plugin Form
 
-The user-visible behavior of nop-age is **byte-identical** to the single-plugin form — same `mdcontrol.*` routes, same skills, same HTTP dispatcher paths. The differences are packaging-internal:
+The user-visible behavior of nop-age is **byte-identical** to the single-plugin form — same `mdcontrol.*` routes, same skills, same HTTP dispatcher paths. The skill IDs `mission-control-run` / `mission-control-draft` / `mission-control-analyze`, the `/mdcontrol/api` prefix, and the cordis service name `mdcontrol` are explicitly outside the migration token map (§nop-age Plugin → Migration Surface). The differences are packaging-internal:
 
 - **Bundle identity**: `nop-age` is the new package name; `dsh-mission-control` no longer exists.
 - **Isolate realm key**: `nopAge` (was `missionControl`). This is observable only through cordis tree inspection in Creator mode.
 - **Service row**: `nop-age` (was `dsh-mission-control`). Observable only through `--dump-config | grep -i mission-control` → `--dump-config | grep -i nop-age` substitution.
 - **Manifest-driven mount**: launching is now `plugin/load-plugins.sh`, not `dsh plugin --profile web add link:.../plugin/dsh` repeated once per bundle.
+- **Engine-tree posture**: engine behavior zero diff; the only engine-tree change is the path-literal update in the three law modules (`law-rules.mjs` / `law-core.mjs` / `test/law-policy.test.js`), ruled 2026-08-28 — see §nop-age Plugin → Migration Surface.
 
 For `nop-route`:
 
@@ -265,11 +302,11 @@ For `nop-route`:
 
 In scope:
 
-- Directory rename + 4-token find-and-replace migration of `plugin/dsh/` → `plugin/nop-age/`.
-- New `plugin/nop-route/` bundle with the four pure-function modules, four routes, and three test files.
-- `plugin/plugin-manifest.yml` with the two-plugin declaration.
+- Directory rename + literal-token migration of `plugin/dsh/` → `plugin/nop-age/` over the full three-face Migration Surface (§nop-age Plugin → Migration Surface: bundle-internal tokens + bundle-external functional references + owner-docs path sync; skill-ID/service-name carve-out enforced).
+- New `plugin/nop-route/` bundle with the four pure-function modules, four routes, four truth-table/orchestration test files (`error-classifier` / `retry-policy` / `model-selector` ≥10 cases each + `routing-core` orchestration), and the e2e entry (`scripts/e2e-noproute.mjs`, `npm run verify:e2e`).
+- `plugin/plugin-manifest.yml` — M3 ships the nop-age-only declaration; the nop-route entry is appended at M4-WI15 (staging ruling above).
 - `plugin/load-plugins.sh` POSIX shell script with the seven flags enumerated above.
-- Owner-doc updates: `dsh-plugin-integration.md`, `dsh-plugin-packaging.md`, `dsh-plugin-development-guide.md`, `tools/mission-driver/CONTEXT.md`, `README.md` (cross-link section), `install-age.sh` (no functional change, but check it does not reference `plugin/dsh/` literally).
+- Owner-doc updates: `dsh-plugin-integration.md`, `dsh-plugin-packaging.md`, `dsh-plugin-development-guide.md`, `tools/mission-driver/CONTEXT.md`, `README.md` (cross-link section), `install-age.sh` (no functional change; live-verified 2026-08-28 by grep to carry zero literal `plugin/dsh` references — re-check at M2-WI5).
 - All affected tests pass.
 
 Out of scope:
@@ -285,7 +322,7 @@ The work lands when:
 
 1. `plugin/nop-age/` and `plugin/nop-route/` both exist and both mount cleanly under a single `plugin/load-plugins.sh` invocation into a fresh DSH profile.
 2. All existing nop-age tests pass byte-identical to the pre-migration baseline (`plugin/dsh/test/*` moved with the rename).
-3. nop-route has ≥10 test cases across its three truth tables (routing-core, model-selector, retry-policy) and all pass deterministically.
+3. nop-route passes its four truth-table test files — `error-classifier`, `retry-policy`, `model-selector` (≥10 cases EACH, per roadmap WI10–WI12) plus the `routing-core` orchestration table (WI13) — deterministically, and the e2e gate (`npm run verify:e2e`, in-process boot + real four-route calls + real error samples + decision replay, WI16) is green.
 4. `dsh web --dump-config | grep -i nop-` shows both `nop-age` and `nop-route` registered under their respective isolate realms, no `dsh-mission-control` or `missionControl` strings remain.
 5. `plugin/load-plugins.sh --unmount-all` followed by `plugin/load-plugins.sh` produces the same end state as a single run from a fresh profile.
 6. The AGE preset still loads with zero service rows; AGE sessions still see `mission-control-run`/`draft`/`analyze` skills.
@@ -315,4 +352,5 @@ The work lands when:
 
 ## Changelog
 
+- 2026-08-28 — **Doc-audit pass** (M1-WI1, plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-1-m1-wi1-wi2-design-doc-audit-consistency.md`): five live-baseline deviations dispositioned — ① migration surface rewritten as the three-face list (bundle-internal tokens incl. insert-row id, bundle-external functional references ×8, owner-docs sync face) + mandatory skill-ID/`mdcontrol`/`/mdcontrol/api` token-map carve-out; ② "engine zero diff" ruled = behavior zero diff with law-three-module path-literal updates only (alternatives rejected, residual risk → M2 grep boundary); ③ manifest staging ruled nop-age-only at M3, example annotated M4-onward end state; ④ nop-route test face unified to four module-named truth tables (naming pinned) + e2e entry, counts aligned with roadmap WI10–WI13/WI16; ⑤ install-age zero literal reference annotated as live-verified. Status DRAFT → AUDITED.
 - 2026-08-27 — Initial design. Authored as planning anchor for the multi-plugin refactor.

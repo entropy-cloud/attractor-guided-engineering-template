@@ -1,6 +1,10 @@
 # DSH Plugin Integration (AGE Mission Control)
 
-> **Status: PLANNED — not yet implemented.** This doc describes the target feature baseline. Nothing in the "Plugin form" columns or sections below is supported today; the standalone form is the only current behavior. Implementation lands in phases (see `docs/architecture/dsh-plugin-packaging.md` §Phased Delivery), and this file converts to supported-baseline status as phases close.
+> **Status: SUPPORTED BASELINE (delivered 2026-08-23 — P1–P4 all closed; phase records in `docs/architecture/dsh-plugin-packaging.md` §Phased Delivery).** Both consumption forms are live: the standalone CLI (default) and the DSH plugin form. As-built notes are inline throughout (dated M2-WI10/M3-WI12/M4-WI14 markers below); this header previously carried the pre-landing "PLANNED" caveat and was corrected 2026-08-28 during the multi-plugin consistency pass.
+
+## Multi-Plugin Forward Reference (nop-* family)
+
+The multi-plugin refactor (mission `multi-plugin-dsh`, design owner `docs/design/multi-plugin-dsh-architecture.md`) will repackage this single bundle as the `nop-*` plugin family. Inheritance: this doc family remains the **as-built doc of the `nop-age` plugin** after the migration — mapping `plugin/dsh/` → `plugin/nop-age/`, package `dsh-mission-control` → `nop-age`, isolate realm `missionControl` → `nopAge` (Concept Mapping table there); the cordis service name `mdcontrol`, the `mission-control-*` skill IDs, and the `/mdcontrol/api` HTTP prefix stay verbatim (token-map carve-out, Migration Surface there). The second bundle `nop-route` is designed in that doc §nop-route Plugin; its full doc section lands with M4/M5 per its Concept Mapping row. Until the refactor lands, every `plugin/dsh` statement in this file is live truth.
 
 ## Purpose
 
@@ -21,7 +25,7 @@ The repository remains single-sourced. It ships in two consumption forms:
 | Form | Status | Entry point | Execution backend | Audience |
 | --- | --- | --- | --- | --- |
 | **Standalone** | Supported (current) | `./install-age.sh` + `./tools/mission-driver.sh --driver opencode\|pi\|cline` | Process driver (spawn headless CLI per step) | Existing consumers; any harness; CI |
-| **DSH plugin** | Planned | Install repo as dsh-plugin into a DSH profile | Native agent dispatch (in-process child agents) | DSH users running AGE inside Harness |
+| **DSH plugin** | Supported (as-built, 2026-08-23) | Install repo as dsh-plugin into a DSH profile | Native agent dispatch (in-process child agents) | DSH users running AGE inside Harness |
 
 Both forms read/write the same on-disk artifacts (`missions/*.json`, `docs/plans/`, run-state JSON). Neither form copies the engine into consumer projects; the plugin form installs from this repository as a git/npm source into the DSH profile, preserving boundary rule 5 ("engine stays single-sourced").
 
@@ -52,7 +56,7 @@ Rejected alternatives: "auto-loop" (generic, no mission identity), "launchpad" (
 
 ## Concept Mapping
 
-| AGE / mission-driver concept | Standalone form (current) | Plugin form (planned) |
+| AGE / mission-driver concept | Standalone form (current) | Plugin form (as-built) |
 | --- | --- | --- |
 | AI step execution | spawn headless CLI per step | in-process child agent dispatch |
 | Result contract | `<AI_STEP_RESULT>` marker parsed from subprocess log | same marker, same parsing rules — only the text source changes |
@@ -65,13 +69,13 @@ The API-level mapping behind the right-hand column is owned by `docs/architectur
 
 ## User Experience
 
-### Installing (planned)
+### Installing (as-built)
 
 ```bash
-dsh plugin --profile web add "github:<this-repo>"   # exact source shape decided at implementation
+dsh plugin --profile web add link:/path/to/this-repo/plugin/dsh   # local bundle mount; step-by-step in the dev guide §Setup
 ```
 
-After install and host restart, DSH sessions will gain the Mission Control skills. No per-project copy of the engine occurs.
+After install and host restart, DSH sessions will gain the Mission Control skills. No per-project copy of the engine occurs. (Distribution-source forms beyond the local `link:` mount remain a user concern.)
 
 ### Running
 

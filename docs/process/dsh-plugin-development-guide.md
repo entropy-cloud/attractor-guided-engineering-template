@@ -1,6 +1,10 @@
 # DSH Plugin Online Development Guide
 
-> **Status: forward-looking guide** for implementing the plugin defined in `docs/design/dsh-plugin-integration.md` + `docs/architecture/dsh-plugin-packaging.md`. External DSH behaviors cited here reflect the developer preview and must be re-verified against the host version at dev time.
+> **Status: operational guide** for the plugin delivered by `docs/design/dsh-plugin-integration.md` + `docs/architecture/dsh-plugin-packaging.md` (P1–P4 closed 2026-08-23; this header previously read "forward-looking" from pre-landing days and was corrected 2026-08-28). External DSH behaviors cited here reflect the developer preview and must be re-verified against the host version at dev time.
+
+## Multi-Plugin Forward Reference (nop-* family)
+
+The multi-plugin refactor (mission `multi-plugin-dsh`, design owner `docs/design/multi-plugin-dsh-architecture.md`) will repackage this single bundle as the `nop-*` plugin family: this bundle becomes `plugin/nop-age/` (package `nop-age`, isolate realm `nopAge`; cordis service `mdcontrol`, `mission-control-*` skill IDs, and `/mdcontrol/api` stay verbatim — token-map carve-out there), and a second bundle `nop-route` is designed in that doc §nop-route Plugin, with its dev-facing section landing at M4/M5. A unified launcher `plugin/load-plugins.sh` + `plugin/plugin-manifest.yml` replaces the per-bundle `dsh plugin add link:.../plugin/dsh` step once M3 lands. Until then, every `plugin/dsh` path in this guide is the live mount path.
 
 ## Purpose
 

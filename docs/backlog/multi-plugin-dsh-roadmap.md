@@ -4,7 +4,7 @@ audit-rounds: 0
 
 # Multi-Plugin DSH Refactor Roadmap
 
-> Last Updated: 2026-08-27 (initial)
+> Last Updated: 2026-08-28 (M1 WI1+WI2 `done`——plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-1`：设计文档 doc-audit 五偏差处置收口〔迁移面三清单 + 技能名 carve-out / 引擎零 diff = 行为零 diff 裁定 / manifest 分期 nop-age-only / 测试面四真值表 + e2e / install-age 零引用核实，Status DRAFT→AUDITED〕+ 既有文档族六维同源一致性矩阵与三处矛盾修正〔矩阵见 `docs/logs/2026/08-28.md`〕；initial 2026-08-27)
 > Source: `docs/design/multi-plugin-dsh-architecture.md`. Architecture owns the what and the why; this file owns the ordered delivery milestones and the work-item status surface.
 
 ## Purpose
@@ -18,9 +18,9 @@ Drive the refactor from a single DSH bundle (`plugin/dsh/` — `dsh-mission-cont
 
 ### M1 — Design and Architecture (the prerequisite for any code)
 
-- [ ] WI1 多插件架构设计文档:明确 nop-* 命名约定、isolate realm 协议、manifest 格式、load-plugins.sh 形态、nop-route 的范围 + 4 路由 + 4 纯函数模块。(Owner: design doc → `docs/design/multi-plugin-dsh-architecture.md` 已落; plan 走流程做 doc-audit + 收口闭环)
+- [x] WI1 多插件架构设计文档:明确 nop-* 命名约定、isolate realm 协议、manifest 格式、load-plugins.sh 形态、nop-route 的范围 + 4 路由 + 4 纯函数模块。(Owner: design doc → `docs/design/multi-plugin-dsh-architecture.md`; plan `2026-08-28-0149-1` doc-audit 收口——五处 live 偏差全部处置：完整迁移面三清单〔bundle 内 token + bundle 外引用 ×8 + owner docs 同步〕+ 技能名/`mdcontrol` carve-out、「引擎零 diff」裁定 = 行为零 diff + law 三模块字面更新、manifest 分期 M3 仅 nop-age、测试面四张模块名真值表 + e2e 入口统一、install-age 零字面引用已核实；Status DRAFT → AUDITED，证据指针该 doc Changelog)
 
-- [ ] WI2 现有 dsh-plugin roadmap / 架构 doc 同源一致性核对 + 引用面增补(nop-age 继承 + nop-route 新增段)。
+- [x] WI2 现有 dsh-plugin roadmap / 架构 doc 同源一致性核对 + 引用面增补(nop-age 继承 + nop-route 新增段)。(plan `2026-08-28-0149-1`:三 live owner docs 各增 §Multi-Plugin Forward Reference〔nop-age 继承映射 + nop-route 前向指针〕;六维一致性核对矩阵全过、矛盾修正 C1-C3〔integration doc 头部 supported-baseline 过期声明 + 双形式表/安装段、dev guide 头部〕——矩阵见 `docs/logs/2026/08-28.md`;`dsh-plugin-roadmap.md` 裁定零触碰——头部无 live-baseline 声明,史实不改写)
 
 ### M2 — nop-age Migration (rename plugin/dsh/ → plugin/nop-age/)
 
