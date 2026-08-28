@@ -10,6 +10,9 @@
 #   L2   — plugin suite: `npm --prefix plugin/nop-age test`
 #          (L2 backend-parity matrix + WI6/WI7 unit chain: manifest check,
 #          node --test, tsc --noEmit, bundle freshness, smoke import)
+#          + launcher stub suite `node --test plugin/test/load-plugins.test.mjs`
+#          (multi-plugin-dsh M3-WI7: PATH-injected stub dsh, hermetic — the
+#          real-host launcher legs are M3-WI8 evidence, not this gate)
 #   L2.5 — law gates (age-autonomy M2-WI23, structural subset, no actor):
 #          ① `gate-check.mjs --policy missions/autonomy.policy.yml`
 #          ② gate-check.mjs on the FULL docs/plans/age-autonomy/ corpus
@@ -44,6 +47,9 @@ if [ ! -d plugin/nop-age/node_modules ]; then
   npm ci --prefix plugin/nop-age --no-audit --no-fund
 fi
 npm --prefix plugin/nop-age test
+
+echo "== L2: nop-* launcher stub suite (load-plugins.sh, M3-WI7) =="
+node --test plugin/test/load-plugins.test.mjs
 
 echo "== L2.5: law gates (policy + plan corpus + truth table) =="
 if [ -f missions/autonomy.policy.yml ]; then

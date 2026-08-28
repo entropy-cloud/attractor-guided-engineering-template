@@ -1,0 +1,35 @@
+# plugin-manifest.yml — declared plugin list for the nop-* family launcher
+# (M3-WI6, plan docs/plans/multi-plugin-dsh/2026-08-28-0149-3; design owner
+# docs/design/multi-plugin-dsh-architecture.md §Plugin Manifest).
+#
+# This file is the single source of truth for what plugin/load-plugins.sh
+# mounts. Pre-flight enforcement lives in the script:
+#   - unknown top-level keys are rejected (whitelist: schema / profile /
+#     plugins)
+#   - ${VAR} placeholders are substituted from the environment at invocation
+#     time; an UNDEFINED variable is a pre-flight error (never silently
+#     empty — a silent empty would point supervisor.projectRoot at the wrong
+#     location with no diagnostic)
+#   - every entry path must exist on disk and contain a cordis.patch.yml
+#
+# Staging (ruled 2026-08-28, M1 doc-audit): M3 declares nop-age ONLY — the
+# pre-flight existence assertion is incompatible with a manifest naming a
+# bundle that does not exist yet. The nop-route entry is appended when its
+# mount face lands (M4-WI15). The manifest always names only bundles that
+# exist on disk.
+#
+# The config block mirrors the live bundle patch (plugin/nop-age/cordis.patch.yml
+# service row config). The launcher does not inject this config — the mounted
+# bundle's own patch row is the runtime source; this block is the declarative
+# reference for drift checks (real-mount dump comparison, M3-WI8).
+schema: 1
+profile: web
+plugins:
+  - name: nop-age
+    path: ./nop-age
+    realm: nopAge
+    config:
+      assetsDir: ./assets
+      supervisor:
+        projectRoot: ${PROJECT_ROOT}
+        continuous: false
