@@ -4,7 +4,7 @@
 
 ## Multi-Plugin Forward Reference (nop-* family)
 
-The multi-plugin refactor (mission `multi-plugin-dsh`, design owner `docs/design/multi-plugin-dsh-architecture.md`) will repackage this single bundle as the `nop-*` plugin family. Inheritance: this doc family remains the **as-built doc of the `nop-age` plugin** after the migration — mapping `plugin/dsh/` → `plugin/nop-age/`, package `dsh-mission-control` → `nop-age`, isolate realm `missionControl` → `nopAge` (Concept Mapping table there); the cordis service name `mdcontrol`, the `mission-control-*` skill IDs, and the `/mdcontrol/api` HTTP prefix stay verbatim (token-map carve-out, Migration Surface there). The second bundle `nop-route` is designed in that doc §nop-route Plugin; its full doc section lands with M4/M5 per its Concept Mapping row. Until the refactor lands, every `plugin/dsh` statement in this file is live truth.
+The multi-plugin refactor (mission `multi-plugin-dsh`, design owner `docs/design/multi-plugin-dsh-architecture.md`) has repackaged the single DSH bundle as the `nop-*` plugin family (migration landed 2026-08-28, plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-2`). Inheritance: this doc family is now the **as-built doc of the `nop-age` plugin** — directory `plugin/nop-age/`, package `nop-age`, isolate realm `nopAge` (Concept Mapping table there); the cordis service name `mdcontrol`, the `mission-control-*` skill IDs, and the `/mdcontrol/api` HTTP prefix stay verbatim (token-map carve-out, Migration Surface there). The second bundle `nop-route` is designed in that doc §nop-route Plugin; its full doc section lands with M4/M5 per its Concept Mapping row.
 
 ## Purpose
 
@@ -72,7 +72,7 @@ The API-level mapping behind the right-hand column is owned by `docs/architectur
 ### Installing (as-built)
 
 ```bash
-dsh plugin --profile web add link:/path/to/this-repo/plugin/dsh   # local bundle mount; step-by-step in the dev guide §Setup
+dsh plugin --profile web add link:/path/to/this-repo/plugin/nop-age   # local bundle mount; step-by-step in the dev guide §Setup
 ```
 
 After install and host restart, DSH sessions will gain the Mission Control skills. No per-project copy of the engine occurs. (Distribution-source forms beyond the local `link:` mount remain a user concern.)

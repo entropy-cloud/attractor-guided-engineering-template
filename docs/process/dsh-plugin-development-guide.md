@@ -1,14 +1,14 @@
 # DSH Plugin Online Development Guide
 
-> **Status: operational guide** for the plugin delivered by `docs/design/dsh-plugin-integration.md` + `docs/architecture/dsh-plugin-packaging.md` (P1–P4 closed 2026-08-23; this header previously read "forward-looking" from pre-landing days and was corrected 2026-08-28). External DSH behaviors cited here reflect the developer preview and must be re-verified against the host version at dev time.
+> **Status: operational guide** for the plugin delivered by `docs/design/dsh-plugin-integration.md` + `docs/architecture/dsh-plugin-packaging.md` (P1–P4 closed 2026-08-23; this header previously read "forward-looking" from pre-landing days and was corrected 2026-08-28). External DSH behaviors cited here reflect the developer preview and must be re-verified against the host version at dev time. 2026-08-28 increment: the bundle directory/package migrated to `plugin/nop-age/` (`nop-age`, realm `nopAge`; `mdcontrol` service, skill IDs, `/mdcontrol/api` unchanged — plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-2`); all paths below are synced.
 
 ## Multi-Plugin Forward Reference (nop-* family)
 
-The multi-plugin refactor (mission `multi-plugin-dsh`, design owner `docs/design/multi-plugin-dsh-architecture.md`) will repackage this single bundle as the `nop-*` plugin family: this bundle becomes `plugin/nop-age/` (package `nop-age`, isolate realm `nopAge`; cordis service `mdcontrol`, `mission-control-*` skill IDs, and `/mdcontrol/api` stay verbatim — token-map carve-out there), and a second bundle `nop-route` is designed in that doc §nop-route Plugin, with its dev-facing section landing at M4/M5. A unified launcher `plugin/load-plugins.sh` + `plugin/plugin-manifest.yml` replaces the per-bundle `dsh plugin add link:.../plugin/dsh` step once M3 lands. Until then, every `plugin/dsh` path in this guide is the live mount path.
+The multi-plugin refactor (mission `multi-plugin-dsh`, design owner `docs/design/multi-plugin-dsh-architecture.md`) has repackaged the single DSH bundle as the `nop-*` plugin family (migration landed 2026-08-28, plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-2`): this bundle is now `plugin/nop-age/` (package `nop-age`, isolate realm `nopAge`; cordis service `mdcontrol`, `mission-control-*` skill IDs, and `/mdcontrol/api` stay verbatim — token-map carve-out there), and a second bundle `nop-route` is designed in that doc §nop-route Plugin, with its dev-facing section landing at M4/M5. A unified launcher `plugin/load-plugins.sh` + `plugin/plugin-manifest.yml` replaces the per-bundle `dsh plugin add link:.../plugin/nop-age` step once M3 lands. Until then, the per-bundle mount step below is the live flow.
 
 ## Purpose
 
-The concise day-to-day procedure for developing this repository's DSH plugin (`plugin/dsh/`, "AGE Mission Control"): develop **online inside a running DSH host in Creator mode**, with every core workflow customized through the mission-driver flow engine — not through imperative plugin code.
+The concise day-to-day procedure for developing this repository's DSH plugin (`plugin/nop-age/`, "AGE Mission Control"): develop **online inside a running DSH host in Creator mode**, with every core workflow customized through the mission-driver flow engine — not through imperative plugin code.
 
 ## Prerequisites
 
@@ -25,7 +25,7 @@ Creator mode (one of the four presets) adds runtime inspection, in-memory plugin
 npx @deepseek-ai/dsh web
 
 # 2. Mount the plugin directory into the profile (bundle form, local path)
-dsh plugin --profile web add link:/path/to/this-repo/plugin/dsh
+dsh plugin --profile web add link:/path/to/this-repo/plugin/nop-age
 # Bundle mounts require a host restart after add:
 dsh web --no-open
 
@@ -36,18 +36,18 @@ dsh web --dump-config | grep -i mission-control
 Online-iteration rules:
 
 - **Bundle form needs a restart per change** — acceptable for coarse iterations.
-- For tight loops, prefer the repository-plugin mechanism (Settings → Plugins → repository source), which hot-reloads without restart. Point it at `plugin/dsh` via the `&path:` subpackage syntax.
+- For tight loops, prefer the repository-plugin mechanism (Settings → Plugins → repository source), which hot-reloads without restart. Point it at `plugin/nop-age` via the `&path:` subpackage syntax.
 - Use Creator mode's runtime inspection to confirm the Mission Control service is mounted in the live Cordis tree before debugging routes.
 - Use in-memory plugin experiments to trial patch-line variants before writing them into `cordis.patch.yml`. Experiments are memory-only and vanish on restart — promote survivors to committed files.
 
 ## AGE Mode: Installing the AGE Preset (M4-WI14, landed)
 
-The AGE session posture ships as a host-discoverable agent preset at `plugin/dsh/preset/age/` (as-built owner doc: `docs/architecture/dsh-plugin-packaging.md` §AGE Preset). Consumer installation:
+The AGE session posture ships as a host-discoverable agent preset at `plugin/nop-age/preset/age/` (as-built owner doc: `docs/architecture/dsh-plugin-packaging.md` §AGE Preset). Consumer installation:
 
 ```bash
 # 1. Copy the preset directory into the host's user preset root (create it first):
 mkdir -p "${DSH_HOME:-$HOME/.dsh}/.agent-presets"
-cp -R /path/to/this-repo/plugin/dsh/preset/age "${DSH_HOME:-$HOME/.dsh}/.agent-presets/age"
+cp -R /path/to/this-repo/plugin/nop-age/preset/age "${DSH_HOME:-$HOME/.dsh}/.agent-presets/age"
 
 # 2. Restart the host (roster discovery reads the roots per call, but the
 #    session picker and any bundle-mount changes need the restart):
@@ -67,15 +67,15 @@ dsh web --no-open
 Verification in the repo (no host needed):
 
 ```bash
-npm --prefix plugin/dsh test                    # structural gate (age-preset.test.mjs) rides the CI chain
-npm --prefix plugin/dsh run verify:e2e:preset   # composition leg (in-process; roster + service same tree)
+npm --prefix plugin/nop-age test                    # structural gate (age-preset.test.mjs) rides the CI chain
+npm --prefix plugin/nop-age run verify:e2e:preset   # composition leg (in-process; roster + service same tree)
 ```
 
 Manual real-host leg (env/manual — not automated): after install, open an AGE-mode session at a project with `missions/base.json` present, confirm the posture section is in effect and the mission-control skills are offered, run a small mission, and observe mount + run + monitor. Natural-language AGE-session quality is a watch-only residual (plan `2026-08-23-2202-1` §Deferred).
 
 Notes:
 
-- The preset carries ZERO service rows — Mission Control stays mounted exactly once (bundle patch). Never add a `dsh-mission-control` row to the preset (a second instance breaks the single active-run guard; the structural gate rejects it).
+- The preset carries ZERO service rows — Mission Control stays mounted exactly once (bundle patch). Never add a `nop-age` row to the preset (a second instance breaks the single active-run guard; the structural gate rejects it).
 - Preset rows that wait for a service the deployment never composes make the whole preset unmountable (observed with `dsh-command-compact` needing the `commands` registry) — keep new rows within the host-spine allowlist pinned by `test/age-preset.test.mjs`.
 - Editing a preset directory takes effect for NEW sessions after the composition file changes (standing-mount stamp generations); already-joined sessions keep their generation.
 

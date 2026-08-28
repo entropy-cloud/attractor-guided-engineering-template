@@ -4,7 +4,7 @@ audit-rounds: 0
 
 # Multi-Plugin DSH Refactor Roadmap
 
-> Last Updated: 2026-08-28 (M1 WI1+WI2 `done`——plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-1`：设计文档 doc-audit 五偏差处置收口〔迁移面三清单 + 技能名 carve-out / 引擎零 diff = 行为零 diff 裁定 / manifest 分期 nop-age-only / 测试面四真值表 + e2e / install-age 零引用核实，Status DRAFT→AUDITED〕+ 既有文档族六维同源一致性矩阵与三处矛盾修正〔矩阵见 `docs/logs/2026/08-28.md`〕；initial 2026-08-27)
+> Last Updated: 2026-08-28 (M2 WI3+WI4+WI5 `done`——plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-2`：plugin/dsh → plugin/nop-age 迁移落地〔token map + carve-out + grep 收口〕、零回归验证〔插件 423/423 · 引擎 987/987 · verify-age L1+L2+L2.5 GREEN · e2e PASS · 引擎零 diff 钉住〕、install-age 零引用证据化；M1 WI1+WI2 `done`——plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-1`：设计文档 doc-audit 五偏差处置收口〔迁移面三清单 + 技能名 carve-out / 引擎零 diff = 行为零 diff 裁定 / manifest 分期 nop-age-only / 测试面四真值表 + e2e / install-age 零引用核实，Status DRAFT→AUDITED〕+ 既有文档族六维同源一致性矩阵与三处矛盾修正〔矩阵见 `docs/logs/2026/08-28.md`〕；initial 2026-08-27)
 > Source: `docs/design/multi-plugin-dsh-architecture.md`. Architecture owns the what and the why; this file owns the ordered delivery milestones and the work-item status surface.
 
 ## Purpose
@@ -24,11 +24,11 @@ Drive the refactor from a single DSH bundle (`plugin/dsh/` — `dsh-mission-cont
 
 ### M2 — nop-age Migration (rename plugin/dsh/ → plugin/nop-age/)
 
-- [ ] WI3 plugin/dsh/ → plugin/nop-age/ 目录迁移(pure move + 4-token 替换)。
+- [x] WI3 plugin/dsh/ → plugin/nop-age/ 目录迁移(pure move + 4-token 替换)。(plan `2026-08-28-0149-2`：`git mv` 整目录〔105×R100 + service.ts RM rename 谱系入 index，`--follow` 提交后可查〕+ token map 全量落地〔`dsh-mission-control`→`nop-age`、`missionControl`→`nopAge`、`mdcontrol-service`→`nop-age-service`、insert row `mission-control`→`nop-age` 单点、`plugin/dsh`→`plugin/nop-age` 全 live 面〕+ carve-out 保持〔`mdcontrol` / `/mdcontrol/api` / 技能三 ID 原名在库〕；bundle 外 8 处功能引用 + 四 owner docs 路径同步〔含 plan 基线记 zero 命中的 integration doc 实测 2 处一并同步——执行期基线修正〕；grep 收口零命中 + 残留 `mission-control` 逐条对照允许集；assets 经 build-bundle 再生 content-equal；`npm ci` 验 lockfile 完整）
 
-- [ ] WI4 验证迁移零回归:全部 plugin 测试(从 plugin/dsh/test 移到 plugin/nop-age/test)绿、引擎零 diff、CLI 行为不变。
+- [x] WI4 验证迁移零回归:全部 plugin 测试(从 plugin/dsh/test 移到 plugin/nop-age/test)绿、引擎零 diff、CLI 行为不变。(plan `2026-08-28-0149-2`：插件套件 **423/423** = 迁移前基线、引擎套件 **987/987** = 基线〔只增不减·纯迁移〕、`./verify-age.sh` **L1+L2+L2.5 GREEN**〔真值表 119/0〕、mission-check 全 mission exit 0〔base.json = extends defaults 片段，standalone fail 为迁移前既有、零 diff〕、`verify:e2e` 真实 cordis runtime **PASS**〔mdcontrol 路由 + 技能三 ID + 双腿 shape identity + correction-retry + monitor render〕、`git diff --stat engine.js flows/` 为空 + tools diff 恰 law 三模块路径字面；真宿主 dump 面：nop-age service row + nopAge realm + 零 missionControl 残留，scratch profile `nop-age-mig-audit` 验毕清理；残险留档：真宿主 boot import 因 package.json 无 `main`/`exports` 不可导入——**迁移前同状**〔旧名同样缺失，既有 runtime 证据全走 in-process fixture 相对路径〕，非本迁移回归，M3-WI8 真挂载面将正面命中该缺口)
 
-- [ ] WI5 install-age.sh / install-age.manifest 中 `plugin/dsh` 字面引用清查与更新。
+- [x] WI5 install-age.sh / install-age.manifest 中 `plugin/dsh` 字面引用清查与更新。(plan `2026-08-28-0149-2`：`grep -rn "plugin/dsh" install-age.sh install-age.manifest` **零命中**实测落档——live 基线即零，双文件零改动，证据化收口)
 
 ### M3 — Plugin Manifest + Load Script
 

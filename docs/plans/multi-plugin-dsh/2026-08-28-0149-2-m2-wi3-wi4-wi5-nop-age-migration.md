@@ -54,18 +54,18 @@ Skill: none
 - Item Types: `Decision | Add`
 - Prereqs: `2026-08-28-0149-1` 收口（迁移面清单 / 零 diff 语义 / carve-out 三件在档）
 
-- [ ] Decision: **token map 钉死**（输入 = 迁移前全量 grep 清单实测）。基线 token 集（逐 live 文件核对后固化）：`dsh-mission-control` → `nop-age`（package.json / package-lock.json name、cordis.patch.yml service row name、src/service.ts mount log）；`missionControl` → `nopAge`（isolate 键）；`mdcontrol-service` → `nop-age-service`（config row id）；`mission-control` → `nop-age` **仅限 cordis.patch.yml insert row id 单点**（非全局——`mission-control-run/draft/analyze` 技能 ID carve-out，M1 裁定）；`plugin/dsh` → `plugin/nop-age`（全部 live 功能引用 + bundle 内自引用）。不变式：服务注册名 `mdcontrol`、`/mdcontrol/api` 前缀、preset 零服务行、技能三 ID 不变。备选（保留 `mission-control` row id）否决：设计成功判据 4 要求 dump 无 missionControl 族残留、`grep -i nop-age` 可检。残险：package-lock.json name 行手改后须 `npm ci --prefix plugin/nop-age` 验证 lockfile 完整性。
-- [ ] Add: `git mv plugin/dsh plugin/nop-age`（目录整体移动，git 历史保留 rename 谱系；node_modules 未跟踪面随物理移动）。
-- [ ] Add: bundle 内 token 替换——package.json / package-lock.json、cordis.patch.yml（isolate 键 / service row / config row id / insert row id + 头注示例路径）、src/service.ts mount log、preset/age/（agent.cordis.yml 注释、preset.yml 增新包名 tag 行）、scripts/*（注释与报错串）、test/fixtures/*.cordis.yml 与 test/*.test.mjs 内路径、其余 src 内自引用字符串（grep 清单为准）。
-- [ ] Add: bundle 外功能引用更新——`law-rules.mjs:1391` prefix + :1367 注释、`law-core.mjs:8` 注释、`missions/autonomy.policy.yml:124` gate match（P8 保护路径：本 plan active 期正文已具名该路径，approved-project leg 承载写入）、`test/law-policy.test.js:86` 断言、`verify-age.sh` 五处、`.github/workflows/age-ci.yml:26/:36`、`missions/age-autonomy-implementation.json:25` 命令 + 两 mission 描述句路径、`.githooks/pre-commit:28` 注释。
-- [ ] Add: owner docs 路径 / 命名零悬挂同步——`tools/mission-driver/CONTEXT.md`（14 处）、`docs/process/dsh-plugin-development-guide.md`（7 处）、`docs/architecture/dsh-plugin-packaging.md`（17 处）：`plugin/dsh`→`plugin/nop-age`、`dsh-mission-control`→`nop-age`、`missionControl`→`nopAge` 同构替换 + 各文档状态头一行增量句（迁移指针本 plan）；结构性改写不在本 slice。
-- [ ] Proof: 迁移后 grep 收口——live 面（plugin/nop-age + bundle 外引用面 + owner docs + 根级 sh/yml/json）`grep -rn "plugin/dsh"` 零命中；`dsh-mission-control` / `mdcontrol-service` / isolate `missionControl` 同法零命中；`mission-control` 残留命中仅为技能三 ID + 其历史注记（逐条列出对照 carve-out）；历史工件（docs/plans/、docs/analysis/、docs/discussions/、docs/logs/、docs/audits/）零改写（`git diff --stat` 佐证）。`npm run build --prefix plugin/nop-age` 后 assets/ content-equal（复制通道再生一致）。
+- [x] Decision: **token map 钉死**（输入 = 迁移前全量 grep 清单实测）。基线 token 集（逐 live 文件核对后固化）：`dsh-mission-control` → `nop-age`（package.json / package-lock.json name、cordis.patch.yml service row name、src/service.ts mount log）；`missionControl` → `nopAge`（isolate 键）；`mdcontrol-service` → `nop-age-service`（config row id）；`mission-control` → `nop-age` **仅限 cordis.patch.yml insert row id 单点**（非全局——`mission-control-run/draft/analyze` 技能 ID carve-out，M1 裁定）；`plugin/dsh` → `plugin/nop-age`（全部 live 功能引用 + bundle 内自引用）。不变式：服务注册名 `mdcontrol`、`/mdcontrol/api` 前缀、preset 零服务行、技能三 ID 不变。备选（保留 `mission-control` row id）否决：设计成功判据 4 要求 dump 无 missionControl 族残留、`grep -i nop-age` 可检。残险：package-lock.json name 行手改后须 `npm ci --prefix plugin/nop-age` 验证 lockfile 完整性。
+- [x] Add: `git mv plugin/dsh plugin/nop-age`（目录整体移动，git 历史保留 rename 谱系；node_modules 未跟踪面随物理移动）。
+- [x] Add: bundle 内 token 替换——package.json / package-lock.json、cordis.patch.yml（isolate 键 / service row / config row id / insert row id + 头注示例路径）、src/service.ts mount log、preset/age/（agent.cordis.yml 注释、preset.yml 增新包名 tag 行）、scripts/*（注释与报错串）、test/fixtures/*.cordis.yml 与 test/*.test.mjs 内路径、其余 src 内自引用字符串（grep 清单为准）。
+- [x] Add: bundle 外功能引用更新——`law-rules.mjs:1391` prefix + :1367 注释、`law-core.mjs:8` 注释、`missions/autonomy.policy.yml:124` gate match（P8 保护路径：本 plan active 期正文已具名该路径，approved-project leg 承载写入）、`test/law-policy.test.js:86` 断言、`verify-age.sh` 五处、`.github/workflows/age-ci.yml:26/:36`、`missions/age-autonomy-implementation.json:25` 命令 + 两 mission 描述句路径、`.githooks/pre-commit:28` 注释。
+- [x] Add: owner docs 路径 / 命名零悬挂同步——`tools/mission-driver/CONTEXT.md`（14 处）、`docs/process/dsh-plugin-development-guide.md`（7 处）、`docs/architecture/dsh-plugin-packaging.md`（17 处）：`plugin/dsh`→`plugin/nop-age`、`dsh-mission-control`→`nop-age`、`missionControl`→`nopAge` 同构替换 + 各文档状态头一行增量句（迁移指针本 plan）；结构性改写不在本 slice。
+- [x] Proof: 迁移后 grep 收口——live 面（plugin/nop-age + bundle 外引用面 + owner docs + 根级 sh/yml/json）`grep -rn "plugin/dsh"` 零命中；`dsh-mission-control` / `mdcontrol-service` / isolate `missionControl` 同法零命中；`mission-control` 残留命中仅为技能三 ID + 其历史注记（逐条列出对照 carve-out）；历史工件（docs/plans/、docs/analysis/、docs/discussions/、docs/logs/、docs/audits/）零改写（`git diff --stat` 佐证）。`npm run build --prefix plugin/nop-age` 后 assets/ content-equal（复制通道再生一致）。
 
 Exit Criteria:
 
-- [ ] `plugin/nop-age/` 在库、`plugin/dsh/` 不存在、git rename 谱系可查（`git log --follow` 抽查一文件）
-- [ ] token map 全量落地 + carve-out 保持（技能三 ID / `mdcontrol` / `/mdcontrol/api` 原名在库）
-- [ ] grep 收口零命中证据在案（含 carve-out 允许集逐条对照）
+- [x] `plugin/nop-age/` 在库、`plugin/dsh/` 不存在、git rename 谱系可查（`git log --follow` 抽查一文件）
+- [x] token map 全量落地 + carve-out 保持（技能三 ID / `mdcontrol` / `/mdcontrol/api` 原名在库）
+- [x] grep 收口零命中证据在案（含 carve-out 允许集逐条对照）
 
 ## Phase 2 — 零回归验证（WI4 + WI5）
 
@@ -75,20 +75,20 @@ Skill: none
 - Item Types: `Proof | Add`
 - Prereqs: Phase 1
 
-- [ ] Proof: 插件套件 `npm --prefix plugin/nop-age test` 绿（check-manifest + 全量 unit + `tsc --noEmit` + build-bundle --check + smoke-import）。
-- [ ] Proof: 引擎套件 `pnpm --prefix tools/mission-driver test` 绿（含更新后 law-policy.test.js 断言；计数对照迁移前基线只增不减——迁移前先跑一次记录基线数）。
-- [ ] Proof: `./verify-age.sh` L1+L2+L2.5 全绿（L2 走新路径 `plugin/nop-age`，真值表 `plugin/nop-age/test/law-truth-table.test.mjs`）。
-- [ ] Proof: mission-check 全量——`node tools/mission-driver/src/mission-check.mjs missions/<name>.json .` 对全部 mission 配置 exit 0（含 verify-e2e 命令已更新的 age-autonomy-implementation）。
-- [ ] Proof: **真宿主挂载冒烟**——scratch profile：`dsh plugin --profile nop-age-mig-audit add "link:$PWD/plugin/nop-age"` → `dsh web --no-open --profile nop-age-mig-audit` 起宿主 → `--dump-config`：`grep -i nop-age` 命中 service row（nopAge isolate realm）；`mdcontrol` 服务注册名在场；`grep -i mission-control` 命中仅为技能三 ID（carve-out 允许集）；验证毕 `dsh plugin --profile nop-age-mig-audit remove` 清理。
-- [ ] Proof: 引擎零 diff 钉住——`git diff --stat tools/mission-driver/src/engine.js tools/mission-driver/flows/` 为空；`tools/mission-driver/` 全部 diff 恰为路径字面三处（law-rules.mjs / law-core.mjs / law-policy.test.js，M1 裁定边界）。
-- [ ] Proof: e2e 真宿主腿（环境变量齐备时执行 `npm --prefix plugin/nop-age run verify:e2e`；缺失时按脚本既有 fail-fast 括号语义如实记录 verification scope limited + 残险评估——不冒充全绿）。
-- [ ] Add: **WI5 清查证据**——`grep -rn "plugin/dsh" install-age.sh install-age.manifest` 零命中输出落 log（live 基线即零，证据化收口；install-age 双文件零改动）。
+- [x] Proof: 插件套件 `npm --prefix plugin/nop-age test` 绿（check-manifest + 全量 unit + `tsc --noEmit` + build-bundle --check + smoke-import）。
+- [x] Proof: 引擎套件 `pnpm --prefix tools/mission-driver test` 绿（含更新后 law-policy.test.js 断言；计数对照迁移前基线只增不减——迁移前先跑一次记录基线数）。
+- [x] Proof: `./verify-age.sh` L1+L2+L2.5 全绿（L2 走新路径 `plugin/nop-age`，真值表 `plugin/nop-age/test/law-truth-table.test.mjs`）。
+- [x] Proof: mission-check 全量——`node tools/mission-driver/src/mission-check.mjs missions/<name>.json .` 对全部 mission 配置 exit 0（含 verify-e2e 命令已更新的 age-autonomy-implementation）。
+- [x] Proof: **真宿主挂载冒烟**——scratch profile：`dsh plugin --profile nop-age-mig-audit add "link:$PWD/plugin/nop-age"` → `dsh web --no-open --profile nop-age-mig-audit` 起宿主 → `--dump-config`：`grep -i nop-age` 命中 service row（nopAge isolate realm）；`mdcontrol` 服务注册名在场；`grep -i mission-control` 命中仅为技能三 ID（carve-out 允许集）；验证毕 `dsh plugin --profile nop-age-mig-audit remove` 清理。
+- [x] Proof: 引擎零 diff 钉住——`git diff --stat tools/mission-driver/src/engine.js tools/mission-driver/flows/` 为空；`tools/mission-driver/` 全部 diff 恰为路径字面三处（law-rules.mjs / law-core.mjs / law-policy.test.js，M1 裁定边界）。
+- [x] Proof: e2e 真宿主腿（环境变量齐备时执行 `npm --prefix plugin/nop-age run verify:e2e`；缺失时按脚本既有 fail-fast 括号语义如实记录 verification scope limited + 残险评估——不冒充全绿）。
+- [x] Add: **WI5 清查证据**——`grep -rn "plugin/dsh" install-age.sh install-age.manifest` 零命中输出落 log（live 基线即零，证据化收口；install-age 双文件零改动）。
 
 Exit Criteria:
 
-- [ ] 全部 Proof 命令 pass（或 e2e 腿按括号语义如实留档）；迁移前后引擎 / 插件套件计数对照在 log
-- [ ] `mdcontrol.*` 路由与技能行为不变（插件套件 + 真宿主 dump 双面证据）
-- [ ] WI5 零命中证据在册
+- [x] 全部 Proof 命令 pass（或 e2e 腿按括号语义如实留档）；迁移前后引擎 / 插件套件计数对照在 log
+- [x] `mdcontrol.*` 路由与技能行为不变（插件套件 + 真宿主 dump 双面证据）
+- [x] WI5 零命中证据在册
 
 ## Phase 3 — roadmap / 文档回写
 
@@ -98,14 +98,14 @@ Skill: none
 - Item Types: `Add | Proof`
 - Prereqs: Phase 2
 
-- [ ] Add: roadmap WI3 / WI4 / WI5 行 `[ ]`→`[x]` + 行内尾部证据注记（token map 指针、套件计数对照、grep 收口、真宿主 dump 摘录、install-age 零命中）；`> Last Updated` 头同步。
-- [ ] Proof: `grep -c "^- \[ \]" docs/backlog/multi-plugin-dsh-roadmap.md` = 13 实测；`node tools/mission-driver/src/roadmap-check.mjs docs/backlog/multi-plugin-dsh-roadmap.md` exit 0。
-- [ ] Add: `docs/logs/2026/08-28.md` 收口条目（三 Phase）。
+- [x] Add: roadmap WI3 / WI4 / WI5 行 `[ ]`→`[x]` + 行内尾部证据注记（token map 指针、套件计数对照、grep 收口、真宿主 dump 摘录、install-age 零命中）；`> Last Updated` 头同步。
+- [x] Proof: `grep -c "^- \[ \]" docs/backlog/multi-plugin-dsh-roadmap.md` = 13 实测；`node tools/mission-driver/src/roadmap-check.mjs docs/backlog/multi-plugin-dsh-roadmap.md` exit 0。
+- [x] Add: `docs/logs/2026/08-28.md` 收口条目（三 Phase）。
 
 Exit Criteria:
 
-- [ ] WI3/WI4/WI5 `[x]` + 行内证据在册；grep = 13 与 roadmap-check exit 0 实测
-- [ ] `docs/logs/` 收口条目在案
+- [x] WI3/WI4/WI5 `[x]` + 行内证据在册；grep = 13 与 roadmap-check exit 0 实测
+- [x] `docs/logs/` 收口条目在案
 
 ## Draft Review Record
 
@@ -114,7 +114,12 @@ Exit Criteria:
 
 ## Verification
 
+- pass test gate-check-20260828T040614 basisHash=496a16cdbccffc4d9c8884a09a1ce16cc270dff091f68bb0c5a06122b8255dba exit=0
+
 ## Closure
+
+- dispatch audit #audit-2026-08-28-104553-mission-driver-2026-08-28-0149-2-m2-wi3-wi4-wi5-nop-age-migration-1-be441ad2 to ses_opencode_audit models={exec:glm-5.2,aud:glm-5.2}
+- accepted #audit-2026-08-28-104553-mission-driver-2026-08-28-0149-2-m2-wi3-wi4-wi5-nop-age-migration-1-be441ad2：独立闭合审计通过——迁移真落地（git index 105×R100 + src/service.ts RM rename 谱系在库、plugin/dsh 不存在）、live 面 grep 收口仅余 missions/multi-plugin-dsh.json:4 任务域陈述句（log 裁定在案、非悬挂功能引用）、carve-out 保持（law-policy 断言随套件绿）、引擎零 diff 实测（`git diff --stat HEAD -- tools/mission-driver/src/engine.js tools/mission-driver/flows/` 为空；tools diff 恰 law 三模块 + CONTEXT.md）、roadmap WI3/WI4/WI5 [x] + `grep -c "^- \[ \]"` = 13、docs/logs/2026/08-28.md 收口条目在档；机械验证现跑 `node tools/mission-driver/src/gate-check.mjs <plan> --verify` → `pnpm --prefix tools/mission-driver test` **987/987 pass · 0 fail** + prompt-check OK，exit 0，basisHash 496a16cd…55dba 现算与 `## Verification` pass 行一致（单模型诚实降级：exec 与 aud 同为 glm-5.2）。
 
 ## Deferred But Adjudicated
 
