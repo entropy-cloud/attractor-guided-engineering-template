@@ -1,14 +1,24 @@
 # DSH Plugin Online Development Guide
 
-> **Status: operational guide** for the plugin delivered by `docs/design/dsh-plugin-integration.md` + `docs/architecture/dsh-plugin-packaging.md` (P1–P4 closed 2026-08-23; this header previously read "forward-looking" from pre-landing days and was corrected 2026-08-28). External DSH behaviors cited here reflect the developer preview and must be re-verified against the host version at dev time. 2026-08-28 increment: the bundle directory/package migrated to `plugin/nop-age/` (`nop-age`, realm `nopAge`; `mdcontrol` service, skill IDs, `/mdcontrol/api` unchanged — plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-2`); all paths below are synced.
+> **Status: operational guide** for the plugin family delivered by `docs/design/dsh-plugin-integration.md` + `docs/architecture/dsh-plugin-packaging.md` (P1–P4 closed 2026-08-23; this header previously read "forward-looking" from pre-landing days and was corrected 2026-08-28). External DSH behaviors cited here reflect the developer preview and must be re-verified against the host version at dev time. 2026-08-28 increments: the bundle directory/package migrated to `plugin/nop-age/` (`nop-age`, realm `nopAge`; `mdcontrol` service, skill IDs, `/mdcontrol/api` unchanged — plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-2`); the unified launcher `plugin/load-plugins.sh` + `plugin/plugin-manifest.yml` landed (M3, plan `2026-08-28-0149-3`); the second bundle `nop-route` landed (M4, plans `2026-08-28-1312-{1,2,3}`); 2026-08-28 final state (M5-WI18): the「forward reference + nop-route increment」juxtaposition was structurally rewritten into §Two-Bundle Family below (plan `docs/plans/multi-plugin-dsh/2026-08-28-1540-2`). All paths below are synced.
 
-## Multi-Plugin Forward Reference (nop-* family)
+## Two-Bundle Family (as-built, final-state rewrite M5-WI18)
 
-The multi-plugin refactor (mission `multi-plugin-dsh`, design owner `docs/design/multi-plugin-dsh-architecture.md`) has repackaged the single DSH bundle as the `nop-*` plugin family (migration landed 2026-08-28, plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-2`): this bundle is now `plugin/nop-age/` (package `nop-age`, isolate realm `nopAge`; cordis service `mdcontrol`, `mission-control-*` skill IDs, and `/mdcontrol/api` stay verbatim — token-map carve-out there), and the second bundle `nop-route` landed 2026-08-28 (M4, §nop-route Bundle (M4, landed) below). The unified launcher `plugin/load-plugins.sh` + `plugin/plugin-manifest.yml` landed 2026-08-28 (M3-WI6/WI7/WI8, plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-3`) and is the live mount flow (§Unified Launcher below); the per-bundle manual `dsh plugin add` step remains as the fallback path.
+This repository hosts a two-bundle DSH plugin family under `plugin/` (design owner `docs/design/multi-plugin-dsh-architecture.md`; all five roadmap milestones closed 2026-08-28):
+
+| Bundle | Directory | Realm | Service(s) | HTTP prefix | Skills / preset |
+| --- | --- | --- | --- | --- | --- |
+| `nop-age` | `plugin/nop-age/` | `nopAge` | `mdcontrol` (+ `mdsupervisor`) | `/mdcontrol/api` | `mission-control-run/draft/analyze` ×3 + `preset/age` |
+| `nop-route` | `plugin/nop-route/` | `nopRoute` | `noproute` | `/noproute/api` | none (programmatic-only) |
+
+- **Primary mount flow**: `./plugin/load-plugins.sh` reads `plugin/plugin-manifest.yml` (dual-entry: both bundles) and mounts the family idempotently (§Unified Launcher below). The per-bundle manual `dsh plugin add` step remains as the fallback path.
+- **Joint-mount evidence** (both realms coexist in one dump, `mdcontrol` unique, idempotent, unmount-remount end-state identity, AGE preset zero service rows): M5-WI17 six legs, plan `docs/plans/multi-plugin-dsh/2026-08-28-1540-1`.
+- **Verification gate family**: `./verify-age.sh` aggregate gate (engine 992 + nop-age 423 + nop-route 97 + launcher 18 + law truth table 119 — CI face, counts only-grow baselines); explicit local e2e legs outside CI — nop-route `verify:e2e` (environment-independent), nop-age `verify:e2e` (self-contained stub model endpoint), nop-age `verify:e2e:preset`, nop-age `verify:e2e:continuous` (`DSH_E2E_CONTINUOUS=1`-gated), nop-age `verify:native[:keyless]` (env-gated). Full map: `docs/architecture/dsh-plugin-packaging.md` §Multi-Plugin Family As-Built.
+- **Known boundaries**: no package entry (`main`/`exports`) in either bundle — real-host boot import is an independent successor item (M2-WI4 record; mount evidence rides `--no-start` + `--dump-config`); cross-plugin composition is a designed Non-Goal with recorded reopen triggers.
 
 ## Purpose
 
-The concise day-to-day procedure for developing this repository's DSH plugin (`plugin/nop-age/`, "AGE Mission Control"): develop **online inside a running DSH host in Creator mode**, with every core workflow customized through the mission-driver flow engine — not through imperative plugin code.
+The concise day-to-day procedure for developing this repository's DSH plugin family — primary subject the `nop-age` bundle (`plugin/nop-age/`, "AGE Mission Control"), with the `nop-route` bundle's dev face in its own section below: develop **online inside a running DSH host in Creator mode**, with every core workflow customized through the mission-driver flow engine — not through imperative plugin code.
 
 ## Prerequisites
 
@@ -45,7 +55,7 @@ Exit code: `0` on full success, non-zero on any failure. Every run ends with a s
 
 As-built notes (verified against the real host, plan `2026-08-28-0149-3` Phase 3): the host start uses `dsh web --no-open` for the `web` profile and `dsh --profile <p>` for any other profile — the `dsh web` subcommand is an alias of `--profile web` and rejects a parent `--profile`. Booting a host with the bundle mounted currently hits the known bundle-import gap (no `main`/`exports` in `plugin/nop-age/package.json`, M2-WI4 residual); the mount itself is proven via `dsh --profile <p> --dump-config | grep nop-`. Deterministic regression coverage lives at `plugin/test/load-plugins.test.mjs` (stub `dsh`, no real-host dependency), wired into `verify-age.sh` L2; `shellcheck plugin/load-plugins.sh` is clean (0.11.0).
 
-## nop-route Bundle (M4, landed 2026-08-28)
+## nop-route Bundle (as-built, M4 landed 2026-08-28)
 
 The second bundle of the family — a pure routing/retry/model-selection decision service over upstream AI call results (plans `docs/plans/multi-plugin-dsh/2026-08-28-1312-1` + `2026-08-28-1312-2`; design owner `docs/design/multi-plugin-dsh-architecture.md` §nop-route Plugin). Dev-facing facts:
 
@@ -53,7 +63,7 @@ The second bundle of the family — a pure routing/retry/model-selection decisio
 - **Service**: `noproute` (name = bundle minus `nop-` prefix, camelCased) — four sync routes `noproute.route` / `noproute.classify` / `noproute.pick-model` / `noproute.health`, plus the `POST /noproute/api/<method>` HTTP dispatcher when a `webServer` is present (headless hosts degrade to a mount-log line; the cordis service stays published).
 - **Code layout**: `src/service.ts` (mount) → `src/noproute-routes.ts` (wire record + HTTP dispatcher) → `src/routing-core.ts` (pure 4-decision orchestration) → `src/{error-classifier,retry-policy,model-selector}.ts` (pure decision modules). The health error histogram is service-layer state (route/classify accumulate, health reads, `resetHistogram()` resets).
 - **Discipline**: zero host calls (no `agents` inject, no dispatch — the plugin only exposes decisions); decision modules stay pure/deterministic (fake clocks in tests; time only via the `now` parameter).
-- **Verification**: `npm --prefix plugin/nop-route test` (check-manifest → six `node --test` suites → `tsc --noEmit`), part of `./verify-age.sh` L2; e2e gate (M4-WI16, landed 2026-08-28): `npm --prefix plugin/nop-route run verify:e2e` — in-process real cordis runtime boot + four-route real calls + real-shape error samples + decision replay; environment-independent (zero model calls, zero credentials — no env gate needed), local-script posture like nop-age `verify:e2e` (NOT part of verify-age.sh L2; re-run explicitly at M5-WI18 closure). No `assets/` face — no build-bundle/smoke-import legs.
+- **Verification**: `npm --prefix plugin/nop-route test` (check-manifest → six `node --test` suites → `tsc --noEmit`), part of `./verify-age.sh` L2; e2e gate (M4-WI16, landed 2026-08-28): `npm --prefix plugin/nop-route run verify:e2e` — in-process real cordis runtime boot + four-route real calls + real-shape error samples + decision replay; environment-independent (zero model calls, zero credentials — no env gate needed), local-script posture like nop-age `verify:e2e` (NOT part of verify-age.sh L2; re-run green at M5-WI18 closure — exit 0, replay 18/18 bit-identical). No `assets/` face — no build-bundle/smoke-import legs.
 
 ## Setup: Enable Creator Mode and Mount the Plugin (manual fallback)
 
