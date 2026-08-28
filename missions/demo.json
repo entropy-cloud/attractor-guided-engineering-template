@@ -4,7 +4,7 @@
   "description": "演示 mission：验证模板脚手架 + mission-driver 引擎 + 监控 Dashboard 集成。用于展示 Dashboard 的 mission 列表、Roadmap Progress、Plans 等面板。",
   "flowName": "mission-driver",
   "roadmapPath": "docs/backlog/demo-roadmap.md",
-  "plansDir": "docs/plans",
+  "plansDir": "docs/plans/demo",
   "planGuide": "docs/plans/00-plan-authoring-and-execution-guide.md",
   "auditsDir": "docs/audits",
   "moduleDir": "tools/mission-driver",
