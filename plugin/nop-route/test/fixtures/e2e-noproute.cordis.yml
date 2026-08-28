@@ -1,0 +1,45 @@
+# plugin/nop-route/test/fixtures/e2e-noproute.cordis.yml
+# M4-WI16 e2e composition (plan
+# docs/plans/multi-plugin-dsh/2026-08-28-1312-3-m4-wi16-nop-route-e2e.md
+# Phase 1 Decision — fixture composition MINIMAL face): the row set is the
+# nop-route service row ONLY — dsh-app-boot `boot()` itself needs no base
+# service rows, and `noproute` injects nothing mandatory (the reactive
+# webServer inject stays dormant — its absence is an ASSERTED degradation
+# face, not a mount prerequisite). The nop-age e2e fixture's 15-row
+# composition exists for the mdcontrol dependency face (llm / bash /
+# agent-spine / sessions / …); nop-route's zero-dispatch discipline
+# (design §nop-route Six-call discipline) makes every one of those rows
+# unnecessary here.
+#
+# Precedent: plugin/nop-age/test/fixtures/e2e.cordis.yml (WI10 L4 in-process
+# leg) — same rulings, smaller row set:
+#   - name: ../../src/service.ts — RELATIVE module specifier resolved
+#     against the config file's directory by dsh-app-boot `boot()`, i.e.
+#     plugin/nop-route/src/service.ts — the REAL service module, loaded
+#     through the ambient module pipeline (Node >= 23.6 type stripping).
+#   - mounted NON-isolated (no cordis:group wrapper): this fixture is owned
+#     by the e2e driver process, so publishing `noproute` at the root realm
+#     is the point — `ctx.get('noproute')` must resolve. The real host
+#     mount keeps its isolate realm via cordis.patch.yml (four-leg dump
+#     evidence in plan 2026-08-28-1312-2).
+#   - NO webServer row (the headless degradation branch is an asserted e2e
+#     face) and NO model rows (zero model calls, zero credentials — the
+#     decision service never dispatches and never calls upstream, so the
+#     nop-age e2e stub SSE model endpoint is omitted entirely and this e2e
+#     is environment-independent: no env gate, no network, no keys).
+#     Rejected alternative (webServer row to double-cover the HTTP face):
+#     the /noproute/api registration shape is already pinned by
+#     noproute-routes.test.mjs's stub-webServer leg — repeating it here adds
+#     no new assertion and makes the fixture more brittle (watch-only
+#     residual; reopen trigger in the plan's Deferred section).
+#
+# Credentials NEVER land in this file; the real-shape error samples live in
+# the driver script (scripts/e2e-noproute.mjs).
+
+- id: nop-route
+  name: ../../src/service.ts
+  config:
+    defaultModel: zhipuai-coding-plan/glm-5.2
+    maxRetries: 3
+    fallbackModels:
+      - zhipuai-coding-plan/glm-4.6
