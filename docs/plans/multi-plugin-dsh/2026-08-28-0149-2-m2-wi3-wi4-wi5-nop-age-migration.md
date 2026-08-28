@@ -115,6 +115,7 @@ Exit Criteria:
 ## Verification
 
 - pass test gate-check-20260828T040614 basisHash=496a16cdbccffc4d9c8884a09a1ce16cc270dff091f68bb0c5a06122b8255dba exit=0
+- pass test build-verify-2026-08-28-104553 basisHash=496a16cdbccffc4d9c8884a09a1ce16cc270dff091f68bb0c5a06122b8255dba exit=0
 
 ## Closure
 
