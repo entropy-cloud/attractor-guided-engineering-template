@@ -23,7 +23,7 @@ on:
   push:
     paths:
       - 'tools/mission-driver/**'
-      - 'plugin/dsh/**'
+      - 'plugin/nop-age/**'
       - 'docs/plans/**'
       - 'docs/backlog/**'
       - 'missions/**'
@@ -33,7 +33,7 @@ on:
   pull_request:
     paths:
       - 'tools/mission-driver/**'
-      - 'plugin/dsh/**'
+      - 'plugin/nop-age/**'
       - 'docs/plans/**'
       - 'docs/backlog/**'
       - 'missions/**'

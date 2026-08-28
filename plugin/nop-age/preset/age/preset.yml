@@ -1,0 +1,4 @@
+# bundle package: nop-age (ships inside plugin/nop-age/preset/age/; display name keeps the Mission Control product name)
+name: AGE Mode (Mission Control)
+description: Attractor-Guided Engineering session posture with Mission Control — run/draft/analyze missions through mdcontrol routes and skills on a standard coding toolset.
+order: 20

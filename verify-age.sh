@@ -7,13 +7,13 @@
 # One command, three chains, all must be green to pass the gate:
 #   L1   — engine suite: `pnpm --prefix tools/mission-driver test`
 #          (zero npm dependencies; includes prompt-check.mjs)
-#   L2   — plugin suite: `npm --prefix plugin/dsh test`
+#   L2   — plugin suite: `npm --prefix plugin/nop-age test`
 #          (L2 backend-parity matrix + WI6/WI7 unit chain: manifest check,
 #          node --test, tsc --noEmit, bundle freshness, smoke import)
 #   L2.5 — law gates (age-autonomy M2-WI23, structural subset, no actor):
 #          ① `gate-check.mjs --policy missions/autonomy.policy.yml`
 #          ② gate-check.mjs on the FULL docs/plans/age-autonomy/ corpus
-#          ③ `node --test plugin/dsh/test/law-truth-table.test.mjs`
+#          ③ `node --test plugin/nop-age/test/law-truth-table.test.mjs`
 #          (explicit standalone call — the same file also runs inside L2's
 #          plugin suite; the standalone face is the WI24 gate alignment)
 #
@@ -39,11 +39,11 @@ echo "== L1: engine suite (zero npm deps) =="
 pnpm --prefix tools/mission-driver test
 
 echo "== L2: plugin suite (backend-parity matrix + unit chain) =="
-if [ ! -d plugin/dsh/node_modules ]; then
+if [ ! -d plugin/nop-age/node_modules ]; then
   echo "(installing plugin devDependencies)"
-  npm ci --prefix plugin/dsh --no-audit --no-fund
+  npm ci --prefix plugin/nop-age --no-audit --no-fund
 fi
-npm --prefix plugin/dsh test
+npm --prefix plugin/nop-age test
 
 echo "== L2.5: law gates (policy + plan corpus + truth table) =="
 if [ -f missions/autonomy.policy.yml ]; then
@@ -70,6 +70,6 @@ for f in docs/plans/age-autonomy/*.md; do
   fi
 done
 [ "$corpus_fail" -eq 0 ] || exit 1
-node --test plugin/dsh/test/law-truth-table.test.mjs
+node --test plugin/nop-age/test/law-truth-table.test.mjs
 
 echo "== L1+L2+L2.5 gate: GREEN =="

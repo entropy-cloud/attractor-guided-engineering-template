@@ -83,7 +83,7 @@ describe("real instance", () => {
       // literal protected families via four {{projectRoot}} match entries.
       { id: "path-guardrail", match: "action:write", rule: "path-guardrail", mode: "enforce" },
       { id: "roadmap-write-guard", match: "{{roadmapPath}}", rule: "roadmap-write-guard", mode: "enforce" },
-      { id: "law-self-protection-law", match: "{{projectRoot}}/plugin/dsh/src/law/**", rule: "law-self-protection", mode: "enforce" },
+      { id: "law-self-protection-law", match: "{{projectRoot}}/plugin/nop-age/src/law/**", rule: "law-self-protection", mode: "enforce" },
       { id: "law-self-protection-policy", match: "{{projectRoot}}/missions/autonomy.policy.yml", rule: "law-self-protection", mode: "enforce" },
       { id: "law-self-protection-plan-check", match: "{{projectRoot}}/tools/mission-driver/src/plan-check.mjs", rule: "law-self-protection", mode: "enforce" },
       { id: "law-self-protection-gate-check", match: "{{projectRoot}}/tools/mission-driver/src/gate-check.mjs", rule: "law-self-protection", mode: "enforce" },

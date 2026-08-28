@@ -1,0 +1,124 @@
+# The `age` agent preset: AGE Mode (Mission Control) — dsh-plugin M4-WI14,
+# plan docs/plans/dsh-plugin/2026-08-23-2202-1-* Phase 1 D2/D3.
+#
+# This file is an AGENT-PLANE composition, mounted ONCE per process under a
+# standing scope by the host's `dsh-agent-presets` roster; sessions naming
+# "age" join by scope parentage (host loader semantics, plan Phase 1 D1).
+#
+# REALM POSTURE (plan Phase 1 D3 — core adjudication): this preset carries
+# ZERO service rows. Every row either publishes no service at all (tool rows
+# register into host registries; persona/instructions/skill rows register
+# into layered prompt/skill registries) or sits inside this preset's own
+# entry-local isolate realm (the compaction group). The root-realm leak
+# guard can therefore never fire, and no `provide()` label-collision surface
+# exists here. The `nop-age` service stays mounted EXACTLY ONCE,
+# by the bundle patch (plugin/nop-age/cordis.patch.yml, isolate realm
+# `nopAge`); AGE sessions consume it through the globally registered
+# mission-control skills and the /mdcontrol/api HTTP dispatcher — never
+# through a second service row here (a second instance would break the
+# single active-run guard semantics).
+#
+# ROW RESOLUTION (host loader): bare package names resolve from the HOST
+# composition base (the installed harness); relative names resolve from this
+# preset's own directory (./age-mode.mjs travels with it).
+
+# ── AGE posture ─────────────────────────────────────────────────────────────
+#
+# The one local contribution: a single system-prompt section carrying the
+# AGE working conventions + Mission Control entry points + async-job
+# contract. No marker examples by design (interactive posture, not a step
+# executor — machine-pinned by test/age-preset.test.mjs).
+- id: age-mode
+  name: ./age-mode.mjs
+
+# ── identity ────────────────────────────────────────────────────────────────
+#
+# Static coding persona (no {{variable}} interpolation — assembly-safe in
+# every composition). NOT `complete`: the age:mode section coexists with the
+# persona and the AGENTS.md digest instead of suppressing them.
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: You are a coding agent working inside a DSH session. Follow the repository's own engineering workflow when one is present.
+
+# The host's own AGENTS.md digest injection — keeps project rules flowing
+# into AGE sessions (the age:mode section points at owner docs; this row
+# carries their content — complement, not duplicate).
+- id: agent-instructions
+  name: '@deepseek-ai/dsh-agent-instructions'
+  config:
+    maxBytes: 65536
+
+# ── tool catalog (execute/closure sufficiency, standard-preset subset) ──────
+#
+# Both shell tools consume the host sandbox/executors from here and provide
+# nothing, so they need no realm; the platform pair mirrors the host
+# standard preset exactly.
+- id: tool-bash
+  name: '@deepseek-ai/dsh-tool-bash'
+  disabled: !!js process.platform === 'win32'
+
+- id: tool-pwsh
+  name: '@deepseek-ai/dsh-tool-pwsh'
+  disabled: !!js process.platform !== 'win32'
+
+# read/write/edit (+ the `fs` policy stays host-plane; these rows provide
+# nothing). Search tools: glob/grep.
+- id: tool-fs
+  name: '@deepseek-ai/dsh-tool-fs'
+
+- id: tool-fs-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    sampleOverCapGlobResults: false
+
+# ── skills ──────────────────────────────────────────────────────────────────
+#
+# The skill REGISTRY lives in the host composition and is layered per scope:
+# these rows register into THIS preset's layer (no realm). The merged catalog
+# also carries deployment-registered (repository plugin) skills — which is
+# how the globally registered mission-control-* skills reach AGE sessions.
+# No preset-side re-registration of them (plan Phase 1 D2 adjudication).
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+
+- id: tool-skill
+  name: '@deepseek-ai/dsh-tool-skill'
+
+# ── task tracking ───────────────────────────────────────────────────────────
+
+- id: tool-todo
+  name: '@deepseek-ai/dsh-tool-todo'
+  config:
+    allowParallelInProgress: true
+
+# ── compaction ──────────────────────────────────────────────────────────────
+#
+# Long missions need compaction. Same entry-local realm shape as the host
+# standard preset (labels are per-standing-mount private — reusing the same
+# labels as another preset cannot collide across mounts; plan Phase 1 D1 #5).
+# `tokenMeter` deliberately NOT in this realm: it stays host-plane.
+#
+# Standard parity note: the standard preset's `dsh-command-compact` row
+# (`/compact` command) is DELIBERATELY absent. It injects the host-plane
+# `commands` registry, and a preset row waiting for a service the deployment
+# never composes makes the WHOLE PRESET unmountable (host loader's
+# inactive-row guard — observed live in the composition leg). The AGE loop
+# does not use `/compact`; automatic compaction + tool-result pruning are
+# what matter, and both mount on any composition carrying the spine.
+- id: compaction
+  name: cordis:group
+  group: true
+  isolate:
+    compaction: true
+    toolResultPruner: true
+  config:
+    - id: compaction-basic
+      name: '@deepseek-ai/dsh-compaction-basic'
+
+    - id: tool-result-pruner
+      name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+      config:
+        thresholdChars: 8192
+        headChars: 4096
+        tailChars: 1024

@@ -25,7 +25,7 @@
 # not be more fragile than the repo's existing toolchain).
 #
 # Real-project file — NOT part of the install-age.sh template manifest
-# (template consumers have no plugin/dsh and no gate-check executable face).
+# (template consumers have no plugin/nop-age and no gate-check executable face).
 
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"

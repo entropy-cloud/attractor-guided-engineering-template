@@ -121,7 +121,7 @@ gates:
     rule: roadmap-write-guard
     mode: enforce
   - id: law-self-protection-law
-    match: "{{projectRoot}}/plugin/dsh/src/law/**"
+    match: "{{projectRoot}}/plugin/nop-age/src/law/**"
     rule: law-self-protection
     mode: enforce
   - id: law-self-protection-policy

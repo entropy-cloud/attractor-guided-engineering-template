@@ -1,0 +1,37 @@
+# nop-age bundle patch (AGE Mission Control, M2-WI6 scaffold; directory/package
+# renamed by the multi-plugin migration, plan
+# docs/plans/multi-plugin-dsh/2026-08-28-0149-2 — token map there)
+#
+# This file is the `dsh.bundle.patch` layer declared by the "dsh" manifest
+# field in package.json (verified host shape: app-boot profile.ts
+# `DshBundleManifest { patch: string }`; composition = each bundle's patch
+# rows in dsh.profile.bundles order → profile's own cordis.patch.yml →
+# launcher layers). Mount via the dev guide flow:
+#
+#   dsh plugin --profile web add link:/path/to/this-repo/plugin/nop-age
+#   dsh web --no-open          # bundle mounts need a restart after add
+#   dsh web --dump-config | grep -i nop-age
+#
+# MOUNT SHAPE (follows two verified precedents):
+#   - the `- insert:` operation list from the dsh-better-sidebar bundle patch
+#   - the isolate-realm group from the anchored-standard preset
+#     (`cordis:group` + `group: true` + `isolate: { <key>: true }`): the
+#     Mission Control service publishes into an entry-local realm instead of
+#     the process-global root realm, so it cannot collide with any other
+#     mounted instance and no host reader resolves it by accident.
+#
+# WI6 scope: the mount skeleton only — the service row targets this same
+# package (two-anchor resolution: dsh installation → profile node_modules,
+# exactly how dsh-better-sidebar self-mounts). mdcontrol.* routes, skills,
+# and the active-run guard belong to WI10 and are deliberately absent.
+- insert:
+    - id: nop-age
+      name: cordis:group
+      group: true
+      isolate:
+        nopAge: true
+      config:
+        - id: nop-age-service
+          name: nop-age
+          config:
+            assetsDir: ./assets
