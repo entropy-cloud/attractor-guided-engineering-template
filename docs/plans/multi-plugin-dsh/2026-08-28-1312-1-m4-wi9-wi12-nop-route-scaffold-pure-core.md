@@ -134,6 +134,7 @@ Exit Criteria:
 ## Verification
 
 - pass test gate-check-20260828T060258 basisHash=d96bb668e8179f71af09cd7a49fa63a0f6668c71b2bee4956f20a898caa283dd exit=0
+- pass test verify-2026-08-28-104553-mission-driver basisHash=d96bb668e8179f71af09cd7a49fa63a0f6668c71b2bee4956f20a898caa283dd exit=0
 
 ## Closure
 
