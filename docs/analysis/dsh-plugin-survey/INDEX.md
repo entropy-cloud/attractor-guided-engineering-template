@@ -4,7 +4,7 @@
 > 方法：每个插件由独立子代理源码级调研（README/ARCHITECTURE/核心 src，file:line 引用），报告结构统一（元信息 / 定位 / 架构机制 / Adopt-Adapt-Reject 映射本项目线程 / 风险 / 源码索引）。插件本体在 `~/ai/dsh-plugins/<同名目录>/`。
 > 服务对象：`docs/analysis/2026-08-24-0000`（agent 复用/prompt DSL）、`-0001`（运行模式/控制面）、`-0002`（最小外化记忆与执行器分离）、`docs/discussions/2026-08-24-roadmap-plan-frontmatter-reform.md`。
 
-## 报告清单（18 份）
+## 报告清单（20 份）
 
 ### 核心编排 / 循环 / 队列
 
@@ -37,9 +37,9 @@
 
 | 报告 | 一句话结论 |
 | --- | --- |
-| [dsh-goal-quiescence](./dsh-goal-quiescence.md) | R1 引用全部属实并精化（acknowledged 是 settled 记录上的布尔位）；"自己 ack 自己"再次坐实 gate ≠ reviewer；RunRecord 状态机与 ack 注入语义已逐行落档 |
-| [goal-acceptance](./goal-acceptance.md) | 两处修正 R1：工具实为 **13 个**非 9 个；Cordis 包 `startGoal` 后续目标退化为 InMemoryStore——"session 事件流为权威"仅对默认目标成立（重要限定） |
-| [dsh-goal-scaffold](./dsh-goal-scaffold.md) | plan.md 模板与 maxGoalRounds:5 都只活在提示串里——无机械看守，与我们 frontmatter 改造（完成派生化）形成鲜明反差例证 |
+| [dsh-goal-quiescence](./dsh-goal-quiescence.md) | R1 引用全部属实并精化（acknowledged 是 settled 记录上的布尔位）；"自己 ack 自己"再次坐实 gate ≠ reviewer；RunRecord 状态机与 ack 注入语义已逐行落档；**补充**：依赖内置 goal 的 complete 门禁，是 dsh-goal-domain 的强化层 |
+| [goal-acceptance](./goal-acceptance.md) | 两处修正 R1：工具实为 **13 个**非 9 个；Cordis 包 `startGoal` 后续目标退化为 InMemoryStore——"session 事件流为权威"仅对默认目标成立（重要限定）；**补充**：有独立 goal 概念，不依赖 `ctx.goals`，与内置 goal 域并存 |
+| [dsh-goal-scaffold](./dsh-goal-scaffold.md) | plan.md 模板与 maxGoalRounds:5 都只活在提示串里——无机械看守，与我们 frontmatter 改造（完成派生化）形成鲜明反差例证；**修正**：maxGoalRounds 实际由 dsh-goal 内部解析并持久化，scaffold 的提示只是建议值 |
 | [dsh-spec-loop](./dsh-spec-loop.md) | **门控并非用官方 workflow 引擎**（前提修正）：会话投影折叠标准事件 + 命令级守卫；批准态存 per-session 投影（反证我们 plan 落盘更优）；「声明式 bash 验证先于 judge」+ `OK\|FAIL` 单行判定格式 → CLOSURE_AUDIT 增强 Adopt 候选 |
 | [dsh-inspect](./dsh-inspect.md) | checkup→fix→review 与 DEEP_AUDIT→DRAFT_PLANS→EXECUTE 外环同构成立；复查独立性五层机制（fresh 上下文/对抗提示词/证据强制/红队二阶证伪/失败不伪装）值得按 AGENTS.md 规则 15 并入 audit prompt；硬局限：默认同源同模型 |
 | [dsh-plannotator](./dsh-plannotator.md) | 反馈回传靠宿主 pending interaction custom 字段零新增持久化；三层锚定消歧+FNV 版本戳可脱 DOM 化为我们纯文本批注规范；作为 WI15 reopen 的轻量 client-plugin 第二例证（~700 行下界），poll-free 容忍条件反证 monitor SSE 裁定不变 |
@@ -56,9 +56,18 @@
 | mirage / modsearch / modlens / dsh-visualize / last30days-skill-cn | 能力扩展类（VFS/搜索/视觉/卡片/技能样例），与 mission loop 无交集 |
 | petdex / dsh-deep-whale / dsh-TUI / vox-director / OpenBiliClaw / deepseek-harness-desktop / dsh-launcher | 桌宠/皮肤/TUI/内容类/桌面壳/启动器，不相关 |
 
+### 深度源码调研（job / plan / goal 核心机制）
+
+| 报告 | 一句话结论 |
+| --- | --- |
+| [dsh-goal-domain](./dsh-goal-domain.md) | DSH 内置同会话目标系统：四包（goal 核心服务 + tool-goal 模型工具 + goal-round-driver 续跑驱动 + command-goal /goal 命令），事件溯源持久化到 session log，armed/disarmed 激活永不持久化；Adopt 事件溯源唯一权威 + phase/activation 分离 + CAS revision + 严格重放 + blocked 统一原因码，Reject 同会话限制/单目标/无独立评估器/无调度重试 |
+| [dsh-job-plan-deep-dive](./dsh-job-plan-deep-dive.md) | job 是进程内 owner-scoped 后台任务注册表（producer 插件 start → read/kill/wait），plan 是 per-session prompt 立场切换（/plan + exit_plan_mode 审查门）——两者正交；Adopt job 的 owner 隔离 + first-wins settlement + 稳定 tool schema，Reject in-memory 持久化和 plan-as-prompt-toggle 语义 |
+
 ## 交叉综合（对既有分析报告的影响）
 
 详见各报告 §3 与下列增补：
 - 0000 报告增补 §9：agent-teams 的 attemptId/parked-cold 分界补强 P2 池化判据；ouroboros 停止信号补强 DEEP_AUDIT。
 - 0001 报告增补 §8：automation 幂等认领/激活边界落地为 queue 策略参数；relay 推翻场景清单入档。
 - frontmatter 讨论稿增补 §9：spec-loop 的 bash-before-judge + OK|FAIL 格式 → CLOSURE_AUDIT 增强；inspect 五层独立性 → audit prompt 规则 15 提升；scaffold 反差例证强化 completed 派生化论证。
+- job-plan-deep-dive 增补：job 的 owner 隔离 + first-wins settlement + producer 插件模式 → 本项目后台任务设计参照；plan 的 reviewed exit gate → CLOSURE_AUDIT 人类签收参照；plan-as-prompt-toggle 与本项目 plan 文件工作流语义不匹配，明确 Reject。
+- dsh-goal-domain 增补：DSH 内置 goal 四包系统（goal 核心 + tool-goal + goal-round-driver + command-goal）→ 事件溯源/phase-activation 分离/CAS revision/严格重放/blocked 统一原因码 Adopt；同会话限制/单目标/无评估器/无调度 Reject。修正 goal-scaffold 调研中"maxGoalRounds 靠模型自觉"的说法——实际由 dsh-goal 内部解析并持久化。

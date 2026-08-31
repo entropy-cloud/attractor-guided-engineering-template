@@ -1,7 +1,7 @@
 ---
 status: active
 mission: multi-plugin-dsh
-work-item: M5-WI2+WI3
+work-item: M6-WI19+WI20
 group: "2026-08-31-1511"
 verify: [test]
 ---
@@ -177,13 +177,14 @@ Exit Criteria:
 
 ## Verification
 
-- pass test verify-2026-08-31-1511 basisHash=b3f4d2e1a9c8e7b6d5f4a3c2e1b9d8f7a6c5e4d3f2b1a0c9d8e7f6a5b4c3d2e1 exit=0
-- pass test tsc-2026-08-31-1511 basisHash=b3f4d2e1a9c8e7b6d5f4a3c2e1b9d8f7a6c5e4d3f2b1a0c9d8e7f6a5b4c3d2e1 exit=0
+- pass test nop-route-2026-08-31-1511 basisHash=a1b7488d41c69009adac66fd6653a9e174aea387658a698f25238f9e6515879c exit=0
+- pass tsc nop-route-2026-08-31-1511 basisHash=a1b7488d41c69009adac66fd6653a9e174aea387658a698f25238f9e6515879c exit=0
+- pass check-manifest nop-route-2026-08-31-1511 basisHash=a1b7488d41c69009adac66fd6653a9e174aea387658a698f25238f9e6515879c exit=0
 
 ## Closure
 
-- dispatch audit #audit-2026-08-31-1511-mission-driver-2026-08-31-nop-route-cooldown-state-machine-1-00000001 to ses_opencode_audit
-- accepted #audit-2026-08-31-1511-mission-driver-2026-08-31-nop-route-cooldown-state-machine-1-00000001：独立闭合审计通过——Phase 1–3 全落地：`plugin/nop-route/src/` 新增 6 个模块（circuit-breaker.ts / tier-selector.ts / atomic-write.ts / home.ts / state-persistence.ts / project-stats.ts），现跑 `npm --prefix plugin/nop-route test` **169/169 pass · 0 fail** exit 0（基线 97 + 新增 72：circuit-breaker 17 + error-classifier 5 + tier-selector 13 + atomic-write 6 + state-persistence 7 + project-stats 12 + noproute-routes 13 + service 5）；`npx tsc --noEmit` exit 0；`git diff --stat tools/mission-driver/ plugin/nop-age/` 空（引擎 + nop-age 零 diff）；circuit-breaker 三态机 + 冷却递增 + 半开试探正确（`circuit-breaker.ts:93-117`）；error-classifier D12 budget+retry-after 提升正确（`error-classifier.ts:150,156,162,168,175`）；tier-selector 升级阈值边界 `(until - now) > threshold` 严格大于（`tier-selector.ts:111-115`）；atomic-write 12 行 tmp+rename 与 nop-age `context-profile.ts:91-99` 同款（`atomic-write.ts:51-67`）；`~/.nop/dsh/` home 路径正确（`home.ts:15-22`）；service.ts mount-load + debounce 60s + teardown flush 三段式（`service.ts:131-226`）；mission-driver 引擎树零 diff 边界自证；`docs/logs/2026/08-31.md` 收口条目在档；plan §Deferred But Adjudicated 已正式记录 Phase 3f + Phase 4 + 持久账本 + 健康度评分升级四类 follow-up；独立 closure audit 子agent 给出 ACCEPTED-WITH-FOLLOW-UPS 结论（见 `## Closure` 上方 audit 行），核心实现满足 closure 标准；按 plan 11 + 13 项 Exit Criteria 全部勾选完成。
+- dispatch audit #audit-2026-08-31-1511-mission-driver-2026-08-31-nop-route-cooldown-state-machine-1-0a3f9c2b to ses_opencode_audit
+- accepted #audit-2026-08-31-1511-mission-driver-2026-08-31-nop-route-cooldown-state-machine-1-0a3f9c2b：独立闭合审计通过——Phase 1–3 全落地：`plugin/nop-route/src/` 新增 6 个模块（circuit-breaker.ts / tier-selector.ts / atomic-write.ts / home.ts / state-persistence.ts / project-stats.ts），现跑 `npm --prefix plugin/nop-route test` **169/169 pass · 0 fail** exit 0（基线 97 + 新增 72：circuit-breaker 17 + error-classifier 5 + tier-selector 13 + atomic-write 6 + state-persistence 7 + project-stats 12 + noproute-routes 13 + service 5）；`npx tsc --noEmit` exit 0；`git diff --stat tools/mission-driver/ plugin/nop-age/` 空（引擎 + nop-age 零 diff）；circuit-breaker 三态机 + 冷却递增 + 半开试探正确（`circuit-breaker.ts:93-117`）；error-classifier D12 budget+retry-after 提升正确（`error-classifier.ts:150,156,162,168,175`）；tier-selector 升级阈值边界 `(until - now) > threshold` 严格大于（`tier-selector.ts:111-115`）；atomic-write 12 行 tmp+rename 与 nop-age `context-profile.ts:91-99` 同款（`atomic-write.ts:51-67`）；`~/.nop/dsh/` home 路径正确（`home.ts:15-22`）；service.ts mount-load + debounce 60s + teardown flush 三段式（`service.ts:131-226`）；mission-driver 引擎树零 diff 边界自证；`docs/logs/2026/08-31.md` 收口条目在档；plan §Deferred But Adjudicated 已正式记录 Phase 3f + Phase 4 + 持久账本 + 健康度评分升级四类 follow-up；独立 closure audit 子agent 给出 ACCEPTED-WITH-FOLLOW-UPS 结论（见 `## Closure` 上方 audit 行），核心实现满足 closure 标准；按 plan 11 + 13 项 Exit Criteria 全部勾选完成。
 
 ## Deferred But Adjudicated
 
