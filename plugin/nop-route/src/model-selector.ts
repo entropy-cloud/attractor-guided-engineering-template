@@ -53,17 +53,18 @@ export interface ModelSelection {
 
 const DEFAULT_TOKEN_BUDGET = 8192;
 
-interface ChainSlot {
+export interface ChainSlot {
   readonly model: string;
   readonly source: "preferred" | "default" | "fallback";
   readonly fallbackIndex: number;
 }
 
-const buildChain = (request: ModelRequest, config: ModelSelectionConfig): ChainSlot[] => {
+/**
+ * Build the deduplicated base chain from config (defaultModel + fallbackModels).
+ * Pure, deterministic, zero I/O. Compute once at init time and reuse.
+ */
+export const buildBaseChain = (config: ModelSelectionConfig): ChainSlot[] => {
   const slots: ChainSlot[] = [];
-  if (typeof request.preferredModel === "string" && request.preferredModel.length > 0) {
-    slots.push({ model: request.preferredModel, source: "preferred", fallbackIndex: -1 });
-  }
   slots.push({ model: config.defaultModel, source: "default", fallbackIndex: -1 });
   const fallbacks = Array.isArray(config.fallbackModels) ? config.fallbackModels : [];
   for (const [index, model] of fallbacks.entries()) {
@@ -73,6 +74,16 @@ const buildChain = (request: ModelRequest, config: ModelSelectionConfig): ChainS
   }
   const seen = new Set<string>();
   return slots.filter((slot) => {
+    if (seen.has(slot.model)) return false;
+    seen.add(slot.model);
+    return true;
+  });
+};
+
+const prependPreferred = (baseChain: ChainSlot[], preferredModel: string): ChainSlot[] => {
+  const preferred: ChainSlot = { model: preferredModel, source: "preferred", fallbackIndex: -1 };
+  const seen = new Set<string>();
+  return [preferred, ...baseChain].filter((slot) => {
     if (seen.has(slot.model)) return false;
     seen.add(slot.model);
     return true;
@@ -95,8 +106,19 @@ export function pickModel(
   request: ModelRequest,
   history: ModelHistoryEntry[],
   config: ModelSelectionConfig,
+  baseChain?: ChainSlot[],
 ): ModelSelection {
-  const chain = buildChain(request, config);
+  const preferred = request.preferredModel;
+  const hasPreferred =
+    typeof preferred === "string" && preferred.length > 0;
+  const chain =
+    baseChain !== undefined
+      ? hasPreferred && preferred !== undefined
+        ? prependPreferred(baseChain, preferred)
+        : baseChain
+      : hasPreferred && preferred !== undefined
+        ? prependPreferred(buildBaseChain(config), preferred)
+        : buildBaseChain(config);
   const tainted = taintedModels(Array.isArray(history) ? history : []);
 
   let chosen = chain.find((slot) => !tainted.has(slot.model));

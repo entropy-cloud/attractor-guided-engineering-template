@@ -297,3 +297,124 @@ test("histogram: snapshot keys are sorted (stable dump face)", () => {
     "transient:timeout",
   ]);
 });
+
+// ── 5. pause / resume / circuit-state / project-stats (M5-WI3 Phase 3c–3d) ──
+
+import { createCircuitBreaker } from "../src/circuit-breaker.ts";
+import { createMissionCallStats } from "../src/noproute-routes.ts";
+
+test("noproute.pause → noproute.route returns { decision: 'paused' }", () => {
+  const { routes } = makeRoutes();
+  routes["noproute.pause"]({});
+  const result = routes["noproute.route"]({ error: { code: "ECONNRESET" } });
+  assert.deepEqual(result, { decision: "paused" });
+});
+
+test("noproute.resume → noproute.route resumes normal decisions", () => {
+  const { routes } = makeRoutes();
+  routes["noproute.pause"]({});
+  assert.deepEqual(routes["noproute.route"]({ error: { code: "ECONNRESET" } }), { decision: "paused" });
+  const resumeResult = routes["noproute.resume"]({});
+  assert.deepEqual(resumeResult, { paused: false });
+  const result = routes["noproute.route"]({ error: { code: "ECONNRESET" }, model: "model-a", attempt: 0 });
+  assert.equal(result.decision, "retry");
+});
+
+test("noproute.pause is per-mission in-memory (resets between createNopRouteRoutes calls)", () => {
+  const { routes: r1 } = makeRoutes();
+  r1["noproute.pause"]({});
+  const { routes: r2 } = makeRoutes();
+  const result = r2["noproute.route"]({ error: { code: "ECONNRESET" }, model: "model-a", attempt: 0 });
+  assert.equal(result.decision, "retry");
+});
+
+test("noproute.circuit-state: per-model snapshot with remainingMs computation", () => {
+  const cb = createCircuitBreaker();
+  cb.recordFailure("model-a", "transient:rate-limit", 0);
+  const { routes } = makeRoutes({ circuitBreaker: cb });
+  const snap = routes["noproute.circuit-state"]({ now: 30_000 });
+  assert.equal(snap.paused, false);
+  assert.equal(snap.models["model-a"].state, "open");
+  assert.equal(snap.models["model-a"].remainingMs, 30_000);
+  assert.equal(snap.models["model-a"].cooldownMs, 60_000);
+  assert.equal(snap.models["model-a"].consecutiveFailures, 1);
+});
+
+test("noproute.circuit-state: works without circuitBreaker injected (returns empty models)", () => {
+  const { routes } = makeRoutes();
+  const snap = routes["noproute.circuit-state"]({});
+  assert.deepEqual(snap.models, {});
+});
+
+test("noproute.circuit-state: reflects paused flag", () => {
+  const { routes } = makeRoutes();
+  routes["noproute.pause"]({});
+  const snap = routes["noproute.circuit-state"]({});
+  assert.equal(snap.paused, true);
+});
+
+test("noproute.project-stats: returns empty when no projectStats injected", () => {
+  const { routes } = makeRoutes();
+  const result = routes["noproute.project-stats"]({});
+  assert.deepEqual(result, { projects: {} });
+});
+
+test("noproute.project-stats: returns single project when projectRoot specified", () => {
+  const ps = createMissionCallStats();
+  ps.record("/p1", "model-a", 1500, 100, 50, null, 1000);
+  ps.record("/p2", "model-b", 800, 80, 40, null, 2000);
+  const { routes } = makeRoutes({ projectStats: ps.snapshot() });
+  const result = routes["noproute.project-stats"]({ projectRoot: "/p1" });
+  assert.deepEqual(Object.keys(result.projects), ["/p1"]);
+  assert.equal(result.projects["/p1"].totalCalls, 1);
+});
+
+test("noproute.project-stats: returns all projects when projectRoot omitted", () => {
+  const ps = createMissionCallStats();
+  ps.record("/p1", "model-a", 1500, 100, 50, null, 1000);
+  ps.record("/p2", "model-b", 800, 80, 40, null, 2000);
+  const { routes } = makeRoutes({ projectStats: ps.snapshot() });
+  const result = routes["noproute.project-stats"]({});
+  assert.deepEqual(Object.keys(result.projects).sort(), ["/p1", "/p2"]);
+});
+
+test("MissionCallStats: accumulates per-project, per-model", () => {
+  const ps = createMissionCallStats();
+  ps.record("/p1", "model-a", 1500, 100, 50, null, 1000);
+  ps.record("/p1", "model-a", 1200, 80, 40, null, 2000);
+  ps.record("/p1", "model-b", 800, 60, 30, "transient:rate-limit", 3000);
+  const snap = ps.snapshot();
+  assert.equal(snap["/p1"].totalCalls, 3);
+  assert.equal(snap["/p1"].totalSuccess, 2);
+  assert.equal(snap["/p1"].totalFailures, 1);
+  assert.equal(snap["/p1"].byModel["model-a"].calls, 2);
+  assert.equal(snap["/p1"].byModel["model-a"].durationMs, 2700);
+  assert.equal(snap["/p1"].byModel["model-b"].failures, 1);
+  assert.equal(snap["/p1"].byModel["model-b"].lastErrorClass, "transient:rate-limit");
+});
+
+test("MissionCallStats: empty projectRoot → __global__ bucket", () => {
+  const ps = createMissionCallStats();
+  ps.record("", "model-a", 100, 10, 5, null, 1000);
+  ps.record(undefined, "model-a", 200, 20, 10, null, 2000);
+  const snap = ps.snapshot();
+  assert.equal(snap["__global__"].totalCalls, 2);
+});
+
+test("MissionCallStats: reset clears all", () => {
+  const ps = createMissionCallStats();
+  ps.record("/p1", "model-a", 100, 10, 5, null, 1000);
+  assert.equal(ps.snapshot()["/p1"].totalCalls, 1);
+  ps.reset();
+  assert.deepEqual(ps.snapshot(), {});
+});
+
+test("circuit-state: bit-identical double run", () => {
+  const cb = createCircuitBreaker();
+  cb.recordFailure("m1", "transient:network", 0);
+  cb.recordFailure("m1", "transient:network", 1000);
+  cb.recordFailure("m2", "permanent:budget", 500);
+  const a = makeRoutes({ circuitBreaker: cb }).routes["noproute.circuit-state"]({ now: 1000 });
+  const b = makeRoutes({ circuitBreaker: cb }).routes["noproute.circuit-state"]({ now: 1000 });
+  assert.deepEqual(a, b);
+});

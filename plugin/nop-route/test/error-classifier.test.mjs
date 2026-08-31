@@ -53,6 +53,34 @@ test("permanent:budget — quota code and 402 status", () => {
   assert.equal(classify({ status: 402 }), "permanent:budget");
 });
 
+test("permanent:budget + retry-after promotes to transient:rate-limit (D12)", () => {
+  assert.equal(
+    classify({ status: 402, retryAfter: 3600 }),
+    "transient:rate-limit",
+    "status 402 + retry-after field promotes to rate-limit",
+  );
+  assert.equal(
+    classify({ code: "insufficient_quota", retryAfter: 60 }),
+    "transient:rate-limit",
+    "quota code + retry-after field promotes to rate-limit",
+  );
+  assert.equal(
+    classify({ status: 402, headers: { "Retry-After": "120" } }),
+    "transient:rate-limit",
+    "status 402 + Retry-After header promotes to rate-limit",
+  );
+  assert.equal(
+    classify({ status: 402, headers: { get: (k) => (k === "retry-after" ? "60" : null) } }),
+    "transient:rate-limit",
+    "status 402 + Headers-like retry-after promotes to rate-limit",
+  );
+});
+
+test("permanent:budget without retry-after stays permanent", () => {
+  assert.equal(classify({ status: 402 }), "permanent:budget");
+  assert.equal(classify({ code: "insufficient_quota" }), "permanent:budget");
+});
+
 test("partial:marker — partial flag and unclosed marker tag", () => {
   assert.equal(classify({ partial: true }), "partial:marker");
   assert.equal(

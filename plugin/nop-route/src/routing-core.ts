@@ -39,6 +39,7 @@ import type {
   ModelSelectionConfig,
   ReasoningEffort,
 } from "./model-selector.ts";
+import type { ChainSlot } from "./model-selector.ts";
 
 /** Combined routing config: retry budget face + model chain face. */
 export interface RoutingConfig {
@@ -153,6 +154,7 @@ export function decide(
   request: RouteRequest,
   config: RoutingConfig,
   now = 0,
+  baseChain?: ChainSlot[],
 ): RoutingDecision {
   const attempt =
     typeof request.attempt === "number" && Number.isInteger(request.attempt) && request.attempt >= 0
@@ -199,6 +201,7 @@ export function decide(
       baseTokenBudget: config.baseTokenBudget,
       maxTokenBudget: config.maxTokenBudget,
     } satisfies ModelSelectionConfig,
+    baseChain,
   );
 
   if (retry.action === "retry") {

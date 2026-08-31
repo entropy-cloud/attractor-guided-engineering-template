@@ -1,9 +1,9 @@
 # DSH 智能路由 + 失败转移（In-Plugin Routing with Failover）
 
-> **Status: DESIGN DRAFT.** 综合 `docs/analysis/dsh-plugins/` 9 份插件调研 + 用户需求（2026-08-27）整理出的插件设计。本文档定义**目标形态**与**关键算法**，实现细节见后续 WI 拆分。
+> **Status: DESIGN.** 综合 `docs/analysis/dsh-plugins/` 9 份插件调研 + 用户需求整理出的插件设计。本文档定义**目标形态**与**策略组合规则**，技术细节唯一真相源为代码。
 >
 > 编写依据：
-> - 需求来源：用户关于"模型 5h 限额后能否自动切换"的扩展讨论
+> - 需求来源：用户关于"模型 5h 限额 / rate-limit / 全部不可用时永不放弃 / 请求超时 / 连续失败熔断 / 分层升级"的扩展讨论
 > - 调研来源：`docs/analysis/dsh-plugins/*.md`（9 份）+ `docs/design/dsh-plugin-integration.md`（双形态产品）
 > - 服务对象：AGE 的 DSH 插件形态（Mission Control）
 
@@ -11,58 +11,61 @@
 
 ### 1.1 问题陈述
 
-当前所有 AI step 都 spawn 一个 driver 子进程（`opencode run` / `pi -p`），每个 step 只用**单一模型**。一旦该模型遇到四类失败，整个 mission 即卡死：
+当前所有 AI step 都 spawn 一个 driver 子进程（`opencode run` / `pi -p`），每个 step 只用**单一模型**。一旦该模型遇到多种失败，整个 mission 即卡死：
 
 | 失败类型 | 频率 | 当前处理 |
 | --- | --- | --- |
 | 5 小时套餐限额（429 quota，账户级） | 高（套餐必触发） | mission-driver 无感知，step 失败 → mission 退出 |
-| Provider 凭据无效（401/403 AUTH，单 provider 级） | 中（套餐切换/凭据过期） | 同上 — **应 failover 到别的 provider** |
+| Provider 凭据无效（401/403 AUTH，单 provider 级） | 中 | 同上 — **应 failover 到别的 provider** |
 | 临时网络/provider 故障（5xx / 连接超时，单 provider 级） | 中 | 同上 — **应 failover 到别的 provider** |
-| 模型特定上下文窗口不足（per model 上下文不同） | 低 | 同上 — **应 failover 到 tier 内窗口更大的 model** |
+| 请求长期无返回（driver 进程挂死、idle watchdog 失效） | 低 | 同上 — **应超时视为失败并 failover** |
+| 同一 provider 连续多次失败 | 中（弱 provider） | 同上 — **应熔断并冷却递增** |
 
 DSH 插件形态下，in-process child agent 有机会在**调用前 / 失败后**做更智能的选择，但目前没有现成机制。
 
 ### 1.2 设计目标
 
-- **不引入跨进程总线**（沿用 dsh-agent-relay 调研裁定：单进程内不适用）
-- **与 dsh-model-router 同形但不绑 Cordis host API**——本插件可同时在 standalone 与 plugin 两种形态运行
-- **mission 模式永不自动中断**：进入 wait-check 模式后必须等用户人工 stop
-- **失败语义清晰**：quota-hit vs transient 是两类状态，冷却时长差异 > 100 倍
+- **永不自动中断**：全 tier 模型不可用时进入 wait-check 模式，必须等用户人工 stop
+- **失败语义清晰**：quota-hit（5h）vs auth（30min）vs rate-limit/network/timeout（60s 起递增）冷却时长差异显著
+- **分层路由**：便宜模型优先，贵模型只在便宜层全部不可用时升级
+- **熔断递增**：同一模型连续失败应触发更长冷却（60s → 120s → ... → 封顶），成功后重置
 
 ### 1.3 与 9 份调研的关系
 
 | 调研发现 | 本设计采纳点 |
 | --- | --- |
-| dsh-model-router: 分级冷却方程 `cool(t, k)` | §6.2 失败状态机核心 |
-| dsh-model-router: 健康度评分 5 维 | §6.3 健康度评分（简化版） |
-| dsh-delegate-router: 任务"轻/重"分类 + 持久账本 | §4 tier 分类 + §7 账本 |
+| dsh-model-router: 分级冷却方程 | §6 冷却递增规则 |
+| dsh-model-router: 健康度评分 5 维 | §6 简化为三态熔断 |
+| dsh-delegate-router: 任务"轻/重"分类 + 持久账本 | §4 tier 分类 + §7 账本（Deferred） |
 | dsh-routed-subagent: per-call override + precheck | §5 dispatcher 接口 |
 | dsh-vision-router: content-type 触发 provider 改写 | §5 tier 选择可叠加 content-type 信号 |
 | flash-godmode: complexity-dispatched 引导 | §4 tier 量化标定 |
-| routing-suite (yjh051108): junction + 路由自愈 | §9 mission wait-check 步（自愈语义） |
+| routing-suite (yjh051108): junction + 路由自愈 | §9 mission wait-check 步 |
 | fork-to-preset: 路由 UI 完全委托 host | §5 dispatcher 接口的 UI seam |
-| model-catalog: 探测 → 换算 → 配置生成 | §4.2 启动时拉 DSH 模型清单校验（在线版本，替代离线探测） |
+| model-catalog: 探测 → 换算 → 配置生成 | §4.2 启动时拉 DSH 模型清单校验（Deferred） |
 
 ## 2. 范围与非目标
 
 ### 2.1 In-Scope
 
-- ✅ 模型 tier 分类定义与配置
+- ✅ 模型 tier 分层定义与配置（便宜层优先、贵模型备用）
 - ✅ 主派发 agent 在派发任务时声明 tier
-- ✅ 插件内部维护模型可用性状态（healthy / cooling_down / auth_blocked / quota_blocked）
-- ✅ tier 内候选链自动 failover
-- ✅ 失败语义识别（quota vs transient）
-- ✅ mission 模式下的 wait-check 步（无任何模型可用时）
-- ✅ 跨 mission 的状态持久化（避免每次重启都从头冷却）
+- ✅ 插件内部维护模型熔断状态（closed / open / half-open）
+- ✅ 冷却时长按失败类型区分 + 连续失败指数递增
+- ✅ tier 内候选链自动 failover，tier 间升级条件
+- ✅ 请求级超时（超时视为失败）
+- ✅ 全 tier 不可用时 wait-check 周期性回查（永不放弃除非用户 STOP）
+- ✅ 状态持久化（避免每次重启都从头冷却）
+- ✅ 用户暂停机制（UI STOP 按钮 → 彻底停止）
 
-### 2.2 Out-of-Scope（明确不做的）
+### 2.2 Out-of-Scope
 
-- ❌ 跨 provider 的统一 ModelID 抽象（reject model-router 主形态——AGE 不绑 DSH-V4）
-- ❌ prompt-level 路由（reject routing-suite-dragonbaba——边际效益低）
-- ❌ runtime injector（reject routing-suite-yjh051108——Cordis 特有）
-- ❌ 自己配置 provider（base_url / auth / 调用形态）—— DSH 已经托管
-- ❌ 模型目录离线自动发现（reject model-catalog 主体）—— DSH Settings → Models 已是真实源
-- ❌ "per-call override" 的强 UI（adapt routed-subagent，但只做 dispatch 注解，不做 user-facing UI）
+- ❌ 跨 provider 的统一 ModelID 抽象（DSH 已托管 provider 配置）
+- ❌ prompt-level 路由（边际效益低）
+- ❌ runtime injector（DSH 特有）
+- ❌ 自己配置 provider（DSH 已托管）
+- ❌ 模型目录离线自动发现（DSH Settings → Models 已是真实源）
+- ❌ 持久账本 `.nop/dsh/routing-ledger.jsonl`（独立 Deferred slice）
 
 ## 3. 架构总览
 
@@ -75,603 +78,484 @@ DSH 插件形态下，in-process child agent 有机会在**调用前 / 失败后
 │         ↓              ↓             ↓              ↓        │
 │   ┌─────────────────────────────────────────────────────┐    │
 │   │  Step Executor (driver subprocess / in-proc agent)  │    │
-│   │   ↑                                                  │    │
-│   │   │ tier annotation                                  │    │
+│   │   ↑ timeoutMs                                       │    │
 │   │   ↓                                                  │    │
 │   ╔═══════════════════════════════════════════════════╗    │
 │   ║  Routing Plugin (本文档)                           ║    │
 │   ║  ┌───────────────┐  ┌──────────────────────────┐  ║    │
-│   ║  │ Dispatcher    │  │ Model Registry           │  ║    │
-│   ║  │ (tier → pick) │←→│ (state per model id)     │  ║    │
-│   ║  └───────────────┘  │  ├─ healthy              │  ║    │
-│   ║         ↓            │  ├─ cooling_down(t_cool)│  ║    │
-│   ║  ┌───────────────┐  │  ├─ auth_blocked(t_auth) │  ║    │
-│   ║  │ LLM Call      │  │  └─ quota_blocked(t_quot)│  ║    │
+│   ║  │ Tier Selector │  │ Circuit Breaker          │  ║    │
+│   ║  │ (layered)     │←→│ (per model state)        │  ║    │
+│   ║  └───────────────┘  │  ├─ closed (normal)      │  ║    │
+│   ║         ↓            │  ├─ open (cooling)       │  ║    │
+│   ║  ┌───────────────┐  │  └─ half-open (probing)  │  ║    │
+│   ║  │ LLM Call      │  └──────────────────────────┘  ║    │
 │   ║  │ Middleware    │           ↑                      ║    │
-│   ║  └───────────────┘           │ failure event       ║    │
-│   ║         ↓                    │                      ║    │
+│   ║  └───────────────┘           │                      ║    │
+│   ║         ↓ timeoutMs/failure │                      ║    │
 │   ║  ┌──────────────────────────────────────────────┐ ║    │
-│   ║  │ Failure Classifier + State Mutator           │ ║    │
+│   ║  │ Error Classifier + Circuit Mutator           │ ║    │
 │   ║  └──────────────────────────────────────────────┘ ║    │
-│   ║         ↓ quota_hit                              ║    │
+│   ║         ↓ all tiers unavailable                   ║    │
 │   ║  ┌──────────────────────────────────────────────┐ ║    │
-│   ║  │ Mission Wait-Check Step (flow step kind)     │ ║    │
-│   ║  │  当 registry 所有 tier 均无健康模型 → 触发    │ ║    │
+│   ║  │ Wait-Check (periodic re-check, never gives up)║    │
+│   ║  │  全 tier 不可用 → 周期性回查 → 用户 STOP 终止 ║    │
 │   ║  └──────────────────────────────────────────────┘ ║    │
 │   ╚════════════════════════════════════════════════════╝    │
 │                                                              │
 │  On-disk state:                                              │
-│    .age/routing-state.json                                   │
-│      { models: { id: { state, until, last_error } } }        │
+│    ~/.nop/dsh/routing-state.json                              │
+│      { models: { id: { state, until, consecutiveFailures,   │
+│                        cooldownMs, lastErrorClass } } }      │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ## 4. 模型 tier 分类
 
-### 4.1 三档（默认）
+### 4.1 分层（默认）
 
-| Tier | 适用任务 | 决策信号 | 默认候选示例 |
+| 层 | 适用任务 | 默认候选示例 | 备注 |
 | --- | --- | --- | --- |
-| **strong** | 复杂推理 / 代码生成 / 深度审计 / 多步规划 | DEEP_AUDIT / EXECUTE 关键步骤 / 跨 30+ 文件变更 | deepseek-reasoner, claude-opus-4, gpt-5, glm-z1 |
-| **medium** | 普通写作 / 中等代码 / review / 元数据生成 | 普通 EXECUTE / REVIEW / DRAFT 主体 | deepseek-chat, claude-sonnet-4, gpt-4.1, glm-4-plus |
-| **light** | 文本分类 / 短 Q&A / 格式校验 / 标题生成 | CHECK 步骤 / 短确认 / 命令解析 | deepseek-flash, claude-haiku, gpt-4.1-mini, glm-flash |
+| **standard** | 普通推理 / 写作 / review | glm-5.2, deepseek-chat, gpt-4.1 | 默认层，优先使用 |
+| **premium** | 复杂推理 / 深度审计 / 大上下文 | gpt-5, claude-opus-4 | 仅当 standard 层全部不可用且冷却 >30min 时升级 |
 
-> 三档不是铁律：用户可在 `missions/base.json` 的 `routing.tiers` 字段自定义档位（任意 2-5 档）。
+分层不是铁律：用户可在配置中自定义任意层数和候选。
 
 ### 4.2 tier 候选列表配置
 
-**关键简化**：候选身份用 `provider/model` 字符串（用户友好的配置写法），但内部解析为 DSH 原生 `{provider, model}` 元组——因为 DSH `GenerateOptions` 接受两个独立字段。我们不重新声明 provider 配置（base_url / auth / 调用形态）—— DSH 已经托管。
+**关键简化**：候选身份用 `provider/model` 字符串（用户友好的配置写法），内部不做解析转换——DSH 已托管 provider 配置。
 
-```jsonc
-// missions/base.json (新增字段)
-{
-  "routing": {
-    "tiers": {
-      "strong": {
-        "candidates": [
-          "deepseek-official/deepseek-reasoner",  // 实际 provider id 是 'deepseek-official'（不是 'deepseek'）
-          "anthropic/claude-opus-4-1",
-          "openai/gpt-5"
-        ]
-      },
-      "medium": {
-        "candidates": [
-          "deepseek-official/deepseek-chat",
-          "anthropic/claude-sonnet-4-5",
-          "openai/gpt-4.1"
-        ]
-      },
-      "light": {
-        "candidates": [
-          "deepseek-official/deepseek-flash",
-          "anthropic/claude-haiku-4-5",
-          "openai/gpt-4.1-mini"
-        ]
-      }
-    },
-    "short_cooldown_seconds": 60,
-    "quota_cooldown_seconds":  18000,    // 5h = 18000s
-    "max_retries_per_step":    2,        // 单 step 内的 tier 内 failover 次数
-    "wait_check_interval_seconds": 300   // mission wait-check 步的回查间隔（5min）
-  }
-}
-```
+**行为规则**：
+- candidates 字符串只切**第一个 `/`** 作为 provider/model 分隔符
+- 切完后的 provider 不在 DSH active 列表里 → 启动**报错**（fail-fast）
+- 切完后的 model 在 DSH 列表里不存在 → **warn 但不报错**（DSH README 明说"catalog membership is advisory"）
 
-**职责分离**（必须钉住）：
-
-| 关注点 | 归属 |
-| --- | --- |
-| ModelID 列表（哪些模型可用） | DSH（用户在 `Settings → Models` 配） |
-| Provider 连接配置（base_url / auth / 调用形态） | DSH（与 ModelID 绑定） |
-| "这个 tier 用哪几个 model" | 本插件（`missions/base.json:routing.tiers`） |
-| "当前哪个 model 处于什么状态" | 本插件（`.age/routing-state.json`） |
-
-**DSH ModelID 形态**（必须钉住 — 来自 DSH 源码核对）：
-
-| 来源 | 形态 |
-| --- | --- |
-| `GenerateOptions`（实际调用） | `{ provider: string, model: string }` 两个独立字段 |
-| `ctx.llm.listModels(provider)` 返回 `LlmModelInfo` | `{ provider, id, name, description?, inputModalities? }` |
-| Provider route id 示例（DSH 源码） | `anthropic` / `deepseek-official` / `openai` / `minimax-cn` |
-| `ConfigurableProviderView.provider` 注释 | `('deepseek-official', 'openai', …)` |
-
-> ⚠️ Provider route id 不一定是 `provider` 这种短名——`deepseek-official` 是真实存在的路由 id。Config 里写什么就用什么，**不**自动补全或转换。
-
-**字符串解析约束**（必须钉住）：
-- `candidates` 字符串只切**第一个 `/`** 作为 provider/model 分隔符
-- provider 名约束**不含 `/`**
-- model 名约束**不含 `/`**（HuggingFace 风格 provider 一律走 `hf:org/model` 等带 prefix 形式）
-- 切完后的 provider 不在 `ctx.llm.listProviders()` 的 active 列表里 → 启动**报错**（fail-fast）
-- 切完后的 model 在 `ctx.llm.listModels(provider)` 里不存在 → **warn 但不报错**（DSH README 明说"catalog membership is advisory"，调用未列出的 model 仍合法）
-
-**启动校验代码骨架**：
-
-```ts
-async function validateCandidates(candidates: string[]): Promise<void> {
-  const providers = new Map(ctx.llm.listProviders().map(p => [p.id, p]));
-  const modelsByProvider = new Map<string, Set<string>>();
-  for (const id of providers.keys()) {
-    const models = await ctx.llm.listModels(id);
-    modelsByProvider.set(id, new Set(models.map(m => m.id)));
-  }
-  for (const id of candidates) {
-    const slash = id.indexOf('/');
-    if (slash <= 0) throw new ConfigError(`bad candidate id (no '/' separator): ${id}`);
-    const provider = id.slice(0, slash);
-    const model    = id.slice(slash + 1);
-    if (!providers.has(provider)) {
-      throw new ConfigError(
-        `candidate '${id}': provider '${provider}' not active in DSH. `
-        + `Active providers: ${[...providers.keys()].join(', ')}`,
-      );
-    }
-    if (!modelsByProvider.get(provider)!.has(model)) {
-      logger.warn(`candidate '${id}': model not in DSH catalog (advisory — call may still work)`);
-    }
-  }
-}
-```
-
-### 4.3 模型发现工具（CLI / UI）
-
-方便用户填写 tier 时知道 DSH 当前有哪些 model：
-
-```bash
-# standalone 形态
-mission-driver routing list-models
-# 输出:
-#   deepseek-official/deepseek-chat      healthy
-#   deepseek-official/deepseek-reasoner  healthy
-#   deepseek-official/deepseek-flash     cooling (58s left)
-#   anthropic/claude-sonnet-4-5          healthy
-#   openai/gpt-5                         quota_blocked (4h 23min left)
-```
-
-DSH plugin 形态下，UI 提供"Models" 面板 + 拖拽到 tier 的可视化配置。订阅 `llm/adapters-updated` 事件实时刷新。
-
-**DSH 源码相关**（实现时引用）：
-- `ctx.llm.listProviders()` → `LlmProviderInfo[]`（`packages/llm/llm/src/index.ts:446`）
-- `ctx.llm.listModels(provider)` → `LlmModelInfo[]`（`packages/llm/llm/src/index.ts:608`）
-- `ctx.llm.listConfigurableProviders()` → `LlmConfigurableProvider[]`（`packages/llm/llm/src/index.ts:517`，含 dormant provider）
-- `ctx.llm.resolveModelInfo(provider, model)` → `LlmResolvedModelInfo`（`packages/llm/llm/src/index.ts:646`，含 contextWindow / maxTokens / reasoningEffort）
-- 客户端 RPC：`ctx.remote.llm.providers()` / `.models()` / `.discoverModels()`（`packages/host/apiproxy/src/api/llm.ts`）
-
-### 4.4 tier 选择标注
-
-dispatcher（即 step executor 在派发任务给 driver 之前）从 flow step 的 `tier` 字段读取：
-
-```jsonc
-// flows/mission-driver.json 中 step 写法
-{
-  "step": "EXEC_main",
-  "tier": "strong",            // ← 本 step 锁 strong tier
-  "driver": "opencode run --model {{routing.selected_model}} ..."
-}
-```
-
-> **fallback**：若 step 未指定 `tier`，按 `missions/base.json` 的 `routing.default_tier`（默认 `medium`）。这是从 `dsh-delegate-router` 的"按规则集分类"借鉴——但本设计是**显式标注**而非"运行时分类"，避免 silent 切模。
-
-## 5. Dispatcher 接口（plugin ↔ step executor）
-
-### 5.1 三条注入路径
-
-| 路径 | 形态 | 说明 |
-| --- | --- | --- |
-| **CLI flag** | standalone | `mission-driver.sh --tier strong ...` 或 step JSON 内 `{{routing.selected_model}}` 占位（值为 DSH ModelID 字符串） |
-| **Plugin API** | DSH plugin 形态 | 在 DSH 中暴露 `routing.select(tier) → ModelId` 与 `routing.report_failure(modelId, error)` 函数；model id 透传给 `ctx.llm.call({ model: id, ... })` |
-| **Wire protocol** | 进程边界 | driver subprocess 启动时通过 `--model <ModelId>` 注入当前候选；driver 失败时通过 exit code 或 stderr 标记回传（沿用 mission-driver 现有 `<AI_STEP_RESULT>` 标记扩展） |
-
-### 5.2 dispatcher 主流程
+### 4.3 分层配置 schema
 
 ```
-function dispatchStep(step):
-  tier = step.tier ?? defaultTier
-  for attempt in 1..max_retries_per_step + 1:
-    pick = routing.select(tier, exclude=alreadyTriedThisStep)
-    if pick is null:
-      # 整个 tier 不可用
-      if isMissionMode:
-        return ScheduleWaitCheck(tier)
-      else:
-        raise NoModelAvailable(tier)
-    try:
-      result = runStep(step, pick)
-      routing.report_success(pick)   // 重置健康度
-      return result
-    except LLMCallError as e:
-      tried = tried ∪ { pick }
-      routing.report_failure(pick, e)
-      # 下一轮 attempt 重选
-  # 达到 max_retries
-  raise AllCandidatesFailed(tier, tried)
+routing:
+  tiers:
+    - name: standard
+      candidates: [zhipuai/glm-5.2, deepseek/deepseek-chat]
+      escalationThresholdMs: 1800000   # 当该层所有模型冷却都超过 30min 时升级
+    - name: premium
+      candidates: [openai/gpt-5, anthropic/claude-opus-4]
+      escalationThresholdMs: null      # 最高层，不升级，进入 wait-check
+  defaultTier: standard
+  waitCheckIntervalMs: 300000         # 5min 回查间隔
+  requestTimeoutMs: 600000             # 10min 请求超时
 ```
 
-### 5.3 选模函数
+### 4.4 tier 选择规则
 
-```ts
-// pseudocode（参考 dsh-model-router §2.2 与 dsh-delegate-router decideRoute）
-function select(tier: string, exclude: Set<ModelId>): ModelId | null {
-  const tierDef = tiers[tier];
-  const now = Date.now();
-  for (const id of tierDef.candidates) {       // id 是 DSH ModelID 字符串
-    if (exclude.has(id)) continue;
-    const state = registry.get(id);
-    if (!state) {
-      // 未观测过 → 默认健康
-      return id;
-    }
-    if (state.status === 'healthy') return id;
-    if (state.until > now) continue;            // 仍在冷却/quota 期内
-    return id;                                  // 冷却过期 → 重新尝试
-  }
-  return null;                                  // 整档不可用
-}
-```
+主派发 agent 从 flow step 的 `tier` 字段读取（缺省按 `defaultTier`）。这是**显式标注**而非运行时分类——避免 silent 切模。
 
-> candidates 字符串就是 DSH ModelID，**不做解析/转换**，整体作为 `ctx.models.call(modelId, ...)` 的入参传给 DSH。Provider 归属、auth、base_url 全部由 DSH 处理。
+## 5. 分层选择策略
 
-## 6. 模型 registry 与失败语义
-
-### 6.1 状态机
+### 5.1 选择函数语义
 
 ```
-                    success
-        ┌──────────────────────────────────┐
-        ↓                                  │
-   ┌─────────┐    success      ┌────────────────┐
-   │ healthy │←────────────────│ auth_block     │
-   └─────────┘                 │  (30min 凭据冷却)│
-        │                      └────────────────┘
-        │ transient/cooldown 过期↑    │ auth 错误
-        │ ←─────────────────────┘    │
-        ↓
-   ┌──────────────┐  冷却过期重试   ┌──────────────┐
-   │ cooling_down │────────────────│  (下一轮)     │
-   │  (60s 短冷却) │                └──────────────┘
-   └──────────────┘
-        ↑   │
-        │   │ transient 错误
-        │   ↓
-        │
-   ┌──────────────┐  quota 错误
-   │ quota_block  │
-   │  (5h 配额)    │
-   └──────────────┘
+select(tier, now):
+  在该 tier 的 candidates 中选第一个状态 = closed 或 half-open 的模型
+  if 找到 → 返回该模型
+  if 该 tier 全部状态 = open：
+    计算最早可用时间 = min(所有模型的 until)
+    if 最早可用时间 - now < escalationThresholdMs：
+      等待到最早可用时间后重试该 tier（不升级）
+    else：
+      if 有更高 tier → 升级
+      else → wait-check
+  return null（触发 wait-check）
 ```
 
-**状态语义**：
+### 5.2 升级条件
 
-| 状态 | 含义 | 进入条件 | 退出条件 |
-| --- | --- | --- | --- |
-| `healthy` | 未观测过或最近一次调用成功 | 启动 / success | 任何 failure |
-| `cooling_down` | 短暂冷却（瞬时错误 / 上下文超限） | transient 类错误 | `until < now` 或 success |
-| `auth_blocked` | 凭据错误冷却（AUTH / INVALID_CREDENTIAL） | auth 类错误 | `until < now` 或 success |
-| `quota_blocked` | 账户配额耗尽 | `QUOTA` 类错误 | `until < now` 或 success |
+当前 tier 所有模型的 `until - now > escalationThresholdMs`（即即使等最早的恢复也需超过阈值）时，才升级到下一层。
 
-**为什么分三档冷却**：user-fixable vs system-recoverable vs transient —— 修复期望时长差异 100 倍级。
-- 60s：网络/provider 瞬时问题，自动恢复
-- 1800s：用户需要时间修复凭据
-- 18000s：账户配额等系统周期恢复（典型 5h package）
+**为什么需要升级阈值**：
+- 60s 短冷却时不应升级到贵模型
+- 等 5min 就能恢复时不应升级
+- 必须等 >30min 仍无恢复，才升级到贵模型（节省费用）
 
-### 6.2 失败分类（关键算法）
+### 5.3 向后兼容
 
-**不要自己写字符串匹配！** DSH 已实现稳定的失败分类器：
+旧 config 格式 `{ defaultModel, fallbackModels }` 等价于单层 tier：`{ name: "default", candidates: [defaultModel, ...fallbackModels], escalationThresholdMs: 0 }`（立即升级，仅作为兼容 shim）。
 
-| 来源 | API | 用途 |
-| --- | --- | --- |
-| `packages/llm/llm/src/error.ts:28` | `QUOTA_EXCEEDED_CODE = 'QUOTA'` | 标准常量 |
-| `packages/llm/llm/src/error.ts:94` | `isQuotaExceededError(detail: string): boolean` | 5 个正则模式匹配 provider 文本 |
-| `packages/llm/llm/src/error.ts:80` | `isContextWindowExceededError(detail: string): boolean` | 4 个正则模式 |
-| `packages/llm/llm-deepseek/src/adapter.ts:333` | `httpErrorCode(status, error): string` | HTTP status → harness code 映射 |
-| `packages/llm/llm/src/error.ts:14` | `HarnessError.code` | **路由字段，不要解析 message** |
+## 6. 熔断器（Circuit Breaker）
 
-**DSH adapter 已分类的 `LlmError.code` 集合**：
+### 6.1 三态状态机
 
-| Adapter code | 含义 | 跨 provider 是否独立？ | 本插件处理 |
-| --- | --- | --- | --- |
-| `QUOTA` | 账户配额/余额耗尽（终端性） | ❌ 账户绑定，同 provider 下其他 model 也不行 | `quota_blocked` → 长冷却（默认 5h） |
-| `RATE_LIMIT` | 429 但非配额耗尽（瞬时限流） | ✅ 不同 provider 独立 quota pool | `cooling_down` → 短冷却（默认 60s） |
-| `SERVER` | provider 5xx | ✅ | `cooling_down` → 短冷却 |
-| `TIMEOUT` | 读超时（idle watchdog） | ✅ | `cooling_down` → 短冷却 |
-| `TRANSPORT` | fetch failed / 连接错误 | ✅ | `cooling_down` → 短冷却 |
-| `EMPTY_RESPONSE` | 正常完成但无内容 | ✅ | `cooling_down` → 短冷却（DSH 自述"safe to retry"） |
-| `AUTH` | 401/403（认证失败） | ✅ **每个 provider 独立凭据**（`ConfigurableProviderView.apiKeyEnv` 按 provider 分开） | `auth_blocked` → 中冷却（默认 1800s = 30min） |
-| `INVALID_CREDENTIAL` | 凭据格式错 | ✅ 同上 | `auth_blocked` → 中冷却 |
-| `CONTEXT_WINDOW_EXCEEDED` | prompt 超 model 上下文 | ✅ **不同 model 窗口不同**（claude-opus 200k / deepseek-chat 8k / gpt-4.1 1M） | `cooling_down` → 短冷却（下次选 tier 内窗口更大的 model） |
-| `INVALID_REQUEST` | 400 通用 / 413 | ⚠️ 多数是调用方 bug（换 provider 也失败），但 413 可能是 provider-specific limit | 不计入（保守） |
-| `ABORTED` | 调用方中止 | n/a | 不计入（用户主动取消） |
-| 其他 `HTTP_<status>` | 未识别 | — | 保守处理：`cooling_down` 短冷却 + 写账本警示 |
-
-**新增 `auth_blocked` 状态的原因**：AUTH 失败介于 transient 与 quota 之间——
-- 60s 太短：用户还没改完凭据就触发重试
-- 5h 太长：用户改完凭据要等 5h 才能验证
-
-30min 是经验值：够长避免 spam、够短让"修了凭据 → 30min 后自动恢复"成立。
-
-**路由失败分类的代码骨架**：
-
-```ts
-import { HarnessError, QUOTA_EXCEEDED_CODE } from '@deepseek-ai/dsh-llm';
-
-type FailureKind = 'quota' | 'transient' | 'auth' | 'non_retryable' | 'aborted';
-
-function classify(error: unknown): FailureKind {
-  if (error instanceof HarnessError) {
-    switch (error.code) {
-      case QUOTA_EXCEEDED_CODE:                      return 'quota';
-      case 'AUTH':
-      case 'INVALID_CREDENTIAL':                     return 'auth';
-      case 'RATE_LIMIT':
-      case 'SERVER':
-      case 'TIMEOUT':
-      case 'TRANSPORT':
-      case 'EMPTY_RESPONSE':
-      case 'CONTEXT_WINDOW_EXCEEDED':                return 'transient';
-      case 'ABORTED':                                return 'aborted';
-      // INVALID_REQUEST / 其他 HTTP_xxx
-      default:                                       return 'non_retryable';
-    }
-  }
-  // 非 HarnessError（如 driver subprocess 退出码异常）：
-  // 保守当 transient，等账本分析后再调
-  return 'transient';
-}
-
-function onFailure(model: ModelId, error: unknown): void {
-  const kind = classify(error);
-  const now = Date.now();
-  switch (kind) {
-    case 'quota':
-      registry.set(model, {
-        status: 'quota_blocked',
-        until: now + quotaCooldownMs,
-        last_error_kind: 'quota',
-        last_error_at: now,
-      });
-      break;
-    case 'auth':
-      registry.set(model, {
-        status: 'auth_blocked',
-        until: now + authCooldownMs,
-        last_error_kind: 'auth',
-        last_error_at: now,
-      });
-      break;
-    case 'transient':
-      registry.set(model, {
-        status: 'cooling_down',
-        until: now + shortCooldownMs,
-        last_error_kind: 'transient',
-        last_error_at: now,
-      });
-      break;
-    case 'non_retryable':
-    case 'aborted':
-      ledger.append({ kind: 'non_retryable', model, error: String(error) });
-      break;
-  }
-}
+```
+          consecutiveFailures >= threshold
+  closed ──────────────────────────────────→ open
+    ↑                                          │
+    │  cooldown 过期 + 试探成功                │
+    │                                          │
+    │    ←── cooldown 过期 → half-open ────────┘
+    │         试探成功 → closed
+    │         试探失败 → open（冷却重新计算）
+    └──────────────────────────────────────────┘
 ```
 
-> 关键：路由字段是 `error.code`，**绝不**解析 `error.message` 文本。DSH adapter 已把 provider 文本归一化为 code，本插件只用 code 即可。
+| 状态 | 含义 | 行为 |
+|------|------|------|
+| `closed` | 正常或冷却过期已恢复 | 可被选中处理请求 |
+| `open` | 冷却期内 | 不可被选中，等待 until 过期 |
+| `half-open` | 冷却过期，试探中 | 允许一个请求试探；成功 → closed，失败 → open |
 
-**配置文件同步新增 `auth_cooldown_seconds`**：
+### 6.2 冷却时长（按 errorClass 分 base/max + 指数递增）
 
-```jsonc
-{
-  "routing": {
-    "short_cooldown_seconds":  60,
-    "auth_cooldown_seconds":   1800,   // ← 新增：AUTH / INVALID_CREDENTIAL 中冷却
-    "quota_cooldown_seconds":  18000,  // 5h = 18000s
-    "max_retries_per_step":    2,
-    "wait_check_interval_seconds": 300
-  }
-}
-```
+| errorClass | base | max | 含义 |
+|-----------|------|-----|------|
+| `transient:rate-limit` | 60s | 1800s (30min) | 限流，自动恢复 |
+| `transient:network` | 60s | 1800s | 网络故障 |
+| `transient:timeout` | 60s | 1800s | 超时 |
+| `permanent:auth` | 1800s | 1800s | 凭据错误，固定 30min |
+| `permanent:budget` | 18000s | 18000s | 配额耗尽，固定 5h |
+| `permanent:invalid-input` | — | — | 不重试，不进熔断 |
+| `partial:marker` | — | — | 不重试，不进熔断 |
 
-### 6.3 健康度评分（轻量版）
+**公式**：`cooldown = min(base × 2^(consecutiveFailures-1), max)`
 
-dsh-model-router 用了 5 维加权；本设计用更简单的**四态状态机**（healthy / cooling_down / auth_blocked / quota_blocked）。如果未来需要更细粒度（比如"半健康"），再升级。
+`consecutiveFailures` 在 `recordSuccess()` 时重置为 0。
 
-简化设计：
-- 不维护滑窗 / TTL
-- 只维护 `state` + `until` + `last_error_kind` + `last_failure_at`
-- 冷却过期即重置为 healthy（不记录历史失败次数）
+### 6.3 失败分类规则（关键）
 
-### 6.4 状态持久化
+**路由字段是 `error.code`，绝不解析 `error.message`**——DSH adapter 已把 provider 文本归一化为 code，路由只用 code。
 
-文件位置：`{projectRoot}/.age/routing-state.json`
+| errorClass | 进入熔断 | 冷却 base/max |
+|-----------|---------|--------------|
+| `transient:rate-limit` | ✓ | 60s / 1800s |
+| `transient:network` | ✓ | 60s / 1800s |
+| `transient:timeout` | ✓ | 60s / 1800s |
+| `permanent:auth` | ✓ | 1800s / 1800s |
+| `permanent:budget`（无 retry-after） | ✓ | 18000s / 18000s |
+| `permanent:budget`（有 retry-after） | 升级为 `transient:rate-limit` | 60s / 1800s |
+| `permanent:invalid-input` | ✗ | — |
+| `partial:marker` | ✗ | — |
+| `unknown` | ✓ | 60s / 1800s（保守处理） |
 
-```jsonc
-{
-  "version": 1,
-  "models": {
-    "deepseek/deepseek-chat": {
-      "status": "quota_blocked",
-      "until": 1756262400000,    // epoch ms
-      "last_error_kind": "quota",
-      "last_error_at": 1756244400000,
-      "last_error_excerpt": "rate_limit_exceeded: 5h package quota"
-    },
-    "anthropic/claude-sonnet-4": {
-      "status": "healthy",
-      "until": 0,
-      "last_error_kind": null,
-      "last_error_at": 0
-    }
-  }
-}
-```
+### 6.4 简化设计原则
 
-> registry key 与 candidates 字符串一致；monitor / 账本 / 日志统一使用 `provider/model` 格式。
+- **不维护滑窗 / TTL**：只维护当前状态 + until + consecutiveFailures + lastErrorClass
+- **冷却过期即半开试探**：不记录历史失败次数的衰减
+- **成功即重置**：recordSuccess() 把 consecutiveFailures 重置为 0
 
-写入时机：每次状态变更 + mission 结束 + 每 60s 一次 flush（防进程被杀丢状态）。
+## 7. 请求级超时
 
-## 7. 持久账本（参考 dsh-delegate-router）
+每个请求有 `requestTimeoutMs`（默认 600000 = 10min）。超时视为该模型的一次失败，触发熔断状态变更。
 
-为了监控与审计，**所有 failover 事件**写一份账本：
+**职责分离**：
+- 路由插件（nop-route）：只提供 timeoutMs 配置，不管理定时器
+- 调用方（mission-driver / step executor）：负责实现超时机制，到时取消请求并回传超时错误
 
-`.age/routing-ledger.jsonl`（append-only）
-
-```jsonl
-{"ts":1756244400000,"kind":"select","tier":"strong","picked":"deepseek/deepseek-chat"}
-{"ts":1756244401000,"kind":"failure","model":"deepseek/deepseek-chat","error":"quota","cooldown_s":18000}
-{"ts":1756244401005,"kind":"select","tier":"strong","picked":"anthropic/claude-sonnet-4"}
-{"ts":1756244402000,"kind":"success","model":"anthropic/claude-sonnet-4"}
-```
-
-monitor / dashboard 可读这份账本做：
-- "过去 24h 各 tier 用了哪个模型"
-- "quota 触发频次 → 套餐选择建议"
-- "某个 provider 失败率" → 健康度面板
-
-## 8. Mission 模式 wait-check 步
+## 8. Wait-Check（永不放弃）
 
 ### 8.1 触发条件
 
-当 dispatcher 在某 step 尝试 `max_retries_per_step + 1` 次后**所有候选仍不可用**，且当前 mission 未收到 STOP 信号：
+**所有 tier 全部不可用**时进入 wait-check。
+
+### 8.2 行为定义
+
+不是失败，不是退出。是 mission 状态机的**挂起状态**：
 
 ```
-"NoModelAvailable(tier)" 触发 wait-check 步
+WAIT_CHECK(retryAtMs, tiers)
 ```
 
-### 8.2 wait-check 步语义
-
-不是失败，不是退出。是一个**挂起状态**，mission 状态机转入：
-
-```
-WAIT_CHECK(tier=X, next_check_at=T, attempt_count=N)
-```
-
-行为：
 1. **不杀进程**：driver subprocess / agent runtime 全部 pause（保留状态）
-2. **周期性回查**：每 `wait_check_interval_seconds`（默认 300s = 5min）尝试一次 `select(tier)`
-3. **恢复条件**：select 返回非 null → 自动恢复 mission 继续
+2. **周期性回查**：每 `waitCheckIntervalMs`（默认 300000 = 5min）尝试一次 select
+3. **恢复条件**：select 返回非 null（任一模型冷却过期）→ 自动恢复
 4. **不可中断原则**：除非收到用户 STOP 信号，否则**永不退出** mission
 
-### 8.3 flow JSON 扩展
+### 8.3 wait-check 是默认行为
 
-```jsonc
-// flows/mission-driver.json 新增 step kind
+**wait-check 不是可禁用的扩展**——全 tier 不可用时的必经路径。调用方可通过 timeoutMs 控制单次等待上限，但不可跳过 wait-check。
+
+## 9. 状态持久化
+
+### 9.1 状态作用域分类
+
+routing 相关状态按作用域分三类：
+
+| 类别 | 作用域 | 持久化位置 | 例子 |
+|---|---|---|---|
+| **账号/凭证级** | per-user 全局（跨项目共享） | `~/.nop/dsh/routing-state.json` | 模型熔断状态（quota 耗尽、auth 失效是账号级别，跨项目都生效） |
+| **mission 级** | per-mission 临时 | 不持久化 / mission 结束时落账本 | paused 标志、当前 mission 调用统计 |
+| **配置级** | per-user 全局或 per-project | `~/.nop/dsh/routing-config.json` 或 `missions/base.json:routing` | tiers 定义、candidates 列表、cooldown 时长 |
+
+**目录约定**：`~/.nop/` 是 nop 平台（age-autonomy / mission-driver / nop-* plugins）的用户级 home，所有平台级持久状态都集中在这里。`~/.nop/dsh/` 子目录专门承载 DSH 相关的路由/熔断/账本状态。类比：
+
+| 平台 | home 目录 | 用途 |
+|---|---|---|
+| DSH | `~/.dsh/settings.yaml` | DSH 原生配置 |
+| nop | `~/.nop/dsh/routing-state.json` | nop 路由状态 |
+| nop | `~/.nop/dsh/routing-config.json` | nop 路由配置 |
+
+**home 解析**：通过 `$NOP_HOME` 环境变量或 fallback 到 `~/.nop/`（参考 `@deepseek-ai/dsh-home-paths` 的 `resolveDshHome` 模式）。
+
+### 9.2 持久化方案与现有模式对照
+
+**采用 atomic write 模式**——直接借鉴 `plugin/nop-age/src/efficiency/context-profile.ts:91-99` 的 `fsProfileIo.writeTextAtomic` 12 行 tmp+rename 实现，**不引入** `@deepseek-ai/dsh-atomic-write`（mode 参数硬约束过强）、**不依赖** DSH host 集成（plan Decision 6）。
+
+| 维度 | 决策 | 依据 |
+|---|---|---|
+| 写入方式 | tmp file + renameSync 原子替换 | 与 mission-driver `_writeWorkflow`、`context-profile.ts:91-99`、`active-run-registry.mjs:82-106` 一致 |
+| 写入时机 | 状态变更即触发 + debounce 60s 兜底 flush | 设计文档 §9 + `context-profile.ts:531-555` "无变化不写"模式 |
+| 账号级文件位置 | `~/.nop/dsh/routing-state.json` | routing 是账号/凭证级状态（quota 耗尽跨项目共享），不写项目根；类比 DSH settings 写 `~/.dsh/settings.yaml` |
+| 配置级文件位置 | `~/.nop/dsh/routing-config.json`（per-user 全局默认）+ `missions/base.json:routing`（per-project 覆盖） | 类比 DSH settings 三层覆盖（home → project → env） |
+| `.gitignore` | 不需要 | 在用户 home，不在项目内 |
+| 跨进程锁 | 可选（多 nop-route 实例同时挂载时考虑） | 单实例通常不需要 |
+| Schema version | 简化为 v1（无 version 字段） | plan 阶段最小化 |
+
+### 9.3 schema（账号级 routing-state.json）
+
+```
 {
-  "step": "WAIT_CHECK_AFTER_EXEC",
-  "kind": "wait_check",
-  "tier": "strong",
-  "interval_seconds": 300,             // 可覆盖全局默认
-  "max_attempts": null,                // null = 无限（除非 STOP）
-  "on_recover": "resume_previous_step"
+  "models": {
+    "deepseek/deepseek-chat": {
+      "state": "open",
+      "until": 1756262400000,
+      "consecutiveFailures": 3,
+      "cooldownMs": 240000,
+      "lastErrorClass": "transient:rate-limit",
+      "lastErrorAt": 1756244400000
+    }
+  }
 }
 ```
 
-> `on_recover: resume_previous_step` 是关键——从挂起点恢复 mission，不是从头重跑。
+注意：`paused` 不在这里——paused 是 per-mission 状态，在 service 层内存即可（mission 结束自动清除）。
 
-### 8.4 wait-check 步与状态外化的关系
+读取失败时保守返回空（circuit 全 closed），不破坏服务可用性。
 
-wait-check 期间**必须**把 mission 状态持久化（不仅是 in-memory）：
-- 当前 step 标记为 `paused`
-- 队列里的后续 step 标记为 `pending`
-- 重启 mission-driver 进程也能从 wait-check 恢复
-
-这与 mission-driver 现有的"持久 run-state + reconcile"形态一致，沿用即可。
-
-### 8.5 用户可见的 wait-check UI
-
-monitor dashboard 增加：
-- mission 卡片显示 `⏸ WAIT_CHECK（strong tier, 5min 后回查, 已 23min）`
-- 每个 model 行显示状态徽章：🟢 healthy / 🟡 cooling / 🟠 auth_blocked / 🔴 quota_blocked
-- 提供"立即回查"按钮（手动触发一次 select）
-- 提供"STOP mission"按钮（唯一中断方式）
-
-## 9. 配置文件 schema 与加载顺序
+### 9.4 schema（配置级 routing-config.json）
 
 ```
-1. 内置默认（在 routing 插件代码里 hardcode 三档默认候选 + 默认冷却）
-2. {projectRoot}/missions/base.json:routing.{tiers, default_tier, ...}
-3. {projectRoot}/missions/base.local.json:routing.* （个人本地覆盖，不入 git）
-4. 环境变量 AGE_ROUTING_* （CI 覆盖）
+{
+  "tiers": [
+    {
+      "name": "standard",
+      "candidates": ["zhipuai/glm-5.2", "deepseek/deepseek-chat"],
+      "escalationThresholdMs": 1800000
+    },
+    {
+      "name": "premium",
+      "candidates": ["openai/gpt-5", "anthropic/claude-opus-4"],
+      "escalationThresholdMs": null
+    }
+  ],
+  "defaultTier": "standard",
+  "waitCheckIntervalMs": 300000,
+  "requestTimeoutMs": 600000
+}
 ```
 
-加载时按 1→2→3→4 顺序合并；后层覆盖前层。这样：
-- 默认开箱可用
-- 项目级 mission 可定制
-- 个人 dev 可临时换模型
-- CI 可注入特定候选
+加载顺序（后层覆盖前层）：
+1. `~/.nop/dsh/routing-config.json`（per-user 默认）
+2. `missions/base.json:routing`（per-project 覆盖）
+3. `missions/base.local.json:routing`（个人本地覆盖，不入 git）
+4. 环境变量 `AGE_ROUTING_*`（CI 覆盖）
 
-## 10. 关键决策记录
+### 9.5 职责分离
+
+- **纯函数层（circuit-breaker / tier-selector）**：零 I/O，状态变更纯入参出参
+- **service 层**：持有 circuit-breaker 闭包 + IO 接口（可注入测试），recordFailure/recordSuccess 后由 `schedulePersist(now)` debounce；启动时从 `~/.nop/dsh/routing-state.json` load，teardown 时 flush
+
+## 10. 用户暂停
+
+- **触发**：UI STOP 按钮（`POST /noproute/api/pause`）
+- **效果**：该 mission 暂停标志，nop-route 所有 route 返回 `{ decision: "paused" }`
+- **作用域**：per-mission（每个 mission-driver run 独立暂停状态）
+- **状态**：service 层内存，**不持久化**——mission 结束即清零
+- **恢复**：`POST /noproute/api/resume` 清除标志
+
+## 11. 调用统计与监控
+
+### 11.1 统计维度与作用域（三层）
+
+| 层级 | 作用域 | 持久化 | 例子 |
+|---|---|---|---|
+| **账号级** | per-user 全局，跨项目跨 mission 共享 | `~/.nop/dsh/routing-state.json` | circuit 状态（quota 耗尽、auth 失效是账号级） |
+| **项目级** | per-project 全局，跨 mission 共享 | `~/.nop/dsh/routing-stats/<project-hash>.json` | 某模型在某项目中的总调用次数、总 token、总耗时 |
+| **mission 级** | per-mission 临时 | 不持久化（in-memory） | 当前 mission 的 paused 标志、本次 run 的累计统计 |
+
+**为什么需要项目级**：circuit 状态是账号级（quota 是账号的），但**统计是项目级的**——
+- 项目 A 用 deepseek-chat 100 次成功（100k tokens），项目 B 用 deepseek-chat 50 次失败（10k tokens）——合并显示没意义
+- 用户需要看"我这个项目用了哪些模型、效果如何"
+- 不同项目的成本/性能特征不同，不能合并
+
+### 11.2 项目识别（project 维度）
+
+**三种 project 标识来源**：
+
+| 来源 | 形态 | 何时使用 |
+|---|---|---|
+| `projectRoot` 绝对路径 | `/Users/abc/projects/foo` | mission-driver 传入，最精确 |
+| `projectId` | 显式 ID（可选） | 当 projectRoot 不可用时（如 HTTP 调用） |
+| 缺省（fallback） | `"__global__"` | 无 project context 时（如 nop-route e2e 测试、HTTP 调用方未传） |
+
+**projectRoot → hash**：`hash = sha256(projectRoot).slice(0, 16)`（避免路径中的 `/` 和长字符串污染文件名），文件名 `~/.nop/dsh/routing-stats/<hash>.json`。
+
+**payload 字段**：调用 `noproute.route` 时新增 `projectRoot?: string` 字段：
+- 提供 → 累加到该项目 stats
+- 缺省 → 累加到 `__global__` stats
+
+**调用方责任**：
+- mission-driver / native-executor 调用 nop-route 时从 `config.projectRoot` 读取并传入 payload（**未来 slice——当前 mission-driver 不调用 nop-route**）
+- HTTP 调用方（如外部脚本）需主动传 `projectRoot`；否则归入 global
+- e2e 测试用 mock projectRoot 或 global
+
+### 11.3 项目级统计字段
+
+每个 `projectRoot × model` 维护：
+
+| 维度 | 类型 | 来源 |
+|---|---|---|
+| `totalCalls` | counter | 每次 select 后 +1 |
+| `totalSuccess` | counter | 每次 recordSuccess 后 +1 |
+| `totalFailures` | counter | 每次 recordFailure 后 +1 |
+| `totalDurationMs` | counter | 每次 recordCall 累加 `durationMs` |
+| `totalTokensInput` | counter | 调用方传入（input tokens） |
+| `totalTokensOutput` | counter | 调用方传入（output tokens） |
+| `lastCallAt` | timestamp | 每次 select 后更新 |
+| `firstCallAt` | timestamp | 首次 select 后设置 |
+
+**注意**：circuit 状态（state / until / consecutiveFailures / lastErrorClass）是**账号级**——不在项目 stats 里。
+
+### 11.4 持久化与内存
+
+- **项目级 stats**：持久化到 `~/.nop/dsh/routing-stats/<project-hash>.json`，每次 recordCall 后 debounce 60s flush；项目结束（mission 全部完成）时强制 flush
+- **mission 级**：纯 in-memory，service 卸载（cordis teardown）即清零
+- **账号级 circuit**：见 §9
+
+### 11.5 为什么不放 missions/base.json 或项目根
+
+| 方案 | 缺点 |
+|---|---|
+| `<homeDir>/.nop/dsh/routing-stats/<hash>.json` | 与 circuit 状态分离，跨项目复制时项目根混乱 |
+| `{projectRoot}/missions/routing-stats.json` | 会被 mission-check 扫描污染 |
+| **`~/.nop/dsh/routing-stats/<hash>.json`** ✓ | 账号级 home 目录，与 circuit 状态同根，hash 文件名隔离项目 |
+
+### 11.6 UI 外化（monitor dashboard）
+
+**复用现有模式**——与 `monitor dashboard` RunList/RunDetail 保持一致的视觉风格：
+
+| 组件 | 来源 | 复用方式 |
+|---|---|---|
+| 状态徽章 | `RunList.vue:201-210` `statusTagType()` | 新增 `circuitStateTagType()` 同模块 |
+| 倒计时 | `useClock.ts:17-44` 1s interval | 直接复用，传入 `getUntil()` |
+| per-item 列表 | `StepTimeline.vue` timeline + tag + footer | 新增 `<CircuitStateTimeline/>` |
+| 总览条 | `RoadmapProgress.vue:12-18` `n-progress` | 可选，"N/M 模型可用" |
+| 数据表 | `ResourceChart.vue:23-31` `n-data-table` | 可选，列：模型 / state / until / remainingMs / consecutiveFailures / lastErrorClass / totalCalls / totalTokens |
+
+### 11.7 REST API（sync wire route）
+
+**`POST /noproute/api/circuit-state`**——返回完整快照（账号级 + project 级 + mission 级合并）：
+
+```
+{
+  "models": {
+    "deepseek/deepseek-chat": {
+      "state": "open",                              // 账号级（跨 project/mission 共享）
+      "until": 1756262400000,
+      "remainingMs": 120000,
+      "consecutiveFailures": 3,                      // 账号级
+      "cooldownMs": 240000,
+      "lastErrorClass": "transient:rate-limit",     // 账号级
+      "lastErrorAt": 1756244400000,
+      "statsByProject": {                            // 项目级（per-project 持久化）
+        "/Users/abc/projects/foo": {
+          "totalCalls": 142,
+          "totalSuccess": 139,
+          "totalFailures": 3,
+          "totalDurationMs": 325000,
+          "totalTokensInput": 124567,
+          "totalTokensOutput": 89342,
+          "firstCallAt": 1756000000000,
+          "lastCallAt": 1756262000000
+        }
+      },
+      "statsGlobal": {                               // mission 级（无 projectRoot 时归入此）
+        "totalCalls": 5,
+        ...
+      }
+    }
+  },
+  "paused": false,                                  // mission 级（per-mission in-memory）
+  "currentProjectRoot": "/Users/abc/projects/foo",  // 当前 mission 上下文
+  "errorHistogram": { "transient:rate-limit": 3 }  // mission 级
+}
+```
+
+**新增 `POST /noproute/api/project-stats` route**：
+
+```
+POST /noproute/api/project-stats
+Body: { projectRoot?: string }  // 缺省返回所有项目
+
+Response:
+{
+  "projects": {
+    "/Users/abc/projects/foo": {
+      "firstSeenAt": 1756000000000,
+      "totalCalls": 147,
+      "byModel": {
+        "deepseek/deepseek-chat": { "calls": 142, "success": 139, "failures": 3, "tokens": 213909 },
+        "zhipuai/glm-5.2": { "calls": 5, "success": 5, "failures": 0, "tokens": 12340 }
+      }
+    }
+  }
+}
+```
+
+**刷新节奏**：REST 轮询 5s（与 `RunList.vue:374` 同节奏），circuit 状态变化低频无需 SSE。
+
+## 12. 配置文件 schema 与加载顺序
+
+1. 内置默认（路由插件代码里 hardcode）
+2. `~/.nop/dsh/routing-config.json`（per-user 全局配置默认）
+3. `{projectRoot}/missions/base.json:routing`（per-project 覆盖）
+4. `{projectRoot}/missions/base.local.json:routing`（个人本地覆盖，不入 git）
+5. 环境变量 `AGE_ROUTING_*`（CI 覆盖）
+
+加载时按 1→2→3→4→5 顺序合并；后层覆盖前层。
+
+## 13. 关键决策记录
 
 | # | 决策 | 备选 | 结论理由 |
 | --- | --- | --- | --- |
-| D1 | 三档默认（strong/medium/light），可自定义 2-5 档 | 固定三档 / 五档 / 单一档 | 用户需求说"复杂度不同"——三档足以覆盖，强约束来自 dsh-delegate-router 的轻/重二分与 flash-godmode 的复杂度量化 |
-| D2 | tier 由 flow step 显式标注，不做运行时分类 | LLM 自觉分类 / 正则分类 | 避免 silent 切模（delegate-router 的风险）；让 mission 设计者掌握每个 step 的成本意图 |
-| D3 | quota 错误 = 长冷却（5h），其他 = 短冷却（默认 60s） | 统一冷却 / 自适应 | 用户明确提出"5h 限额"与"短冷却"两类语义，差 100 倍以上必须分开 |
-| D4 | mission wait-check 默认 5min 回查，可配置 | 固定 1min / 固定 10min | 5min 平衡响应速度与 provider 配额恢复时间（5h 限额通常在整点刷新） |
-| D5 | wait-check 永不超时（除非用户 STOP） | 24h 后强制退出 / N 次后放弃 | 用户明确"确保整体绝对不会中断，除非人工要求停止" |
-| D6 | 健康度用二元状态机，不维护滑窗 | 5 维加权评分（dsh-model-router） | mission-driver 不需要毫秒级健康度感知；二元状态机足够，复杂度低一个数量级 |
-| D7 | 失败分类基于错误字符串匹配 | 错误码精确匹配 / 模型自报 | provider 错误码不一致；字符串匹配是 dsh-model-router 验证可行的折中 |
-| D8 | 状态持久化到 `.age/routing-state.json` | mission-driver run-state 内嵌 / SQLite | 沿用 mission-driver 的"git + JSON"事实源原则；单独文件便于跨 mission 共享状态 |
-| D9 | 状态变更写账本 `.age/routing-ledger.jsonl` | 不写 / 写 SQLite | append-only JSONL 与 mission-driver memory 目录同形；monitor 读它做面板 |
-| D10 | 不实现 prompt-level routing | 实现 / 部分实现 | routing-suite-dragonbaba 调研结论：边际效益低，README 自承"不改模型/不换工具/不多发调用"——影响仅 1 句引导 |
-| D11 | 配置 candidate 时直接使用 DSH 的 ModelID 字符串，不自管 provider / auth / base_url | 自管 provider 段 | DSH 已托管这些；自管是重复造轮子且会与 DSH 配置漂移 |
-| D12 | candidates 用 DSH 原生 ModelID 字符串（沿用 DSH 格式，可能是 `provider/model` 或纯 model name） | 强制某种格式 / 自定义格式 | 与 DSH 100% 一致；registry key / 账本 / monitor 全部用同一字符串，不做转换 |
-| D13 | 启动时校验：candidate 的 provider 必须在 DSH active provider 列表里；model 不存在只 warn（DSH README 明说 catalog advisory） | 严格白名单 / 完全不校验 | DSH 的语义是"未列出的 model 仍可能可用"——严格白名单会误伤 |
-| D14 | AUTH / INVALID_CREDENTIAL 触发 failover，并新增 `auth_blocked` 状态（默认 30min 冷却） | 不 failover / 用 quota 冷却（5h） | DSH 每个 provider 凭据独立；failover 是正确动作；30min 是 user-fixable 的合理窗口（短于 quota 长于 transient） |
-| D15 | `CONTEXT_WINDOW_EXCEEDED` 也触发 failover（短冷却），让选模函数下次选 tier 内窗口更大的 model | 不 failover / 永久屏蔽 model | tier 内不同 model 上下文窗口差异显著（8k vs 1M），failover 经常能救 |
+| D1 | 分层默认（standard/premium），可自定义 2-N 层 | 固定两层 / 单一层 | 用户明确提出"贵模型备用"——分层足以覆盖 |
+| D2 | tier 由 flow step 显式标注，不做运行时分类 | LLM 自觉分类 / 正则分类 | 避免 silent 切模；让 mission 设计者掌握成本意图 |
+| D3 | 熔断冷却按 errorClass 分 base/max + 指数递增 | 统一冷却 / 固定冷却 | quota（5h）vs rate-limit（60s）差 100 倍必须分开；连续失败应递增 |
+| D4 | 升级条件 = 当前 tier 全部冷却 > 30min | 全部不可用即升级 / 无升级 | 短冷却时不应浪费贵模型；30min 是经验阈值 |
+| D5 | wait-check 永不超时（除非用户 STOP） | 24h 后强制退出 | 用户明确"确保整体绝对不会中断" |
+| D6 | 熔断三态（closed/open/half-open），不维护滑窗 | 5 维加权评分 | mission-driver 不需要毫秒级健康度感知；三态足够 |
+| D7 | 请求超时（>10min）视为失败 | 不设超时 | 防止 driver 挂死后永远占用资源 |
+| D8 | 失败分类基于 error.code，不解析 message | 字符串匹配 | DSH adapter 已归一化；字符串匹配是冗余且易漂移 |
+| D9 | 状态持久化分作用域：账号级（circuit 状态）→ `~/.nop/dsh/routing-state.json`；mission 级（paused / stats）→ 内存；配置级（tiers）→ `~/.nop/dsh/routing-config.json` + `missions/base.json:routing` | 项目根目录 / SQLite | routing 是账号级状态，跨项目共享；不同作用域用不同位置 |
+| D10 | 旧 config 格式（defaultModel + fallbackModels）向后兼容为单层 tier | 强制迁移 | 不破坏已使用 nop-route 的 mission |
+| D11 | wait-check 是默认行为，不可禁用 | 提供 disable 开关 | 全不可用时永不放弃是核心承诺 |
+| D12 | permanent:budget + retry-after 提升为 transient:rate-limit | 始终 permanent | provider 返回重试时间说明配额将刷新 |
+| D13 | 持久化走 service 层 atomic write（vendor context-profile 12 行模式） | `@deepseek-ai/dsh-atomic-write` / DSH settings | mission-driver 零依赖原则 + 不依赖 DSH host 集成 |
+| D14 | circuit 状态 REST 5s 轮询，**不引入 SSE** | SSE 推送 | 状态变化低频（每次 recordFailure/Success），REST 轮询足够 |
+| D15 | UI 复用 monitor dashboard 模式（statusTagType / useClock / StepTimeline） | 独立 UI 体系 / slot 注入 | 与 RunList/RunDetail 视觉一致，复用现有 Vue 组件 |
+| D16 | 调用统计按 project 维度持久化（`~/.nop/dsh/routing-stats/<hash>.json`），circuit 状态账号级，paused 标志 mission 级 | 全局单维度统计 / 项目级内存不持久化 | 不同项目的成本/性能特征不同；统计需要按项目聚合分析 |
+| D17 | token 消耗由调用方传入 `recordCall(model, durationMs, tokensInput, tokensOutput, projectRoot?)` | 路由插件自己统计 | 路由插件无 LLM 调用语义，由调用方提供 |
+| D18 | projectRoot 缺省 → 归入 `__global__` 维度 | 强制要求调用方传入 | 兼容 HTTP 调用方和 e2e 测试；调用方有 projectRoot 时应主动传 |
+| D19 | mission-driver 当前不调用 nop-route，projectRoot 传入是未来 slice 的责任 | 当前就要 mission-driver 集成 | nop-route 是 programmatic-only 决策服务，集成是 mission-driver 改造的一部分（cross-plugin composition，Deferred） |
 
-## 11. 待澄清问题（实现前必须回答）
+## 14. 待澄清问题
 
-| # | 问题 | 候选答案 | 影响 | 状态 |
-| --- | --- | --- | --- | --- |
-| Q1 | "5 小时限额"的字符串匹配规则是什么？需要逐 provider 验证 | deepseek / anthropic / openai / zhipu 各自的 429 文本 | §6.2 分类正确率 | **已答** — DSH `isQuotaExceededError()` + `QUOTA_EXCEEDED_CODE` 已覆盖 |
-| Q2 | driver subprocess 失败时如何回传错误细节？现有 `<AI_STEP_RESULT>` 够不够？ | 扩展 schema 加 `error_kind` 字段 | §5.1 wire protocol | 待答 |
-| Q3 | mission 模式下挂起的 driver 进程是否能"真正 pause"（vs kill+restart）？ | pause-by-suspend-signal / kill-and-recreate | §8.4 恢复语义 | 待答 |
-| Q4 | wait-check 期间 monitor 是否仍可用？SSE 心跳如何兼容？ | 独立心跳通道 / 共用 SSE | §8.5 UI 形态 | 待答 |
-| Q5 | 跨 mission 的状态共享边界在哪？ | 全局 / per-project / per-user | §6.4 持久化 | 待答 |
-| Q6 | tier 选择失败时（flow step 标的 tier 不存在），fallback 到哪？ | default_tier / 报错 | §4.4 fallback | 待答 |
-| Q7 | "max_retries_per_step" 的语义是"尝试 N 个不同模型"还是"尝试 N 次同一模型"？ | 不同模型 | §5.2 | 待答 |
-| Q8 | DSH 原生 ModelID 的格式到底是什么？纯 model name / `provider/model` / UUID？影响 candidates 字符串写法 | 需要查 DSH 模型清单 API 实际返回 | §4.2 / §4.3 / D12 | **已答** — `{provider, model}` 元组；config 用 `provider/model` 字符串，运行时 split |
-| Q9 | DSH 是否暴露模型清单 API（如 `ctx.models.list()`）？如果不暴露，是否需要从 `Settings → Models` UI 反向解析？ | 需要 DSH host API 调研 | §4.2 校验 / §4.3 发现工具 | **已答** — `ctx.llm.listProviders()` / `.listModels(provider)` / `.listConfigurableProviders()` / `.resolveModelInfo(provider, model)`；客户端 RPC `ctx.remote.llm.{providers,models,discoverModels}`；事件 `llm/adapters-updated` |
-
-## 12. 采纳计划（与 AGE WI 对齐）
-
-| Phase | 内容 | 关联 WI |
+| # | 问题 | 状态 |
 | --- | --- | --- |
-| P0 | 本设计文档落地 → WI 拆分 | M5-WI1（待开） |
-| P1 | 离线实现：routing-state.json + dispatch 函数 + select 算法 + 失败分类（standalone 形态，先不带 mission wait-check） | M5-WI2 |
-| P2 | mission wait-check 步 + monitor 面板 | M5-WI3 |
-| P3 | DSH plugin 形态适配（Plugin API + UI seam） | M5-WI4（依赖 `dsh-plugin-integration.md` M4-WI14） |
-| P4 | 多 provider 错误字符串实测标定 + 健康度升级（如未来需要） | M5-WI5 |
+| Q1 | 半开试探（half-open）允许多少并发请求？ | 1 个，超出仍走 closed 模型 |
+| Q2 | mission 重启后如何从 wait-check 恢复？ | 沿用 mission-driver run-state 持久化 |
+| Q3 | wait-check 期间 monitor 是否仍可用？SSE 心跳如何兼容？ | 沿用现有 SSE，wait-check 状态作为新事件类型 |
+| Q4 | 跨 mission 的状态共享边界在哪？ | 全局，routing-state.json 跨 mission 共享 |
+| Q5 | "max_retries_per_step" 的语义？ | "尝试 N 个不同模型" |
 
-## 13. 对 9 份调研的最终映射
+## 15. Changelog
 
-| 调研报告 | 本设计中的角色 | 章节 |
-| --- | --- | --- |
-| dsh-model-router | 冷却方程思想 + 候选链遍历（不直接抄——DSH 已分类错误，不重复正则） | §5.3 + §6.2 |
-| dsh-delegate-router | tier 二元分类灵感 + 持久账本形态 | §4.1 + §7 |
-| dsh-vision-router | content-type 触发 provider 改写（可叠加） | §5.3 扩展点 |
-| dsh-routed-subagent | per-call override + precheck | §5.2 dispatcher 接口 |
-| dsh-fork-to-preset | UI 完全委托 host 的 seam 设计参考 | §5.1 |
-| dsh-flash-godmode | complexity dispatch 的"显式标注"反例（避免 silent 切模） | §4.4 + D2 |
-| dsh-model-catalog | 在线版替代：拉 DSH `ctx.llm.listProviders()` / `listModels()` 作为真实源，不再做离线探测 | §4.2 / §4.3 + §11 Q9 |
-| dsh-routing-suite (yjh051108) | 自愈语义 + junction 思路（吸收为 wait-check 步的自愈循环） | §8 |
-| dsh-routing-suite-dragonbaba | prompt-level 路由的负价值证据（reject） | §10 D10 |
-
-## 14. DSH host API 参考（实现时直接 import）
-
-| 需求 | 导入 | 文件 |
-| --- | --- | --- |
-| Provider/model 列表 | `ctx.llm.listProviders()` / `.listModels(provider)` | `packages/llm/llm/src/index.ts:446,608` |
-| Configurable providers（含 dormant） | `ctx.llm.listConfigurableProviders()` | `packages/llm/llm/src/index.ts:517` |
-| Route 精确元数据（context/maxTokens/reasoning） | `ctx.llm.resolveModelInfo(provider, model)` | `packages/llm/llm/src/index.ts:646` |
-| 模型目录变化事件 | `ctx.on('llm/adapters-updated', ...)` | `packages/llm/llm/src/types.ts:19` |
-| 失败分类常量 | `QUOTA_EXCEEDED_CODE` / `CONTEXT_WINDOW_EXCEEDED_CODE` / `EMPTY_RESPONSE_CODE` / `INVALID_CREDENTIAL_CODE` | `packages/llm/llm/src/error.ts:25-48` |
-| 失败分类函数 | `isQuotaExceededError(detail)` / `isContextWindowExceededError(detail)` | `packages/llm/llm/src/error.ts:80,94` |
-| 错误基类（路由 code 字段） | `HarnessError.code` | `packages/llm/llm/src/error.ts:14` |
-| 客户端 RPC（standalone 走 RPC） | `ctx.remote.llm.providers()` / `.models()` / `.discoverModels()` | `packages/host/apiproxy/src/api/llm.ts` |
-
-**未直接 import 但可参考**：
-- `packages/llm/llm-deepseek/src/adapter.ts:333` 的 `httpErrorCode()` 函数 — 已知 DeepSeek adapter 已映射的 status→code 表
-- `packages/client/ui-settings-models/src/client/store.ts:70` 的 `deriveKeyRef(provider)` — provider id → env var 名（`${PROVIDER}_API_KEY`）
-
----
-
-> **本设计是 ACTION-ORIENTED**：所有"调研中有价值但本设计未采纳"的模式列在 §10 决策表与 §13 映射表，避免下次重启时再走一遍调研。
+- 2026-08-31 — **重设计**：加入熔断三态 + 冷却指数递增、分层路由、请求超时、wait-check 永不放弃、用户暂停；移除所有代码骨架和实现伪码（技术细节唯一真相源为代码）
+- 2026-08-31 — **追加**：持久化对齐 nop-age context-profile atomic write 模式；UI 复用 monitor dashboard statusTagType/useClock/StepTimeline；调用统计 in-memory 累加（counter + gauge + token 消耗）
+- 2026-08-27 — Initial design

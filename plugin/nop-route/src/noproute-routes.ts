@@ -5,20 +5,33 @@
  * table; exposure shape = mdcontrol-routes precedent: a wire-method
  * FULL-NAME record, served by the plugin's own dispatcher).
  *
- * ── Sync contract (design §nop-route table: all four routes sync) ───────────
- *   - `noproute.route`     — single call result → RoutingDecision (+ the
- *                            next model when applicable).
- *   - `noproute.classify`  — error → ErrorClass (pure classify-only).
- *   - `noproute.pick-model`— request descriptor → ModelSelection (pure).
- *   - `noproute.health`    — version + configured fallback chain + the
- *                            error histogram since last reset.
+ * ── Sync contract (design §nop-route table) ────────────────────────────────
+ *   - `noproute.route`         — single call result → RoutingDecision (+ the
+ *                                next model when applicable).
+ *   - `noproute.classify`      — error → ErrorClass (pure classify-only).
+ *   - `noproute.pick-model`    — request descriptor → ModelSelection (pure).
+ *   - `noproute.health`        — version + configured fallback chain + the
+ *                                error histogram since last reset.
+ *   - `noproute.circuit-state` — full per-model circuit-breaker snapshot
+ *                                (account-level) + per-project / global stats
+ *                                snapshot, + paused flag, + error histogram.
+ *                                Pure read; intended for monitor dashboard
+ *                                5s REST polling.
+ *   - `noproute.project-stats` — per-project call-stats listing across all
+ *                                tracked projects. Optional `projectRoot`
+ *                                payload narrows to a single project.
+ *   - `noproute.pause`         — set the in-memory pause flag; every
+ *                                `noproute.route` call returns
+ *                                `{ decision: "paused" }` while set.
+ *   - `noproute.resume`        — clear the pause flag.
  *
- * ── State ownership boundary (plan 1312-2 Current Baseline) ────────────────
- * The pure decision modules stay stateless; the health histogram is
- * service-layer state INJECTED here: route/classify call sites record,
- * health reads, reset semantics travel with the owning service (WI15).
- * `createErrorHistogram()` builds the default instance; the service may
- * construct its own and pass it in.
+ * ── State ownership boundary ───────────────────────────────────────────────
+ * The pure decision modules stay stateless; the following mutable faces are
+ * owned by the service layer and INJECTED here via the options record:
+ *   - histogram (errors-class counter, M4-WI15 precedent)
+ *   - circuitBreaker (account-level circuit state)
+ *   - projectStats (per-project call statistics, see §11.3 D16)
+ *   - paused flag (per-mission, in-memory only — design owner §10)
  *
  * ── Wire errors (mdcontrol MdControlError pattern) ─────────────────────────
  * Parameter validation failures throw NopRouteError with a machine-readable
@@ -37,12 +50,14 @@ import { classify } from "./error-classifier.ts";
 import type { ErrorClass } from "./error-classifier.ts";
 import { decide } from "./routing-core.ts";
 import type { RoutingDecision } from "./routing-core.ts";
-import { pickModel } from "./model-selector.ts";
+import { buildBaseChain, pickModel } from "./model-selector.ts";
 import type {
   ModelHistoryEntry,
   ModelSelection,
   ReasoningEffort,
 } from "./model-selector.ts";
+import type { CircuitBreaker, CircuitStateRecord } from "./circuit-breaker.ts";
+import type { ProjectAggregate as ProjectStats, ProjectStatsMap } from "./project-stats.ts";
 
 // ── Wire errors ──────────────────────────────────────────────────────────────
 
@@ -116,12 +131,48 @@ export interface NopRouteHealth {
   errorHistogram: Record<string, number>;
 }
 
-/** The four routes — all sync (design §nop-route contract). */
+export interface NopRouteCircuitStateModel {
+  state: "closed" | "open" | "half-open";
+  until: number;
+  remainingMs: number;
+  consecutiveFailures: number;
+  cooldownMs: number;
+  lastErrorClass: ErrorClass | null;
+  lastErrorAt: number;
+}
+
+export interface NopRouteCircuitState {
+  version: string;
+  defaultModel: string;
+  paused: boolean;
+  models: Record<string, NopRouteCircuitStateModel>;
+  projectStats: Record<string, ProjectStats>;
+  globalStats: ProjectStats;
+  errorHistogram: Record<string, number>;
+}
+
+export interface NopRouteProjectStatsResult {
+  projects: Record<string, ProjectStats>;
+}
+
+export interface NopRoutePauseResult {
+  paused: boolean;
+}
+
+export interface NopRouteResumeResult {
+  paused: boolean;
+}
+
+/** The wire-method record — all sync (design §nop-route contract). */
 export interface NopRouteRoutes {
-  "noproute.route"(payload: unknown): RoutingDecision;
+  "noproute.route"(payload: unknown): RoutingDecision | { decision: "paused" };
   "noproute.classify"(payload: unknown): { errorClass: ErrorClass };
   "noproute.pick-model"(payload: unknown): ModelSelection;
   "noproute.health"(payload?: unknown): NopRouteHealth;
+  "noproute.circuit-state"(payload?: unknown): NopRouteCircuitState;
+  "noproute.project-stats"(payload: unknown): NopRouteProjectStatsResult;
+  "noproute.pause"(payload?: unknown): NopRoutePauseResult;
+  "noproute.resume"(payload?: unknown): NopRouteResumeResult;
 }
 
 export interface NopRouteLogger {
@@ -207,19 +258,114 @@ export interface CreateNopRouteRoutesOptions {
   config?: NopRouteServiceConfig;
   /** Service-owned histogram state; a fresh one is created when omitted. */
   histogram?: ErrorHistogram;
+  /**
+   * Account-level circuit breaker (M5-WI3 / design §6). Optional — when
+   * provided, `noproute.route` records failures/successes against it and
+   * `noproute.circuit-state` exposes its snapshot. When omitted, the
+   * circuit-breaker features are no-ops (still type-safe).
+   */
+  circuitBreaker?: CircuitBreaker;
+  /**
+   * Project-level stats (M5-WI3 / design §11.3 D16). Optional — when
+   * provided, `noproute.route` records calls and `noproute.circuit-state`
+   * / `noproute.project-stats` expose the snapshot. Per-mission by default
+   * (no persistence wiring here — the service layer wires persistence).
+   */
+  projectStats?: ProjectStatsMap;
   logger?: NopRouteLogger;
+}
+
+/** Per-mission in-memory stats holder; mutated by `recordCall`. */
+export interface MissionCallStats {
+  record(projectRoot: string, model: string, durationMs: number, tokensInput: number, tokensOutput: number, errorClass: ErrorClass | null, now: number): void;
+  snapshot(): ProjectStatsMap;
+  reset(): void;
+}
+
+const ensureProjectEntry = (map: ProjectStatsMap, key: string, now: number): ProjectStats => {
+  let entry = map[key];
+  if (entry === undefined) {
+    entry = {
+      firstSeenAt: now,
+      totalCalls: 0,
+      totalSuccess: 0,
+      totalFailures: 0,
+      totalDurationMs: 0,
+      totalTokensInput: 0,
+      totalTokensOutput: 0,
+      byModel: {},
+    };
+    map[key] = entry;
+  }
+  return entry;
+};
+
+const ensureModelEntry = (project: ProjectStats, model: string, now: number) => {
+  let entry = project.byModel[model];
+  if (entry === undefined) {
+    entry = {
+      calls: 0,
+      success: 0,
+      failures: 0,
+      durationMs: 0,
+      tokensInput: 0,
+      tokensOutput: 0,
+      firstCallAt: now,
+      lastCallAt: now,
+      lastErrorClass: null,
+    };
+    project.byModel[model] = entry;
+  }
+  return entry;
+};
+
+export function createMissionCallStats(): MissionCallStats {
+  const map: ProjectStatsMap = {};
+  return {
+    record(projectRoot, model, durationMs, tokensInput, tokensOutput, errorClass, now) {
+      const key = typeof projectRoot === "string" && projectRoot.length > 0 ? projectRoot : "__global__";
+      const project = ensureProjectEntry(map, key, now);
+      const m = ensureModelEntry(project, model, now);
+      project.totalCalls += 1;
+      project.totalDurationMs += durationMs;
+      project.totalTokensInput += tokensInput;
+      project.totalTokensOutput += tokensOutput;
+      m.calls += 1;
+      m.durationMs += durationMs;
+      m.tokensInput += tokensInput;
+      m.tokensOutput += tokensOutput;
+      m.lastCallAt = now;
+      if (errorClass === null) {
+        project.totalSuccess += 1;
+        m.success += 1;
+      } else {
+        project.totalFailures += 1;
+        m.failures += 1;
+        m.lastErrorClass = errorClass;
+      }
+    },
+    snapshot() {
+      return map;
+    },
+    reset() {
+      for (const key of Object.keys(map)) {
+        delete map[key];
+      }
+    },
+  };
 }
 
 /**
  * Build the `noproute.*` wire-method record. Pure plugin-layer wiring over
- * the three decision modules (route = decide(), classify = classify(),
- * pick-model = pickModel()); the only mutable face is the injected
- * histogram (health evidence). Unit-testable with direct record calls —
+ * the decision modules; mutable faces (histogram / circuitBreaker /
+ * projectStats) are injected. Unit-testable with direct record calls —
  * zero host, zero I/O.
  */
 export function createNopRouteRoutes({
   config = {},
   histogram = createErrorHistogram(),
+  circuitBreaker,
+  projectStats,
   logger,
 }: CreateNopRouteRoutesOptions = {}): NopRouteRoutes {
   const defaultModel = config.defaultModel;
@@ -242,6 +388,9 @@ export function createNopRouteRoutes({
     (model, index, all) => all.indexOf(model) === index,
   );
 
+  const baseChain = buildBaseChain({ defaultModel, fallbackModels });
+  let paused = false;
+
   logger?.info?.("noproute routes created", {
     defaultModel,
     maxRetries,
@@ -250,6 +399,9 @@ export function createNopRouteRoutes({
 
   return {
     "noproute.route"(payload) {
+      if (paused) {
+        return { decision: "paused" };
+      }
       const p = payload as NopRouteRoutePayload | null | undefined;
       const error = requireKey(payload, "error");
       const model = optionalModelString(p?.model, "model");
@@ -260,6 +412,8 @@ export function createNopRouteRoutes({
       const decision = decide(
         { error, model, attempt, history, reasoningEffort, expectedTokens },
         { defaultModel, maxRetries, fallbackModels },
+        0,
+        baseChain,
       );
       histogram.record(decision.errorClass);
       return decision;
@@ -282,6 +436,7 @@ export function createNopRouteRoutes({
         { preferredModel, reasoningEffort, expectedTokens },
         history,
         { defaultModel, fallbackModels },
+        baseChain,
       );
     },
 
@@ -294,8 +449,74 @@ export function createNopRouteRoutes({
         errorHistogram: histogram.snapshot(),
       };
     },
+
+    "noproute.circuit-state"(payload) {
+      const p = payload as { now?: number } | null | undefined;
+      const now = typeof p?.now === "number" ? p.now : Date.now();
+      const models: Record<string, NopRouteCircuitStateModel> = {};
+      if (circuitBreaker !== undefined) {
+        const all = circuitBreaker.getAllStates(now);
+        for (const [model, s] of Object.entries(all)) {
+          models[model] = enrichCircuitState(s, now);
+        }
+      }
+      return {
+        version: SERVICE_VERSION,
+        defaultModel,
+        paused,
+        models,
+        projectStats: projectStats ?? {},
+        globalStats: projectStats?.["__global__"] ?? emptyStats(now),
+        errorHistogram: histogram.snapshot(),
+      };
+    },
+
+    "noproute.project-stats"(payload) {
+      const p = payload as { projectRoot?: string } | null | undefined;
+      const all = projectStats ?? {};
+      if (typeof p?.projectRoot === "string" && p.projectRoot.length > 0) {
+        const entry = all[p.projectRoot];
+        return {
+          projects: entry === undefined ? {} : { [p.projectRoot]: entry },
+        };
+      }
+      return { projects: all };
+    },
+
+    "noproute.pause"() {
+      paused = true;
+      logger?.info?.("noproute paused", { defaultModel });
+      return { paused: true };
+    },
+
+    "noproute.resume"() {
+      paused = false;
+      logger?.info?.("noproute resumed", { defaultModel });
+      return { paused: false };
+    },
   };
 }
+
+const emptyStats = (now: number): ProjectStats => ({
+  firstSeenAt: now,
+  totalCalls: 0,
+  totalSuccess: 0,
+  totalFailures: 0,
+  totalDurationMs: 0,
+  totalTokensInput: 0,
+  totalTokensOutput: 0,
+  byModel: {},
+});
+
+const enrichCircuitState = (s: CircuitStateRecord, now: number): NopRouteCircuitStateModel => ({
+  state: s.state,
+  until: s.until,
+  remainingMs: Math.max(0, s.until - now),
+  consecutiveFailures: s.consecutiveFailures,
+  cooldownMs: s.cooldownMs,
+  lastErrorClass: s.lastErrorClass,
+  lastErrorAt: s.lastErrorAt,
+});
 
 // ── Service publication + HTTP dispatcher (service.ts consumes both) ─────────
 

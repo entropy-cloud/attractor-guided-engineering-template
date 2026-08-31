@@ -1,7 +1,8 @@
 /**
  * error-classifier.ts — pure upstream-error classification (multi-plugin-dsh
  * M4-WI10; design owner docs/design/multi-plugin-dsh-architecture.md
- * §nop-route Plugin routing table).
+ * §nop-route Plugin routing table; budget+retry-after promotion per
+ * docs/design/dsh-routing-with-failover.md §6.3 D12).
  *
  * Discrimination rules (pinned by test/error-classifier.test.mjs):
  *   - Input face = structural fields of the incoming error object:
@@ -16,6 +17,9 @@
  *     status, then code, then name, then message shape. First match wins;
  *     cross-class conflicts resolve by class precedence (e.g. status 429 +
  *     code ECONNRESET → rate-limit).
+ *   - `permanent:budget` rule match is promoted to `transient:rate-limit`
+ *     when a retry-after hint is present (D12: provider returning a retry-
+ *     after time means the quota will recover; honour it).
  *   - A bare retry-after hint (no other signal) classifies as rate-limit.
  *   - Everything else — non-objects, empty objects, unknown codes, novel
  *     messages — falls through to `unknown`.
@@ -142,10 +146,30 @@ export function classify(error: unknown): ErrorClass {
   const code = normalizeCode(record.code);
   const name = normalizeCode(record.name);
   for (const rule of CLASS_RULES) {
-    if (status !== null && rule.statuses.includes(status)) return rule.errorClass;
-    if (code !== "" && rule.codes.includes(code)) return rule.errorClass;
-    if (name !== "" && rule.names.includes(name)) return rule.errorClass;
-    if (texts.some((text) => rule.messagePattern.test(text))) return rule.errorClass;
+    if (status !== null && rule.statuses.includes(status)) {
+      if (rule.errorClass === "permanent:budget" && hasRetryAfter(record)) {
+        return "transient:rate-limit";
+      }
+      return rule.errorClass;
+    }
+    if (code !== "" && rule.codes.includes(code)) {
+      if (rule.errorClass === "permanent:budget" && hasRetryAfter(record)) {
+        return "transient:rate-limit";
+      }
+      return rule.errorClass;
+    }
+    if (name !== "" && rule.names.includes(name)) {
+      if (rule.errorClass === "permanent:budget" && hasRetryAfter(record)) {
+        return "transient:rate-limit";
+      }
+      return rule.errorClass;
+    }
+    if (texts.some((text) => rule.messagePattern.test(text))) {
+      if (rule.errorClass === "permanent:budget" && hasRetryAfter(record)) {
+        return "transient:rate-limit";
+      }
+      return rule.errorClass;
+    }
   }
 
   if (hasRetryAfter(record)) return "transient:rate-limit";
