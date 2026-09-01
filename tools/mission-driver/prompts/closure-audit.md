@@ -10,6 +10,10 @@ The automated checklist script has been run. Results:
 
 Read the plan guide first: `{{planGuide}}` **completely**. Detect the plan format: YAML frontmatter with `status:` = ledger (new) format; `> Plan Status:` line = legacy format.
 
+## Step 0 — Held-plan pre-check (do this first, before any work)
+
+Read the plan's frontmatter `status:` field. If it is exactly `status: held` (with a `hold:` reason), the plan is legally waiting on a human decision that you cannot make and no re-dispatch can change that. Skip the entire verification battery — a held plan has no closable verification surface, and receipts for unexecuted work must never be written. Do NOT edit the plan, do NOT run verification commands, do NOT forge `## Verification` pass lines or `## Closure` receipts — emit the `held` marker (see Result markers) immediately with a one-line reason quoting the `hold:` value. Only proceed with the steps below when `status:` is `active` (a human unlock flips held→active).
+
 ## Step 1 — Mechanical gate (mandatory when SCRIPT_CHECK_RESULT is FAIL)
 
 Fix ALL issues reported in SCRIPT_CHECK_DETAILS by editing the plan file directly with the Edit tool. The automated checker is: `node "$MISSION_DRIVER_HOME/src/plan-check.mjs" {{PLAN_FILE}} --strict` (run from the project root). `$MISSION_DRIVER_HOME` is the engine directory, set via `.env` or the shell environment; resolve `{{PLAN_FILE}}` to an absolute or project-relative path first.
@@ -157,5 +161,6 @@ If this run achieved a full-green state (unit tests + e2e both passed completely
 - `<AI_STEP_RESULT>fixed</AI_STEP_RESULT>` with `<REMAINING>` — you edited the plan (edits are correct per your own plan-check run) but could NOT complete full closure this visit for a non-EXECUTE reason (e.g. commit infrastructure broken, tree preserved). Re-enters CLOSURE_SCRIPT_CHECK; its pass routes back here for a light completion visit.
 - `<AI_STEP_RESULT>issues</AI_STEP_RESULT>` with `<REMAINING>` — genuinely unfinished work (real implementation, test fixes, or owner-doc content changes) → the flow returns to EXECUTE with your feedback appended.
 - `<AI_STEP_RESULT>fail</AI_STEP_RESULT>` — step-level failure: you cannot run the verification commands at all (environment broken, commands missing). The flow retries EXECUTE.
+- `<AI_STEP_RESULT>held</AI_STEP_RESULT>` — the plan frontmatter is `status: held` awaiting a human decision (Step 0): nothing was verified, nothing was edited, no receipts were written. The flow terminates as `blocked` instead of riding the fail→retry loop.
 
 A missing or malformed marker triggers an additional correction run — emit exactly one marker, exactly as shown, with matching `AI_STEP_RESULT` tags. Do NOT output plan content, the Closure template, or any other text.
