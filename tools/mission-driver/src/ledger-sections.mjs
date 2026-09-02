@@ -18,7 +18,10 @@ export const CHECKED_RE = /^- \[x\]/;
 const PLAN_ANCHORS = ["Closure Findings", "Draft Review Record", "Verification", "Closure"];
 const ROADMAP_ANCHORS = ["Deep Audit Record"];
 const WI_STATUS_RE = /: `(todo|ready|done)`\s*$/;
-const WI_ID_RE = /\bWI(\d+)\b/;
+// Generic work-item ID: extracts the first token after checkbox marker
+// Supports: "WI21", "**WI21**" (bold), "auth-refactor", "123", etc.
+// Strips markdown bold markers (**) if present.
+const WI_ID_RE = /^- \[[ x]\]\s+(?:\*\*)?(\S+?)(?:\*\*)?(?:\s|$)/;
 
 const ID_TOKEN = "#(?:review|audit)-[0-9A-Za-z_-]+";
 const DISPATCH_RE = new RegExp(`^- dispatch (review|audit) (${ID_TOKEN}) to (\\S+)`);
@@ -373,7 +376,7 @@ export function scanRoadmapLedger(text) {
           const st = line.match(WI_STATUS_RE);
           workItems.push({
             line: i + 1,
-            id: wi ? `WI${wi[1]}` : null,
+            id: wi ? wi[1] : null,
             checked: CHECKED_RE.test(line),
             status: st ? st[1] : null,
             text: line,
@@ -414,6 +417,24 @@ export function scanRoadmapLedger(text) {
     : null;
 
   collectOutOfDomain(split, countingBlocks, errors, "roadmap: Work Item blocks under ### M<n> only");
+
+  // Check for duplicate work-item IDs across all milestones
+  const seenIds = new Map(); // id -> first occurrence line
+  for (const ms of milestones) {
+    for (const wi of ms.workItems) {
+      if (wi.id === null) continue;
+      if (seenIds.has(wi.id)) {
+        pushError(
+          errors,
+          wi.line,
+          "duplicate-work-item-id",
+          `work-item ID "${wi.id}" is duplicated (first seen at line ${seenIds.get(wi.id)})`,
+        );
+      } else {
+        seenIds.set(wi.id, wi.line);
+      }
+    }
+  }
 
   const total = milestones.reduce((n, m) => n + m.total, 0);
   const checked = milestones.reduce((n, m) => n + m.checked, 0);

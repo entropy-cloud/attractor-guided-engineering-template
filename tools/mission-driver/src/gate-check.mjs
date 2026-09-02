@@ -221,14 +221,13 @@ function workItemSummary(text, roadmapScan, roadmapFile) {
   }
   const expanded = expandWorkItemLabel(label);
   if (!expanded.ok) return { applicable: true, label, ok: false, error: expanded.error };
-  const pairs = expanded.items.map((i) => `M${i.milestone}-${i.wi}`);
   if (roadmapScan === null) {
     return {
       applicable: true,
       label,
-      expanded: pairs,
+      expanded: expanded.items,
       registered: [],
-      missing: pairs,
+      missing: expanded.items,
       roadmap: null,
       note: "owning mission roadmap not found/readable — registry reconciliation not run (grammar verified only)",
     };
@@ -238,8 +237,8 @@ function workItemSummary(text, roadmapScan, roadmapFile) {
     applicable: true,
     label,
     ok: reg.ok,
-    expanded: pairs,
-    registered: reg.ok ? reg.hits : pairs.filter((p) => !reg.misses.some((m) => m.startsWith(`${p}:`))),
+    expanded: expanded.items,
+    registered: reg.ok ? reg.hits : expanded.items.filter((id) => !reg.misses?.some((m) => m.startsWith(`${id}:`))),
     missing: reg.ok ? [] : reg.misses,
     roadmap: roadmapFile,
   };

@@ -244,8 +244,8 @@ describe("--law allow face (legal fixture under the real policy posture)", () =>
         applicable: true,
         label: "M3-WI31",
         ok: true,
-        expanded: ["M3-WI31"],
-        registered: ["M3-WI31"],
+        expanded: ["WI31"],
+        registered: ["WI31"],
         missing: [],
         roadmap: join(tmp, "docs", "backlog", "roadmap.md"),
       });

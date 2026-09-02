@@ -198,33 +198,26 @@ export function matchGate(pattern, action, ctx = {}) {
   return globToRegExp(toPosix(resolved)).test(toPosix(action.path));
 }
 
-// ── work-item composite label grammar + registration predicate (M2-WI21) ────
+// ── work-item ID grammar + registration predicate ──────────────────────────
 //
-// Composite-label grammar ruling (0815-3 Non-Goal hand-off, adjudicated here):
-// legal = `M<n>-WI<a>` single, or `M<n>-WI<a>+WI<b>+…` composite where the
-// FIRST token carries the milestone prefix and subsequent bare `WI<m>` tokens
-// inherit it; subsequent tokens that explicitly repeat an `M<n>-` prefix are
-// ACCEPTED as the equivalent expansion (corpus-divergence tolerance). Each
-// expanded `M<n>-WI<m>` pair must hit the scanRoadmapLedger registry at
-// exactly that milestone — a wrong-but-existing milestone number (e.g.
-// M3-WI21) misses the (milestone, id) pair and denies.
-
-const WI_FIRST_TOKEN_RE = /^M(\d+)-WI(\d+)$/;
-const WI_BARE_TOKEN_RE = /^WI(\d+)$/;
+// Simplified: work-item is any non-empty string ID (e.g. "WI21", "auth-refactor",
+// "M2-WI21", "123"). No format enforcement — just string matching against the
+// roadmap registry. Backward compatible with M<n>-WI<m> format.
 
 /**
- * Expand one work-item label into (milestone, id) pairs.
- * @returns {{ ok: true, items: Array<{ milestone: number, wi: string }> } |
- *           { ok: false, error: string }}
+ * Expand one work-item label into an array of IDs.
+ * Supports "+" separated multi-token labels (backward compatible with M<n>-WI<m>).
+ * For M<n>-WI<m> format, extracts the WI<m> part for matching against roadmap.
+ * @returns {{ ok: true, items: string[] } | { ok: false, error: string }}
  */
 export function expandWorkItemLabel(label) {
   if (typeof label !== "string" || label.trim() === "") {
-    return { ok: false, error: "work-item label is empty — legal shapes are M<n>-WI<m> or M<n>-WI<a>+WI<b>+… (bare WI<m> tokens inherit the first token's milestone)" };
+    return { ok: false, error: "work-item label is empty" };
   }
   const tokens = label.split("+");
   const items = [];
   for (let i = 0; i < tokens.length; i++) {
-    const tok = tokens[i];
+    const tok = tokens[i].trim();
     if (tok === "") {
       const where = i === 0 ? "leading" : i === tokens.length - 1 ? "trailing" : "consecutive";
       return {
@@ -232,31 +225,9 @@ export function expandWorkItemLabel(label) {
         error: `malformed separator in work-item label ${JSON.stringify(label)} — ${where} "+" produces an empty token`,
       };
     }
-    if (i === 0) {
-      const m = tok.match(WI_FIRST_TOKEN_RE);
-      if (!m) {
-        return {
-          ok: false,
-          error: `first work-item token ${JSON.stringify(tok)} must carry the milestone prefix — legal shapes are M<n>-WI<m> or M<n>-WI<a>+WI<b>+… (subsequent tokens may stay bare WI<m> and inherit the milestone)`,
-        };
-      }
-      items.push({ milestone: Number(m[1]), wi: `WI${m[2]}` });
-      continue;
-    }
-    const bare = tok.match(WI_BARE_TOKEN_RE);
-    if (bare) {
-      items.push({ milestone: items[0].milestone, wi: `WI${bare[1]}` });
-      continue;
-    }
-    const prefixed = tok.match(WI_FIRST_TOKEN_RE);
-    if (prefixed) {
-      items.push({ milestone: Number(prefixed[1]), wi: `WI${prefixed[2]}` });
-      continue;
-    }
-    return {
-      ok: false,
-      error: `work-item token ${JSON.stringify(tok)} matches neither WI<m> nor M<n>-WI<m> (label ${JSON.stringify(label)})`,
-    };
+    // Backward compatible: M<n>-WI<m> → extract WI<m> part
+    const mMatch = tok.match(/^M\d+-(WI\d+)$/);
+    items.push(mMatch ? mMatch[1] : tok);
   }
   return { ok: true, items };
 }
@@ -273,39 +244,40 @@ export function expandWorkItemLabel(label) {
 export function workItemRegistered(label, roadmapScan) {
   const expanded = expandWorkItemLabel(label);
   if (!expanded.ok) return { ok: false, items: [], error: expanded.error };
+  
+  // Collect all work-item IDs from all milestones
+  const allIds = new Set();
   const milestones = roadmapScan && Array.isArray(roadmapScan.milestones) ? roadmapScan.milestones : [];
-  const idsByMilestone = new Map();
   for (const ms of milestones) {
-    if (!idsByMilestone.has(ms.number)) idsByMilestone.set(ms.number, []);
     for (const wi of ms.workItems ?? []) {
-      if (typeof wi.id === "string" && wi.id !== "") idsByMilestone.get(ms.number).push(wi.id);
+      if (typeof wi.id === "string" && wi.id !== "") allIds.add(wi.id);
     }
   }
-  if (idsByMilestone.size === 0) {
+  
+  if (allIds.size === 0) {
     return {
       ok: false,
       items: expanded.items,
-      error: "work-item registration not verifiable against an empty roadmap registry — no ### M<n> milestone block with work-item lines was found; labels may only reference roadmap-registered items (02 §4.7)",
+      error: "work-item registration not verifiable against an empty roadmap registry — no work-item lines found in roadmap",
     };
   }
+  
   const misses = [];
-  for (const { milestone, wi } of expanded.items) {
-    const ids = idsByMilestone.get(milestone);
-    if (ids === undefined) {
-      misses.push(`M${milestone}-${wi}: roadmap has no milestone M${milestone} (registered milestones: ${[...idsByMilestone.keys()].map((n) => `M${n}`).join(", ")})`);
-    } else if (!ids.includes(wi)) {
-      misses.push(`M${milestone}-${wi}: milestone M${milestone} has no ${wi} (registered: ${ids.join(", ")})`);
+  for (const id of expanded.items) {
+    if (!allIds.has(id)) {
+      misses.push(`${id}: not found in roadmap`);
     }
   }
+  
   if (misses.length > 0) {
     return {
       ok: false,
       items: expanded.items,
       misses,
-      error: `unregistered work-item token(s) — ${misses.join("; ")}; work-item labels may only reference roadmap-registered items (02 §4.7)`,
+      error: `unregistered work-item(s) — ${misses.join("; ")}`,
     };
   }
-  return { ok: true, items: expanded.items, hits: expanded.items.map((i) => `M${i.milestone}-${i.wi}`) };
+  return { ok: true, items: expanded.items, hits: expanded.items };
 }
 
 // ── seed rule: plan-structure (02 §4.7 structural face + 01 §2/§5.2) ────────
