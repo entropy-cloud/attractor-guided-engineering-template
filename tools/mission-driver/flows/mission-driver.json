@@ -64,12 +64,21 @@
       "promptPath": "prompts/draft-from-roadmap.md",
       "onUnknownMaxRetries": 2,
       "transitions": {
-        "created": { "goto": "REVIEW_PLANS" },
+        "created": { "goto": "INJECT_PLAN_PREAMBLE" },
         "nothing": { "goto": "DEEP_AUDIT" }
       },
       "onError": { "retry": "DRAFT_PLANS", "maxRetries": 3 },
       "onUnknown": { "goto": "DEEP_AUDIT" },
       "onMaxRetries": { "done": "failed" }
+    },
+
+    "INJECT_PLAN_PREAMBLE": {
+      "type": "script",
+      "scriptId": "inject-plan-preamble",
+      "transitions": {
+        "pass": { "goto": "REVIEW_PLANS" },
+        "fail": { "goto": "REVIEW_PLANS" }
+      }
     },
 
     "REVIEW_PLANS": {

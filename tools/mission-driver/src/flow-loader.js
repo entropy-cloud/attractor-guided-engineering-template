@@ -225,8 +225,84 @@ async function closureScriptCheck(delegates, flowVars) {
   }
 }
 
+/**
+ * inject-plan-preamble — scan plansDir for .md plans and inject the mission's
+ * planPreamble string after each plan's frontmatter block (idempotent: skipped
+ * if already present). When a plan has no frontmatter, the preamble is prepended
+ * at the top. When planPreamble is unset/empty, the step is a no-op pass.
+ */
+async function injectPlanPreamble(delegates, flowVars) {
+  const config = delegates?.config || {};
+  const mission = config.mission || {};
+  const projectRoot = config.projectRoot;
+  const preambleContent = (mission.planPreamble || "").trim();
+  if (!preambleContent) {
+    return { marker: "pass", text: "no planPreamble configured — skipping" };
+  }
+
+  const plansDir = mission.plansDir
+    ? resolve(projectRoot, mission.plansDir)
+    : null;
+  if (!plansDir || !existsSync(plansDir)) {
+    return { marker: "pass", text: "plansDir not found — skipping" };
+  }
+
+  const files = readdirSync(plansDir)
+    .filter((f) => f.endsWith(".md") && !f.startsWith("00-"))
+    .sort();
+
+  let injected = 0;
+  let skipped = 0;
+  const results = [];
+
+  for (const file of files) {
+    const abs = resolve(plansDir, file);
+    const content = readFileSync(abs, "utf8");
+
+    // Idempotent check: if preamble content (first 80 chars) already exists, skip.
+    const snippet = preambleContent.slice(0, 80);
+    if (content.includes(snippet)) {
+      skipped++;
+      continue;
+    }
+
+    // Find frontmatter boundary: first `---` ... `---` block
+    const lines = content.split(/\r?\n/);
+    let insertIdx = 0;
+    if (lines[0]?.trim() === "---") {
+      for (let i = 1; i < lines.length; i++) {
+        if (lines[i].trim() === "---") {
+          insertIdx = i + 1;
+          break;
+        }
+      }
+    }
+
+    // Build injected content: blank line after frontmatter if needed
+    const before = lines.slice(0, insertIdx).join("\n");
+    const after = lines.slice(insertIdx).join("\n");
+    const needsNewline = insertIdx > 0 && after.length > 0 && !after.startsWith("\n");
+    const injected_content = before
+      + (needsNewline ? "\n\n" : "\n")
+      + preambleContent
+      + "\n\n"
+      + after;
+
+    writeFileSync(abs, injected_content, "utf8");
+    injected++;
+    results.push(file);
+  }
+
+  const summary = `injected: ${injected}, skipped (already present): ${skipped}, total: ${files.length}`;
+  return {
+    marker: "pass",
+    text: summary + (results.length ? `\nmodified: ${results.join(", ")}` : ""),
+  };
+}
+
 const SCRIPT_REGISTRY = {
   "closure-script-check": (delegates, flowVars) => closureScriptCheck(delegates, flowVars),
+  "inject-plan-preamble": (delegates, flowVars) => injectPlanPreamble(delegates, flowVars),
 };
 
 const TOOL_PROMPTS_DIR = resolve(TOOL_ROOT, "prompts");

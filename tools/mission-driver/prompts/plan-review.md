@@ -9,23 +9,25 @@ For review you need to know the project's conventions and the target module's ar
 
 Read `{{planGuide}}` **completely**. It defines the plan format, required sections, checklist, and closure evidence rules.
 
-## Review Checklist
+## Issue Classification
 
-1. **Format compliance**: Required sections exist, field names are correct, Phase structure is valid. Ledger (frontmatter) plans follow the new-format body structure (`## Phase <n>` sections, counting-domain discipline); legacy plans follow the legacy template.
-2. **Completeness**: Exit Criteria are clear and testable. Execution Plan covers all checklist items.
-3. **Scope**: Work item boundaries are clear. No ambiguous "and also..." scope creep.
-4. **Closure evidence**: Plan defines what evidence proves completion. Ledger plans: completion is derived (all-checked + `## Verification` pass lines + `## Closure` dispatch/accepted receipts) — the plan must NOT instruct writing `completed`.
+- **Blocker**: content issues that make the plan unexecutable — unclear exit criteria, scope creep, missing closure evidence, ambiguous decisions, incomplete baseline inventory. These must be fixed before promotion.
+- **Minor**: format/style issues — missing optional sections, inconsistent heading capitalization, wording. These may remain; downstream audit will catch them.
 
-## Action
+Format compliance means the rules enforced by `plan-check.mjs` and the plan guide's Minimum Rules — not every section in the template example. Template sections are examples, not requirements.
 
-- Fix any Blocker/Major issues directly in the plan file.
-- After fixing (or if no issues found), promote the plan — dual mode:
-  - Ledger format (frontmatter `status:`): set frontmatter `status: active`. Additionally append your review receipt to the `## Draft Review Record` section (create the section if absent, directly after the last Phase) — two lines, append-only:
-    - `- dispatch review #review-<runId>-<plan-file-stem>-<iteration>-<nonce8hex> to <your-session-id>`
-    - `- <YYYY-MM-DD>：iteration <n>，共识 <verdict> #review-<runId>-<plan-file-stem>-<iteration>-<same-nonce8hex>`
-    (generate a fresh 8-hex nonce for this round; the two lines must share the same id)
-  - Legacy format: change `> Plan Status: draft` to `> Plan Status: active`.
-- Minor issues may remain — downstream closure audit and deep audit will catch them during/after execution.
+## Review Workflow
+
+1. **Read all context** (project-context, plan guide, module context if exists).
+2. **Scan the plan once** and list ALL issues (both format and content) — do NOT fix anything yet.
+3. **Fix all issues in one pass** — Blockers first, then Minor if trivial.
+4. **Verify** — run `node tools/mission-driver/src/plan-check.mjs <plan> --strict` if available, or manually confirm the fixes are correct.
+5. **Promote** — dual mode:
+   - Ledger format (frontmatter `status:`): set frontmatter `status: active`. Additionally append your review receipt to the `## Draft Review Record` section (create the section if absent, directly after the last Phase) — two lines, append-only:
+     - `- dispatch review #review-<runId>-<plan-file-stem>-<iteration>-<nonce8hex> to <your-session-id>`
+     - `- <YYYY-MM-DD>：iteration <n>，共识 <verdict> #review-<runId>-<plan-file-stem>-<iteration>-<same-nonce8hex>`
+     (generate a fresh 8-hex nonce for this round; the two lines must share the same id)
+   - Legacy format: change `> Plan Status: draft` to `> Plan Status: active`.
 
 ### Holding a plan that is not ready (fix-forward, with an escape hatch)
 

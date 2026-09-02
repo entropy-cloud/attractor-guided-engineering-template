@@ -32,6 +32,7 @@ A **mission** = an explicit configuration file for a development objective (`mis
 - **auditsDir** -- audit results directory path (defaults to `audits`)
 - **contextDir** -- project context directory (optional)
 - **moduleDir** -- target module or project directory (for audit scope, e.g. `packages` or `src/main/java`)
+- **planPreamble** -- text injected after each newly drafted plan's frontmatter. Idempotent: plans already containing the preamble are skipped. Optional; when unset, no injection occurs.
 - **commands** -- verification commands (install/test/typecheck/build/lint)
 - **commitFormat** -- commit message format description (used by BUILD_VERIFY)
 - **prompts** -- optional project-specific skill prompts: `multiAudit`, `openAudit` (paths to project-specific audit prompt files)
