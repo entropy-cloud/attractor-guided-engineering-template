@@ -272,17 +272,17 @@ test("mining merges all three data-source layers: session events + run-state pro
   const io = fakeMiningIo({
     files: {
       [artifact]: serializeProfile(newSeededProfile(AGENTS_MD, NOW)),
-      "/repo/_tmp/run-1-mission-driver/run-state.json": JSON.stringify({
+      [join(root, "_tmp/run-1-mission-driver/run-state.json")]: JSON.stringify({
         steps: [{ name: "EXEC", promptFile: "prompt-EXEC.txt" }, { name: "TOOL", promptFile: null }],
       }),
-      "/repo/_tmp/run-1-mission-driver/prompt-EXEC.txt": promptText,
-      "/repo/docs/plans/demo/2026-08-27-plan.md": "# plan",
-      "/repo/docs/backlog/age-autonomy-implementation-roadmap.md": "# roadmap",
-      "/repo/docs/context/project-context.md": "# ctx",
-      "/repo/docs/design/age-autonomy/04-efficiency.md": "# eff",
-      "/repo/tools/mission-driver/memory/runs.md": "run 1 concluded after reading docs/context/project-context.md and docs/design/age-autonomy/04-efficiency.md",
+      [join(root, "_tmp/run-1-mission-driver/prompt-EXEC.txt")]: promptText,
+      [join(root, "docs/plans/demo/2026-08-27-plan.md")]: "# plan",
+      [join(root, "docs/backlog/age-autonomy-implementation-roadmap.md")]: "# roadmap",
+      [join(root, "docs/context/project-context.md")]: "# ctx",
+      [join(root, "docs/design/age-autonomy/04-efficiency.md")]: "# eff",
+      [join(root, "tools/mission-driver/memory/runs.md")]: "run 1 concluded after reading docs/context/project-context.md and docs/design/age-autonomy/04-efficiency.md",
     },
-    dirs: { "/repo/_tmp": ["run-1-mission-driver", "not-a-run"] },
+    dirs: { [join(root, "_tmp")]: ["run-1-mission-driver", "not-a-run"] },
   });
   const out = mineContextProfile({
     io,
@@ -430,9 +430,9 @@ test("kind:profile consumption: resolveAssemblyBlocks pins profileRoot; assemble
   const io = {
     readTextFile: (p) => {
       if (p === artifact) return serializeProfile(profile);
-      if (p === "/repo/docs/backlog/age-autonomy-implementation-roadmap.md") return "ROADMAP TEXT";
-      if (p === "/repo/docs/context/project-context.md") return "CTX TEXT";
-      if (p === "/repo/docs/design/age-autonomy/04-efficiency.md") return "EFF TEXT";
+      if (p === join(root, "docs/backlog/age-autonomy-implementation-roadmap.md")) return "ROADMAP TEXT";
+      if (p === join(root, "docs/context/project-context.md")) return "CTX TEXT";
+      if (p === join(root, "docs/design/age-autonomy/04-efficiency.md")) return "EFF TEXT";
       return null;
     },
     listDirEntries: () => null,
@@ -451,7 +451,7 @@ test("kind:profile consumption: resolveAssemblyBlocks pins profileRoot; assemble
     last = idx;
   }
   assert.ok(!out.text.includes("conventions.md"), "topN=3 truncates the tail (reads asc) out of the embed");
-  assert.ok([...out.sentHashes.keys()].every((p) => p.startsWith("/repo/")), "expanded files ride the hash ledger semantics");
+  assert.ok([...out.sentHashes.keys()].every((p) => p.replace(/\\/g, "/").startsWith(root)), "expanded files ride the hash ledger semantics");
 
   // CONTINUE dedup applies to the expanded files (unchanged → skipped)
   const cont = assemble("CONTINUE", { blocks: resolved }, { text: "followup" }, new Map(out.sentHashes), io);

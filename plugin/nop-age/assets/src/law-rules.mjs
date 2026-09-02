@@ -489,7 +489,7 @@ function planCompletedRule(action, currentFileState, ctx = {}) {
     }
     return {
       verdict: "deny",
-      reason: `plan-completed: full-tick with receipts but the completion formula is unsatisfied — ${derived.reasons.join("; ")} (re-run mechanical verification for the current basisHash and keep receipts bound, 01 §5.2)`,
+      reason: `plan-completed: full-tick with receipts but the completion formula is unsatisfied — ${derived.reasons.join("; ")} (run the missing mechanical verification and keep receipts recorded, 01 §5.2)`,
     };
   }
 

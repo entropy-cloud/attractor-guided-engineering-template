@@ -190,7 +190,7 @@ dispatch:                                # 派发类型 → 具名 agent（提�
 ## 5. BUILD_VERIFY 机械化
 
 - 现状：BUILD_VERIFY 是 AI 步，AI 自跑命令并自报 pass/fail——引擎信自陈。
-- 最终：plan 进入 `awaitingClosure` 后，由守夜人**直接执行** plan frontmatter `verify` 列出的 command key（缺失时用 mission 默认集合）对应的 `commands.test/build/lint/typecheck`，exit code 即放行条件；全部通过后写 `## Verification` pass 行（basisHash 绑定全勾内容），再派发 Closure Audit——严格强于 AI 自报，且成为完成派生公式的硬前置。
+- 最终：plan 进入 `awaitingClosure` 后，由守夜人**直接执行** plan frontmatter `verify` 列出的 command key（缺失时用 mission 默认集合）对应的 `commands.test/build/lint/typecheck`，exit code 即放行条件；全部通过后写 `## Verification` 的 `- pass <key> <runId> exit=0` 行，再派发 Closure Audit——严格强于 AI 自报，且成为完成派生公式的硬前置。历史 basisHash 收据可读但不参与判定。
 - **命令来源纪律**：`verify` 只能是 `commands.*` 的 key 枚举，且对应命令必须非空；plan 的 Proof 只是证据引用，不得成为可执行命令来源（防 plan 注入任意 shell）。
 - 独立形态：同一命令在 CI 跑，作为 merge-blocking 门禁。
 

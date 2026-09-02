@@ -28,6 +28,7 @@ import { join, resolve, basename, extname, relative, isAbsolute, dirname } from 
 import { fileURLToPath } from "node:url";
 import { getSpawner, __setSpawnerForTest } from "./spawner.mjs";
 import { planLedgerState } from "./ledger-dualread.mjs";
+import { missionDefaultVerifyKeys } from "./plan-check.mjs";
 import { getAllProcesses, getDescendants } from "./platform.mjs";
 import { reconcileStaleRuns, isAliveAndOurs, markAborted } from "./run-reconcile.mjs";
 import { startDraftJob, readDraftJob, listDraftJobs, validateDraftDesc } from "./draft-job.mjs";
@@ -177,12 +178,41 @@ function serveStaticFile(res, filePath, webDir) {
 
 function serveIndex(res, webDir) {
   const indexFile = resolve(webDir, "index.html");
-  if (existsSync(indexFile) && statSync(indexFile).isFile()) {
+  if (!existsSync(indexFile)) {
+    // Placeholder when web/dist/index.html doesn't exist yet (prod mode,
+    // API-only degradation — FSD §8). Points the user at the build/dev commands.
+    const placeholder =
+      '<!DOCTYPE html>\n<html><head><meta charset="utf-8">' +
+      "<title>Mission-Driver Monitor</title></head><body>" +
+      "<p>Monitor server is running in API-only mode. The Vue UI was not found.</p>" +
+      "<p>Build it: <code>npm --prefix web run build</code></p>" +
+      "<p>Or run in dev mode: <code>--dev</code> flag + <code>npm --prefix web run dev</code> (vite at :5173)</p>" +
+      "</body></html>";
+    res.writeHead(200, {
+      "Content-Type": "text/html; charset=utf-8",
+      "Content-Length": Buffer.byteLength(placeholder),
+    });
+    res.end(placeholder);
+    return;
+  }
+  let indexIsFile = false;
+  try {
+    indexIsFile = existsSync(indexFile) && statSync(indexFile).isFile();
+  } catch {
+    sendJson(res, 404, { error: "not found" });
+    return;
+  }
+  if (!indexIsFile) {
+    sendJson(res, 404, { error: "not found" });
+    return;
+  }
+  if (indexIsFile) {
     // WI49 Phase 1 item 2: same TOCTOU guard as serveStaticFile — a read
     // failure after the existence check returns 404, not a crash.
     let content;
     try {
       content = readFileSync(indexFile);
+      if (!statSync(indexFile).isFile()) throw new Error("index no longer a file");
     } catch {
       sendJson(res, 404, { error: "not found" });
       return;
@@ -194,20 +224,6 @@ function serveIndex(res, webDir) {
     res.end(content);
     return;
   }
-  // Placeholder when web/dist/index.html doesn't exist yet (prod mode,
-  // API-only degradation — FSD §8). Points the user at the build/dev commands.
-  const placeholder =
-    '<!DOCTYPE html>\n<html><head><meta charset="utf-8">' +
-    "<title>Mission-Driver Monitor</title></head><body>" +
-    "<p>Monitor server is running in API-only mode. The Vue UI was not found.</p>" +
-    "<p>Build it: <code>npm --prefix web run build</code></p>" +
-    "<p>Or run in dev mode: <code>--dev</code> flag + <code>npm --prefix web run dev</code> (vite at :5173)</p>" +
-    "</body></html>";
-  res.writeHead(200, {
-    "Content-Type": "text/html; charset=utf-8",
-    "Content-Length": Buffer.byteLength(placeholder),
-  });
-  res.end(placeholder);
 }
 
 // Dev mode (webDir === null): static hosting is disabled (vite dev server
@@ -852,6 +868,22 @@ function handleGetRoadmap(projectRoot, name) {
   }
 }
 
+function walkPlanFiles(dir) {
+  const files = [];
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return files;
+  }
+  for (const entry of entries) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) files.push(...walkPlanFiles(path));
+    else if (entry.isFile() && entry.name.endsWith(".md") && !entry.name.startsWith("00-")) files.push(path);
+  }
+  return files;
+}
+
 // GET /api/configs/:name/plans  (FIX-2)
 // Lists non-index plan files under the mission's plansDir with their status,
 // via the shared dual-read ledger resolver (ledger-dualread.mjs — frontmatter
@@ -862,21 +894,14 @@ function handleListPlans(projectRoot, name) {
   if (!mission || !mission.plansDir) return { plans: [], plansDir: null };
   const plansDir = resolve(projectRoot, mission.plansDir);
   if (!existsSync(plansDir)) return { plans: [], plansDir: mission.plansDir };
-  let files;
-  try {
-    files = readdirSync(plansDir);
-  } catch {
-    return { plans: [], plansDir: mission.plansDir };
-  }
-  const plans = files
-    .filter((f) => f.endsWith(".md") && !f.startsWith("00-"))
-    .map((f) => {
-      const filePath = join(plansDir, f);
+  const defaultVerifyKeys = missionDefaultVerifyKeys(mission);
+  const plans = walkPlanFiles(plansDir)
+    .map((filePath) => {
       let status = "unknown";
       let fieldErrors = [];
       try {
         const content = readFileSync(filePath, "utf8");
-        const state = planLedgerState(content);
+        const state = planLedgerState(content, defaultVerifyKeys ? { defaultVerifyKeys } : {});
         if (state.format !== "none") status = state.normalized;
         // M2-WI42: transparently expose the read-seam field-set verdict
         // (API data face only — frontend rendering is a monitor-face concern).
@@ -888,7 +913,13 @@ function handleListPlans(projectRoot, name) {
       } catch {
         st = { size: 0, mtimeMs: 0 };
       }
-      return { fileName: f, status, fieldErrors, sizeBytes: st.size, lastModified: st.mtimeMs };
+      return {
+        fileName: relative(plansDir, filePath).split(/\\/).join("/"),
+        status,
+        fieldErrors,
+        sizeBytes: st.size,
+        lastModified: st.mtimeMs,
+      };
     })
     .sort((a, b) => b.lastModified - a.lastModified);
   return { plans, plansDir: mission.plansDir };

@@ -7,7 +7,7 @@
  *   1. mechanical-verification — awaitingClosure → verify-runner direct run
  *      (resolveVerifyPlan + runVerifyCommands over mission commands.*, the
  *      0925-1/0950-3 Deferred collection) → all green ⇒ the writer appends
- *      `## Verification` pass lines (basisHash same-source bound) ⇒
+ *      `## Verification` pass lines with exit=0 ⇒
  *      closure-audit dispatch follows; any failure ⇒ NO pass line + a
  *      receipt (failure attribution metering = 1411-3). Dual-driver
  *      idempotency: the predicate face reads the LEDGER — if the engine
@@ -43,7 +43,7 @@
  * renewal would let legitimate in-flight executions be reclaimed mid-run.
  * Residual risk (accepted, plan): a forged activity signal could renew a
  * claim indefinitely — bounded per-renewal window (never beyond
- * now + MAX_RENEWAL_TTL_MS) + the WI30 stagnation fingerprint are the two
+ * now + MAX_RENEWAL_TTL_MS) + the WI30 activity-only stagnation timeout are the
  * backstops.
  *
  * Every exit is fail-soft: an exception becomes an exception receipt and the
@@ -152,7 +152,7 @@ export function dispatchPromptOf(options: {
       '',
       `You are the independent closure auditor for the plan at \`${target}\`.`,
       `Follow \`${promptFile}\` (SCRIPT_CHECK_RESULT is PASS: the supervisor already ran the mechanical verification;`,
-      'the `## Verification` pass lines are on disk with the current basisHash).',
+       'the `## Verification` pass lines are on disk with successful exit codes).',
       '',
       'Dispatch registration (already written by the supervisor — do NOT write your own dispatch line):',
       `  ${registeredId}`,
@@ -696,7 +696,7 @@ export async function runMechanicalVerification(hit: TriggerHit, opts: ExecArmOp
     runId,
     plan: planPath,
     event: 'mechanical-verification-passed',
-    detail: `${plan.keys.join(', ')} exit=0 @ basisHash=${run.basisHash.slice(0, 8)} — pass lines on disk, closure-audit dispatch follows`,
+    detail: `${plan.keys.join(', ')} exit=0 — pass lines on disk, closure-audit dispatch follows`,
   })
   // chain: dispatch closure-audit for the same plan (the trigger-2 face)
   const closureHit: TriggerHit = { ...hit, action: 'closure-audit', trigger: { ...hit.trigger, exitValue: 'closure-audit' }, occurrence: { ...hit.occurrence, type: 'audit' } }
@@ -985,7 +985,7 @@ export interface RenewalOutcome {
  * renewal lands in the LEDGER through the writer (claim-validity's
  * "未过期" face stays enforceable), bounded to now + min(ttl, MAX_RENEWAL_TTL)
  * per renewal. Forged infinite activity is backstopped by the bounded window
- * + the WI30 stagnation fingerprint (accepted residual, plan Phase 3).
+ * + the WI30 activity-only stagnation timeout (accepted residual, plan Phase 3).
  */
 export function renewClaim(options: {
   planPath: string

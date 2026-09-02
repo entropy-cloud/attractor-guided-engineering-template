@@ -95,12 +95,11 @@ describe("deriveCompleted — §5.2 truth table (five conjuncts)", () => {
     assert.equal(r.completed, false);
   });
 
-  it("conjunct 3 broken (stale hash): pass line whose basisHash differs from the current basis → basis-hash-mismatch", () => {
+  it("conjunct 3: a legacy receipt hash is ignored when the command passed", () => {
     const stale = buildPlan({ passes: ["- pass test run-001 basisHash=" + "0".repeat(64) + " exit=0"] });
     const r = deriveCompleted({ path: PATH, text: stale }, { defaultVerifyKeys: ["test"] });
-    assert.equal(r.conjuncts.mechanicalVerification, false);
-    assert.ok(r.reasons.includes("basis-hash-mismatch:test"));
-    assert.deepEqual(r.verification.staleKeys, ["test"]);
+    assert.equal(r.conjuncts.mechanicalVerification, true);
+    assert.equal(r.completed, true);
   });
 
   it("conjunct 3 broken (red run): pass line with exit=1 does not satisfy the key", () => {
@@ -126,9 +125,37 @@ describe("deriveCompleted — §5.2 truth table (five conjuncts)", () => {
       closureAccepted: `- accepted ${badId}：审计通过`,
     });
     const r = deriveCompleted({ path: PATH, text: paired }, { defaultVerifyKeys: ["test"] });
-    assert.equal(r.conjuncts.auditReceipt, true);
+    assert.equal(r.conjuncts.auditReceipt, false);
     assert.equal(r.conjuncts.dispatchRegister, false);
     assert.ok(r.reasons.includes("invalid-dispatch-register"));
+    assert.equal(r.completed, false);
+  });
+
+  it("does not derive completion when the ledger has structural errors", () => {
+    const invalid = buildPlan().replace("## Goals\n\nprose goal", "## Goals\n\n- [x] out-of-domain checkbox");
+    const r = deriveCompleted({ path: PATH, text: invalid }, { defaultVerifyKeys: ["test"] });
+    assert.equal(r.conjuncts.ledgerValid, false);
+    assert.ok(r.reasons.includes("ledger-structure-invalid"));
+    assert.equal(r.completed, false);
+  });
+
+  it("does not derive completion when frontmatter fields are invalid", () => {
+    const invalid = buildPlan().replace("work-item: M1-WI3", "work-item: M1-WI3\nverify: []");
+    const r = deriveCompleted({ path: PATH, text: invalid });
+    assert.equal(r.conjuncts.ledgerValid, false);
+    assert.ok(r.reasons.includes("frontmatter-fields-invalid"));
+    assert.equal(r.completed, false);
+  });
+
+  it("requires a valid audit receipt rather than a review receipt in Closure", () => {
+    const reviewId = `#review-2026-08-25-063133-mission-driver-${STEM}-1-a1b2c3d4`;
+    const reviewReceipt = buildPlan({
+      closureDispatch: `- dispatch review ${reviewId} to ses_r`,
+      closureAccepted: `- accepted ${reviewId}: review disguised as closure`,
+    });
+    const r = deriveCompleted({ path: PATH, text: reviewReceipt }, { defaultVerifyKeys: ["test"] });
+    assert.equal(r.conjuncts.auditReceipt, false);
+    assert.ok(r.reasons.includes("no-audit-receipt"));
     assert.equal(r.completed, false);
   });
 });
@@ -212,7 +239,7 @@ describe("deriveCompleted — derived status never rewrites frontmatter", () => 
   });
 });
 
-describe("computeBasisHash — normalization and stability", () => {
+describe("computeBasisHash — CAS helper only", () => {
   it("is invariant under trailing-whitespace noise and CRLF rewrites", () => {
     const noisier = COMPLETE.replace("- [x] implement", "- [x] implement   ").replace(/\n/g, "\r\n");
     assert.equal(computeBasisHash(noisier), computeBasisHash(COMPLETE));

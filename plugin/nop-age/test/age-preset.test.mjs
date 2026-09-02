@@ -29,7 +29,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parse } from 'yaml'
 
 const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -196,7 +196,7 @@ test('Non-Goal posture: no marker examples anywhere in the preset', () => {
 })
 
 test('age-mode.mjs registers the single AGE posture section with route pointers', async () => {
-  const mod = await import(join(PRESET_DIR, 'age-mode.mjs'))
+  const mod = await import(pathToFileURL(join(PRESET_DIR, 'age-mode.mjs')).href)
   assert.equal(mod.name, 'age-mode')
   assert.deepEqual(mod.inject, ['systemPrompt'])
   assert.equal(typeof mod.apply, 'function')

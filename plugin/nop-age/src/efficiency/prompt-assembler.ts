@@ -210,13 +210,22 @@ export function resolveAssemblyBlocks(
   blocks: AssemblyBlock[],
   ctx: { projectRoot?: string; plansDir?: string; roadmapPath?: string },
 ): AssemblyBlock[] {
-  return blocks.map((b) => ({
-    ...b,
-    ref: resolvePolicyPlaceholders(b.ref, ctx),
-    // M4-WI34: profile blocks carry the repo root so their repo-relative
-    // entries can resolve at expansion time (filesOfBlock)
-    ...(b.kind === 'profile' && typeof ctx.projectRoot === 'string' && ctx.projectRoot !== '' ? { profileRoot: ctx.projectRoot } : {}),
-  }))
+  return blocks.map((b) => {
+    const ref = resolvePolicyPlaceholders(b.ref, ctx)
+    const root = ctx.projectRoot
+    const rootPrefix = typeof root === 'string' && root !== '' ? `${root.replace(/[\\/]+$/u, '')}/` : null
+    return {
+      ...b,
+      // Placeholder expansion uses forward slashes, while filesystem I/O uses
+      // native paths. Profile artifacts are always rooted at projectRoot.
+      ref: b.kind === 'profile' && rootPrefix !== null && ref.startsWith(rootPrefix)
+        ? join(root!, ref.slice(rootPrefix.length))
+        : ref,
+      // M4-WI34: profile blocks carry the repo root so their repo-relative
+      // entries can resolve at expansion time (filesOfBlock)
+      ...(b.kind === 'profile' && typeof root === 'string' && root !== '' ? { profileRoot: root } : {}),
+    }
+  })
 }
 
 interface ResolvedFile {

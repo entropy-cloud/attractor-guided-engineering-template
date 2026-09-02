@@ -187,7 +187,7 @@ async function closureScriptCheck(delegates, flowVars) {
     // D2): a frontmatter-format plan whose counting domain is fully ticked
     // must satisfy the 01 §5.2 completion formula before it may pass to
     // BUILD_VERIFY. Anything missing (## Closure dispatch/accepted receipt,
-    // ## Verification pass line, stale basisHash after rework) fails here so
+    // ## Verification pass line) fails here so
     // the flow routes to CLOSURE_AUDIT — the only writer of the Closure
     // receipt — instead of silently deadlocking the plan in activePlans.
     // Legacy / format:none plans are untouched (behavior byte-identical).

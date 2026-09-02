@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createRunner } from "../src/runner.js";
+import { createRunner, resolveDriverExecutable } from "../src/runner.js";
 
 // OPT-3: a fake execute that records the spawn args (no real opencode process).
 // createRunner accepts an injectable execute (default = real executor), which lets
@@ -30,6 +30,25 @@ function baseConfig(runDir, extra = {}) {
   };
 }
 
+function isOpenCodeCommand(cmd) {
+  return cmd === resolveDriverExecutable("opencode");
+}
+
+describe("runner — Windows OpenCode resolution", () => {
+  it("uses npm's native executable when APPDATA contains the global installation", () => {
+    const executable = resolveDriverExecutable("opencode", { APPDATA: process.env.APPDATA });
+    if (process.platform === "win32" && process.env.APPDATA) {
+      assert.ok(executable.endsWith("opencode.exe"));
+    } else {
+      assert.equal(executable, "opencode");
+    }
+  });
+
+  it("does not rewrite non-OpenCode drivers", () => {
+    assert.equal(resolveDriverExecutable("cline"), "cline");
+  });
+});
+
 describe("runner — OPT-3 parseModel routing", () => {
   it("runParseAgent invokes opencode with config.parseModel and forwards --session", async () => {
     const runDir = mkdtempSync(join(tmpdir(), "md-runner-route-"));
@@ -39,7 +58,7 @@ describe("runner — OPT-3 parseModel routing", () => {
 
       await runner.runParseAgent("parse-AI_STEP_RESULT", "infer marker", "sys", "ses_xyz");
 
-      const opencodeCalls = calls.filter((c) => c.cmd === "opencode");
+      const opencodeCalls = calls.filter((c) => isOpenCodeCommand(c.cmd));
       assert.equal(opencodeCalls.length, 1);
       const args = opencodeCalls[0].args;
       const mIdx = args.indexOf("-m");
@@ -61,7 +80,7 @@ describe("runner — OPT-3 parseModel routing", () => {
 
       await runner.runParseAgent("parse-X", "infer", "sys", null);
 
-      const opencodeCalls = calls.filter((c) => c.cmd === "opencode");
+      const opencodeCalls = calls.filter((c) => isOpenCodeCommand(c.cmd));
       assert.equal(opencodeCalls.length, 1);
       const args = opencodeCalls[0].args;
       const mIdx = args.indexOf("-m");
@@ -80,7 +99,7 @@ describe("runner — OPT-3 parseModel routing", () => {
 
       await runner.runAgent("EXECUTE", "do work", "sys", "ses_main");
 
-      const opencodeCalls = calls.filter((c) => c.cmd === "opencode");
+      const opencodeCalls = calls.filter((c) => isOpenCodeCommand(c.cmd));
       assert.equal(opencodeCalls.length, 1);
       const args = opencodeCalls[0].args;
       const mIdx = args.indexOf("-m");
@@ -121,7 +140,7 @@ describe("runner — OPT-6 --pure routing", () => {
 
       await runner.runAgent("EXECUTE", "do work", "sys", "ses_main");
 
-      const opencodeCalls = calls.filter((c) => c.cmd === "opencode");
+      const opencodeCalls = calls.filter((c) => isOpenCodeCommand(c.cmd));
       assert.equal(opencodeCalls.length, 1);
       const args = opencodeCalls[0].args;
       assert.equal(args[0], "run", "first arg still 'run'");
@@ -146,7 +165,7 @@ describe("runner — OPT-6 --pure routing", () => {
 
       await runner.runAgent("EXECUTE", "do work", "sys", "ses_main");
 
-      const opencodeCalls = calls.filter((c) => c.cmd === "opencode");
+      const opencodeCalls = calls.filter((c) => isOpenCodeCommand(c.cmd));
       assert.equal(opencodeCalls.length, 1);
       const args = opencodeCalls[0].args;
       assert.equal(args[0], "run", "first arg still 'run'");
@@ -174,7 +193,7 @@ describe("runner — OPT-6 --pure routing", () => {
 
       await runner.runAgent("EXECUTE", "do work", "sys", null);
 
-      const opencodeCalls = calls.filter((c) => c.cmd === "opencode");
+      const opencodeCalls = calls.filter((c) => isOpenCodeCommand(c.cmd));
       assert.equal(opencodeCalls.length, 1);
       const args = opencodeCalls[0].args;
       assert.equal(args[1], "--pure", "--pure injected");

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, basename } from "node:path";
-import { createRunner } from "../src/runner.js";
+import { createRunner, resolveDriverExecutable } from "../src/runner.js";
 import { FlowEngine } from "../src/engine.js";
 import { boundPromptSize } from "../src/engine.js";
 import { makeMockDelegates, simpleFlow } from "./helpers.js";
@@ -39,7 +39,7 @@ describe("runner — mdr-3 Phase 2: prompt via stdin", () => {
 
       await runner.runAgent("EXECUTE", "do the work", "sys", "ses_main");
 
-      const opencodeCalls = calls.filter((c) => c.cmd === "opencode");
+      const opencodeCalls = calls.filter((c) => c.cmd === resolveDriverExecutable("opencode"));
       assert.equal(opencodeCalls.length, 1);
       const { args, opts } = opencodeCalls[0];
 
@@ -76,7 +76,7 @@ describe("runner — mdr-3 Phase 2: prompt via stdin", () => {
       const bigPrompt = "X".repeat(65466);
       await runner.runAgent("EXECUTE", bigPrompt, "sys", null);
 
-      const opencodeCalls = calls.filter((c) => c.cmd === "opencode");
+      const opencodeCalls = calls.filter((c) => c.cmd === resolveDriverExecutable("opencode"));
       assert.equal(opencodeCalls.length, 1);
       const { args, opts } = opencodeCalls[0];
 

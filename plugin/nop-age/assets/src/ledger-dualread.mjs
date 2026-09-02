@@ -66,11 +66,23 @@ function fmReadResult(mode, split) {
 export function readPlanStatus(text) {
   const mode = ledgerReadMode();
   const split = splitLedgerSections(text);
-  const hasFm = split.hasFrontmatter && split.fmError === null && fmHasStatus(split.fm);
+  // `split.hasFrontmatter` is false when parsing fails before a closed block can
+  // be recorded. The opening delimiter still selects the ledger format so a
+  // malformed new-format file cannot be interpreted as a legacy plan.
+  const hasFrontmatter = /^\uFEFF?[ \t]*---[ \t]*(?:\r?\n|$)/.test(text);
+  const hasFm = hasFrontmatter && split.fmError === null && fmHasStatus(split.fm);
 
   if (mode === "frontmatter") {
     if (hasFm) return fmReadResult(mode, split);
+    if (hasFrontmatter) return { mode, format: "frontmatter", status: null, rejected: split.fmError ?? "frontmatter missing required status field", fieldErrors: [] };
     return { mode, format: "none", status: null, rejected: "legacy-or-non-plan-format-rejected-in-frontmatter-mode" };
+  }
+
+  // An opened frontmatter block is an explicit format choice. Never let a malformed
+  // ledger file fall through into the legacy parser because it happens to contain a
+  // legacy-looking status line in prose.
+  if (hasFrontmatter && !hasFm) {
+    return { mode, format: "frontmatter", status: null, rejected: split.fmError ?? "frontmatter missing required status field", fieldErrors: [] };
   }
 
   let legacy = null;

@@ -406,7 +406,7 @@ export function tallyFromText(text: string | null, options?: { projectRoot?: str
   if (typeof text !== 'string' || text === '') return tally
   const tokens = text.match(/[^\s`*()[\]{}<>"'，。；：、|]+/g) ?? []
   for (const token of tokens) {
-    const trimmed = token.replace(/[:,;]+$/u, '')
+    const trimmed = token.replace(/[.,:;!?—–-]+$/u, '')
     if (!isRepoRelativePathToken(trimmed)) continue
     const path = normalizeProfilePath(trimmed, options?.projectRoot)
     if (path === '') continue

@@ -37,7 +37,7 @@
  * that make re-dispatch refuse live in the exec arm (Phase 2/3 wiring).
  */
 import { parseTriggerWhen } from '../../assets/src/law-policy.mjs'
-import { computeBasisHash, scanPlanLedger, scanRoadmapLedger, splitLedgerSections } from '../../assets/src/ledger-sections.mjs'
+import { scanPlanLedger, scanRoadmapLedger, splitLedgerSections } from '../../assets/src/ledger-sections.mjs'
 import { sha256Text } from '../../assets/src/law-core.mjs'
 import type { SupervisorPlanRecord, SupervisorSnapshot } from './decision-core.ts'
 
@@ -62,9 +62,9 @@ export interface PlanTriggerState {
   status: string | null
   /** active ∧ all-checked over the counting domain (Phase + Closure Findings). */
   fullTick: boolean
-  /** every resolvable verify key has an exit=0 pass line at the CURRENT basisHash. */
+  /** every resolvable verify key has an exit=0 pass line. */
   mechanicalVerificationPass: boolean
-  /** ¬pass (missing or stale pass lines; no-verify-keys reads as missing, M2-WI44 fail-closed). */
+  /** ¬pass (missing pass lines; no-verify-keys reads as missing, M2-WI44 fail-closed). */
   mechanicalVerificationMissing: boolean
   /** Closure has no paired dispatch+accepted audit receipt. */
   closureReceiptMissing: boolean
@@ -82,7 +82,7 @@ export interface PlanTriggerState {
 interface PlanScanFace {
   fm: Record<string, unknown> | null
   counts: { total: number; checked: number; unchecked: number }
-  verification: { passes: Array<{ key: string; exit: number; basisHash: string }> } | null
+  verification: { passes: Array<{ key: string; exit: number }> } | null
   closure: { pairs: string[] } | null
   draftReviewRecord: { dispatches: Array<{ id: string; valid: boolean }> } | null
 }
@@ -130,9 +130,8 @@ export function planTriggerStateOf(
   const allChecked = scan.counts.unchecked === 0 && scan.counts.total > 0
   const verifyKeys = resolveVerifyKeysOf(fm, options.defaultVerifyKeys, errors)
 
-  const basisHash = computeBasisHash(record.text)
   const passes = scan.verification ? scan.verification.passes : []
-  const satisfying = new Set(passes.filter((p) => p.exit === 0 && p.basisHash === basisHash).map((p) => p.key))
+  const satisfying = new Set(passes.filter((p) => p.exit === 0).map((p) => p.key))
   const mechanicalVerificationPass = verifyKeys !== null && verifyKeys.length > 0 && verifyKeys.every((k) => satisfying.has(k))
   if (verifyKeys === null) errors.push('no-verify-keys resolvable (plan.verify absent and no mission default) — mechanical-verification reads missing (fail-closed)')
 

@@ -678,10 +678,8 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
       if (terminalState === null) {
         const post = scanSupervisorSnapshot({ projectRoot, lawCtx: ctx, io, clock, now })
         if (post !== null) {
-          // M3-WI30 detector cycle (03 §7): fingerprint (per-plan basisHash
-          // set + roadmap text hash) × activity signal (the noteActivity map,
-          // window = one heartbeat) × ping-pong (per-plan status history) —
-          // the emitted fact is the single point BOTH R4 entries inject.
+          // M3-WI30 detector cycle (03 §7): only noteActivity in the current
+          // heartbeat window resets stagnation. Ledger mutations are ignored.
           const observed = observeStagnation(stagnationDetector, {
             plans: post.plans,
             roadmapText: post.roadmap !== null ? post.roadmap.text : null,
@@ -696,11 +694,9 @@ export function createWatchdog(options: WatchdogOptions): WatchdogFace {
             receipt({
               kind: 'observation',
               runId: null,
-              plan: observed.pingPongPlan,
+              plan: null,
               event: 'stagnation-detected',
-              detail: observed.pingPongPlan !== null
-                ? `ping-pong: ${observed.pingPongPlan} oscillated between two states with no terminal progress (03 §7) — saturated R4 injection`
-                : `stagnation fingerprint ${observed.stagnantRounds}/${ctx!.stagnationRounds} rounds unchanged ∧ zero activity (03 §7) — R4 injection`,
+              detail: `stagnation activity ${observed.stagnantRounds}/${ctx!.stagnationRounds} rounds with zero activity (03 §7) — R4 injection`,
             })
           }
           const evaluation = evaluateTermination(post, {

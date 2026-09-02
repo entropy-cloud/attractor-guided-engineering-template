@@ -1,4 +1,4 @@
-// AGE file-ledger body-section scanner, structural validators, basisHash, and
+// AGE file-ledger body-section scanner, structural validators, and
 // completion-derivation predicates.
 // Contract: docs/design/age-autonomy/01-file-ledger.md §2.5/§3.2/§3.3/§4.2/§4.4/§5.2/§5.3
 // (decisions pinned in docs/plans/age-autonomy/2026-08-25-0635-2 Phase 1).
@@ -7,7 +7,7 @@
 // write-time enforcement (append-only interception, writer identity) is M2 law.
 
 import { createHash } from "node:crypto";
-import { parseFrontmatter, TERMINAL_PLAN_STATUSES } from "./ledger-frontmatter.mjs";
+import { parseFrontmatter, TERMINAL_PLAN_STATUSES, validatePlanFrontmatter } from "./ledger-frontmatter.mjs";
 
 export const PHASE_HEADING_RE = /^Phase (\d+)(?:\s*(?:—|-)\s*(\S.*))?$/;
 export const MILESTONE_HEADING_RE = /^M(\d+)(?:\s*(?:—|-)\s*(\S.*))?$/;
@@ -26,7 +26,10 @@ const DISPATCH_RE = new RegExp(`^- dispatch (review|audit) (${ID_TOKEN}) to (\\S
 // — optional, tail-parsed separately so the no-suffix line shape is unchanged.
 const DISPATCH_MODELS_RE = /^ models=\{exec:([^,}\s]+),aud:([^,}\s]+)\}$/;
 const ACCEPTED_RE = new RegExp(`^- accepted (${ID_TOKEN})\\s*(.*)$`);
-const PASS_RE = /^- pass ([A-Za-z][A-Za-z0-9:_-]*) (\S+) basisHash=([0-9a-f]{64}) exit=(\d+)\s*(.*)$/;
+// Historical ledger receipts may retain their former basisHash token. Accept it
+// for read compatibility but deliberately discard it: current verification is
+// proven by command key and exit code, never by a plan-content hash.
+const PASS_RE = /^- pass ([A-Za-z][A-Za-z0-9:_-]*) (\S+)(?: basisHash=[0-9a-f]{64})? exit=(\d+)\s*(.*)$/;
 const REVIEW_CONCLUSION_RE = new RegExp(
   `^- (\\d{4}-\\d{2}-\\d{2})[：:]iteration (\\d+)[，,]共识 (\\S+)\\s+(${ID_TOKEN})`,
 );
@@ -219,10 +222,10 @@ function scanRegistryLines(split, block, acceptedFindingsMode, errors) {
     if (line.startsWith("- pass ")) {
       const m = line.match(PASS_RE);
       if (!m) {
-        pushError(errors, lineNo, "malformed-pass", "pass line must be `- pass <commandKey> <runId> basisHash=<sha256hex> exit=<code>`");
+        pushError(errors, lineNo, "malformed-pass", "pass line must be `- pass <commandKey> <runId> exit=<code>`");
         continue;
       }
-      passes.push({ line: lineNo, key: m[1], runId: m[2], basisHash: m[3], exit: Number(m[4]) });
+      passes.push({ line: lineNo, key: m[1], runId: m[2], exit: Number(m[3]) });
       continue;
     }
     if (DATE_LINE_PREFIX_RE.test(line)) {
@@ -450,22 +453,28 @@ export function computeBasisHash(text) {
 }
 
 // 01 §5.2 completion formula, conjunct by conjunct:
-// active ∧ all-checked ∧ mechanical-verification ∧ audit-receipt ∧ dispatch-register.
+// ledger-valid ∧ active ∧ all-checked ∧ mechanical-verification ∧ audit-receipt ∧ dispatch-register.
 export function deriveCompleted(record, opts = {}) {
   const text = typeof record === "string" ? record : record.text;
   const path = record && typeof record === "object" ? record.path : null;
   const scan = scanPlanLedger(text);
   const status = scan.fm && typeof scan.fm.status === "string" ? scan.fm.status : null;
-  const basisHash = computeBasisHash(text);
   const reasons = [];
+  const fields = scan.fmError === null ? validatePlanFrontmatter(scan.fm) : { ok: false, errors: [] };
 
   const conjuncts = {
+    ledgerValid: scan.fmError === null && scan.errors.length === 0 && fields.ok,
     statusActive: status === "active",
     allChecked: scan.counts.unchecked === 0,
     mechanicalVerification: false,
     auditReceipt: false,
     dispatchRegister: false,
   };
+  if (!conjuncts.ledgerValid) {
+    if (scan.fmError !== null) reasons.push("frontmatter-invalid");
+    if (scan.errors.length > 0) reasons.push("ledger-structure-invalid");
+    if (!fields.ok) reasons.push("frontmatter-fields-invalid");
+  }
   if (!conjuncts.statusActive) reasons.push("status-not-active");
   if (!conjuncts.allChecked) reasons.push(`unchecked-items:${scan.counts.unchecked}`);
 
@@ -481,22 +490,24 @@ export function deriveCompleted(record, opts = {}) {
       ? opts.defaultVerifyKeys
       : undefined;
   const passes = scan.verification ? scan.verification.passes : [];
-  const satisfying = new Set(passes.filter((p) => p.exit === 0 && p.basisHash === basisHash).map((p) => p.key));
-  const recorded = new Set(passes.filter((p) => p.exit === 0).map((p) => p.key));
-  const verification = { keys, basisHash, missingKeys: [], staleKeys: [], basisHashMatch: false };
+  const satisfying = new Set(passes.filter((p) => p.exit === 0).map((p) => p.key));
+  const verification = { keys, missingKeys: [] };
   if (keys === undefined) {
     reasons.push("no-verify-keys");
   } else {
     verification.missingKeys = keys.filter((k) => !satisfying.has(k));
-    verification.staleKeys = keys.filter((k) => !satisfying.has(k) && recorded.has(k));
-    verification.basisHashMatch = verification.missingKeys.length === 0;
     conjuncts.mechanicalVerification = verification.missingKeys.length === 0;
     for (const k of verification.missingKeys) {
-      reasons.push(verification.staleKeys.includes(k) ? `basis-hash-mismatch:${k}` : `missing-pass:${k}`);
+      reasons.push(`missing-pass:${k}`);
     }
   }
 
-  const closurePairs = scan.closure ? scan.closure.pairs : [];
+  const closurePairs = scan.closure
+    ? scan.closure.dispatches
+      .filter((d) => d.valid && d.kind === "audit" && /^#audit-/.test(d.id))
+      .filter((d) => scan.closure.accepted.some((a) => a.valid && a.id === d.id && /^#audit-/.test(a.id)))
+      .map((d) => d.id)
+    : [];
   conjuncts.auditReceipt = closurePairs.length > 0;
   if (!conjuncts.auditReceipt) reasons.push("no-audit-receipt");
 
@@ -514,7 +525,6 @@ export function deriveCompleted(record, opts = {}) {
     completed,
     conjuncts,
     reasons,
-    basisHash,
     verification,
     auditReceipt: { pairs: closurePairs, unpairedDispatches: scan.closure ? scan.closure.unpairedDispatches : [] },
     inDomain: scan.hasFrontmatter && scan.fmError === null,

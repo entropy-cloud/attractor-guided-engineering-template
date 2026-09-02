@@ -73,23 +73,15 @@ If this run achieved a full-green state (unit tests + e2e both passed completely
 
 For a plan in the **ledger format** (YAML frontmatter with `status:`), after ALL commands pass and ALL commits are done, record the mechanical-verification evidence the engine derives completion from (01 §5.2; agent-written on engine flow authority until the M2 gate/writer law lands):
 
-1. Compute the plan's current basis hash (from the project root; adjust the engine path if the engine is not at `tools/mission-driver`):
+1. Append one pass line per command key listed in the plan's frontmatter `verify` array (e.g. `test`) to the plan's `## Verification` section (create the section after `## Closure Findings` / before `## Closure` if absent; append-only — never edit existing lines):
 
    ```
-   node --input-type=module -e "const {readFileSync}=await import('node:fs');const {computeBasisHash}=await import('./tools/mission-driver/src/ledger-sections.mjs');console.log(computeBasisHash(readFileSync(process.argv[1],'utf8')))" {{PLAN_FILE}}
-   ```
-
-   The hash covers the frontmatter + all `## Phase` sections + `## Closure Findings` — write the pass lines LAST (after every checkbox tick and commit) so the hash cannot go stale; pass lines themselves live in `## Verification` and do NOT change the hash.
-
-2. Append one pass line per command key listed in the plan's frontmatter `verify` array (e.g. `test`) to the plan's `## Verification` section (create the section after `## Closure Findings` / before `## Closure` if absent; append-only — never edit existing lines):
-
-   ```
-   - pass <commandKey> <runId> basisHash=<sha256-from-step-1> exit=0
+    - pass <commandKey> <runId> exit=0
    ```
 
    `<commandKey>` must be exactly a key from the plan's `verify` array (its command must have actually run green in this step); `<runId>` is any non-space run identifier (e.g. the run timestamp). Only write lines for keys that ran green — never fabricate a pass line.
 
-3. Do NOT touch the frontmatter `status` (stays `active`; completion is derived) and do NOT write anything into `## Closure` (that is the independent closure auditor's receipt).
+2. Do NOT touch the frontmatter `status` (stays `active`; completion is derived) and do NOT write anything into `## Closure` (that is the independent closure auditor's receipt).
 
 Legacy-format plans (`> Plan Status:` line): skip this section entirely — the legacy close path applies.
 

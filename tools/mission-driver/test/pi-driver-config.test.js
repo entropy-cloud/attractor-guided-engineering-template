@@ -15,7 +15,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join, resolve, isAbsolute } from "node:path";
 import { tmpdir } from "node:os";
 import { resolveConfig } from "../src/config.js";
-import { createRunner, findLatestSessionId } from "../src/runner.js";
+import { createRunner, findLatestSessionId, resolveDriverExecutable } from "../src/runner.js";
 
 function tmpRoot() {
   return mkdtempSync(join(tmpdir(), "pi-driver-"));
@@ -205,7 +205,7 @@ describe("pi driver — buildDriverArgs rendering", () => {
 
     await runner.runAgent("CHECK", "short prompt", "sys", null);
     const { cmd, args, opts } = calls[0];
-    assert.equal(cmd, "opencode");
+    assert.equal(cmd, resolveDriverExecutable("opencode"));
     assert.ok(args.includes("--dangerously-skip-permissions"), "oc keeps its perm flag");
     assert.equal(opts.stdin, undefined, "oc arg mode must NOT pipe stdin");
     assert.ok(args.some(a => typeof a === "string" && a.includes("short prompt")), "oc arg mode appends prompt as positional");

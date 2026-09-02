@@ -122,7 +122,10 @@ test("⑤ built-in plan-execution prompts stay dual-mode (ledger instructions pr
     buildVerify.includes("Ledger Verification pass lines"),
     "built-in build-verify.md lost the transition-period Verification pass-line writer section",
   );
-  assert.ok(buildVerify.includes("computeBasisHash"), "built-in build-verify.md lost the computeBasisHash shared command");
+  assert.ok(
+    buildVerify.includes("- pass <commandKey> <runId> exit=0") && !buildVerify.includes("basisHash"),
+    "built-in build-verify.md must instruct direct hash-free verification receipts",
+  );
 });
 
 test("guard test runs from the engine test chain", () => {

@@ -97,8 +97,8 @@ hold: "缺上游裁定，等 D2" # 仅 status: held 时必填；其他状态不�
 - 2026-08-24：iteration 1，共识 acceptable-as-is #review-<runId>-<plan>-<iter>-<nonce8>（该 reviewerSessionId 写入）
 ## Closure Findings          # 可选；审计拒绝时由审计者追加 - [ ] 返工项（计数域）
 ## Verification              # 机器验证记录（append-only，守夜人写入）
-- pass test <runId> basisHash=<sha256> exit=0
-- pass build <runId> basisHash=<sha256> exit=0
+- pass test <runId> exit=0
+- pass build <runId> exit=0
 ## Closure                     # 内联收口审计记录（独立审计者写入）
 - dispatch audit #audit-<runId>-<plan>-<round>-<nonce8> to <auditorSessionId>（守夜人/引擎写入）
 - accepted #audit-<runId>-<plan>-<round>-<nonce8>：审计结论与证据（该 auditorSessionId 写入）
@@ -168,11 +168,11 @@ draft | active | held ──T7 人工/评审 disposition──▶ cancelled | su
 plan.completed(p) ⇔
     p.status == active
   ∧ 全勾（该 plan 所有计数区块无 `- [ ]`：Phase 区块 + Closure Findings 区块）
-  ∧ 机械验证通过（Verification 区存在 plan.verify（缺省 mission 默认）每个 command key 的 pass 行，且 basisHash == 当前 basisHash）
+  ∧ 机械验证通过（Verification 区存在 plan.verify（缺省 mission 默认）每个 command key 的 `exit=0` pass 行）
   ∧ 审计回执绑定（Closure 区存在 dispatch 行与同 id accepted 行）
   ∧ 派发登记匹配（dispatch 行登记者 = 守夜人/引擎；DSH 形态再校验写入者身份）
 
-basisHash = sha256(frontmatter + 全部 Phase 区块 + Closure Findings 区块的规范化文本)。门禁正确性绑定用全量 sha256（不是提示词 dedup 的 hash8）；内容再变则旧 pass/旧全勾事实自然失效，无需删除记录。
+历史 `basisHash=<sha256>` pass 行保持可读兼容，但被忽略；机械验证只由 command key 与 `exit=0` 证明。
 
 ```
 

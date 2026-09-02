@@ -8,7 +8,7 @@
  * library-form engine.
  */
 import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ASSETS_SRC = resolve(fileURLToPath(new URL("../assets/src/", import.meta.url)));
 
@@ -23,7 +23,7 @@ const entries = [
 let failed = false;
 for (const [mod, keys] of entries) {
   try {
-    const ns = await import(`${ASSETS_SRC}/${mod}`);
+    const ns = await import(pathToFileURL(`${ASSETS_SRC}/${mod}`).href);
     const missing = keys.filter((k) => !(k in ns));
     if (missing.length > 0) {
       console.error(`smoke-import: FAIL ${mod} missing exports: ${missing.join(", ")}`);

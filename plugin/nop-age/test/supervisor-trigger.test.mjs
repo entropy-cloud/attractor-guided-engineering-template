@@ -14,7 +14,7 @@
  *   - predicate form matrix: cmp string ops (= == !=), cmp fail-soft on
  *     numeric ops over strings, call numeric ops (=0 >0 >=1), malformed values
  *   - clock injection boundaries for claim-expired (< = >)
- *   - basisHash stale pass lines read as missing; no-verify-keys fail-closed
+ *   - direct exit=0 pass lines satisfy verification; legacy hash receipts are ignored; no-verify-keys fail-closed
  *   - occurrenceKey material shape (03 §5 ledger-derived key)
  *   - fail-soft: malformed when text / malformed claim expiry never crash
  */
@@ -137,25 +137,22 @@ test("T1+: full-tick ∧ missing pass lines → dispatch mechanical-verification
   assert.match(hit.occurrence.key, /^\/p\/docs\/plans\/a\.md#verification@[0-9a-f]{8}$/);
 });
 
-test("T1 stale: basisHash-stale pass line counts as missing (plan Phase 1 pinning)", () => {
+test("T1 legacy: basisHash pass receipts remain readable but their hash is ignored", () => {
   const stale = planText({
     ticked: true,
     verify: ["test"],
     passLines: ["- pass test mdrun-1 basisHash=0000000000000000000000000000000000000000000000000000000000000000 exit=0"],
   });
   const staleState = planTriggerStateOf({ path: "a.md", text: stale }, { defaultVerifyKeys: ["test"], clock: () => NOW_MS });
-  assert.equal(staleState.mechanicalVerificationPass, false, "stale basisHash → not satisfied");
-  assert.equal(staleState.mechanicalVerificationMissing, true, "stale reads as missing");
+  assert.equal(staleState.mechanicalVerificationPass, true, "exit=0 satisfies verification regardless of legacy hash");
+  assert.equal(staleState.mechanicalVerificationMissing, false);
   const snap = snapshotOf({ plans: [{ path: "/p/docs/plans/a.md", text: stale }], derived: { active: ["/p/docs/plans/a.md"] } });
   const hits = triggerDuty(snap, { triggers: POLICY_TRIGGERS }, () => NOW_MS, { defaultVerifyKeys: ["test"] });
-  assert.ok(hits.some((h) => h.action === "mechanical-verification"), "stale pass re-triggers verification");
+  assert.equal(hits.some((h) => h.action === "mechanical-verification"), false);
 });
 
-test("T1 fresh hash: pass line bound to the CURRENT basis satisfies the predicate", async () => {
-  const { computeBasisHash } = await import("../assets/src/ledger-sections.mjs");
-  const base = planText({ ticked: true, verify: ["test"] });
-  const h = computeBasisHash(base);
-  const withPass = planText({ ticked: true, verify: ["test"], passLines: [`- pass test mdrun-1 basisHash=${h} exit=0`] });
+test("T1 direct: pass line with exit=0 satisfies the predicate", () => {
+  const withPass = planText({ ticked: true, verify: ["test"], passLines: ["- pass test mdrun-1 exit=0"] });
   const state = planTriggerStateOf({ path: "a.md", text: withPass }, { defaultVerifyKeys: ["test"], clock: () => NOW_MS });
   assert.equal(state.mechanicalVerificationPass, true);
   assert.equal(state.mechanicalVerificationMissing, false);
@@ -178,12 +175,10 @@ test("T1−: not full-tick (unchecked item) → no mechanical-verification hit",
 
 // ── 2. trigger 2: closure-audit ──────────────────────────────────────────────
 
-test("T2+: full-tick ∧ fresh pass ∧ closure receipt missing → dispatch closure-audit", async () => {
-  const { computeBasisHash } = await import("../assets/src/ledger-sections.mjs");
-  const base = planText({ ticked: true, verify: ["test"] });
+test("T2+: full-tick ∧ successful pass ∧ closure receipt missing → dispatch closure-audit", () => {
   const plan = {
     path: "/p/docs/plans/a.md",
-    text: planText({ ticked: true, verify: ["test"], passLines: [`- pass test mdrun-1 basisHash=${computeBasisHash(base)} exit=0`] }),
+    text: planText({ ticked: true, verify: ["test"], passLines: ["- pass test mdrun-1 exit=0"] }),
   };
   const snap = snapshotOf({ plans: [plan], derived: { active: [plan.path] } });
   const hits = triggerDuty(snap, { triggers: POLICY_TRIGGERS }, () => NOW_MS, { defaultVerifyKeys: ["test"] });
@@ -193,15 +188,13 @@ test("T2+: full-tick ∧ fresh pass ∧ closure receipt missing → dispatch clo
   assert.equal(hits.filter((h) => h.action === "mechanical-verification").length, 0, "no double dispatch");
 });
 
-test("T2−: paired closure receipt present → no closure-audit hit", async () => {
-  const { computeBasisHash } = await import("../assets/src/ledger-sections.mjs");
-  const base = planText({ ticked: true, verify: ["test"] });
+test("T2−: paired closure receipt present → no closure-audit hit", () => {
   const plan = {
     path: "/p/docs/plans/a.md",
     text: planText({
       ticked: true,
       verify: ["test"],
-      passLines: [`- pass test mdrun-1 basisHash=${computeBasisHash(base)} exit=0`],
+      passLines: ["- pass test mdrun-1 exit=0"],
       closureLines: [
         "- dispatch audit #audit-run-1-a-1-11111111 to ses-auditor-1 models={exec:zhipuai/glm-5.2,aud:zhipuai/glm-5.2}",
         "- accepted #audit-run-1-a-1-11111111：done",
@@ -483,7 +476,7 @@ import { createWatchdog } from "../src/supervisor/watchdog.ts";
 import { decide as decideCore, policyFaceOf, scanSupervisorSnapshot } from "../src/supervisor/decision-core.ts";
 import { discoverLawContext, fsLawGateIo } from "../src/law/host-adapter.ts";
 import { readReceipts, receiptFileFor } from "../src/supervisor/receipt.ts";
-import { computeBasisHash, deriveCompleted } from "../assets/src/ledger-sections.mjs";
+import { deriveCompleted } from "../assets/src/ledger-sections.mjs";
 import { createFakeAgentsService } from "./helpers/fake-agents.mjs";
 
 function tmpProject() {
@@ -684,10 +677,10 @@ test("e2e full chain: full-tick plan → verify-runner echo fixture → pass lin
     await wd.runCycle("manual");
 
     const text = readFileSync(plan, "utf8");
-    assert.match(text, /- pass test mdsupervisor basisHash=[0-9a-f]{64} exit=0/, "pass line landed (01 §4.2 grammar)");
+    assert.match(text, /- pass test mdsupervisor exit=0/, "direct pass line landed (01 §4.2 grammar)");
     // plan-check / deriveCompleted perspective: the mechanical-verification conjunct is now TRUE
     const derived = deriveCompleted({ path: plan, text }, { defaultVerifyKeys: ["test"] });
-    assert.equal(derived.conjuncts.mechanicalVerification, true, "pass line basisHash binds the full-tick content (same-source conjunction)");
+    assert.equal(derived.conjuncts.mechanicalVerification, true, "successful pass line satisfies the conjunction");
     assert.equal(derived.conjuncts.allChecked, true);
     // closure-audit dispatch line in place
     const scan = JSON.stringify(text);

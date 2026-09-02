@@ -30,19 +30,13 @@
  *   - headless degradation: no agents face → stale judgment undecidable →
  *     observation receipt only, ledger byte-unchanged, second cycle quiet
  *
- * M3-WI30 (plan `2026-08-26-1954-3`) — stagnation fingerprint + ping-pong
- * detection (+8 cases, the WI31 gate share in this file):
- *   - fingerprint aggregation determinism + the basisHash-domain pin (DRR /
- *     Verification / Closure appends do NOT move it; status flips / ticks /
- *     Closure Findings / roadmap changes DO)
+ * M3-WI30 activity-only stagnation detection:
+ *   - plan/roadmap mutations and status ping-pong never reset it
  *   - stagnation N-1/N boundary e2e through the watchdog cycle end (R4
  *     blocked + run-terminal receipt + stagnation-detected receipt)
  *   - activity participation: noteActivity in window clears the count (the
  *     long-task-not-yet-landed positive case, 03 §7 literal) and the count
  *     re-accumulates after activity stops
- *   - ping-pong unit boundaries (< K round trips no fact / = K saturated
- *     fact / terminal resets / third state restarts the pair) + the e2e
- *     oscillation face through the watchdog (fingerprint leg isolated off)
  *   - restart clears the scratch state: a fresh mount never trips early —
  *     stagnation re-accumulates from zero (03 §6 归零成文接受)
  *   - dual-entry cross case: the declared face (forwardTerminalDecision)
@@ -64,12 +58,6 @@ import { evaluateGates } from "../assets/src/law-core.mjs";
 import { readReceipts } from "../src/supervisor/receipt.ts";
 import { dispatchAlreadyRegistered } from "../src/supervisor/dispatch-resolve.ts";
 import { forwardTerminalDecision } from "../src/supervisor/exec-arm.ts";
-import {
-  computeLedgerFingerprint,
-  initialStagnationState,
-  observeStagnation,
-  pingPongRoundTripsOf,
-} from "../src/supervisor/stagnation.ts";
 import { discoverLawContext, fsLawGateIo } from "../src/law/host-adapter.ts";
 import { resolveStagnationRounds, validatePolicy } from "../assets/src/law-policy.mjs";
 
@@ -554,53 +542,12 @@ test("recovery headless degradation: no agents face → stale judgment UNDECIDAB
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// M3-WI30 (plan 2026-08-26-1954-3) — stagnation fingerprint + ping-pong
-// detection cases (03 §7/§8; the WI31 gate share in this file).
+// M3-WI30 activity-only stagnation detection cases (03 §7/§8).
 // ═══════════════════════════════════════════════════════════════════════════
 
-// ── 10. fingerprint aggregation determinism + the basisHash-domain pin ─────
+// ── 10. stagnation N-1/N boundary e2e through the watchdog cycle end ───────
 
-test("stagnation fingerprint: deterministic aggregation + domain pin — DRR/Verification/Closure appends do NOT move it; status flips / ticks / Closure Findings / roadmap changes DO", async () => {
-  const root = tmpProject();
-  try {
-    writePolicy(root);
-    writeRoadmap(root);
-    const plan = writePlan(root, "docs/plans/demo/fp.md", { status: "draft", ticked: false });
-    const roadmapFile = join(root, "docs", "backlog", "demo-roadmap.md");
-    const readPlan = () => [{ path: plan, text: readFileSync(plan, "utf8") }];
-    const readRoadmap = () => readFileSync(roadmapFile, "utf8");
-
-    const f1 = computeLedgerFingerprint(readPlan(), readRoadmap());
-    assert.equal(computeLedgerFingerprint(readPlan(), readRoadmap()), f1, "same corpus twice → same fingerprint (determinism)");
-
-    // in-flight bookkeeping appends stay OUTSIDE the fingerprint domain
-    writeFileSync(plan, readFileSync(plan, "utf8").replace("## Draft Review Record\n", "## Draft Review Record\n- dispatch review #review-run-1-fp-1-aaaa0000 to ses_rev\n"), "utf8");
-    assert.equal(computeLedgerFingerprint(readPlan(), readRoadmap()), f1, "DRR dispatch line append does not reset the fingerprint (review dispatch ≠ progress)");
-    writeFileSync(plan, readFileSync(plan, "utf8").replace("## Verification\n", "## Verification\n- [x] test @ basisHash=ab12cd34 — PASS\n"), "utf8");
-    assert.equal(computeLedgerFingerprint(readPlan(), readRoadmap()), f1, "Verification pass-line append does not reset the fingerprint");
-    writeFileSync(plan, readFileSync(plan, "utf8").replace("## Closure\n", "## Closure\n- accepted #audit-run-1-fp-1-aaaa0000：closure ok\n"), "utf8");
-    assert.equal(computeLedgerFingerprint(readPlan(), readRoadmap()), f1, "Closure receipt-line append does not reset the fingerprint");
-
-    // progress faces DO move it
-    writeFileSync(plan, readFileSync(plan, "utf8").replace("status: draft", "status: active"), "utf8");
-    assert.notEqual(computeLedgerFingerprint(readPlan(), readRoadmap()), f1, "frontmatter status flip moves the fingerprint");
-    const withFlip = computeLedgerFingerprint(readPlan(), readRoadmap());
-    writeFileSync(plan, readFileSync(plan, "utf8").replace("- [ ] only item", "- [x] only item"), "utf8");
-    assert.notEqual(computeLedgerFingerprint(readPlan(), readRoadmap()), withFlip, "checkbox tick moves the fingerprint");
-    const withTick = computeLedgerFingerprint(readPlan(), readRoadmap());
-    writeFileSync(plan, `${readFileSync(plan, "utf8")}\n## Closure Findings\n\n- [ ] rework item\n`, "utf8");
-    assert.notEqual(computeLedgerFingerprint(readPlan(), readRoadmap()), withTick, "Closure Findings append moves the fingerprint");
-    const withFindings = computeLedgerFingerprint(readPlan(), readRoadmap());
-    writeFileSync(roadmapFile, readFileSync(roadmapFile, "utf8").replace("- [ ] WI2 second item", "- [x] WI2 second item"), "utf8");
-    assert.notEqual(computeLedgerFingerprint(readPlan(), readRoadmap()), withFindings, "roadmap change moves the fingerprint (full-text hash)");
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-// ── 11. stagnation N-1/N boundary e2e through the watchdog cycle end ───────
-
-test("stagnation e2e: N-1 rounds never trip, round N trips R4 blocked + receipts (fingerprint leg through the watchdog cycle end)", async () => {
+test("stagnation e2e: plan and roadmap mutations do not reset activity-only N-1/N accumulation", async () => {
   const root = tmpProject();
   try {
     writePolicy(root, { stagnationRounds: 2 });
@@ -608,7 +555,11 @@ test("stagnation e2e: N-1 rounds never trip, round N trips R4 blocked + receipts
     writePlan(root, "docs/plans/demo/stuck.md", { status: "draft", ticked: false });
     const fake = recoveryAgents({});
     const wd = makeWatchdog(root, fake.service);
-    await wd.runCycle("manual"); // cycle 1: baseline fingerprint (the plan-review dispatch line lands OUTSIDE the domain)
+    await wd.runCycle("manual"); // cycle 1: activity-only round 1
+    const plan = join(root, "docs", "plans", "demo", "stuck.md");
+    const roadmap = join(root, "docs", "backlog", "demo-roadmap.md");
+    writeFileSync(plan, readFileSync(plan, "utf8").replace("status: draft", "status: active"), "utf8");
+    writeFileSync(roadmap, readFileSync(roadmap, "utf8").replace("- [ ] WI2 second item", "- [x] WI2 second item"), "utf8");
     await wd.runCycle("manual"); // cycle 2: stagnant round 1 = N-1
     assert.equal(wd.statusFace().terminal, null, "N-1 stagnant rounds → no terminal");
     await wd.runCycle("manual"); // cycle 3: stagnant round 2 = N → R4
@@ -618,7 +569,7 @@ test("stagnation e2e: N-1 rounds never trip, round N trips R4 blocked + receipts
     assert.equal(terminal.rule, "R4");
     assert.equal(terminal.source, "cycle");
     const receipts = receiptsOf(root);
-    assert.ok(receipts.some((r) => r.event === "stagnation-detected" && /fingerprint 2\/2 rounds unchanged ∧ zero activity/.test(r.detail ?? "")), "stagnation-detected observation receipt with the fingerprint detail");
+    assert.ok(receipts.some((r) => r.event === "stagnation-detected" && /activity 2\/2 rounds with zero activity/.test(r.detail ?? "")), "stagnation receipt records activity-only detection");
     assert.ok(receipts.some((r) => r.event === "run-terminal:blocked" && /R4/.test(r.detail ?? "")), "run-terminal:blocked receipt carries the R4 reasons");
     wd.stop();
   } finally {
@@ -626,7 +577,7 @@ test("stagnation e2e: N-1 rounds never trip, round N trips R4 blocked + receipts
   }
 });
 
-// ── 12. activity participation (03 §7 literal: activity MUST participate) ──
+// ── 11. activity participation (03 §7 literal: activity MUST participate) ──
 
 test("stagnation activity signal: in-window noteActivity clears the count (long task not yet landed — never misjudged) and the count re-accumulates after activity stops", async () => {
   const root = tmpProject();
@@ -649,7 +600,7 @@ test("stagnation activity signal: in-window noteActivity clears the count (long 
       await wd.runCycle("manual");
       clockNow += 60_000;
     }
-    assert.equal(wd.statusFace().terminal, null, "unchanged fingerprint WITH in-window activity never trips — the 03 §7 positive case");
+    assert.equal(wd.statusFace().terminal, null, "in-window activity never trips — the 03 §7 positive case");
     assert.equal(receiptsOf(root).filter((r) => r.event === "stagnation-detected").length, 0, "no stagnation receipt while active");
     // activity stops → the stale signal ages out of the window → the count
     // re-accumulates from zero and trips at N
@@ -665,83 +616,7 @@ test("stagnation activity signal: in-window noteActivity clears the count (long 
   }
 });
 
-// ── 13. ping-pong unit boundaries + e2e oscillation face ───────────────────
-
-test("ping-pong unit: <K round trips no fact / =K saturated fact / terminal resets / third state restarts the pair; K derived from the same policy key", () => {
-  assert.equal(pingPongRoundTripsOf(10), 2, "K = max(2, floor(N/5)) — N=10 → 2 round trips (4 flips)");
-  assert.equal(pingPongRoundTripsOf(3), 2, "K floor 2 at small N");
-  assert.equal(pingPongRoundTripsOf(25), 5, "K scales: N=25 → 5 round trips");
-
-  const planAt = (status) => [{ path: "/p/osc.md", text: `---\nstatus: ${status}\nmission: demo\nwork-item: M1-WI1\n---\n\n# Plan\n\n## Phase 1 — Work\n\n- [ ] only item\n` }];
-  const observe = (state, status, now, threshold = 10) =>
-    observeStagnation(state, { plans: planAt(status), roadmapText: "roadmap", activityAt: [], now, activityWindowMs: 30_000, threshold });
-
-  let state = initialStagnationState();
-  let out = observe(state, "active", 1_000); // first sample — no flip
-  assert.equal(out.fact, null);
-  for (const [status, label] of [["held", "flip 1"], ["active", "flip 2"], ["held", "flip 3"]]) {
-    out = observe(state, status, 1_000);
-    assert.equal(out.fact, null, `${label}: below K round trips — no fact`);
-  }
-  out = observe(state, "active", 1_000); // flip 4 = 2 complete round trips
-  assert.notEqual(out.fact, null, "K round trips → saturated fact");
-  assert.deepEqual(out.fact, { rounds: 10, threshold: 10 }, "saturated injection {rounds: threshold, threshold} — equivalently satisfies R4");
-  assert.equal(out.pingPongPlan, "/p/osc.md");
-
-  // third state restarts the pair
-  state = initialStagnationState();
-  observe(state, "active", 1_000);
-  observe(state, "held", 1_000);
-  observe(state, "active", 1_000);
-  observe(state, "held", 1_000);
-  out = observe(state, "draft", 1_000); // breaks the active↔held pair
-  assert.equal(out.fact, null, "a third state restarts the alternation count");
-
-  // terminal progress resets
-  state = initialStagnationState();
-  observe(state, "active", 1_000);
-  observe(state, "held", 1_000);
-  observe(state, "active", 1_000);
-  observe(state, "held", 1_000);
-  out = observe(state, "cancelled", 1_000); // terminal disposition = progress
-  assert.equal(out.fact, null, "a terminal disposition resets the plan's oscillation ledger");
-
-  // threshold 0 = detector OFF
-  state = initialStagnationState();
-  for (const s of ["active", "held", "active", "held", "active"]) out = observe(state, s, 1_000, 0);
-  assert.equal(out.fact, null, "stagnationRounds 0 ⇒ detector inert — R4 never evaluates");
-});
-
-test("ping-pong e2e: active↔held oscillation with NO fingerprint stagnation trips R4 through the watchdog (the hash-blind leg)", async () => {
-  const root = tmpProject();
-  try {
-    writePolicy(root); // no stagnationRounds row → default 10 → K=2 (4 flips)
-    writeRoadmap(root, { auditRounds: 0 }); // R1/R2/R3 off — only R4 can decide
-    const plan = writePlan(root, "docs/plans/demo/osc.md", { status: "active", ticked: false });
-    const setStatus = (status) => writeFileSync(plan, readFileSync(plan, "utf8").replace(/status: \w+/, `status: ${status}`), "utf8");
-    const fake = recoveryAgents({});
-    const wd = makeWatchdog(root, fake.service);
-    await wd.runCycle("manual"); // sample: active (no flips yet)
-    for (const status of ["held", "active", "held"]) {
-      setStatus(status);
-      await wd.runCycle("manual"); // flips 1..3 — each flip MOVES the fingerprint (the fingerprint leg never accumulates)
-      assert.equal(wd.statusFace().terminal, null, "3 flips < 2 round trips — no terminal");
-    }
-    setStatus("active");
-    await wd.runCycle("manual"); // flip 4 = 2 complete round trips → saturated injection
-    const terminal = wd.statusFace().terminal;
-    assert.notEqual(terminal, null, "2 complete round trips trip the breaker even though the fingerprint changed every cycle");
-    assert.equal(terminal.word, "blocked");
-    assert.equal(terminal.rule, "R4");
-    const detected = receiptsOf(root).find((r) => r.event === "stagnation-detected");
-    assert.ok(detected !== undefined && /ping-pong/.test(detected.detail ?? "") && detected.plan === plan, "stagnation-detected receipt names the oscillating plan");
-    wd.stop();
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-// ── 14. restart clears the scratch state (03 §6 归零成文接受) ────────────────
+// ── 12. restart clears the scratch state (03 §6 归零成文接受) ────────────────
 
 test("stagnation restart semantics: a fresh mount never trips early — rounds re-accumulate from zero (conservative direction)", async () => {
   const root = tmpProject();

@@ -11,7 +11,6 @@ import {
   renameSync,
   existsSync,
   readdirSync,
-  chmodSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
@@ -19,6 +18,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import http from "node:http";
 import { startMonitor, parseRoadmapMarkdown, __setSpawnerForTest, handleStartDraft } from "../src/monitor.js";
+import { computeBasisHash } from "../src/ledger-sections.mjs";
 
 // ── Test helpers ──────────────────────────────────────────────────────────
 
@@ -1495,6 +1495,63 @@ describe("Monitor — detail page fixes (FIX-1~4)", () => {
         assert.equal(res.status, 200);
         assert.equal(res.body.plans.length, 1);
         assert.equal(res.body.plans[0].fileName, "2026-06-30-001-real.md");
+      } finally {
+        await monitor.close();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("lists nested plans with shared ledger-derived status and excludes nested guides", async () => {
+    const root = makeTmpProject();
+    try {
+      const plansDir = join(root, "docs", "plans", "nested");
+      const childDir = join(plansDir, "batch");
+      mkdirSync(childDir, { recursive: true });
+      writeFileSync(join(childDir, "active.md"), "---\nstatus: active\nmission: m\nwork-item: WI1\n---\n# active\n\n## Phase 1\n\n- [ ] pending\n");
+      writeFileSync(join(childDir, "00-guide.md"), "---\nstatus: draft\nmission: m\nwork-item: WI2\n---\n# guide\n");
+      makeMission(root, "nested", {
+        name: "nested",
+        plansDir: "docs/plans/nested",
+        roadmapPath: "docs/backlog/nested.md",
+        commands: { test: "npm test" },
+      });
+
+      const monitor = await startMonitor({ projectRoot: root, port: 0, webDir: join(root, "web") });
+      try {
+        const res = await fetchJson(`${baseUrl(monitor)}/api/configs/nested/plans`);
+        assert.equal(res.status, 200);
+        assert.equal(res.body.plans.length, 1);
+        assert.equal(res.body.plans[0].fileName, "batch/active.md");
+        assert.equal(res.body.plans[0].status, "active");
+      } finally {
+        await monitor.close();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("uses the mission default verify key when displaying a derived-completed plan", async () => {
+    const root = makeTmpProject();
+    try {
+      const plansDir = join(root, "docs", "plans", "defaults");
+      mkdirSync(plansDir, { recursive: true });
+      const auditId = "#audit-run-defaults-plan-1-a1b2c3d4";
+      const basis = "---\nstatus: active\nmission: defaults\nwork-item: WI1\n---\n# completed\n\n## Phase 1\n\n- [x] work\n\n## Verification\n\n## Closure\n\n- dispatch audit " + auditId + " to ses_a\n- accepted " + auditId + ": accepted\n";
+      const plan = basis.replace("## Verification\n\n", `## Verification\n\n- pass test run-defaults basisHash=${computeBasisHash(basis)} exit=0\n\n`);
+      writeFileSync(join(plansDir, "completed.md"), plan);
+      makeMission(root, "defaults", {
+        name: "defaults",
+        plansDir: "docs/plans/defaults",
+        roadmapPath: "docs/backlog/defaults.md",
+        commands: { test: "npm test" },
+      });
+      const monitor = await startMonitor({ projectRoot: root, port: 0, webDir: join(root, "web") });
+      try {
+        const res = await fetchJson(`${baseUrl(monitor)}/api/configs/defaults/plans`);
+        assert.equal(res.body.plans[0].status, "completed");
       } finally {
         await monitor.close();
       }
@@ -3328,16 +3385,18 @@ describe("Monitor — WI49 robustness: ghost dirs + read guards (Phase 1)", () =
     }
   });
 
-  it("WI49-3: serveStaticFile/serveIndex read failure after stat check → 404 (TOCTOU guard)", { skip: process.getuid && process.getuid() === 0 ? "root ignores file permission bits" : false }, async () => {
+  it("WI49-3: serveStaticFile/serveIndex read failure after stat check → 404 (TOCTOU guard)", async () => {
     const root = makeTmpProject();
     try {
       writeFileSync(join(root, "web", "index.html"), "<!DOCTYPE html><html><body>UI</body></html>");
       mkdirSync(join(root, "web", "assets"), { recursive: true });
       writeFileSync(join(root, "web", "assets", "app.js"), "console.log(1)");
-      // Owner-unreadable files: statSync().isFile() passes, readFileSync throws
-      // EACCES — the deterministic stand-in for a delete between stat and read.
-      chmodSync(join(root, "web", "index.html"), 0o000);
-      chmodSync(join(root, "web", "assets", "app.js"), 0o000);
+      // Replace both files with directories after startup. This is portable across
+      // Windows and POSIX and simulates a path replacement between checks and reads.
+      rmSync(join(root, "web", "index.html"));
+      rmSync(join(root, "web", "assets", "app.js"));
+      mkdirSync(join(root, "web", "index.html"));
+      mkdirSync(join(root, "web", "assets", "app.js"));
       const monitor = await startMonitor({ projectRoot: root, port: 0, webDir: join(root, "web") });
       try {
         const indexRes = await fetchJson(`${baseUrl(monitor)}/`);
@@ -3351,8 +3410,6 @@ describe("Monitor — WI49 robustness: ghost dirs + read guards (Phase 1)", () =
         const alive = await fetchJson(`${baseUrl(monitor)}/api/runs`);
         assert.equal(alive.status, 200, "monitor survives the failed reads");
       } finally {
-        chmodSync(join(root, "web", "index.html"), 0o644);
-        chmodSync(join(root, "web", "assets", "app.js"), 0o644);
         await monitor.close();
       }
     } finally {
@@ -3391,5 +3448,3 @@ describe("Monitor — WI49 robustness: ghost dirs + read guards (Phase 1)", () =
     }
   });
 });
-
-

@@ -31,8 +31,8 @@
  *                                    verify-keys gate, then EXECUTE the
  *                                    commands via verify-runner.mjs and emit
  *                                    per-key `{exitCode, passLine}` data
- *                                    (basisHash = computeBasisHash of the
- *                                    plan content; 01 §4.2 grammar). stdout
+ *                                    (direct command receipt grammar; 01 §4.2).
+ *                                    stdout
  *                                    JSON only — the pass line is NOT
  *                                    written into the plan file (the writer
  *                                    stays the supervisor / engine
@@ -400,7 +400,7 @@ async function runVerifyMode(file) {
     },
   );
   const runId = process.env.MISSION_DRIVER_RUN_ID ?? `gate-check-${new Date().toISOString().replace(/[-:]/g, "").split(".")[0]}`;
-  const { basisHash, results } = await runVerifyCommands({
+  const { results } = await runVerifyCommands({
     keys: resolved.keys,
     commands,
     projectRoot,
@@ -421,7 +421,6 @@ async function runVerifyMode(file) {
         usedDefaultKeys: resolved.usedDefault,
         keyResolution: resolved.ok ? "ok" : { problems: resolved.problems },
         gateCheck: { decision: gateOut.decision, reason: gateOut.reason, observations: gateOut.observations },
-        basisHash,
         results: results.map(({ key, command, exitCode, timedOut, durationMs, passLine, output }) => ({
           key,
           command,
@@ -617,7 +616,6 @@ function runLawMode(file) {
           completed: derived.completed,
           conjuncts: derived.conjuncts,
           reasons: derived.reasons,
-          basisHash: derived.basisHash,
           verification: derived.verification,
         },
         defaultVerifyKeys,

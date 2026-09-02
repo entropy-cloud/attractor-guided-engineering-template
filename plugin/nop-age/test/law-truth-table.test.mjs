@@ -33,7 +33,7 @@ import {
   workItemRegistered,
 } from "../assets/src/law-core.mjs";
 import { parsePolicy, policyAgentNames, checkDistinctModelSatisfiability, resolveMaxAuditRounds } from "../assets/src/law-policy.mjs";
-import { scanPlanLedger, scanRoadmapLedger, computeBasisHash, deriveCompleted, draftPlans, activePlans } from "../assets/src/ledger-sections.mjs";
+import { scanPlanLedger, scanRoadmapLedger, deriveCompleted, draftPlans, activePlans } from "../assets/src/ledger-sections.mjs";
 import { defaultVerifyKeys, passLineFor, resolveVerifyPlan, runVerifyCommands } from "../assets/src/verify-runner.mjs";
 import {
   evaluateLawCall,
@@ -907,15 +907,13 @@ ${closureBody}`;
 }
 
 function completedPlan() {
-  const base = fullTickPlan({ closureBody: "" });
-  const hash = computeBasisHash(base);
   return fullTickPlan({
     closureBody: `- dispatch audit ${AUDIT_ID} to ses_auditor_1 models={exec:glm-5.2,aud:glm-5.2}\n- accepted ${AUDIT_ID}：审计通过\n`,
-    verificationBody: `\n- pass test run-1 basisHash=${hash} exit=0\n`,
+    verificationBody: "\n- pass test run-1 exit=0\n",
   });
 }
 
-test("gate3-①: full-tick + bound receipts + matching pass basisHash → completion formula satisfied → allow", () => {
+test("gate3-①: full-tick + bound receipts + successful pass → completion formula satisfied → allow", () => {
   const plan = completedPlan();
   assert.equal(deriveCompleted(plan).completed, true);
   const out = gate3ctx(null, plan);
@@ -923,12 +921,12 @@ test("gate3-①: full-tick + bound receipts + matching pass basisHash → comple
   assert.match(out.observations[0].reason, /completion formula satisfied/);
 });
 
-test("gate3-①: reworked full-tick with STALE pass basisHash denies pointing at re-verification (rework reuse case)", () => {
+test("gate3-①: reworked full-tick retains direct successful verification", () => {
   const plan = completedPlan().replace("- [x] only item", "- [x] only item\n- [x] rework item");
-  assert.equal(deriveCompleted(plan).completed, false);
+  assert.equal(deriveCompleted(plan).completed, true);
   const out = gate3ctx(null, plan);
-  assert.equal(out.decision, "deny");
-  assert.match(out.reason, /completion formula is unsatisfied — .*basis-hash-mismatch:test/);
+  assert.equal(out.decision, "allow");
+  assert.match(out.observations[0].reason, /completion formula satisfied/);
 });
 
 test("gate3-②: full-tick transition by the claim holder clearing the claim → allow entering awaitingClosure", () => {
@@ -973,7 +971,7 @@ test("gate3-②: no claim / wrong holder / expired claim / residual claim each d
 
 test("gate3-maintenance: pass-line and dispatch writes inside awaitingClosure allow (already full-tick, no receipt)", () => {
   const current = fullTickPlan({});
-  const withPass = fullTickPlan({ verificationBody: `\n- pass test run-1 basisHash=${computeBasisHash(fullTickPlan({}))} exit=0\n` });
+  const withPass = fullTickPlan({ verificationBody: "\n- pass test run-1 exit=0\n" });
   const out = gate3ctx(current, withPass);
   assert.equal(out.decision, "allow");
   assert.match(out.observations[0].reason, /awaitingClosure maintenance write/);
@@ -1130,12 +1128,11 @@ function fixturePlans(root) {
   const activeFile = join(dir, "active-one.md");
   writeFileSync(activeFile, LEGAL_PLAN.replace("- [x] only item", "- [ ] only item"), "utf8");
   const doneFile = join(dir, "done-one.md");
-  const doneBase = fullTickPlan({});
   writeFileSync(
     doneFile,
     fullTickPlan({
       closureBody: `- dispatch audit ${AUDIT_ID} to ses_auditor_1\n- accepted ${AUDIT_ID}：审计通过\n`,
-      verificationBody: `\n- pass test run-1 basisHash=${computeBasisHash(doneBase)} exit=0\n`,
+      verificationBody: "\n- pass test run-1 exit=0\n",
     }),
     "utf8",
   );
@@ -1166,8 +1163,8 @@ test("gate-nothing: nothing-to-draft with draft/active work remaining denies poi
     const out = terminalClaim({ kind: "nothing-to-draft" }, { plans: records });
     assert.equal(out.decision, "deny");
     assert.match(out.reason, /nothing-claim-guard: nothing-to-draft claim denied — visible unfinished work remains/);
-    assert.match(out.reason, /draftPlans=1 \(draft-one\.md\)/);
-    assert.match(out.reason, /activePlans=1 \(active-one\.md\)/);
+    assert.match(out.reason, /draftPlans=1 \((?:.*[\\/])?draft-one\.md\)/);
+    assert.match(out.reason, /activePlans=1 \((?:.*[\\/])?active-one\.md\)/);
     // only-draft vs only-active columns of the truth table
     const onlyDraft = terminalClaim({ kind: "nothing-to-draft" }, { plans: records.filter((r) => !basename(r.path).startsWith("active")) });
     assert.equal(onlyDraft.decision, "deny");
@@ -1707,16 +1704,16 @@ ${body}
 `;
 }
 
-const PASS_BODY = `\n- pass test run-1 basisHash=${"a".repeat(64)} exit=0\n`;
+const PASS_BODY = "\n- pass test run-1 exit=0\n";
 
 test("gate-append-only: tail appends allow; delete / rewrite / reorder / section removal / prose deletion deny naming the first violating line", () => {
   const current = planWithVerification(PASS_BODY);
-  const appended = planWithVerification(`${PASS_BODY}- pass build run-1 basisHash=${"b".repeat(64)} exit=0\n`);
+  const appended = planWithVerification(`${PASS_BODY}- pass build run-1 exit=0\n`);
   const ok = appendOnlyGate(appended, { current });
   assert.equal(ok.decision, "allow");
   assert.match(ok.observations[0].reason, /all append-only sections .* prefix-preserved/);
 
-  const deleted = planWithVerification(`\n- pass build run-1 basisHash=${"b".repeat(64)} exit=0\n`);
+  const deleted = planWithVerification("\n- pass build run-1 exit=0\n");
   const del = appendOnlyGate(deleted, { current });
   assert.equal(del.decision, "deny");
   assert.match(del.reason, /## Verification line \d+ was deleted or rewritten \("- pass test run-1/);
@@ -1726,8 +1723,8 @@ test("gate-append-only: tail appends allow; delete / rewrite / reorder / section
   assert.equal(rw.decision, "deny");
   assert.match(rw.reason, /was deleted or rewritten/);
 
-  const reordered = planWithVerification(`${PASS_BODY}- pass build run-1 basisHash=${"b".repeat(64)} exit=0\n`)
-    .replace(`${PASS_BODY}- pass build`, `- pass build run-1 basisHash=${"b".repeat(64)} exit=0\n${PASS_BODY.trim()}\n`);
+  const reordered = planWithVerification(`${PASS_BODY}- pass build run-1 exit=0\n`)
+    .replace(`${PASS_BODY}- pass build`, `- pass build run-1 exit=0\n${PASS_BODY.trim()}\n`);
   const ro = appendOnlyGate(reordered, { current });
   assert.equal(ro.decision, "deny");
 
@@ -1796,18 +1793,19 @@ test("runner: resolveVerifyPlan — declared keys, mission defaults, and problem
   assert.match(malformed.problems.join("; "), /verify field must be an array of command keys/);
 });
 
-test("runner: passLineFor grammar + basisHash binding over the plan text (01 §4.2)", () => {
-  const basisHash = computeBasisHash(LEGAL_PLAN);
-  const line = passLineFor({ key: "test", runId: "run-1", basisHash, exitCode: 0 });
-  assert.equal(line, `- pass test run-1 basisHash=${basisHash} exit=0`);
-  const nullExit = passLineFor({ key: "test", runId: "run-1", basisHash, exitCode: null });
+test("runner: passLineFor uses direct command key, run id, and exit code (01 §4.2)", () => {
+  const line = passLineFor({ key: "test", runId: "run-1", exitCode: 0 });
+  assert.equal(line, "- pass test run-1 exit=0");
+  const nullExit = passLineFor({ key: "test", runId: "run-1", exitCode: null });
   assert.match(nullExit, /exit=null$/);
   const scan = scanPlanLedger(LEGAL_PLAN.replace("## Verification\n", `## Verification\n\n${line}\n`));
   // the emitted line parses back through the M1 pass-line grammar
   const verification = scan.verification ?? { passes: [] };
   assert.equal(verification.passes.length, 1);
   assert.equal(verification.passes[0].key, "test");
-  assert.equal(verification.passes[0].basisHash, basisHash);
+  assert.equal(verification.passes[0].exit, 0);
+  const legacy = scanPlanLedger(LEGAL_PLAN.replace("## Verification\n", "## Verification\n\n- pass test old-run basisHash=" + "a".repeat(64) + " exit=0\n"));
+  assert.equal(legacy.verification.passes[0].exit, 0, "legacy basisHash receipts remain readable and are ignored");
 });
 
 test("runner: runVerifyCommands executes commands.* only — exit codes, timeout, and empty-mapping faces", async () => {
@@ -1820,18 +1818,17 @@ test("runner: runVerifyCommands executes commands.* only — exit codes, timeout
       slow: 'node -e "setTimeout(() => process.exit(0), 5000)"',
       empty: "",
     };
-    const { basisHash, results } = await runVerifyCommands({
+    const { results } = await runVerifyCommands({
       keys: ["ok", "fail", "slow", "empty"],
       commands,
       projectRoot: root,
       planText,
       runId: "run-e2e",
-      timeoutMs: 150,
+      timeoutMs: 1000,
     });
-    assert.equal(basisHash, computeBasisHash(planText));
     const byKey = Object.fromEntries(results.map((r) => [r.key, r]));
     assert.equal(byKey.ok.exitCode, 0);
-    assert.match(byKey.ok.passLine, /^- pass ok run-e2e basisHash=[0-9a-f]{64} exit=0$/);
+    assert.equal(byKey.ok.passLine, "- pass ok run-e2e exit=0");
     assert.equal(byKey.fail.exitCode, 3);
     assert.match(byKey.fail.passLine, /exit=3$/);
     assert.equal(byKey.slow.timedOut, true);

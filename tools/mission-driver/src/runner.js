@@ -1,5 +1,5 @@
-import { readFileSync, writeFileSync } from "node:fs";
-import { basename } from "node:path";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import { execSync } from "node:child_process";
 import { execute } from "./executor.js";
 import { IS_WIN32, killProcessTree, isAlive } from "./platform.mjs";
@@ -21,6 +21,18 @@ import { IS_WIN32, killProcessTree, isAlive } from "./platform.mjs";
  * spawning, so the child process inherits them via executor's env spread.
  */
 const DEFAULT_DRIVER_ARGS = "run -m {model} --agent {agent} --dangerously-skip-permissions {session}";
+
+export function resolveDriverExecutable(driver = "opencode", env = process.env) {
+  if (!IS_WIN32 || driver !== "opencode") return driver;
+
+  // Git Bash exposes npm's POSIX shell shim on PATH, but Windows Node cannot
+  // spawn that shim. npm's global package contains the native executable.
+  const appData = env.APPDATA;
+  const npmExecutable = appData
+    ? join(appData, "npm", "node_modules", "opencode-ai", "bin", "opencode.exe")
+    : null;
+  return npmExecutable && existsSync(npmExecutable) ? npmExecutable : driver;
+}
 
 function buildDriverArgs(config, sessionId, prompt) {
   const template = config.driverArgs || DEFAULT_DRIVER_ARGS;
@@ -66,7 +78,7 @@ function buildDriverArgs(config, sessionId, prompt) {
     args,
     useStdin: promptMode === "stdin",
     shell: false,
-    exe: config.driver || "opencode",
+    exe: resolveDriverExecutable(config.driver || "opencode"),
   };
 }
 

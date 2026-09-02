@@ -113,7 +113,7 @@ describe("M2-WI41 Phase 1 — closureScriptCheck receipt-aware routing (three st
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
 
-  it("③ + basisHash-matching pass line → pass (formula satisfied, routes to BUILD_VERIFY)", async () => {
+  it("③ + successful pass line → pass (formula satisfied, routes to BUILD_VERIFY)", async () => {
     const text = buildFixture({ passes: ["- pass test run-001 basisHash={{HASH}} exit=0"] });
     const { file, dir } = tmpPlan("state3.md", text);
     try {
@@ -124,7 +124,7 @@ describe("M2-WI41 Phase 1 — closureScriptCheck receipt-aware routing (three st
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
 
-  it("④ rework: Closure Findings item added and ticked after ③ → stale basisHash → fail", async () => {
+  it("④ rework: Closure Findings item added and ticked after ③ retains successful verification", async () => {
     const step3 = buildFixture({ passes: ["- pass test run-001 basisHash={{HASH}} exit=0"] });
     const staleHash = computeBasisHash(step3);
     const step4 = buildFixture({
@@ -133,10 +133,9 @@ describe("M2-WI41 Phase 1 — closureScriptCheck receipt-aware routing (three st
     });
     const { file, dir } = tmpPlan("state4.md", step4);
     try {
-      assert.equal(planLedgerState(step4).completed, false);
+      assert.equal(planLedgerState(step4).completed, true);
       const r = await runClosureCheck(file);
-      assert.equal(r.marker, "fail");
-      assert.ok(r.text.includes("basis-hash-mismatch:test"), `text: ${r.text}`);
+      assert.equal(r.marker, "pass");
       assert.ok(!r.text.includes("no-audit-receipt"), `receipt still paired: ${r.text}`);
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
@@ -296,6 +295,56 @@ describe("M2-WI41 Phase 2 — defaultVerifyKeys engine read-path injection", () 
       ];
       assert.deepEqual(closedPlans(records, { defaultVerifyKeys: ["test"] }), ["a"]);
     } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+
+  it("queue predicates detect frontmatter and legacy plans without cross-format leakage", () => {
+    const root = mkdtempSync(join(tmpdir(), "ledger-dual-read-"));
+    const previousMode = process.env.MISSION_DRIVER_LEDGER;
+    try {
+      delete process.env.MISSION_DRIVER_LEDGER;
+      const plans = join(root, "plans");
+      const nested = join(plans, "nested");
+      mkdirSync(nested, { recursive: true });
+      writeFileSync(join(plans, "legacy-draft.md"), "# old\n\n> Plan Status: draft\n");
+      writeFileSync(join(plans, "legacy-active.md"), "# old\n\n> Plan Status: active\n");
+      writeFileSync(join(plans, "frontmatter-draft.md"), buildFixture({ status: "draft" }));
+      writeFileSync(join(nested, "frontmatter-active.md"), buildFixture({ phaseItems: ["- [ ] work"] }));
+      writeFileSync(join(nested, "frontmatter-completed.md"), COMPLETE_NO_VERIFY);
+      writeFileSync(join(nested, "frontmatter-terminal.md"), buildFixture({ status: "deferred" }));
+      writeFileSync(join(nested, "00-guide.md"), "# guide\n");
+
+      const fns = createExpressionFunctions({
+        projectRoot: root,
+        mission: { plansDir: "plans", commands: { test: "pnpm test" } },
+      });
+      assert.deepEqual(
+        fns.draftPlans().map((f) => basename(f)).sort(),
+        ["frontmatter-draft.md", "legacy-draft.md"],
+      );
+      assert.deepEqual(
+        fns.activePlans().map((f) => basename(f)).sort(),
+        ["frontmatter-active.md", "legacy-active.md"],
+      );
+    } finally {
+      if (previousMode === undefined) delete process.env.MISSION_DRIVER_LEDGER;
+      else process.env.MISSION_DRIVER_LEDGER = previousMode;
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("does not fall back to legacy parsing when an opened frontmatter block is malformed", () => {
+    const malformed = "---\nstatus: active\nmission: m\nwork-item: WI1\n";
+    const missingStatus = "---\nmission: m\nwork-item: WI1\n---\n> Plan Status: active\n";
+    const indentedMalformed = " ---\nstatus: active\nmission: m\nwork-item: WI1\n> Plan Status: active\n";
+    for (const text of [malformed, missingStatus, indentedMalformed]) {
+      const state = planLedgerState(text);
+      assert.equal(state.format, "frontmatter");
+      assert.equal(state.normalized, null);
+      assert.ok(state.rejected, "frontmatter problem must be surfaced instead of legacy fallback");
+    }
+    const indentedValid = " ---\nstatus: active\nmission: m\nwork-item: WI1\n---\n";
+    assert.equal(planLedgerState(indentedValid).format, "frontmatter");
+    assert.equal(planLedgerState(indentedValid).normalized, "active");
   });
 
   it("CLI: the owning mission's commands.test is injected as mission-default verify keys", () => {

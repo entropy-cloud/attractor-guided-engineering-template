@@ -279,14 +279,9 @@ const SCENARIOS = [
     expect: { status: "failed", exit: 1 },
   },
   {
-    // D1 documented drift (packaging doc §Implementation state and
-    // boundaries): the process path drops `timeout` (60min default → command
-    // completes → pass); the native path consumes it in ms (killed at 100ms
-    // → fail). Asserted EXACTLY as documented — either side changing forces
-    // this pin (and its doc citation) to be revisited.
+    // Both executor paths now consume the engine timeout in milliseconds.
     id: "tool-timeout-drift",
     group: 6,
-    divergent: true,
     flow: baseFlow({
       BUILD: { type: "tool", timeout: 100,
         command: "node -e setTimeout(()=>{console.log('late')},800)",
@@ -294,10 +289,7 @@ const SCENARIOS = [
     }, { entry: "BUILD" }),
     turns: [],
     expectTurnRoles: ["tool"],
-    expectByLeg: {
-      process: { status: "completed", exit: 0 },
-      native: { status: "failed", exit: 1 },
-    },
+    expect: { status: "failed", exit: 1 },
   },
 
   // ── group 5: flow budgets ────────────────────────────────────────────────

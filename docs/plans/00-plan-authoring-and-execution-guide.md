@@ -41,7 +41,7 @@ If unsure, use a full plan.
 8. **Record skill usage deliberately.** For each phase or item where a reusable skill matters, record `Skill: <name>` or `Skill: none`. Skills choose the work method, not the business truth. If a skill is named, its required inputs and expected output must already be clear from `docs/skills/README.md` and the referenced owner docs.
 9. **Record Decisions with rationale.** Every `Decision` item must document the choice, the alternatives considered, and the residual risk if any. Write the rationale into the plan or a referenced doc. If a decision requires prototyping or exploration before committing, add a temporary `Explore` item that must conclude before the `Decision` resolves. Framework-forced or obvious choices (e.g. "must match existing framework pattern") can be noted as constrained without full alternatives analysis.
 10. **Checklist integrity before closure.** Before closure, no in-scope checklist item may remain unchecked. Either complete it or explicitly move it out of scope with a written reason. Scope narrowing after plan approval is a scope change and must be recorded with rationale; silently removing items from scope is a violation.
-11. **Completion is derived (01 §5.2).** A plan is closed iff: `status: active` ∧ every counting-domain checkbox is `[x]` ∧ every frontmatter `verify` key has a `## Verification` pass line whose `basisHash` equals the plan's current basis hash ∧ `## Closure` contains a dispatch line and a same-id accepted line. Nobody writes `completed` — there is no status text to keep consistent with the checkboxes; consistency between "declared done" and "actually done" is enforced by the formula and the M2 gates. Phase progress = that Phase's `[ ]` count (no per-Phase status lines exist).
+11. **Completion is derived (01 §5.2).** A plan is closed iff: `status: active` ∧ every counting-domain checkbox is `[x]` ∧ every frontmatter `verify` key has a successful `## Verification` pass line ∧ `## Closure` contains a dispatch line and a same-id accepted line. Nobody writes `completed` — there is no status text to keep consistent with the checkboxes; consistency between "declared done" and "actually done" is enforced by the formula and the M2 gates. Phase progress = that Phase's `[ ]` count (no per-Phase status lines exist).
 12. **Independent review and closure audit (receipt-enforced).** A plan may only reach `active` via an independent draft review (receipt lines in `## Draft Review Record`: dispatch + date-iteration conclusion sharing one id) and may only close via an independent closure audit (dispatch + accepted pair in `## Closure`). Self-closing is structurally impossible — `completed` cannot be written. Protected areas, unresolved product risk, and source-of-truth conflicts still require human/subagent review or stay open, per `AGENTS.md`.
 13. **Non-degradable items** cannot be downgraded to non-blocking follow-ups: confirmed live defects, confirmed contract drift, confirmed owner-doc drift, and CI/lint rules already fixed in the repo.
 
@@ -62,7 +62,7 @@ Format subset (hard boundary, 01 §2): flat scalar keys plus single-level flow a
 | `status` | enum string: `draft \| active \| held \| cancelled \| superseded \| deferred` | per transition table (01 §5.1) | required; `completed` is a derived status and must never be written |
 | `mission` | non-empty string | drafter at plan creation | required |
 | `work-item` | non-empty string | drafter at plan creation | required; must hit a registered roadmap work item (cross-file check lands with M2) |
-| `group` | non-empty string | drafter | optional batch tag; falls back to the filename timestamp prefix when absent |
+| `group` | non-empty string | drafter | optional shared review-batch identifier; use only for plans deliberately drafted in one batch that share reviewer context or pool scope. It is not a creation date; omit for independent plans. Filename timestamp prefix is the fallback when absent. |
 | `failures` | non-negative integer | supervisor (failure attribution) | optional; reset to 0 in the same write that moves held to active |
 | `verify` | single-level array of command keys | drafter | optional; defaults to the mission default when absent |
 | `agent` | agent-name string | drafter / supervisor routing | optional; may only reference an agents-list name from `autonomy.policy.yml` (cross-file check lands with M2) |
@@ -77,7 +77,7 @@ Example (minimal valid set):
 status: active
 mission: age-autonomy-implementation
 work-item: M1-WI3
-group: "2026-08-25-0635"
+# group: "shared-review-batch"  # Optional; omit unless this plan shares a deliberate review batch.
 failures: 0
 verify: [test]
 ---
@@ -118,7 +118,7 @@ Body blocks, in document order. `## Phase <n>` is an h2 heading that may carry a
 - 2026-08-25：iteration 1，共识 acceptable-as-is #review-2026-08-25-063133-mission-driver-2026-08-25-0900-demo-plan-1-9f8e7d6c
 ## Closure Findings
 ## Verification
-- pass test 2026-08-25-063133-mission-driver basisHash=3f2a9c1b8e7d4f60a5c2e1b9d8f7a3c6e5b4d2f1a9c8e7b6d5f4a3c2e1b9d8f7 exit=0
+- pass test 2026-08-25-063133-mission-driver exit=0
 ## Closure
 - dispatch audit #audit-2026-08-25-063133-mission-driver-2026-08-25-0900-demo-plan-1-a1b2c3d4 to ses_auditor_1
 - accepted #audit-2026-08-25-063133-mission-driver-2026-08-25-0900-demo-plan-1-a1b2c3d4：审计结论与证据
@@ -136,7 +136,7 @@ The example above is fixture-isomorphic: it parses green under `scanPlanLedger` 
 
 - Dispatch lines: `- dispatch (review|audit) #<id> to <sessionId>`, written before dispatch; reviewers/auditors may only append conclusion lines after it.
 - ids: `#review-<runId>-<plan>-<iter>-<nonce8>` / `#audit-<runId>-<plan>-<round>-<nonce8>`; `<plan>` is the filename stem (without `.md`); `<nonce8>` is 8 hex chars (prevents pre-forged receipts). Parsed tail-anchored, so hyphen-rich stems are safe.
-- pass lines: `- pass <commandKey> <runId> basisHash=<sha256hex> exit=<code>`; a pass line satisfies mechanical verification only when `exit=0` and its `basisHash` equals the plan's current basis hash (`computeBasisHash` over the frontmatter + all Phase sections + `## Closure Findings`).
+- pass lines: `- pass <commandKey> <runId> exit=<code>`; a pass line satisfies mechanical verification when its command key is required by the plan and `exit=0`. Historical receipts with an additional `basisHash` token remain readable but the token is ignored.
 - A dispatch line without a same-id conclusion line is a derived-state fact (feeds `awaitingClosure` / the completion formula), not a syntax error.
 
 ### Counting-domain and append-only rules
@@ -190,7 +190,7 @@ If any of these fail, the plan stays open (its unchecked items keep it open auto
 status: draft
 mission: <mission-name>
 work-item: <roadmap-work-item-label>
-group: "{YYYY-MM-DD-HHmm}"
+# group: "<shared-review-batch>" # Optional; omit unless this plan shares a deliberate review batch.
 verify: [test]
 ---
 

@@ -24,7 +24,7 @@ Legacy format:
 Ledger format:
 - Frontmatter `status: active` (NEVER write `completed` — it is a derived status)
 - Every `## Phase <n>` section fully `[x]`, no unchecked item anywhere in the counting domain
-- `## Verification` with pass lines and `## Closure` with a paired dispatch/accepted receipt (see PASS path below — if they are missing because execution is genuinely unfinished, output `issues` instead of forging receipts)
+- `## Verification` with successful pass lines and `## Closure` with a paired dispatch/accepted receipt (see PASS path below — if they are missing because execution is genuinely unfinished, output `issues` instead of forging receipts)
 
 ### Fix Procedure
 
@@ -55,7 +55,7 @@ The plan structure is valid. Now verify the SEMANTICS:
 
 2. **Anti-Hollow check**: New code must be called at runtime / wired into the system. Look for empty function bodies `{}`, `return null` placeholders, swallowed exceptions, components registered but never reachable.
 
-3. **Completion derivation instead of five-point text consistency**: Legacy plans — verify Plan Status / Phase statuses / Exit Criteria / Closure Gates / Closure evidence all agree. Ledger plans — there is no written completion state to cross-check: verify the DERIVATION inputs instead (all checkboxes ticked; `## Verification` pass lines present for the plan's frontmatter `verify` keys; no contradiction between log entries and the repo). Never write `completed` into a ledger plan.
+3. **Completion derivation instead of five-point text consistency**: Legacy plans — verify Plan Status / Phase statuses / Exit Criteria / Closure Gates / Closure evidence all agree. Ledger plans — there is no written completion state to cross-check: verify the DERIVATION inputs instead (all checkboxes ticked; successful `## Verification` pass lines present for the plan's frontmatter `verify` keys; no contradiction between log entries and the repo). Never write `completed` into a ledger plan.
 
 4. **Deferred honesty**: No in-scope live defect or contract drift hidden in "Deferred" or "Non-Blocking Follow-ups".
 

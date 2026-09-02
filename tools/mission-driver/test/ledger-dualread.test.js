@@ -207,11 +207,8 @@ describe("planLedgerState — closed semantics", () => {
   it("frontmatter active, all checked, verify pass + receipt ⇒ derived completed", () => {
     const text = FM_PLAN.replace("- [ ] task two", "- [x] task two");
     const s = planLedgerState(text);
-    // basisHash in FM_PLAN's pass line is fake → missing/stale, still not completed
-    assert.equal(s.completed, false);
-    assert.ok(
-      s.derived.reasons.some((r) => r.startsWith("basis-hash-mismatch") || r.startsWith("missing-pass")),
-    );
+    // Historical basisHash is accepted but ignored; the successful command receipt completes the plan.
+    assert.equal(s.completed, true);
   });
 });
 

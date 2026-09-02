@@ -56,7 +56,7 @@
  *
  * ── R4 input seam (Deferred → WI30) ─────────────────────────────────────────
  * R4 consumes an INJECTED stagnation fact { rounds, threshold } — the
- * fingerprint detection machinery (ledger hash + activity signal over N
+ * activity-only detection machinery (noteActivity signal over N
  * rounds) is WI30. This core only pins the input interface; the N threshold's
  * policy configuration key lands with WI30. No stagnation injected ⇒ R4 is
  * not evaluated.
@@ -69,7 +69,7 @@ import type { SupervisorDecision, SupervisorSnapshot } from './decision-core.ts'
 export type TerminationWord = 'completed' | 'partial' | 'blocked' | 'continue'
 export type TerminationRule = 'R1' | 'R2' | 'R3' | 'R4'
 
-/** WI30 stagnation fingerprint fact — injected, never computed here. */
+/** WI30 activity-only stagnation fact — injected, never computed here. */
 export interface StagnationFact {
   /** consecutive stagnant rounds observed (ledger hash + activity signal unchanged). */
   rounds: number
@@ -210,13 +210,13 @@ export function evaluateTermination(snapshot: TerminationSnapshotFace, limits: T
   }
 
   // R4 — stagnation circuit breaker: injected fact only (WI30 supplies the
-  // fingerprint; this core pins the input seam).
+  // activity-only detector; this core pins the input seam).
   if (limits.stagnation !== undefined && limits.stagnation.rounds >= limits.stagnation.threshold) {
     return {
       decision: 'blocked',
       rule: 'R4',
       reasons: [
-        `R4: stagnation fingerprint ${limits.stagnation.rounds} consecutive rounds ≥ threshold ${limits.stagnation.threshold} (ledger + activity signal unchanged) — stagnation circuit breaker (fact supplied by the WI30 detector)`,
+        `R4: stagnation activity ${limits.stagnation.rounds} consecutive rounds ≥ threshold ${limits.stagnation.threshold} (zero noteActivity) — stagnation circuit breaker (fact supplied by the WI30 detector)`,
       ],
     }
   }

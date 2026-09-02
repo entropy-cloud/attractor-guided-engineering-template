@@ -763,6 +763,18 @@ function tailText(text: string, maxLines: number, maxChars: number): string {
   return lines.slice(-maxLines).join('\n').slice(-maxChars)
 }
 
+function splitToolCommand(command: string): string[] {
+  const text = String(command).trim()
+  // Node's executable path can contain spaces on Windows; callers commonly
+  // provide it unquoted as `${process.execPath} <script>`.
+  if (text.startsWith(process.execPath) && /\s/u.test(text.slice(process.execPath.length, process.execPath.length + 1))) {
+    return [process.execPath, ...text.slice(process.execPath.length).trim().split(/\s+/u).filter(Boolean)]
+  }
+  const match = text.match(/^(?:"([^"]+)"|'([^']+)'|(\S+))(?:\s+(.*))?$/u)
+  if (match === null) return []
+  return [match[1] ?? match[2] ?? match[3]!, ...(match[4] ? match[4].split(/\s+/u).filter(Boolean) : [])]
+}
+
 /**
  * Minimal spawn path for tool steps in native mode: child_process spawn with
  * cwd from config, exit-code/ok mapping, output written to a run-dir log
@@ -784,7 +796,7 @@ export function runNativeTool(
   const runDir = config.runDir
   const logFile = genLogFile(runDir, stepName)
   const cwd = config.projectRoot || undefined
-  const parts = String(command).split(' ').filter(Boolean)
+  const parts = splitToolCommand(command)
   const cmd = parts[0]
   const timeoutMs = Number.isFinite(opts?.timeout) && (opts?.timeout as number) > 0
     ? (opts?.timeout as number)
@@ -815,7 +827,8 @@ export function runNativeTool(
       child = spawn(cmd, parts.slice(1), {
         cwd,
         stdio: ['ignore', 'pipe', 'pipe'],
-        shell: process.platform === 'win32',
+        // argv spawning preserves executable paths containing spaces on Windows.
+        shell: false,
         windowsHide: true,
         env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0', CLICOLOR: '0' },
       })

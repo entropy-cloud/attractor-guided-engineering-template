@@ -4,13 +4,9 @@
 // Zero-engine-diff util (a NEW module; engine.js untouched, zero npm deps):
 // resolves a plan's `verify` keys against the mission `commands.*` map and
 // EXECUTES the mapped commands, collecting per-key `{exitCode, passLine}`
-// data. passLine follows 01 §4.2: `- pass <key> <runId> basisHash=<sha256>
-// exit=<code>`, with basisHash = computeBasisHash over the plan content the
-// runner was handed — the SAME conjunction source as deriveCompleted (so a
-// pass line emitted against full-tick content binds; re-tick invalidates it
-// naturally). Callers that verify BEFORE the final tick emit data for the
-// current basis; the supervisor (M3/WI26) runs this at awaitingClosure where
-// the content is full-tick.
+// data. passLine follows 01 §4.2: `- pass <key> <runId> exit=<code>`. A pass
+// record is direct mechanical verification evidence; it is not bound to a hash
+// of editable plan text.
 //
 // Command-source discipline (02 §5): ONLY commands.* values are spawned;
 // plan Proof text is never a command source (structural guarantee — this
@@ -29,7 +25,6 @@
 // 4000) — tails carry the failure diagnostics, heads rarely do.
 
 import { spawn } from "node:child_process";
-import { computeBasisHash } from "./ledger-sections.mjs";
 
 export const DEFAULT_VERIFY_TIMEOUT_MS = 10 * 60 * 1000;
 export const KILL_GRACE_MS = 5000;
@@ -75,9 +70,9 @@ export function resolveVerifyPlan({ verify, commands }) {
   return { ok: problems.length === 0, keys, problems, usedDefault };
 }
 
-export function passLineFor({ key, runId, basisHash, exitCode }) {
+export function passLineFor({ key, runId, exitCode }) {
   const exit = exitCode === null || exitCode === undefined ? "null" : String(exitCode);
-  return `- pass ${key} ${runId} basisHash=${basisHash} exit=${exit}`;
+  return `- pass ${key} ${runId} exit=${exit}`;
 }
 
 function clipOutput(text, maxChars) {
@@ -139,20 +134,18 @@ export function runVerifyCommand({ key, command, projectRoot, timeoutMs = DEFAUL
 }
 
 /**
- * Run every resolved verify key and attach pass-line data bound to the
- * plan's current basisHash.
- * @returns {Promise<{basisHash: string, results: Array<{key, command, exitCode, timedOut, durationMs, output, passLine}>}>}
+ * Run every resolved verify key and attach direct pass-line data.
+ * @returns {Promise<{results: Array<{key, command, exitCode, timedOut, durationMs, output, passLine}>}>}
  */
 export async function runVerifyCommands({ keys, commands, projectRoot, planText, runId, timeoutMs }) {
   const map = commands && typeof commands === "object" && !Array.isArray(commands) ? commands : {};
-  const basisHash = computeBasisHash(planText);
   const results = [];
   for (const key of keys) {
     const command = typeof map[key] === "string" ? map[key] : "";
     const result = command.trim() === ""
       ? { key, command, exitCode: null, timedOut: false, durationMs: 0, output: `[verify-runner] no non-empty command mapped to "${key}"` }
       : await runVerifyCommand({ key, command, projectRoot, ...(timeoutMs !== undefined ? { timeoutMs } : {}) });
-    results.push({ ...result, passLine: passLineFor({ key, runId, basisHash, exitCode: result.exitCode }) });
+    results.push({ ...result, passLine: passLineFor({ key, runId, exitCode: result.exitCode }) });
   }
-  return { basisHash, results };
+  return { results };
 }

@@ -59,11 +59,10 @@
 
 ## 7. 卡死检测（无产出守卫）
 
-- **停滞指纹**：账本（plans/roadmap）hash 与活动信号（events/session 工具活动）连续 N 轮无有效变化 → 判定停滞 → 升级（回执/熔断/进审计）。只盯账本 hash 会把「长任务尚未落盘」误判为空转，活动信号必须参与。
+- **停滞检测**：连续 N 轮无 `noteActivity` 活动信号（events/session 工具活动）→ 判定停滞 → 升级（回执/熔断/进审计）。只有活动信号能清零；plan/roadmap 写入与状态往返不得重置计数。
 - **claim 无产出**：认领超过 TTL 无进展 → 回收。
 - **idle 超时**：子代理 followup 超时 → cancel。
 - **失败熔断**：同 plan `failures ≥ maxFailures` → held + 回执；全部 held → 终态化 blocked/partial + 回执。
-- **往返检测**：账本状态振荡（如 plan 在 active↔held 反复横跳）→ 停滞检测收口。
 
 ## 8. 终态规则集（Termination）
 
@@ -74,7 +73,7 @@
   - 否则 → `partial/blocked` + 回执（**不得**因预算耗尽而把未完成 roadmap 静默记为 completed）。仍有执行中 claim 的 active plan 时先让其跑完/到 awaitingClosure，不提前杀活。
 - **R2（干净早退）** `audit-rounds ≥ 1 ∧ roadmap 全 done ∧ openPlans()==0` → `completed`。
 - **R3（显式卡住）** `audit-rounds ≥ 1 ∧ draftPlans()==0 ∧ activePlans()==0 ∧ (roadmap 有未勾 ∨ heldPlans()>0)` → `partial/blocked` + 回执；有 draft plan 时继续评审，不得提前终态。
-- **R4（停滞熔断）** 连续 N 轮账本与活动信号无有效变迁 → `blocked` + 回执；N 为策略配置，默认值由产品配置决定。
+- **R4（停滞熔断）** 连续 N 轮无 `noteActivity` 活动信号 → `blocked` + 回执；N 为策略配置，默认值由产品配置决定。
 
 **终态映射纪律**：`partial/blocked` 是 M4 新增终态。DSH 形态走回执不依赖退出码；独立形态若由引擎/守夜人 CLI 暴露这两个终态，必须先作为独立立项修改冻结的 `EXIT_MAP` 契约并同步 `EXECUTION-PRINCIPLE.md §11`，不得在引擎存续期内静默增改。
 
@@ -103,7 +102,7 @@
 - 2026-08-28（M5-WI48，plan `docs/plans/age-autonomy/2026-08-27-2122-2-m5-wi48-engine-silent-completed-terminal.md`）：nothing→deep-audit trigger 语义判据扩面 + §8 R1 引擎形态 as-built 豁免注记（R6 P1 引擎形态 silent-completed 终态通道封堵的成文面）。① §3 trigger 同源段增「nothing→deep-audit 为强制沿」句：law 动作面 `nothing-claim-guard`（02 §4.4）判据扩 `roadmap.unchecked` 维度——`ctx.roadmapText` 注入时未勾 >0 → allow 信号携带 `roadmapUnchecked: N`（additive 字段）+ 派发为强制沿；未勾 ==0 信号逐字节不变；缺席不可观测不冒充（02 §2）。② §8 增 R1 引擎形态 as-built 豁免注记：引擎完成判据 = plans-only 清洁（清洁短路/轮门终态不读全局未勾），完整 R1 语义由守夜人形态承载，引擎缺口 = 06 G8（retirement-gated）。落位注记：立项文与 roadmap WI48 行所称「03 §4.4」——03 无 §4.4 小节，nothing→deep-audit trigger 语义的 03 承载面即 §3 trigger 同源段（判据契约本体 = 02 §4.4），扩面句按此落位。零引擎 diff（engine.js 不触碰）；真值表 116→119 例（三分支钉住：未勾>0 强化信号 / ==0 逐字节不变 / 缺席现行输出逐字节回归）。
 - 2026-08-27（M5-WI38，plan `docs/plans/age-autonomy/2026-08-27-1023-2`）：§8 终态映射纪律的独立立项兑现——`EXIT_MAP` 显式增补 `partial`/`blocked` → **exit 3**（`tools/mission-driver/src/exit-map.js` 11→13 键 + `EXECUTION-PRINCIPLE.md` §11 表两行 + 表尾语义句 + `test/exit-map.test.js` 13→19 例钉住）。exit 3 选型 = 新退出码类「终态非完成、需人工处置」（补救 = unlock/dispose），与 2（预算/上限保护族——重跑）与 1（不可恢复失败）分离；备选否决与重开触发（出现按退出码分支的真实消费者）成文于 plan Phase 1 Decision。引擎 `_result` 存续期仍不发射两词（DSH 回执面不变）——数据行级增补、零引擎行为变更（engine.js 零 diff）、零新增依赖；`skipped`/动态 done 词 fall-through 语义不动。
 - 2026-08-27（M5-WI37，plan `docs/plans/age-autonomy/2026-08-27-1023-1`）：§10 事实性指针增补（非契约变更）：P4 判定门判定清单在库——`06-engine-retirement-checklist.md` 覆盖矩阵 12 行（职责→覆盖→证据→缺口→判定三态）+ D1–D7 裁定（本 § 与 04 §6/roadmap「marker 迁移纪律」累积 Deferred 归本清单裁定）+ 总判定「引擎留任主后端（条件退役）」+ 缺口前置清单 G1–G6；execute 腿接线终审（D4）= 本轮不接线、前置条件成文（独立立项 + 真宿主长跑证据）。
-- 2026-08-27（M3-WI30，plan `docs/plans/age-autonomy/2026-08-26-1954-3`）：§7 卡死检测执行面落地注记（非契约变更——设计基线即本文 §7，本条只记实现面）：**停滞指纹 + 活动信号检测器** = `plugin/dsh/src/supervisor/stagnation.ts` 纯函数（`computeLedgerFingerprint` = 排序后 (planPath → basisHash) 行 + roadmap 全文 hash 聚合——computeBasisHash 完成公式同源；**指纹域 = basisHash 域**（frontmatter + Phase + Closure Findings），DRR/Verification/Closure 追加在域外、dispatch/pass 行不重置指纹（评审派发 ≠ 进展）；一轮停滞 = 指纹不变 ∧ 活动窗口（默认 = 一个心跳周期）内 noteActivity 零命中——**活动信号必须参与**：有活动轮清零重积，长任务未落盘不误判（§7 字面，测试正例钉住）；往返检测腿 = per-plan 状态连续交替翻转计数，两态间 ≥ K 完整往返（2K 翻转）无终态进展 → 饱和注入 `{rounds: threshold, threshold}` → **同一 R4 出口**（§7「停滞检测收口」单出口纪律；第三态破对重计 / 终态 disposition 重置）；承载 = watchdog 持有内存 scratch 态（§6 归零成文接受——重启重积保守向，最多多等 N 轮不误杀）。**双入口同注入（1411-3 契约保持）**：检测器输出为 watchdog 持有单点，周期末端求值与 exec-arm `forwardTerminalDecision` 声明面入口（`ExecArmOptions.stagnationFact` 回调透传）同读同一状态——零单周期分歧，跨入口时序差 ≤ 一周期由幂等重评收敛（交叉用例钉住）。**N/K 阈值策略配置（§8 R4 N 落点）**：policy limits 单键 `stagnationRounds`（law-policy `resolveStagnationRounds` 双源：policy 权威 / `flows/mission-driver.json` 顶层回退键 / 双缺默认 10——30s 心跳 × 10 ≈ 5 分钟墙钟换算成文；0 = 检测器 off）；K 派生自同键 `max(2, floor(N/5))` 完整往返，无第二配置键（02 §3 单键单义）。检测器命中首跳落 `stagnation-detected` 观察回执（fingerprint/ping-pong 双措辞），终态沿 1411-3 既有 setTerminal 回执链零终态面改动。测试 `plugin/dsh/test/supervisor-recovery.test.mjs` 18 例（1954-2 份额 9 + 本 plan 份额 9——WI31 门 ≥8 超额：停滞指纹 N-1/N 边界 / 活动信号参与 / 往返检测 unit+e2e / 重启清零重积 / 双入口交叉 / partial/blocked 区分恢复语境变体 / 双源矩阵 + schema）。
+  - 2026-09-02：监督器停滞检测改为 activity-only：首次观察只建立基线，后续仅 `noteActivity` 在活动窗口内清零；plan/roadmap 写入与状态往返均不影响计数。历史 ping-pong 与账本指纹实现及测试已移除。
 
 - 2026-08-26（M3-WI29，plan `docs/plans/age-autonomy/2026-08-26-1954-2`）：§6 执行面落地注记（非契约变更——设计基线即本文 §6 崩溃恢复表，本条只记实现面）：**恢复扫描执行化** = `plugin/dsh/src/supervisor/recovery.ts`（watchdog start() 首周期 trigger='recovery' 前置运行，fail-soft 隔离，mission 终态停派优先，不受 §4 continuous 门——崩溃收尾非新无人值守推进，「恢复后链式继续」仍沿其门）。**守夜人恢复处置表（「终态化残留 running」的守夜人侧落点，逐字收录）**：① plan 带 claim：TTL 未到期不动作（等自然到期回收，死会话无活动信号不续期）、TTL 已过期走既有 reclaim trigger（1411-2，每周期求值已覆盖恢复周期）；② dispatch 无结论：本 plan resume-or-redispatch；③ awaitingClosure 停滞：既有 mechanical-verification/closure-audit trigger 面（1411-2）。引擎侧 run-state 孤儿归 `reap-orphans.mjs`（引擎既有职责，零引擎 diff）；DSH 形态 LiveRunRecord 内存态随进程消亡（无残留可清，ActiveRunGuard 重启即清空先例）。**resume-or-redispatch 语义**：dispatch 行结论缺失 × agents face 会话存活查询——存活 → resume（原会话 followup 注入，不写新行）；死 → 对同 occurrence 写**新 dispatch 行**（新 nonce8 id）重派，旧行 append-only 保留（01 §4.2 不删不改）；无 agents face（headless）→ stale 判定不可判，观察回执不动作（显式降级）；per-mount handled 集保证重复恢复周期零重复动作（跨重启重评沿账本幂等面）。**幂等面/评审租约最新行作答**：同 occurrence 多 dispatch 行时最末行作答（stale 行不占位）——`dispatchAlreadyRegistered`（deep-audit 面：最末行 paired → 开放下一轮）与 writer-identity 评审租约（持有者 = 最末 unpaired dispatch review 行 sessionId，superseded 行不持约，最末行配对即租约关闭——redispatch 后 plan 写面不锁死）单一语义面。**deep-audit 同 occurrence 重派零自增**（01 §3.1）：恢复重派复用已付轮次号、不写 audit-rounds 自增、audit-rounds-overflow 门禁同轮次重派豁免（耗尽预算后死会话在飞仍可重派——否则永不重派死锁）。**不计 failures**：恢复 redispatch 不计三桶（02 §4.6 不计清单增量行——「不把单次崩溃计为计划失败」字面落点）。测试 `plugin/dsh/test/supervisor-recovery.test.mjs` 9 例（本 plan 份额 7 + 边界 2；WI30 补停滞/往返至 WI31 门 ≥8）。
 
