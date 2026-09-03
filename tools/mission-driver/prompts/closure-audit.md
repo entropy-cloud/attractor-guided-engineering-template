@@ -12,7 +12,7 @@ Read the plan guide first: `{{planGuide}}` **completely**. Detect the plan forma
 
 ## SCRIPT_CHECK_RESULT is FAIL — Fix Strictly Per Plan Guide
 
-Fix ALL issues reported in SCRIPT_CHECK_DETAILS by editing the plan file directly with the Edit tool. The automated checker is: `node tools/mission-driver/src/plan-check.mjs {{PLAN_FILE}} --strict` (run from the project root).
+Fix ALL issues reported in SCRIPT_CHECK_DETAILS by editing the plan file directly with the Edit tool. The automated checker is: `node "$MISSION_DRIVER_HOME/src/plan-check.mjs" {{PLAN_FILE}} --strict` (run from the project root). `$MISSION_DRIVER_HOME` is the engine directory, set via `.env` or the shell environment; resolve `{{PLAN_FILE}}` to an absolute or project-relative path first.
 
 ### Mandatory structure
 
@@ -32,7 +32,7 @@ Ledger format:
 2. Identify every issue from SCRIPT_CHECK_DETAILS
 3. Fix each issue by editing the file with the Edit tool
 4. If a `## Closure` section is missing on a legacy plan, add it with at least one concrete evidence item
-5. After all edits are done, re-run: `node tools/mission-driver/src/plan-check.mjs {{PLAN_FILE}} --strict`
+5. After all edits are done, re-run: `node "$MISSION_DRIVER_HOME/src/plan-check.mjs" {{PLAN_FILE}} --strict`
 6. If it still fails, fix again. Maximum 3 fix rounds.
 
 After fixing, return results in the following format:
@@ -49,7 +49,7 @@ Do NOT output plan content, the Closure template, or any other text. This trigge
 
 The plan structure is valid. Now verify the SEMANTICS:
 
-0. **Phase status / items consistency** (do this FIRST): For every Phase, if (legacy) `Status:` says `completed` but the Phase body still contains any `- [ ]` item, that is an inconsistency. Do NOT blindly tick the items — first use grep/glob/read to verify whether the work actually landed in the codebase. If it landed, tick the items `[x]` and re-run `node tools/mission-driver/src/plan-check.mjs {{PLAN_FILE}} --strict`. If it did NOT land, the Phase is genuinely unfinished — output `issues` with a `<REMAINING>` entry naming the Phase so the flow returns to EXECUTE. Ledger plans have no per-phase status text — unchecked items ARE the unfinished signal.
+0. **Phase status / items consistency** (do this FIRST): For every Phase, if (legacy) `Status:` says `completed` but the Phase body still contains any `- [ ]` item, that is an inconsistency. Do NOT blindly tick the items — first use grep/glob/read to verify whether the work actually landed in the codebase. If it landed, tick the items `[x]` and re-run `node "$MISSION_DRIVER_HOME/src/plan-check.mjs" {{PLAN_FILE}} --strict`. If it did NOT land, the Phase is genuinely unfinished — output `issues` with a `<REMAINING>` entry naming the Phase so the flow returns to EXECUTE. Ledger plans have no per-phase status text — unchecked items ARE the unfinished signal.
 
 1. **Exit Criteria vs live repo**: Read each Exit Criterion and the corresponding live code **completely**. Use grep/glob/read to confirm it matches the LIVE codebase (`{{moduleDir}}/`). Do NOT trust `[x]` marks blindly.
 
@@ -69,6 +69,8 @@ If ALL checks pass, and the plan is **ledger format**, record your audit receipt
 ```
 
 Generate a fresh 8-hex nonce; do NOT reuse ids from other plans or rounds. On the dispatch line, append the ` models={exec:…,aud:…}` lineage suffix (02-rule-law §4.1): `exec:` = the agent/model that executed the plan, `aud:` = your own agent/model (names or provider/model from `missions/autonomy.policy.yml` `agents:`; identical pairs are the declared single-model downgrade — record them honestly, never omit the suffix's shape). This receipt (with the BUILD_VERIFY step's `## Verification` pass lines) is what lets the engine derive `completed` — without it the plan can never close.
+
+**Auditor fix authority (per plan-guide Minimum Rule 15):** you MAY edit the plan directly to close any of these minor classes without bouncing back to EXECUTE — `[ ]` items that depend on out-of-repo evidence (live lint probes, transitive dependency records, third-party state) where you record the gap honestly by moving the item into the plan's `## Deferred But Adjudicated` section with `Classification: watch-only residual`, `Successor Required: yes`, and a `Next plan: <plan-id>` pointer, then tick the original Phase item `[x]` so the counting domain stays clean; frontmatter or `## Verification` line typos; missing closure pair; ledger-section structural errors caught by `plan-check.mjs`. After any of these fixes, return `<AI_STEP_RESULT>approved</AI_STEP_RESULT>` with the receipt above. Anything that needs real implementation, test fixes, or owner-doc content changes MUST still be returned as `<AI_STEP_RESULT>issues</AI_STEP_RESULT>` with a `<REMAINING>` item — do not silently absorb work that should belong to EXECUTE.
 
 Then return results in the following format:
 ```

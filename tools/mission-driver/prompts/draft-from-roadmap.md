@@ -11,7 +11,10 @@ Read `{{planGuide}}` **completely**. It defines the plan format, status lifecycl
 
 ## Workflow
 
-1. **Read & bundle**: Read `{{roadmapPath}}` **completely**, then pick the next 1-3 plans' worth of work from remaining items, also considering deferred items from previous plans. Do not cover all remaining items. On a checkbox roadmap, remaining work = unchecked work items (in set order).
+1. **Read & bundle**: Read `{{roadmapPath}}` **completely**, then pick the next 1-3 plans' worth of work from remaining items, also considering deferred items from previous plans. Do not cover all remaining items. On a checkbox roadmap, remaining work = unchecked work items (in set order). Deferred-item sources to scan explicitly before drafting:
+   - `## Deferred But Adjudicated` sections in any completed or held plan in `{{plansDir}}` — explicit holds with `Successor Required: yes` and a `Next plan: <plan-id>` pointer (or legacy form). Collect every such item; treat each unique `Next plan: <plan-id>` as a planning trigger that must produce one new plan.
+   - `Follow-up:` sections under a completed plan's `## Closure` (legacy form, pre-M2 ledger plans) — collect any non-blocking follow-up items.
+   Merge these sources with the roadmap's unchecked work items into one ordered work set, dedupe by successor id, and pick the next 1-3 plans' worth from the merged set. The `successor:` inline annotation form from earlier drafts is superseded by `## Deferred But Adjudicated`; do not grep for it.
 
 2. **Order plans**: When drafting multiple plans, assign them an explicit execution order. Plans that unblock others come first.
 

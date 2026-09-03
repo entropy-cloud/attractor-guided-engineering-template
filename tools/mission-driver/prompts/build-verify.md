@@ -9,11 +9,11 @@ The mission's `{{buildCmd}}` / `{{typecheckCmd}}` / `{{testCmd}}` already scope 
 0. Before building, run `git diff --name-only HEAD~1` (or compare against the last commit / the plan's working set) to confirm **which modules** actually changed. Only the listed modules need a rebuild — Maven's `-pl <module> -am` already targets them; do NOT re-add `clean` (it would wipe `target/` and force a full recompile, defeating the incremental goal). If a check unexpectedly passes without compiling anything because a prior step left a stale `target/`, only then consider an explicit `mvn clean` for that module as a one-off recovery — never as the default path.
 
 Steps:
-1. Run, from the project root:
-   - `{{typecheckCmd}}`
-   - `{{buildCmd}}`
-   - `{{lintCmd}}`
-   - `{{testCmd}}`
+1. Run, from the project root, one at a time. These MUST run sequentially — never parallelize build/test commands across multiple shells (Maven `target/` races, lock contention on `node_modules`, etc.).
+   1. `{{typecheckCmd}}`
+   2. `{{buildCmd}}`
+   3. `{{lintCmd}}`
+   4. `{{testCmd}}`
    If a command is empty, skip it.
 2. If any command fails:
    a. Diagnose the root cause (TypeScript error, ESLint violation, failed test, etc.)
