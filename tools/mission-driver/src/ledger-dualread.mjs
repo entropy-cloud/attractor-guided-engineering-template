@@ -48,7 +48,7 @@ function fmHasStatus(fm) {
 // implementation discipline). Non-frontmatter formats simply don't attach the
 // keys — there is no plan field set to validate on a legacy line or a guide.
 function fmReadResult(mode, split) {
-  const { ok, errors } = validatePlanFrontmatter(split.fm);
+  const { ok, errors } = validatePlanFrontmatter(split.fm, { split });
   return { mode, format: "frontmatter", status: split.fm.status, rejected: null, fieldErrors: errors, fieldsValid: ok };
 }
 

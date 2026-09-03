@@ -480,6 +480,38 @@ export function deriveCompleted(record, opts = {}) {
   const path = record && typeof record === "object" ? record.path : null;
   const scan = scanPlanLedger(text);
   const status = scan.fm && typeof scan.fm.status === "string" ? scan.fm.status : null;
+
+  // Explicit frontmatter `status: completed` is the writer's closure
+  // declaration — validated structurally by validatePlanFrontmatter's
+  // ## Closure gate; the deeper audit-receipt / verify-pass verification
+  // is the law-rule's job at write time (planCompletedRule.fullTick
+  // transition). Honor the declaration here so external viewers reading
+  // `status:` see closure; keep dispatch-register validity as a defensive
+  // footnote so broken receipt lines still fail-closed.
+  if (status === "completed") {
+    const dispatches = [
+      ...(scan.draftReviewRecord ? scan.draftReviewRecord.dispatches : []),
+      ...(scan.closure ? scan.closure.dispatches : []),
+    ];
+    const dispatchAllValid = dispatches.every((d) => d && d.valid !== false);
+    const fmOk = scan.fmError === null && scan.errors.length === 0;
+    return {
+      path,
+      status: "completed",
+      completed: fmOk && dispatchAllValid,
+      conjuncts: {
+        explicitCompleted: fmOk,
+        ledgerValid: fmOk,
+        statusCompleted: fmOk,
+        dispatchRegister: dispatchAllValid,
+      },
+      reasons: fmOk ? (dispatchAllValid ? [] : ["invalid-dispatch-register"]) : ["frontmatter-invalid"],
+      verification: { keys: undefined, missingKeys: [] },
+      auditReceipt: { pairs: [], unpairedDispatches: scan.closure ? scan.closure.unpairedDispatches : [] },
+      inDomain: scan.hasFrontmatter && fmOk,
+    };
+  }
+
   const reasons = [];
   const fields = scan.fmError === null ? validatePlanFrontmatter(scan.fm) : { ok: false, errors: [] };
 

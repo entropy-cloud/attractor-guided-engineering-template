@@ -2,8 +2,17 @@
 // Contract: docs/design/age-autonomy/01-file-ledger.md §2/§3.1/§4.1/§5.1 — zero imports,
 // flat scalar keys + single-level flow arrays only; out-of-subset syntax is rejected, never tolerated.
 
-export const WRITABLE_PLAN_STATUSES = ["draft", "active", "held", "cancelled", "superseded", "deferred"];
-export const TERMINAL_PLAN_STATUSES = ["cancelled", "superseded", "deferred"];
+// `completed` is BOTH writable in frontmatter AND the historical derived
+// view name. Writers (the closure-executor, humans) may now set
+// `status: completed` directly; readers (deriveCompleted / closedPlans)
+// treat the explicit value the same as a 5-conjunct satisfied file, so
+// external viewers do not see `status: active` on closed work. The
+// structural gate (## Closure heading present) lives in
+// validatePlanFrontmatter; deeper audit-receipt / verify-pass verification
+// remains the law-rule's job at write time.
+export const WRITABLE_PLAN_STATUSES = ["draft", "active", "held", "cancelled", "superseded", "deferred", "completed"];
+export const TERMINAL_PLAN_STATUSES = ["cancelled", "superseded", "deferred", "completed"];
+// Kept as an alias for API stability (legacy importers + tests reference it).
 export const DERIVED_PLAN_STATUS = "completed";
 export const PLAN_FRONTMATTER_FIELDS = [
   "status", "mission", "work-item", "group", "failures", "verify", "agent", "hold", "claim", "claim-expires",
@@ -165,10 +174,28 @@ export function validatePlanFrontmatter(fm, opts = {}) {
   const status = fm.status;
   if (status === undefined) {
     errors.push('missing required field "status"');
-  } else if (status === DERIVED_PLAN_STATUS) {
-    errors.push('"completed" is a derived status and must never be written in frontmatter');
   } else if (typeof status !== "string" || !WRITABLE_PLAN_STATUSES.includes(status)) {
     errors.push(`invalid status ${JSON.stringify(status)} — must be one of: ${WRITABLE_PLAN_STATUSES.join(" | ")}`);
+  } else if (status === "completed") {
+    // Structural gate for `status: completed` (writer-driven closure).
+    // The validator has fieldset scope — Closure is the one structural
+    // fact that distinguishes "marked done" from "actually closed".
+    // Audit-receipt / verify-pass verification remains the law-rule's
+    // job at write time (planCompletedRule.fullTick transition), where
+    // currentState and write intent are both observable.
+    //
+    // opts.split.blocks is provided by fmReadResult (frontmatter plan
+    // read seam); callers that have not yet split the file pass no opts
+    // and the gate falls open — the law-rule / closure-executor will
+    // perform the structural check at write-time before accepting the
+    // status flip.
+    const split = opts && opts.split;
+    const blocks = split && Array.isArray(split.blocks) ? split.blocks : null;
+    const hasClosure = blocks !== null
+      && blocks.some((b) => b && b.level === 2 && typeof b.text === "string" && b.text.trim() === "Closure");
+    if (blocks !== null && !hasClosure) {
+      errors.push('"completed" status requires a "## Closure" section heading — write the closure record or keep status at active / cancelled / superseded / deferred');
+    }
   }
   for (const key of ["mission", "work-item"]) {
     const v = fm[key];

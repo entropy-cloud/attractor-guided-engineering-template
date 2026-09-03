@@ -242,7 +242,11 @@ const LEGAL_TRANSITIONS = new Set([
   "active→cancelled", "active→superseded", "active→deferred",
   "held→cancelled", "held→superseded", "held→deferred",
 ]);
-const TERMINAL_STATUSES = ["cancelled", "superseded", "deferred"];
+// `completed` joins the terminal freeze set: explicit frontmatter
+// `status: completed` is the writer-driven closure declaration (see
+// ledger-frontmatter WRITABLE_PLAN_STATUSES), so the basis-domain
+// immutability rule that gates post-closure writes applies symmetrically.
+const TERMINAL_STATUSES = ["cancelled", "superseded", "deferred", "completed"];
 const LEASE_EXEMPT_ROLES = ["supervisor", "engine"];
 
 /**
@@ -450,6 +454,21 @@ function planCompletedRule(action, currentFileState, ctx = {}) {
   if (currentText !== null) {
     const cs = scanPlanLedger(currentText);
     if (cs.hasFrontmatter && !cs.fmError) currentScan = cs;
+  }
+
+  // ── explicit `status: completed` writer-claim guard (post-M2-WI45):
+  // the frontmatter validator's structural gate (validatePlanFrontmatter)
+  // only checks for a `## Closure` heading on the read seam. At write time
+  // this rule adds the body-side guard: a claim of closure while any
+  // Phase box (or any Closure Findings item) is still unchecked is denied.
+  // Closure-audit dispatch / verify-pass verification continues through
+  // the fullTick branch below — this guard only catches "mark done with
+  // stragglers" before it lands.
+  if (typeof scan.fm.status === "string" && scan.fm.status === "completed" && scan.counts.unchecked !== 0) {
+    return {
+      verdict: "deny",
+      reason: `plan-completed: \`status: completed\` write has ${scan.counts.unchecked} unchecked item(s) — the writer's closure declaration must reflect the fullTick check (every Phase box ticked, no stragglers); restart the work as a new plan if the closure was abandoned (02 §4.3)`,
+    };
   }
 
   // ── terminal freeze (02 §4.3): once completed is derived or the status is

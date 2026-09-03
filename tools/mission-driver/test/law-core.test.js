@@ -166,13 +166,17 @@ describe("gate posture: observe vs enforce (02 §6)", () => {
   });
 
   it("enforce-mode deny blocks with a structured reason", () => {
+    // `status: completed` is now writable in frontmatter (M2-WI45 face), so
+    // the deny has to come from somewhere else on the same proposed content
+    // — missing `mission` and `work-item` are the structural violations.
     const out = evaluateGates(
       { type: "write", path: `${PLANS_DIR}/x.md`, proposedContent: "---\nstatus: completed\n---\n# p\n" },
       { policy: policyWith("enforce"), ctx: { plansDir: PLANS_DIR } },
     );
     assert.equal(out.decision, "deny");
     assert.match(out.reason, /gate plan-structure \(plan-structure\) denied:/);
-    assert.match(out.reason, /derived status/);
+    assert.match(out.reason, /missing required field "mission"/);
+    assert.match(out.reason, /missing required field "work-item"/);
   });
 
   it("unknown rule at evaluate time degrades to an observation (policy should have failed schema)", () => {
@@ -243,9 +247,12 @@ describe("seed rule plan-structure (01 §2/§5.2 structural face)", () => {
     assert.match(v.reason, /dispatch line must be/);
   });
 
-  it("denies frontmatter field violations (derived status, unknown key, bad hold pair)", () => {
+  it("denies frontmatter field violations (unknown key, bad hold pair)", () => {
+    // `status: completed` was historically rejected as a derived status; M2-WI45
+    // promotes it to the writable + terminal set (Closure-heading gate lives in
+    // the validator + body-unchecked gate lives in plan-completed.fullTick),
+    // so it is no longer on this deny-face. Two remaining denials:
     for (const fm of [
-      "---\nstatus: completed\nmission: m\nwork-item: M1-WI1\n---\n# p\n",
       "---\nstatus: draft\nmission: m\nwork-item: M1-WI1\nbogus: 1\n---\n# p\n",
       "---\nstatus: draft\nmission: m\nwork-item: M1-WI1\nclaim: attempt-r-s-abc12345\n---\n# p\n",
     ]) {

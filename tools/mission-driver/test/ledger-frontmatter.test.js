@@ -132,11 +132,32 @@ describe("validatePlanFrontmatter — field conditional rules", () => {
     assert.ok(validatePlanFrontmatter({ status: "draft", mission: " ", "work-item": "WI1" }).ok === false);
   });
 
-  it("rejects writable `completed` (derived) and off-vocabulary statuses", () => {
-    const done = validatePlanFrontmatter({ status: "completed", mission: "m", "work-item": "WI1" });
-    assert.equal(done.ok, false);
-    assert.ok(done.errors.some((e) => e.includes('"completed" is a derived status')));
-    assert.ok(validatePlanFrontmatter({ status: "in-progress", mission: "m", "work-item": "WI1" }).errors.some((e) => e.includes("invalid status")));
+  it("rejects off-vocabulary statuses and accepts `completed` (now writable, M2-WI45 face)", () => {
+    // `completed` joins WRITABLE + TERMINAL sets — visible to external viewers
+    // instead of staying stuck at `status: active`. The validator's structural
+    // gate (## Closure heading) only fires when opts.split is provided (read
+    // seam); law-rule guards the body side (unchecked boxes) at write time.
+    const inProgress = validatePlanFrontmatter({ status: "in-progress", mission: "m", "work-item": "WI1" });
+    assert.ok(inProgress.errors.some((e) => e.includes("invalid status")));
+
+    const withoutSplit = validatePlanFrontmatter({ status: "completed", mission: "m", "work-item": "WI1" });
+    assert.equal(withoutSplit.ok, true, `unexpected rejection: ${withoutSplit.errors.join(" | ")}`);
+
+    const withSplitNoClosure = validatePlanFrontmatter(
+      { status: "completed", mission: "m", "work-item": "WI1" },
+      { split: { blocks: [{ level: 2, text: "Phase 1" }] } },
+    );
+    assert.equal(withSplitNoClosure.ok, false);
+    assert.ok(
+      withSplitNoClosure.errors.some((e) => e.includes('requires a "## Closure"')),
+      `expected Closure-gate rejection, got ${withSplitNoClosure.errors.join(" | ")}`,
+    );
+
+    const withSplitClosure = validatePlanFrontmatter(
+      { status: "completed", mission: "m", "work-item": "WI1" },
+      { split: { blocks: [{ level: 2, text: "Phase 1" }, { level: 2, text: "Closure" }] } },
+    );
+    assert.equal(withSplitClosure.ok, true, `unexpected rejection: ${withSplitClosure.errors.join(" | ")}`);
   });
 
   it("holds the hold⇔held invariant in both directions", () => {
@@ -198,11 +219,17 @@ describe("validatePlanFrontmatter — field conditional rules", () => {
   });
 
   it("exposes the §5.1 status vocabulary and §4.1 field list as constants", () => {
-    assert.deepEqual(WRITABLE_PLAN_STATUSES, ["draft", "active", "held", "cancelled", "superseded", "deferred"]);
-    assert.deepEqual(TERMINAL_PLAN_STATUSES, ["cancelled", "superseded", "deferred"]);
+    // M2-WI45 face: `completed` joins both WRITABLE (writers may set
+    // `status: completed` directly) and TERMINAL (terminal-freeze covers
+    // explicit writes the same as derived-completed). DERIVED_PLAN_STATUS
+    // is retained as the legacy alias for downstream readers still keyed
+    // off the constant name.
+    assert.deepEqual(WRITABLE_PLAN_STATUSES, ["draft", "active", "held", "cancelled", "superseded", "deferred", "completed"]);
+    assert.deepEqual(TERMINAL_PLAN_STATUSES, ["cancelled", "superseded", "deferred", "completed"]);
     assert.equal(DERIVED_PLAN_STATUS, "completed");
     assert.ok(WRITABLE_PLAN_STATUSES.includes("deferred"));
-    assert.ok(!WRITABLE_PLAN_STATUSES.includes(DERIVED_PLAN_STATUS));
+    assert.ok(WRITABLE_PLAN_STATUSES.includes("completed"));
+    assert.ok(TERMINAL_PLAN_STATUSES.includes("completed"));
     assert.deepEqual(PLAN_FRONTMATTER_FIELDS, [
       "status", "mission", "work-item", "group", "failures", "verify", "agent", "hold", "claim", "claim-expires",
     ]);
