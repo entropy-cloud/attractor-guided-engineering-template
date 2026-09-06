@@ -6,7 +6,7 @@
 
 ## Format Authority
 
-This guide is the single format authority for plans (contract: `docs/design/age-autonomy/01-file-ledger.md`; machine face: `tools/mission-driver/src/ledger-frontmatter.mjs` + `ledger-sections.mjs` + `ledger-dualread.mjs`). The current format is the **ledger format**: a YAML frontmatter block plus `## Phase <n>` body sections. Completion is **derived**, never written. Legacy plans (pre-migration, `> Plan Status:` header lines) remain readable by the engine's dual-read legacy channel but are historical — do not create new plans in the legacy format.
+This guide is the single format authority for plans (contract: `docs/design/age-autonomy/01-file-ledger.md`; machine face: `$MISSION_DRIVER_HOME/src/ledger-frontmatter.mjs` + `ledger-sections.mjs` + `ledger-dualread.mjs`). The current format is the **ledger format**: a YAML frontmatter block plus `## Phase <n>` body sections. Completion is **derived**, never written. Legacy plans (pre-migration, `> Plan Status:` header lines) remain readable by the engine's dual-read legacy channel but are historical — do not create new plans in the legacy format.
 
 ## When To Write A Plan
 
@@ -34,7 +34,7 @@ If unsure, use a full plan.
 1. **Start from live baseline.** Read the repo first, then write `Current Baseline`. Do not rely on memory or old plans. For net-new features, the baseline must inventory all existing code the feature will touch or contradict — hardcoded values, missing hooks, incompatible patterns. An inventory is not optional.
 2. **Write Goals and Non-Goals.** If either is unclear, the plan boundary is not ready.
 3. **Use checkboxes for execution and closure.** Unchecked items mean unfinished work until closure. Checkboxes live ONLY inside `## Phase <n>` sections and `## Closure Findings` (counting domain, 01 §2.5) — column 0, never in code fences or other sections.
-4. **One plan, one result surface.** If the plan needs multiple independent closure criteria, it is too wide. Split it. Multi-module extraction or migration that shares the same behavioral contract and closure criteria is still ONE result surface — do not over-split.
+4. **One plan, one result surface, one deliverable pass.** If the plan needs multiple independent closure criteria, it is too wide. Split it. Multi-module extraction or migration that shares the same behavioral contract and closure criteria is still ONE result surface — do not over-split. Size is bounded on both ends: a plan must not be so small that it carries no independently verifiable result (bundle trivial edits into the next plan), and not so large that it cannot be drafted, reviewed, and closed in one pass — as a calibration, keep a plan at roughly 10 phases or fewer; when more are required, move the remainder into a successor plan via `## Deferred But Adjudicated` with a `Next plan:` pointer.
 5. **Proof before closure.** Do not consider a plan closed until the repo contains verifiable proof for every exit criterion (mechanical verification pass lines + audit receipt, see the completion formula below).
 6. **No code-design dumps.** The plan captures scope, proof, and closure logic, not low-level implementation detail. Exception: refactoring and extraction plans MUST include the interface contracts between extracted modules — these are structural boundary definitions, not implementation pseudocode.
 7. **Tag items with types.** Each execution item must be `Fix`, `Add`, `Decision`, `Proof`, or `Follow-up`. `Fix` covers defect repairs; `Add` covers net-new code or config. An item may carry multiple types (e.g., `Decision | Add`); when it does, all implied obligations apply. A confirmed live defect or contract drift must be `Fix`, not `Follow-up`. When 80%+ of items in a phase share one type, declare the uniform type at the phase level instead of per-item (e.g., `Phase 1 — Fix-heavy (8/10 items tagged Fix)`).
@@ -44,6 +44,7 @@ If unsure, use a full plan.
 11. **Completion is derived (01 §5.2).** A plan is closed iff: `status: active` ∧ every counting-domain checkbox is `[x]` ∧ every frontmatter `verify` key has a successful `## Verification` pass line ∧ `## Closure` contains a dispatch line and a same-id accepted line. Nobody writes `completed` — there is no status text to keep consistent with the checkboxes; consistency between "declared done" and "actually done" is enforced by the formula and the M2 gates. Phase progress = that Phase's `[ ]` count (no per-Phase status lines exist).
 12. **Independent review and closure audit (receipt-enforced).** A plan may only reach `active` via an independent draft review (receipt lines in `## Draft Review Record`: dispatch + date-iteration conclusion sharing one id) and may only close via an independent closure audit (dispatch + accepted pair in `## Closure`). Self-closing is structurally impossible — `completed` cannot be written. Protected areas, unresolved product risk, and source-of-truth conflicts still require human/subagent review or stay open, per `AGENTS.md`.
 13. **Non-degradable items** cannot be downgraded to non-blocking follow-ups: confirmed live defects, confirmed contract drift, confirmed owner-doc drift, and CI/lint rules already fixed in the repo.
+14. **Validate every draft mechanically before hand-off (bug 2026-09-06-research-orm-plans-invisible).** After writing a plan and before returning `created` / handing it to review, the drafter MUST run `node "$MISSION_DRIVER_HOME/src/plan-check.mjs" <plan> --strict` on each file and fix every reported issue until clean. A plan whose frontmatter the ledger parser rejects (e.g. an unquoted multi-word `work-item:` value) is invisible to `draftPlans()`/`activePlans()` — review and execution will silently skip it forever. The engine's VALIDATE_PLANS gate is the backstop, not the primary check; the drafter's own strict pass is.
 
 ### Anti-Slacking Rule
 
@@ -83,7 +84,7 @@ verify: [test]
 ---
 ```
 
-Retired legacy header lines and their migration mapping (codemod contract, executed 2026-08-25):
+Retired legacy header lines and their migration mapping (codemod contract):
 
 | Legacy line | New home |
 | --- | --- |
@@ -110,18 +111,19 @@ Body blocks, in document order. `## Phase <n>` is an h2 heading that may carry a
 ## Goals
 ## Non-Goals
 ## Phase 1 — <name>
-- [ ] 实施项（含 Proof：测试命令）
+- [ ] implementation item (with Proof: test command)
 ## Phase 2
 - [ ] ...
 ## Draft Review Record
 - dispatch review #review-2026-08-25-063133-mission-driver-2026-08-25-0900-demo-plan-1-9f8e7d6c to ses_reviewer_1
 - 2026-08-25：iteration 1，共识 acceptable-as-is #review-2026-08-25-063133-mission-driver-2026-08-25-0900-demo-plan-1-9f8e7d6c
+  <!-- NOTE: `共识` and the full-width punctuation in this line are PINNED GRAMMAR tokens (DATE_ITERATION_RE in `src/ledger-sections.mjs`) — do not translate or normalize them -->
 ## Closure Findings
 ## Verification
 - pass test 2026-08-25-063133-mission-driver exit=0
 ## Closure
 - dispatch audit #audit-2026-08-25-063133-mission-driver-2026-08-25-0900-demo-plan-1-a1b2c3d4 to ses_auditor_1
-- accepted #audit-2026-08-25-063133-mission-driver-2026-08-25-0900-demo-plan-1-a1b2c3d4：审计结论与证据
+- accepted #audit-2026-08-25-063133-mission-driver-2026-08-25-0900-demo-plan-1-a1b2c3d4: audit conclusion and evidence
 ```
 
 The example above is fixture-isomorphic: it parses green under `scanPlanLedger` (concrete id/hash shapes; `<title>` and `<name>` are free prose). Block roles: `## Draft Review Record` / `## Verification` / `## Closure` are append-only (conclusion lines are only appended after the dispatch line; see rules below); `## Closure Findings` is optional and is a counting domain (rework items appended by an audit rejection); `## Phase <n>` sections are the execution checklist.
@@ -130,9 +132,9 @@ The example above is fixture-isomorphic: it parses green under `scanPlanLedger` 
 
 | Context | Line form | Notes |
 | --- | --- | --- |
-| plan `## Closure` | `- accepted #<id>：结论与证据` | NO `findings=` lexeme |
-| roadmap `## Deep Audit Record` | `- accepted #<id> findings=none\|items：结论` | `findings=` required |
-| plan `## Draft Review Record` | `- <date>：iteration <n>，共识 <verdict> #<id>` | pairs with the review dispatch, not with accepted lines |
+| plan `## Closure` | `- accepted #<id>: conclusion and evidence` | NO `findings=` lexeme |
+| roadmap `## Deep Audit Record` | `- accepted #<id> findings=none\|items: conclusion` | `findings=` required |
+| plan `## Draft Review Record` | `- <date>：iteration <n>，共识 <verdict> #<id>` (`共识` is a pinned grammar token — not translatable) | pairs with the review dispatch, not with accepted lines |
 
 - Dispatch lines: `- dispatch (review|audit) #<id> to <sessionId>`, written before dispatch; reviewers/auditors may only append conclusion lines after it.
 - ids: `#review-<runId>-<plan>-<iter>-<nonce8>` / `#audit-<runId>-<plan>-<round>-<nonce8>`; `<plan>` is the filename stem (without `.md`); `<nonce8>` is 8 hex chars (prevents pre-forged receipts). Parsed tail-anchored, so hyphen-rich stems are safe.
@@ -262,8 +264,3 @@ Exit Criteria:
 
 `## Verification` and `## Closure` start empty — the BUILD_VERIFY / CLOSURE_AUDIT steps fill them (append-only). Do not add a `## Closure Gates` section (retired — derivation covers it) or any per-Phase `Status:` lines.
 
-## Changelog
-
-- 2026-08-25 — **Full switch to the ledger format** (age-autonomy M1-WI9, plan `2026-08-25-0635-3`): template replaced with the frontmatter + `## Phase <n>` skeleton; rules 11 (text consistency) / 12 (status-vs-checkbox consistency) retired and replaced by the completion-derivation formula reference (01 §5.2); the former rule 13 is reformulated as receipt-enforced independent review/closure (dispatch + same-id conclusion lines); `> Last Reviewed:` / `> Audit:` / per-Phase `Status:` / `## Closure Gates` retired with migration mappings recorded; the two M1 additive sections (frontmatter field table, plan body sections) are merged in as the main format sections. Legacy `> Plan Status:` plans remain readable via the engine's dual-read legacy channel (migration: 52 completed plans stay legacy forever).
-- 2026-08-25 — Added `## Plan Body Sections (M1 Additive Format)` (age-autonomy 01-file-ledger §4.2/§4.4, plan `2026-08-25-0635-2` M1-WI3/WI5/WI6): canonical new-format body-block example (Phase / Draft Review Record / Closure Findings / Verification / Closure), the three pinned conclusion-line forms (plan accepted without findings / roadmap accepted with `findings=none|items` / review date-iteration line), id + pass-line grammars, counting-domain rules (column-0 discipline, fence skipping), append-only shape policy, and bounded inline review. Machine face: `tools/mission-driver/src/ledger-sections.mjs`. Additive only; examples live inside code fences so counting stays unpolluted.
-- 2026-08-25 — Added `## Plan Frontmatter Field Table (M1 Additive Format)` (age-autonomy 01-file-ledger §4.1/§7): new plan frontmatter field set `status/mission/work-item/group/failures/verify/agent/hold/claim/claim-expires` with parser-subset hard boundary and legacy-line migration mapping. Additive only: legacy `> Plan Status:` format stays valid during the transition; rules 11/12/13 retirement and template replacement are planned follow-up work.

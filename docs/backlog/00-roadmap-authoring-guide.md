@@ -11,7 +11,7 @@ Vocabulary: **roadmap → milestone → work item**. Do not call a roadmap unit 
 
 ## Purpose
 
-This guide defines what a roadmap under `docs/backlog/` is, how to write it, and when to update it. The roadmap is optional. Use it only when a project is large enough that a flat backlog table no longer shows global progress. It is the single format authority for roadmaps (contract: `docs/design/age-autonomy/01-file-ledger.md` §3; machine face: `tools/mission-driver/src/ledger-sections.mjs` `scanRoadmapLedger` + `ledger-frontmatter.mjs` `validateRoadmapFrontmatter`, read dual-mode via `roadmap-check.mjs`).
+This guide defines what a roadmap under `docs/backlog/` is, how to write it, and when to update it. The roadmap is optional. Use it only when a project is large enough that a flat backlog table no longer shows global progress. It is the single format authority for roadmaps (contract: `docs/design/age-autonomy/01-file-ledger.md` §3; machine face: `$MISSION_DRIVER_HOME/src/ledger-sections.mjs` `scanRoadmapLedger` + `ledger-frontmatter.mjs` `validateRoadmapFrontmatter`, read dual-mode via `roadmap-check.mjs`).
 
 ## What a Roadmap Is
 
@@ -21,10 +21,14 @@ A roadmap is a milestone index and a work-item status surface. Its core use:
 2. It records each work item's dependencies, owner doc, and reusable framework/platform capabilities.
 3. It is the entry point for choosing the next work item.
 
+### Role In The Document Hierarchy
+
+The roadmap is the planning layer between owner docs and plans. Detailed design information lives in owner docs (`docs/design/`, `docs/architecture/`, `docs/analysis/`, ...); the roadmap plans the NEXT ACTIONS over those docs — which work items remain, in what order, with which dependencies. Plans are drafted FROM the roadmap: the engine's DRAFT_PLANS step reads the roadmap, takes the first unchecked work items, and drafts one plan per item. The per-item action contract — purpose, deliverables, verification — is pinned in the drafted plan, not in the roadmap line. A work item whose plan was never drafted has no action contract; the roadmap only decides that the action is still owed, not how to perform it.
+
 ## Containment: Milestones And Work Items
 
 - A **milestone** groups related work items (e.g. "Core Business Loop", "CRUD for 18 domains"). A milestone is a `### M<n> — <title>` section only — it **never carries a status field**. Its progress is read by scanning its work items.
-- A **work item** is the atomic markable unit — a coherent, independently-deliverable slice. It is a column-0 checkbox line inside a milestone block (`- [ ]` = not done, `- [x]` = done). A work item that cannot be completed by a single delivery pass is too large and must be split.
+- A **work item** is the atomic markable unit — a coherent, independently-deliverable slice. It is a column-0 checkbox line inside a milestone block (`- [ ]` = not done, `- [x]` = done). A work item that cannot be completed by a single delivery pass is too large and must be split. Size a work item so it roughly corresponds to ONE plan: the engine drafts one plan per work item, and the line must carry enough clarity to decide that plan's scope — a work item whose plan would need multiple independent result surfaces is oversized and must be split.
 
 ## Roadmap Frontmatter And Audit Record
 
@@ -32,7 +36,7 @@ A roadmap is a milestone index and a work-item status surface. Its core use:
 
 ```yaml
 ---
-audit-rounds: 2          # 已消耗的 mission 级 Deep Audit 轮次（跨 run 跨 session 累计）
+audit-rounds: 2          # consumed mission-level Deep Audit rounds (accumulated across runs/sessions)
 ---
 ```
 
@@ -44,7 +48,7 @@ audit-rounds: 2          # 已消耗的 mission 级 Deep Audit 轮次（跨 run 
 ```md
 ## Deep Audit Record
 - dispatch audit #audit-2026-08-25-063133-mission-driver-age-roadmap-1-1a2b3c4d to ses_auditor_1
-- accepted #audit-2026-08-25-063133-mission-driver-age-roadmap-1-1a2b3c4d findings=none：结论（该 auditorSessionId 写入）
+- accepted #audit-2026-08-25-063133-mission-driver-age-roadmap-1-1a2b3c4d findings=none: conclusion (written by that auditorSessionId)
 ```
 
 The example above is fixture-isomorphic: it parses green under `scanRoadmapLedger` (concrete id shape).
@@ -55,7 +59,18 @@ The example above is fixture-isomorphic: it parses green under `scanRoadmapLedge
 ### Work Item block pure-checkbox discipline
 
 - Work Item status lives ONLY inside `### M<n> — <title>` milestone blocks, as column-0 checkboxes (`- [ ]` / `- [x]`). todo/done counting, reconciliation, and UI rendering share this single grep channel (`grep -c "^- \[ \]"`).
-- **The legacy status-suffix form is retired**: `- WI1 …: `done`` and the `## Work Item Status` status table migrated to checkboxes on 2026-08-25 (pre-migration roadmaps remain readable via the engine's dual-read suffix/table fallback). The old `ready` value no longer exists on roadmaps — "draft-reviewed and queued" is carried by the delivering plan's frontmatter `status` (a `ready`-grade work item is simply an unchecked one whose plan is past review).
+- **Work-item id = the first token after the checkbox** (`WI_ID_RE` takes the first `\S+` token); the naming convention is `WI<n>` with **globally incrementing numbers across the whole file** — ids must be unique file-wide (milestones do NOT reset the counter; `scanRoadmapLedger` reports `duplicate-work-item-id` otherwise). Plans reference a work item cross-file via the composite label `work-item: M<n>-WI<a>`. Milestone numbers are integers (`M(\d+)`) — dotted ids like `M0.3` are not milestone headings.
+- Canonical milestone + work-item fragment (inside a fence so it never pollutes counting):
+
+  ```md
+  ### M2 — Tech Selection
+
+  - [x] WI9 Time-series store selection (Owner: `docs/architecture/telemetry-storage-design.md`; deps: M1)
+  - [ ] WI10 Protocol adapter architecture confirmation (Owner: `docs/design/protocol-adapter-design.md`; deps: M1)
+  ```
+
+  Trailing parentheticals (Owner / deps / evidence / plan pointers) are the sanctioned place for extra metadata — they ride AFTER the `WI<n> <short label>` head and never replace it. Use `Owner:` for an existing doc that owns the work item's resulting truth; for research or production items whose target artifact does not exist yet, use `Deliverable:` pointing to the artifact to be produced (e.g. the report path) — a pre-existing input document is never evidence of completion.
+- **The legacy status-suffix form is retired**: `- WI1 …: `done`` suffixes and `## Work Item Status` status tables give way to column-0 checkboxes (pre-migration roadmaps remain readable via the engine's dual-read suffix/table fallback). The old `ready` value no longer exists on roadmaps — "draft-reviewed and queued" is carried by the delivering plan's frontmatter `status` (a `ready`-grade work item is simply an unchecked one whose plan is past review).
 - Indented lines (e.g. verification-gate command sub-items) are outside the machine face and are not counted. Column-0 checkboxes outside milestone blocks are structural errors. Examples inside code fences never count.
 
 ## Roadmap Role: Human–AI Alignment + AI Work Queue
@@ -103,7 +118,7 @@ Omit sections that do not apply.
 
 ## Writing Rules
 
-1. Keep it coarse-grained. Work item lines are short; delivery scope detail lives in plans.
+1. Keep it coarse-grained. A work item line must be clear enough to decide the delivering plan's scope and content, but stay short — detailed information must be supported by external docs (design docs, research reports). Delivery scope detail lives in plans.
 2. Annotate framework/platform reuse explicitly to avoid rebuilding existing capabilities.
 3. Keep status accurate. A ticked checkbox means the closure audit passed; stale ticks are worse than no roadmap.
 4. Keep dependencies consistent between sections; on conflict the milestone blocks win.
@@ -134,11 +149,9 @@ When multiple roadmaps exist, list all of them in `docs/backlog/README.md` with 
 - Not annotating existing framework/platform capabilities, causing redundant rebuilds
 - A work item larger than one delivery pass, so finished implementation updates nothing and the loop stalls
 - Putting a status on a milestone, a status table, per-item status suffixes, or ❌/✅ icons — any second status channel drifts out of sync with the checkboxes
+- Resetting `WI<n>` numbers per milestone, or duplicating work-item ids anywhere in the file (ids are file-global; the machine face rejects duplicates)
+- Dotted milestone headings (`### M0.3 — …`) — the heading grammar is `M` + integer only
 - AI re-arbitrating priority or inventing work items instead of executing the human-set order
 - Tracking "active work / current blocker / AI autonomy" as fields in `project-context.md` — these are high-churn and go stale; read work-in-progress from active plans instead
 - Calling a roadmap unit a "phase"
 
-## Changelog
-
-- 2026-08-25 — **Full switch to the checkbox ledger format** (age-autonomy M1-WI9, plan `2026-08-25-0635-3`): work-item status suffixes and the status table are retired (migrated to pure checkboxes; pre-migration roadmaps stay readable via the dual-read fallback); `ready` retires as a roadmap value — plan-side frontmatter `status` carries it; `audit-rounds` frontmatter and `## Deep Audit Record` move from the additive section into the main format; the Status Values table is retired (done = checked, not done = unchecked, everything else derived). Machine face: `scanRoadmapLedger` + dual-read `roadmap-check.mjs`.
-- 2026-08-25 — Added `## Roadmap Frontmatter And Audit Record (M1 Additive Format)` (age-autonomy 01-file-ledger §3.1/§3.2/§3.3, plan `2026-08-25-0635-2` M1-WI6): roadmap frontmatter `audit-rounds` semantics, `## Deep Audit Record` dispatch/accepted format with required `findings=none|items`, and the Work Item block pure-checkbox counting discipline. Additive only; examples live inside code fences so counting stays unpolluted.
