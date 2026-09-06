@@ -167,8 +167,8 @@ dispatch:                                # 派发类型 → 具名 agent（提�
 
 - plan 文件只能落在 mission 配置的 `plansDir` 域内；frontmatter 必须符合 01-file-ledger §2 的扁平子集；`work-item` 必须命中 roadmap 已登记项；roadmap 写回只能改已登记 work-item 的 checkbox。
 - 越域写 / 非法 frontmatter / 未登记 work-item → deny；对已完成派生或可写终态 plan 的 Phase/status/机器字段写入 → deny（终态冻结）。
-- **执法层自护（P8）**：law 实现（`plugin/dsh/src/law/**`）、策略数据（`missions/autonomy.policy.yml`）、执法 CLI（`tools/mission-driver/src/{plan-check,gate-check}.mjs`）对 AI 写一律 deny；人工 / CI / 已批准立项路径为合法例外。被执法者不得改写执法者自身——法律层单点失效的唯一防线，属 A1 裁定下唯一无条件对抗级的面。
-- **as-built 放置与保护姿态注记（M5-WI39 事实性增补）**：law 实现本体（规则/策略内核 `tools/mission-driver/src/{law-core,law-policy,law-rules}.mjs`）按 0815-1 放置裁定落**引擎侧**零 npm 模块（可达链 `config.js → law-policy → law-core`，与 M1 共享账本库同裁定族）；上文字面集中的 `plugin/dsh/src/law/**` 实指宿主适配层（`host-adapter.ts`）——即 P8 路径集（`law-self-protection` `isLawProtectedPath` 四族）**不含**引擎侧内核三模块。引擎侧内核的替代保护面：① 引擎 import 闭包消费 + **build-bundle 复制通道**（`plugin/dsh/assets/src/law-*.mjs` 副本由 `ALLOWED_MODULES` 通道从 tools 源再生物化，bundle freshness 结构门钉住副本与源一致）；② **CI + 已批准立项纪律**（内核变更历 M2 0815-{1,2,3}/0950-1 批次均经 active plan 立项引用目标路径——P8「已批准立项」例外支的合法消费者；`verify-age.sh` L2.5 law gates 与 `age-ci.yml` 账本/执法数据触发路径兜底）。本注记收口 0950-1（WI21）Deferred「law 内核 P8 覆盖缺口」：字面清单不扩张（扩张 = 契约变更需独立立项），放置错位以成文注记消解。
+- **执法层自护（P8）**：law 实现（`plugin/dsh/src/law/**`）、策略数据（`missions/autonomy.policy.yml`）、执法 CLI（`$MISSION_DRIVER_HOME/src/{plan-check,gate-check}.mjs`）对 AI 写一律 deny；人工 / CI / 已批准立项路径为合法例外。被执法者不得改写执法者自身——法律层单点失效的唯一防线，属 A1 裁定下唯一无条件对抗级的面。
+- **as-built 放置与保护姿态注记（M5-WI39 事实性增补）**：law 实现本体（规则/策略内核 `$MISSION_DRIVER_HOME/src/{law-core,law-policy,law-rules}.mjs`）按 0815-1 放置裁定落**引擎侧**零 npm 模块（可达链 `config.js → law-policy → law-core`，与 M1 共享账本库同裁定族）；上文字面集中的 `plugin/dsh/src/law/**` 实指宿主适配层（`host-adapter.ts`）——即 P8 路径集（`law-self-protection` `isLawProtectedPath` 四族）**不含**引擎侧内核三模块。引擎侧内核的替代保护面：① 引擎 import 闭包消费 + **build-bundle 复制通道**（`plugin/dsh/assets/src/law-*.mjs` 副本由 `ALLOWED_MODULES` 通道从 tools 源再生物化，bundle freshness 结构门钉住副本与源一致）；② **CI + 已批准立项纪律**（内核变更历 M2 0815-{1,2,3}/0950-1 批次均经 active plan 立项引用目标路径——P8「已批准立项」例外支的合法消费者；`verify-age.sh` L2.5 law gates 与 `age-ci.yml` 账本/执法数据触发路径兜底）。本注记收口 0950-1（WI21）Deferred「law 内核 P8 覆盖缺口」：字面清单不扩张（扩张 = 契约变更需独立立项），放置错位以成文注记消解。
 
 ### 4.8 评审与审计区 append-only
 
@@ -209,13 +209,3 @@ dispatch:                                # 派发类型 → 具名 agent（提�
 - 门禁只裁决**可判定事实**：文件存在、hash 相等、状态位值、计数未超限、dispatch/accepted 行匹配。
 - 计划质量、scope 是否诚实、closure 证据是否充分——这些是判断，由独立评审 agent 依 guide 完成（Draft Review Record / Closure 内联），门禁只保证「该审的审了」（派发+回执绑定），不保证「审得对」。
 
-## Changelog
-
-- 2026-08-28（M5-WI48，plan `docs/plans/age-autonomy/2026-08-27-2122-2-m5-wi48-engine-silent-completed-terminal.md`）：§4.4 增量——nothing-claim 动作面判据扩 **roadmap 未勾维度**：`ctx.roadmapText` 注入时 allow 分支计数未勾 work item（未勾 >0 → 触发信号携带 `roadmapUnchecked: N` + 强制沿语义成文；==0 逐字节不变；缺席不可观测不冒充——§2 纪律互指），deny 面与 kind 判别面零改动；03 §3/§8 引擎形态豁免与 06 G8 登记随同批成文（R6 P1 silent-completed 终态通道封堵，零引擎 diff）。
-
-- 2026-08-27（M5-WI47，plan `docs/plans/age-autonomy/2026-08-27-2122-1-m5-wi47-audit-budget-dual-face-alignment.md`）：§4.6 增量——预算闸双域语义句成文（执法域 = law 消费面 × 全局 `audit-rounds` × policy 权威值；引擎形态轮门 = per-run 瞬态防护域、不读全局计数非本闸执法面——06 G7 指针）+ policy `limits.maxAuditRounds` 3→8 全局预算校正（已消耗 6 轮 + 两轮生产性余量；flows per-run 值 3 维持不动，双域刻意分离）。
-- 2026-08-27（M5-WI39，plan `docs/plans/age-autonomy/2026-08-27-1023-3`）：§4.7 as-built 放置与保护姿态注记（事实性增补，非契约变更）——引擎侧 law 内核三模块放置裁定（0815-1）+ 不入 P8 字面集的理由与替代保护面（import 闭包 + build-bundle freshness / CI + 已批准立项纪律）成文；收口 0950-1（WI21）Deferred「law 内核 P8 覆盖缺口」。
-- 2026-08-26（M3-WI29，plan `docs/plans/age-autonomy/2026-08-26-1954-2`）：§4.6 增量——不计清单补第四行「恢复 redispatch」（崩溃重派不重复计 `failures`，03 §6「不把单次崩溃计为计划失败」字面落点；恢复路径 `recordPlanFailure` 调用点为空，重派动作经 observation 回执记录）；同 plan 附带两处窄域行为增量（均真值表钉住）：§4.2 评审租约改**最末 dispatch review 行作答**（superseded 行不持约、最末行配对即租约关闭——与幂等面最新行作答单一语义面，redispatch 后 plan 写面不锁死）+ §4.6 预算闸增**同轮次崩溃重派豁免**（新 DAR dispatch 行轮次号 ∈ 现 unpaired 在飞轮次集 = 同 occurrence 重派，轮次已付不耗预算不 deny，01 §3.1）。
-
-- 2026-08-26（M3-WI27，plan `docs/plans/age-autonomy/2026-08-26-1411-3`）：§4.6 增量——failures 归因桶成文（`executor-error` / `verification-red` / `claim-expired-no-output` 三桶各计/不计规则 + 不计清单）+ maxFailures 双源解析（policy 权威 / mission flow 回退 / 双缺默认 3，`resolveMaxFailures`）+ 熔断执行语义注记（held 同写清 claim、单 held 不阻塞、全 held 经 03 §8 求值核心终态化）。
-- 2026-08-25（M2-WI12/WI13，plan `docs/plans/age-autonomy/2026-08-25-0815-1`）：§6 部署面表补 gate-check.mjs 与 DSH 适配层实名（supported baseline 的最小事实性增补——内核 `tools/mission-driver/src/{law-core,law-policy}.mjs`、真实实例 `missions/autonomy.policy.yml` 已落地；本文其余契约无改动）。
