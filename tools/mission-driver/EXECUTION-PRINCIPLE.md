@@ -1,7 +1,7 @@
 # Mission 执行原理
 
 > Status: active
-> Scope: `tools/mission-driver/` 的运行机制 —— 从命令行启动到 AI 子进程执行再到状态持久化的完整链路。
+> Scope: `$MISSION_DRIVER_HOME/` 的运行机制 —— 从命令行启动到 AI 子进程执行再到状态持久化的完整链路。
 > 相关文档：`README.md`（用法）、`TROUBLESHOOTING.md`（卡住诊断）、`design/mission-design.md`（设计）、`design/mission-driver-flow-design.md`（流程编排）。
 
 本文用 Mermaid 图讲清楚"一个 mission 跑起来后到底发生了什么"。先看组件分层，再看时序。

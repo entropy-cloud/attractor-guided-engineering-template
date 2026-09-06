@@ -185,10 +185,11 @@ describe("context-map — buildInjectionMap subflow recursion (fix #1)", () => {
   it("returns top-level transition edges (state-machine) — fix #graph", () => {
     assert.ok(Array.isArray(map.edges), "map.edges is an array");
     assert.ok(map.edges.length > 0, `expected transitions, got ${map.edges.length}`);
-    // CHECK pass → REVIEW_PLANS (happy-path goto edge).
+    // CHECK pass → VALIDATE_PLANS (happy-path goto edge; ledger hard gate,
+    // bug 2026-09-06-research-orm-plans-invisible, then REVIEW_PLANS).
     const checkPass = map.edges.find((e) => e.from === "CHECK" && e.marker === "pass");
     assert.ok(checkPass, "CHECK/pass edge present");
-    assert.equal(checkPass.to, "REVIEW_PLANS");
+    assert.equal(checkPass.to, "VALIDATE_PLANS");
     assert.equal(checkPass.terminal, undefined);
     // CHECK fail → done:failed (terminal edge with synthetic done: target).
     const checkFail = map.edges.find((e) => e.from === "CHECK" && e.marker === "fail");

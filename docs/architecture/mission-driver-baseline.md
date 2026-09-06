@@ -2,17 +2,17 @@
 
 ## Purpose
 
-Record the cross-cutting technical baseline for the `tools/mission-driver/` engine — the public contracts that the rest of the repository depends on and that an AI agent or maintainer must treat as stable.
+Record the cross-cutting technical baseline for the `$MISSION_DRIVER_HOME/` engine — the public contracts that the rest of the repository depends on and that an AI agent or maintainer must treat as stable.
 
-`docs/architecture/` owns cross-cutting technical and module-boundary truth (AGENTS.md Documentation Ownership). Mission-driver is a cross-cutting tool (`mission-design.md` §10: "operationalizes the AGE loop") whose CLI surface, schemas, and marker contracts are consumed by plans, prompts, audits, the monitor dashboard, and downstream analysis. Those contracts were previously documented only inside `tools/mission-driver/design/*.md`; this file lifts the stable surface to the project architecture level and cites the design docs as the controlling detail owners.
+`docs/architecture/` owns cross-cutting technical and module-boundary truth (AGENTS.md Documentation Ownership). Mission-driver is a cross-cutting tool (`mission-design.md` §10: "operationalizes the AGE loop") whose CLI surface, schemas, and marker contracts are consumed by plans, prompts, audits, the monitor dashboard, and downstream analysis. Those contracts were previously documented only inside `$MISSION_DRIVER_HOME/design/*.md`; this file lifts the stable surface to the project architecture level and cites the design docs as the controlling detail owners.
 
 This document does **not** re-derive implementation detail. It enumerates the contracts and points to the detailed owner doc for each.
 
 ## Scope
 
-`tools/mission-driver/` — Node.js (ESM) engine that reads `missions/<name>.json`, walks a flow-defined state machine, spawns a configurable **driver** subprocess per step (`opencode run` by default; `pi -p` via `--driver pi`), and serves a monitor dashboard (Node `http` + SSE + Vue 3 frontend).
+`$MISSION_DRIVER_HOME/` — Node.js (ESM) engine that reads `missions/<name>.json`, walks a flow-defined state machine, spawns a configurable **driver** subprocess per step (`opencode run` by default; `pi -p` via `--driver pi`), and serves a monitor dashboard (Node `http` + SSE + Vue 3 frontend).
 
-The engine core is **zero npm dependencies** (only CLI-layer `commander`; monitor uses only Node built-ins). This constraint is normative — see `tools/mission-driver/CONTEXT.md` "关键约束".
+The engine core is **zero npm dependencies** (only CLI-layer `commander`; monitor uses only Node built-ins). This constraint is normative — see `$MISSION_DRIVER_HOME/CONTEXT.md` "关键约束".
 
 ## Public CLI Surface
 
@@ -31,7 +31,7 @@ CLI registration lives in `src/main.js` (`commander` subcommand declarations in 
 
 ### Driver selection
 
-The per-step subprocess driver is configurable, resolved in `src/config.js` with priority `CLI --driver` > `MISSION_DRIVER_EXEC` env > `mission.json`/`base.json` `driver` field > `"opencode"`. Supported values: `opencode` | `pi` | `cline` | `native` — validated at resolve time against the exported `SUPPORTED_DRIVERS` whitelist at every `resolveConfig` return point (main / draft / analyze): an unknown value from any source fails fast with the legal values listed instead of surfacing mid-run as a SPAWN ENOENT. `native` is reserved for the DSH plugin host: it is accepted only when the caller passes the internal option `allowNativeDriver: true` (never a CLI flag / mission field / env), and the standalone CLI rejects it with a host-specific error. Related embed flag: when the resolved engine config carries `embed: true` (injected by the plugin host, not the CLI), `FlowEngine.run()` skips its process-level startup diagnostics (active-run registration, START sys-snapshot, orphan reaping) so an in-host engine cannot destabilize the host process — details in `docs/architecture/dsh-plugin-packaging.md` §Execution Backend Seam. `driverArgs` (`{model}`/`{agent}`/`{session}`/`{agentFile}` tokens) and `promptMode` (`arg`|`stdin`) follow the same priority chain. When `driver=="pi"` or `driver=="cline"`, config.js applies driver-sensible defaults (pi: driverArgs + `promptMode:"stdin"` + a computed `agentFile` persona path; cline: `-m/--json/--yolo/-s` args + `promptMode:"arg"`) so the switch needs no further config; explicit values always win. The pi persona lives at `<engine>/agents/build.pi.md` (engine-relative, resolved via `import.meta.url`, so it works for consumers referencing the engine via `MISSION_DRIVER_HOME`). `runner.js` suppresses opencode-only flags (`--pure`/`--variant`/`--dangerously-skip-permissions`) for non-opencode drivers. See `tools/mission-driver/README.md` §配置项.
+The per-step subprocess driver is configurable, resolved in `src/config.js` with priority `CLI --driver` > `MISSION_DRIVER_EXEC` env > `mission.json`/`base.json` `driver` field > `"opencode"`. Supported values: `opencode` | `pi` | `cline` | `native` — validated at resolve time against the exported `SUPPORTED_DRIVERS` whitelist at every `resolveConfig` return point (main / draft / analyze): an unknown value from any source fails fast with the legal values listed instead of surfacing mid-run as a SPAWN ENOENT. `native` is reserved for the DSH plugin host: it is accepted only when the caller passes the internal option `allowNativeDriver: true` (never a CLI flag / mission field / env), and the standalone CLI rejects it with a host-specific error. Related embed flag: when the resolved engine config carries `embed: true` (injected by the plugin host, not the CLI), `FlowEngine.run()` skips its process-level startup diagnostics (active-run registration, START sys-snapshot, orphan reaping) so an in-host engine cannot destabilize the host process — details in `docs/architecture/dsh-plugin-packaging.md` §Execution Backend Seam. `driverArgs` (`{model}`/`{agent}`/`{session}`/`{agentFile}` tokens) and `promptMode` (`arg`|`stdin`) follow the same priority chain. When `driver=="pi"` or `driver=="cline"`, config.js applies driver-sensible defaults (pi: driverArgs + `promptMode:"stdin"` + a computed `agentFile` persona path; cline: `-m/--json/--yolo/-s` args + `promptMode:"arg"`) so the switch needs no further config; explicit values always win. The pi persona lives at `<engine>/agents/build.pi.md` (engine-relative, resolved via `import.meta.url`, so it works for consumers referencing the engine via `MISSION_DRIVER_HOME`). `runner.js` suppresses opencode-only flags (`--pure`/`--variant`/`--dangerously-skip-permissions`) for non-opencode drivers. See `$MISSION_DRIVER_HOME/README.md` §配置项.
 
 ## Mission Config Schema (`mission.json`)
 
@@ -50,11 +50,11 @@ Enforced by `src/mission-check.mjs`. Mission configs live in `{projectRoot}/miss
 
 Optional path fields whose existence is checked when `projectRoot` is supplied: `roadmapPath`, `plansDir`, `contextDir`, `moduleDir`.
 
-Detailed schema and project-specific values: `tools/mission-driver/design/mission-design.md` §8 (Fixed Contracts vs Project-Specific).
+Detailed schema and project-specific values: `$MISSION_DRIVER_HOME/design/mission-design.md` §8 (Fixed Contracts vs Project-Specific).
 
 ## Draft-State Schema (`draft-state.json`)
 
-Written by `cmdDraftMission` only when `--draft-job-dir` is set; consumed by `src/monitor.js` for the draft-job UI. The full 14-field table (status / phase / startedAt / endedAt / desc / flowHint / targetFile / briefPath / briefGate / briefGateReason / missionName / roadmapPath / missionFile / error) with patch-point anchors is owned by `tools/mission-driver/design/draft-robustness-design.md` §1.4 — this file does not duplicate it.
+Written by `cmdDraftMission` only when `--draft-job-dir` is set; consumed by `src/monitor.js` for the draft-job UI. The full 14-field table (status / phase / startedAt / endedAt / desc / flowHint / targetFile / briefPath / briefGate / briefGateReason / missionName / roadmapPath / missionFile / error) with patch-point anchors is owned by `$MISSION_DRIVER_HOME/design/draft-robustness-design.md` §1.4 — this file does not duplicate it.
 
 Key invariants:
 
@@ -92,7 +92,7 @@ AI prompts emit structured markers that the engine parses. Two are cross-cutting
 
 - **`<AI_STEP_RESULT>pass|fail</AI_STEP_RESULT>`** — step result tag enforced structurally by `src/prompt-check.mjs` (chained into `pnpm --prefix tools/mission-driver test`). Every agent-facing prompt that produces a pass/fail outcome must ship a well-formed example; the check fails the test suite otherwise.
 
-Step-transition markers (e.g. `<PLAN_FILE>`, `<MISSION_FILE>`, `<DRAFT>`, `<REVISED>`, `<FLOW_VARS>`) are owned by `mission-design.md` and the individual flow designs under `tools/mission-driver/design/`.
+Step-transition markers (e.g. `<PLAN_FILE>`, `<MISSION_FILE>`, `<DRAFT>`, `<REVISED>`, `<FLOW_VARS>`) are owned by `mission-design.md` and the individual flow designs under `$MISSION_DRIVER_HOME/design/`.
 
 ## Public Exports vs Test Seams
 
@@ -126,12 +126,12 @@ Consumers must not depend on `__`-prefixed exports outside of `test/`, and must 
 
 | Topic | Owner doc |
 | --- | --- |
-| Engine / state machine design | `tools/mission-driver/design/mission-design.md` |
-| Draft pipeline robustness (WI1–WI5) | `tools/mission-driver/design/draft-robustness-design.md` |
-| Step execution + audit count | `tools/mission-driver/design/step-execution-and-audit-count-design.md` |
-| Flow definitions | `tools/mission-driver/design/mission-driver-flow-design.md` + `flows/*.json` |
-| Tool context / build commands | `tools/mission-driver/CONTEXT.md` |
-| Execution principles | `tools/mission-driver/EXECUTION-PRINCIPLE.md` |
+| Engine / state machine design | `$MISSION_DRIVER_HOME/design/mission-design.md` |
+| Draft pipeline robustness (WI1–WI5) | `$MISSION_DRIVER_HOME/design/draft-robustness-design.md` |
+| Step execution + audit count | `$MISSION_DRIVER_HOME/design/step-execution-and-audit-count-design.md` |
+| Flow definitions | `$MISSION_DRIVER_HOME/design/mission-driver-flow-design.md` + `flows/*.json` |
+| Tool context / build commands | `$MISSION_DRIVER_HOME/CONTEXT.md` |
+| Execution principles | `$MISSION_DRIVER_HOME/EXECUTION-PRINCIPLE.md` |
 | Plan authoring | `docs/plans/00-plan-authoring-and-execution-guide.md` |
 
 ## Update Rule

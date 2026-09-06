@@ -6,7 +6,7 @@ This document is the architecture truth for why this repository has a `template/
 
 This repo has a dual identity:
 
-1. **As a real project** — it develops `tools/mission-driver/` using its own AGE workflow + mission-driver itself.
+1. **As a real project** — it develops `$MISSION_DRIVER_HOME/` using its own AGE workflow + mission-driver itself.
 2. **As a template** — consumers run `./install-age.sh /path/to/target "Project Name"` from a clone of this repo to bootstrap a new AGE project.
 
 Prior to 2026-07-27, the repo was structured only for audience (2): root files were template-flavored (`<project-name>` placeholders, unfilled `docs/context/project-context.md`, etc.), which obstructed using the repo itself as a real project. See `docs/analysis/2026-07-27-0000-template-realproject-split-proposal.md` for the full problem statement and the 4-round audit history that converged on this boundary.
@@ -19,7 +19,7 @@ Prior to 2026-07-27, the repo was structured only for audience (2): root files w
 | **Root `docs/` (shared methodology)** | **Shared (template + real project)** | Methodology guides (`00-*-guide.md`, `docs/skills/*`, `docs/references/*`, `docs/process/README.md`, `docs/articles/*`, `docs/examples/*`, directory-level `README.md`s except those flagged below) are identical for both audiences. Consumers copy them as-is via `install-age.manifest`. |
 | **Root `docs/` (real-project filled)** | **Real project** | `docs/context/{project-context,ai-autonomy-policy,codebase-map}.md`, `docs/architecture/{README,module-boundaries,project-vision,system-baseline}.md`, `docs/process/application-development-workflow.md`, `docs/backlog/README.md`, `docs/index.md`, `docs/testing/known-good-baselines.md` — these were template stubs, now filled with mission-driver-specific content. |
 | **`template/` subdirectory** | **Template** | Pristine copies of the 16 fill-in files + `README.md` + `README.zh.md` + `START-HERE-after-copy.md` (deprecated manual fallback). Consumers receive these via `install-age.sh`. |
-| **`tools/mission-driver/`** | **Real project (NOT copied)** | The engine itself. Consumers reference it via `MISSION_DRIVER_HOME`, never copy it. See `tools/README.md`. |
+| **`$MISSION_DRIVER_HOME/`** | **Real project (NOT copied)** | The engine itself. Consumers reference it via `MISSION_DRIVER_HOME`, never copy it. See `tools/README.md`. |
 | **`install-age.sh` + `install-age.manifest`** | **Shared** | The single copy-flow mechanism. Manifest entries with `template/` prefix source from `template/`; entries without prefix source from root (shared methodology). |
 
 ## What `install-age.sh` Does (Consumer Flow)
@@ -46,7 +46,7 @@ Rejected alternatives, summarized from the proposal audit history:
 2. **Twin files (`project-context.md` + `project-context-tpl.md`)** — rejected: cannot twin the opencode-auto-loaded `AGENTS.md`; consumers get both files and must manually delete; does not scale to 16 fill-in files.
 3. **`.opencode/opencode.json` instruction injection** — rejected: capability unproven in this repo; even if supported, it only addresses `AGENTS.md` while the other 15 fill-in files remain template-flavored.
 
-Selected design — **`template/` subdirectory overlay extending the existing `install-age.sh` mechanism** — honors the existing "reference not copy" pattern already used for `tools/mission-driver/` and `docs/articles/`, requires no new tooling, and bounds the drift surface to 16 fill-in files (vs. the entire `docs/` tree).
+Selected design — **`template/` subdirectory overlay extending the existing `install-age.sh` mechanism** — honors the existing "reference not copy" pattern already used for `$MISSION_DRIVER_HOME/` and `docs/articles/`, requires no new tooling, and bounds the drift surface to 16 fill-in files (vs. the entire `docs/` tree).
 
 ## Editing Rules
 

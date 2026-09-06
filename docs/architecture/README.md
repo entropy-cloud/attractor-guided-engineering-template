@@ -17,5 +17,5 @@
 ## When This Directory Changes
 
 - Adding a new cross-cutting technical contract that spans multiple modules → add a doc here and reference it from `mission-driver-baseline.md` (do NOT duplicate content already in `mission-driver-baseline.md`).
-- Design-level decisions belong in `docs/design/` (or under `tools/mission-driver/design/` for engine internals); cross-cutting technical structure belongs here.
+- Design-level decisions belong in `docs/design/` (or under `$MISSION_DRIVER_HOME/design/` for engine internals); cross-cutting technical structure belongs here.
 - Per `AGENTS.md` Operating Rule 6, keep this directory focused on the current supported baseline, not migration history.

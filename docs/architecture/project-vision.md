@@ -9,7 +9,7 @@ Describe the long-term product and engineering attractor for `mission-driver`.
 ## Long-Term Direction
 
 1. **Be the canonical AGE loop engine.** Stay the single source of truth for AGE-driven AI development. Other projects reference it via `MISSION_DRIVER_HOME`; they do not fork it.
-2. **Keep the engine zero-npm-dependency.** The clone-and-run promise (`node src/main.js` works on a fresh checkout) is non-negotiable. New functionality that would require runtime deps goes behind feature flags or stays in `tools/mission-driver/web/` (which has its own package.json).
+2. **Keep the engine zero-npm-dependency.** The clone-and-run promise (`node src/main.js` works on a fresh checkout) is non-negotiable. New functionality that would require runtime deps goes behind feature flags or stays in `$MISSION_DRIVER_HOME/web/` (which has its own package.json).
 3. **Stay observable.** Monitor dashboard + structured events + per-step logs are first-class. If a human cannot understand why a mission stalled, that is a defect.
 4. **Self-improving via Reflexion.** `--analyze-run` postmortems distil durable lessons back into mission prompts. The memory system is part of the attractor, not a side feature.
 

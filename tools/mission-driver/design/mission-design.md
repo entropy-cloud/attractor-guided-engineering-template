@@ -177,7 +177,7 @@ AI reads project structure + user intent -> generates `missions/<name>.json`. Se
 ./tools/mission-driver.sh list missions
 ```
 
-`./tools/mission-driver.sh` is a thin wrapper that calls `node tools/mission-driver/src/main.js`.
+`./tools/mission-driver.sh` is a thin wrapper that calls `node $MISSION_DRIVER_HOME/src/main.js`.
 
 ## 6. Flow Architecture
 
@@ -270,5 +270,5 @@ From current (hardcoded paths + module parameter) to mission-based. **In depende
 
 ## 12. Open Questions
 
-- Mission directory default location: `missions/` (project root) vs `tools/mission-driver/missions/`. Prefer project root `missions/`, `--missions-dir` can override.
+- Mission directory default location: `missions/` (project root) vs `$MISSION_DRIVER_HOME/missions/`. Prefer project root `missions/`, `--missions-dir` can override.
 - Multi-mission concurrency/dependencies: currently serial; concurrency and dependency modeling is future work.

@@ -5,7 +5,7 @@
 > - Run log `_tmp/2026-07-22-075526-mission-driver/`（`run-state.json` / `events.jsonl` / `oc-*.log`——运行自身日志，非事后推断）
 > - 分支 `draft-robustness` 最新提交 `4094a33`（46 commit squash）
 > - 对照旧版本 `C:\Work\cardlite-acq\tools\mission-driver`（未 squash、逐提交，未出现"必满 3 轮"）
-> - Owner docs: `tools/mission-driver/design/mission-driver-flow-design.md`、`flows/*.json`、`src/engine.js`、`src/flow-loader.js`
+> - Owner docs: `$MISSION_DRIVER_HOME/design/mission-driver-flow-design.md`、`flows/*.json`、`src/engine.js`、`src/flow-loader.js`
 > Verification command: `npm --prefix tools/mission-driver test`（当前基线 533/533 green）
 
 ## Purpose / 目标
@@ -111,7 +111,7 @@
 
 ## Scope / 范围
 
-设计细节归属 `tools/mission-driver/design/mission-driver-flow-design.md`，本文件定义 what 与验收。
+设计细节归属 `$MISSION_DRIVER_HOME/design/mission-driver-flow-design.md`，本文件定义 what 与验收。
 
 ### R1 — 审计严重度阈值（引擎强制，治根因 A）
 
@@ -187,5 +187,5 @@
 ## Routing / 后续
 
 - Task type: architecture change + implementation（触及 flow 契约、引擎 transition、验证链）——需 plan。
-- Owner docs to update on closure: `tools/mission-driver/design/mission-driver-flow-design.md`（audit 收敛语义）、`flows/deep-audit-loop.json` + `flows/mission-driver.json`（转移边 / clean 出口）、`src/flow-loader.js`（openAudits 严重度过滤）、`docs/architecture/mission-driver-baseline.md`（引用约定）。
+- Owner docs to update on closure: `$MISSION_DRIVER_HOME/design/mission-driver-flow-design.md`（audit 收敛语义）、`flows/deep-audit-loop.json` + `flows/mission-driver.json`（转移边 / clean 出口）、`src/flow-loader.js`（openAudits 严重度过滤）、`docs/architecture/mission-driver-baseline.md`（引用约定）。
 - 建议 roadmap 拆分：**R1+R2（收敛闸门，核心，同时治已触发的根因 A 与潜在的根因 B）**、R3（行号循环治理）、R4（成本护栏）、R5（模板 stub 护栏）、R6（启动前置）；god-file 拆分单列架构跟进。

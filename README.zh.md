@@ -10,7 +10,7 @@
 
 这不是一个 starter app，不包含生成的产品代码。其目的是为仓库提供足够的持久结构，让人类和 AI 能够共享需求、owner-doc 基线、计划、验证和项目记忆，而无需重量级的流程开销。
 
-> **双重身份仓库。** 本仓库同时开发 `tools/mission-driver/`（一个 Flow DSL 引擎 + Vue 3 监控仪表盘，自动化 AGE 开发循环），用自己的 AGE 工作流 dogfood 自己。仓库根和 `docs/` 下的文件是**真实项目版**（为 mission-driver 开发填好内容）；fill-in 文件的纯净模板版在 `template/` 子目录下。消费者不直接接触 `template/`，而是跑 `./install-age.sh`（见下方"如何开始新项目"）。
+> **双重身份仓库。** 本仓库同时开发 `$MISSION_DRIVER_HOME/`（一个 Flow DSL 引擎 + Vue 3 监控仪表盘，自动化 AGE 开发循环），用自己的 AGE 工作流 dogfood 自己。仓库根和 `docs/` 下的文件是**真实项目版**（为 mission-driver 开发填好内容）；fill-in 文件的纯净模板版在 `template/` 子目录下。消费者不直接接触 `template/`，而是跑 `./install-age.sh`（见下方"如何开始新项目"）。
 
 ## AGE 的含义
 
@@ -34,7 +34,7 @@ AGE 从一个问题开始：
 
 ## Mission Driver — 自动化开发循环引擎
 
-`tools/mission-driver/` 是一个 Flow DSL 引擎，自动化 AGE 开发循环。它读取 `missions/<name>.json`，驱动状态机经过健康检查 → 审查 → 执行 → 草拟 → 深度审计，并为每个 AI 步骤生成 `opencode run`。
+`$MISSION_DRIVER_HOME/` 是一个 Flow DSL 引擎，自动化 AGE 开发循环。它读取 `missions/<name>.json`，驱动状态机经过健康检查 → 审查 → 执行 → 草拟 → 深度审计，并为每个 AI 步骤生成 `opencode run`。
 
 **本仓库是引擎的单一来源。** 消费者通过 `MISSION_DRIVER_HOME` 环境变量引用它（`install-age.sh` 自动生成一个 thin `tools/mission-driver.sh` shim）；**不**复制引擎目录。
 
@@ -66,7 +66,7 @@ AGE 从一个问题开始：
 ./tools/mission-driver.sh --analyze-run
 ```
 
-完整文档见 `tools/mission-driver/README.md`。
+完整文档见 `$MISSION_DRIVER_HOME/README.md`。
 
 ## 模板包含的内容
 

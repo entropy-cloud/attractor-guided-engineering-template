@@ -38,12 +38,21 @@
       "promptPath": "prompts/health-check.md",
       "onUnknownMaxRetries": 2,
       "transitions": {
-        "pass": { "goto": "REVIEW_PLANS" },
+        "pass": { "goto": "VALIDATE_PLANS" },
         "fail": { "done": "failed" },
         "needs_fix": { "retry": "CHECK", "maxRetries": 2 }
       },
       "onMaxRetries": { "done": "failed" },
       "onError": { "done": "failed" }
+    },
+
+    "VALIDATE_PLANS": {
+      "type": "script",
+      "scriptId": "validate-plans",
+      "transitions": {
+        "pass": { "goto": "REVIEW_PLANS" },
+        "fail": { "goto": "DRAFT_PLANS" }
+      }
     },
 
     "EXEC_PLANS": {
@@ -76,8 +85,8 @@
       "type": "script",
       "scriptId": "inject-plan-preamble",
       "transitions": {
-        "pass": { "goto": "REVIEW_PLANS" },
-        "fail": { "goto": "REVIEW_PLANS" }
+        "pass": { "goto": "VALIDATE_PLANS" },
+        "fail": { "goto": "VALIDATE_PLANS" }
       }
     },
 

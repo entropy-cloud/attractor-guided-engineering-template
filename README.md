@@ -10,7 +10,7 @@ It is designed for small and medium-sized projects that already have a technical
 
 It is not a starter app and does not include generated product code. Its purpose is to give a repository enough durable structure for humans and AI to share requirements, owner-doc baselines, plans, verification, and project memory without heavyweight process overhead.
 
-> **Dual-audience repo.** This repository also develops `tools/mission-driver/` — a Flow DSL engine + Vue 3 monitor dashboard that automates the AGE development loop — using its own AGE workflow (it dogfoods itself). Files at the repo root and under `docs/` are the real-project versions (filled in for mission-driver development). Pristine template copies of the fill-in files live under `template/`. Consumers do not interact with `template/` directly; they run `./install-age.sh` (see "How To Start A New Project" below).
+> **Dual-audience repo.** This repository also develops `$MISSION_DRIVER_HOME/` — a Flow DSL engine + Vue 3 monitor dashboard that automates the AGE development loop — using its own AGE workflow (it dogfoods itself). Files at the repo root and under `docs/` are the real-project versions (filled in for mission-driver development). Pristine template copies of the fill-in files live under `template/`. Consumers do not interact with `template/` directly; they run `./install-age.sh` (see "How To Start A New Project" below).
 
 ## What AGE Means
 
@@ -187,7 +187,7 @@ For created plans, independent draft review and closure audit are part of the de
 
 ## Mission Driver — Automated Development Loop Engine
 
-`tools/mission-driver/` is a Flow DSL engine that automates the AGE development loop. It reads `missions/<name>.json`, drives a state machine through health-check → review → execute → draft → deep-audit, and spawns `opencode run` for each AI step.
+`$MISSION_DRIVER_HOME/` is a Flow DSL engine that automates the AGE development loop. It reads `missions/<name>.json`, drives a state machine through health-check → review → execute → draft → deep-audit, and spawns `opencode run` for each AI step.
 
 **This repository is the engine's source of truth.** Consumers reference it via the `MISSION_DRIVER_HOME` env var (a thin `tools/mission-driver.sh` shim is created by `install-age.sh`); they do NOT copy the engine directory.
 
@@ -219,7 +219,7 @@ For created plans, independent draft review and closure audit are part of the de
 ./tools/mission-driver.sh --analyze-run
 ```
 
-See `tools/mission-driver/README.md` for full documentation.
+See `$MISSION_DRIVER_HOME/README.md` for full documentation.
 
 ## Optional Starter Skeletons
 
@@ -309,7 +309,7 @@ Not everything in this template belongs in your project:
 
 - `docs/articles/` — outward-facing articles about AGE methodology. These are the template's own explanatory writing, not project content. Do not copy them into your project.
 - `docs/retrospectives/template-design-decisions.md` — the template's own evolution record. Your project should have its own retrospectives but should not carry over the template's history.
-- `tools/mission-driver/` (the engine code) — do not copy this directory. Instead, `install-age.sh` creates a thin `tools/mission-driver.sh` that references the template's `tools/mission-driver/` via `MISSION_DRIVER_HOME` (see `tools/README.md`). This keeps the engine single-sourced and your project lean.
+- `$MISSION_DRIVER_HOME/` (the engine code) — do not copy this directory. Instead, `install-age.sh` creates a thin `tools/mission-driver.sh` that references the template's `$MISSION_DRIVER_HOME/` via `MISSION_DRIVER_HOME` (see `tools/README.md`). This keeps the engine single-sourced and your project lean.
 - The generic skills in `docs/skills/` — these are default templates and MUST be customized after install (see customization note below). Do not keep them unchanged.
 - `template/` subdirectory at the repo root — this holds pristine copies of fill-in files for `install-age.sh` to source from. Consumers do not interact with it directly; it stays in this template repo. (If you cloned instead of running `install-age.sh`, simply delete `template/` after copying; the consumer-audience files are already in your target's docs tree.)
 

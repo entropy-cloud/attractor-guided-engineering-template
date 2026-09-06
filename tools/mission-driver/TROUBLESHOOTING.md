@@ -244,9 +244,9 @@ kill -KILL -"$STEP_PID"
 Then sweep any survivors (sub-agent processes are in-process, but MCP servers / spawned tools may orphan):
 
 ```sh
-node tools/mission-driver/src/reap-orphans.mjs <PGID> _tmp/<run-dir>
+node $MISSION_DRIVER_HOME/src/reap-orphans.mjs <PGID> _tmp/<run-dir>
 # or, to clear orphans from a previous crashed run at startup:
-node tools/mission-driver/src/reap-orphans.mjs --startup _tmp <RUN_PID>
+node $MISSION_DRIVER_HOME/src/reap-orphans.mjs --startup _tmp <RUN_PID>
 ```
 
 ### Option 3 — Stop the whole mission
@@ -306,7 +306,7 @@ grep -E "level=(ERROR|WARN)" "$LOG" | tail -20
 
 # 7. recover
 kill -TERM -<STEP_PID> ; sleep 10 ; kill -KILL -<STEP_PID> 2>/dev/null
-node tools/mission-driver/src/reap-orphans.mjs <PGID> _tmp/<run-dir>
+node $MISSION_DRIVER_HOME/src/reap-orphans.mjs <PGID> _tmp/<run-dir>
 ```
 
 ---

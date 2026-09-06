@@ -55,15 +55,15 @@ These are mission-driver-specific protected areas (in addition to AGENTS.md glob
 
 | Area | Rule | Notes |
 | --- | --- | --- |
-| `tools/mission-driver/src/engine.js` state-machine core | `ask-first` | Central `_result` / `_wfClose` / `_executeSubflowStep` / `_reconcileTerminal` paths. Changes need a plan + subagent review. |
-| Engine zero-npm-dependency invariant | `blocked` unless human approves | Adding any runtime dep in `tools/mission-driver/package.json` `dependencies` breaks the clone-and-run promise. `commander` is vendored; do not un-vendor. |
-| `tools/mission-driver/web/dist/` committed-artifact | `ask-first` | Re-adding `dist/` to `.gitignore` or removing committed dist must go through `.github/workflows/web-dist-check.yml` freshness check. |
-| `tools/mission-driver/memory/_index.md` always-load contract | `ask-first` | This file is injected into every mission prompt via `{{selfMemoryIndex}}`. Structural changes affect the Reflexion loop. |
+| `$MISSION_DRIVER_HOME/src/engine.js` state-machine core | `ask-first` | Central `_result` / `_wfClose` / `_executeSubflowStep` / `_reconcileTerminal` paths. Changes need a plan + subagent review. |
+| Engine zero-npm-dependency invariant | `blocked` unless human approves | Adding any runtime dep in `$MISSION_DRIVER_HOME/package.json` `dependencies` breaks the clone-and-run promise. `commander` is vendored; do not un-vendor. |
+| `$MISSION_DRIVER_HOME/web/dist/` committed-artifact | `ask-first` | Re-adding `dist/` to `.gitignore` or removing committed dist must go through `.github/workflows/web-dist-check.yml` freshness check. |
+| `$MISSION_DRIVER_HOME/memory/_index.md` always-load contract | `ask-first` | This file is injected into every mission prompt via `{{selfMemoryIndex}}`. Structural changes affect the Reflexion loop. |
 | `install-age.sh` personalization (sed-replace `<project-name>` at `:121-127`) | `ask-first` | Any change here requires updating the Phase 3 closure-gate test (see `docs/plans/2026-07-27-0000-template-realproject-split-plan.md`). |
 | `install-age.manifest` membership | `ask-first` | Adding/removing entries changes what consumers receive. Test with `./install-age.sh /tmp/test "Test"` after any change. |
 | Exit-code map (`main.js` `exitMap`) | `ask-first` | Documented in `EXECUTION-PRINCIPLE.md §11`. Status↔code mapping is a public contract for mission-driver consumers. |
-| Flow JSON contract (`flows/*.json` step types, transition schema) | `ask-first` | Documented in `tools/mission-driver/design/mission-design.md`. Changes affect all consumer missions. |
-| AGE 执法层（law 实现 `plugin/dsh/src/law/**`、策略数据 `missions/autonomy.policy.yml`、执法 CLI `tools/mission-driver/src/{plan-check,gate-check}.mjs`） | `ask-first` | 执法者自护（`docs/discussions/2026-08-24-age-autonomy-design-independent-grill.md` A2）：被执法 AI 不得改写执法者自身；变更需 plan + human 批准。本行为加严（A1/A2 裁定于 2026-08-24 经 human 委托选择落地）。 |
+| Flow JSON contract (`flows/*.json` step types, transition schema) | `ask-first` | Documented in `$MISSION_DRIVER_HOME/design/mission-design.md`. Changes affect all consumer missions. |
+| AGE 执法层（law 实现 `plugin/dsh/src/law/**`、策略数据 `missions/autonomy.policy.yml`、执法 CLI `$MISSION_DRIVER_HOME/src/{plan-check,gate-check}.mjs`） | `ask-first` | 执法者自护（`docs/discussions/2026-08-24-age-autonomy-design-independent-grill.md` A2）：被执法 AI 不得改写执法者自身；变更需 plan + human 批准。本行为加严（A1/A2 裁定于 2026-08-24 经 human 委托选择落地）。 |
 
 ## Source-of-Truth Precedence
 

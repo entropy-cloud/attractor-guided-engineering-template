@@ -1,10 +1,10 @@
 # Draft Robustness Design
 
 **Date**: 2026-07-20
-**Scope**: `tools/mission-driver/src/main.js` (`cmdDraftMission`), `tools/mission-driver/prompts/mission-brief.md`, `tools/mission-driver/prompts/mission-draft.md`, draft-state schema
+**Scope**: `$MISSION_DRIVER_HOME/src/main.js` (`cmdDraftMission`), `$MISSION_DRIVER_HOME/prompts/mission-brief.md`, `$MISSION_DRIVER_HOME/prompts/mission-draft.md`, draft-state schema
 **Status**: implemented — §4.1/§4.2/§4.3/§4.4/§4.5 landed via WI1–WI5; see `docs/plans/mission-driver-draft-robustness/`
 **Related**: `mission-design.md`, `flow-engine-design.md`
-**Origin**: 一次 `draft "d"` 调用产生了 3 个无用文件（`d-brief.md` / `d-roadmap.md` / `tools/mission-driver/missions/d.json`），暴露 draft 管线的 3 个缺陷。
+**Origin**: 一次 `draft "d"` 调用产生了 3 个无用文件（`d-brief.md` / `d-roadmap.md` / `$MISSION_DRIVER_HOME/missions/d.json`），暴露 draft 管线的 3 个缺陷。
 
 ---
 
@@ -14,9 +14,9 @@
 
 - `docs/backlog/d-brief.md` — Stage 1 brief 产物
 - `docs/backlog/d-roadmap.md` — Stage 2 draft 产物
-- `tools/mission-driver/missions/d.json` — Stage 2 draft 产物（mission.json）
+- `$MISSION_DRIVER_HOME/missions/d.json` — Stage 2 draft 产物（mission.json）
 
-brief agent 正确识别出 `"d"` 信息不足，写了一份 gate brief（明确"不得进入实现"）。但 Stage 2 仍无条件执行，照常生成了 roadmap + mission.json；且 mission.json 落在了 `tools/mission-driver/missions/` 而非仓库根 `missions/`。三个产物都没有实际意义，需要人工清理。
+brief agent 正确识别出 `"d"` 信息不足，写了一份 gate brief（明确"不得进入实现"）。但 Stage 2 仍无条件执行，照常生成了 roadmap + mission.json；且 mission.json 落在了 `$MISSION_DRIVER_HOME/missions/` 而非仓库根 `missions/`。三个产物都没有实际意义，需要人工清理。
 
 这不是孤立的"用户输错"，而是 draft 管线在**输入校验、gate 强制、路径解析**三处都缺位共同造成的。本文档分析根因并给出方案。
 
@@ -132,9 +132,9 @@ draft 管线里路径有两种来源，解析基准不同：
 | 模板变量 | `{{missionsDir}}` | `projectRoot`（绝对） | `main.js` 注入 |
 | 字面量 | `docs/backlog/...` | agent cwd / AGENTS.md 所在地（相对） | agent 自己 |
 
-当 `projectRoot ≠ 仓库根` 时（如本次 `cwd = tools/mission-driver/`），两者发散：
+当 `projectRoot ≠ 仓库根` 时（如本次 `cwd = $MISSION_DRIVER_HOME/`），两者发散：
 
-- `{{missionsDir}}` = `<repo>/tools/mission-driver/missions`（绝对，按 projectRoot）→ `d.json` 落这里
+- `{{missionsDir}}` = `<repo>/$MISSION_DRIVER_HOME/missions`（绝对，按 projectRoot）→ `d.json` 落这里
 - `docs/backlog/` → agent 按 AGENTS.md 所在地（仓库根）解析 → brief/roadmap 落仓库根
 
 brief agent 自己也观察到了这个分歧（`d-brief.md:31`："Project root 指向 `tools/mission-driver`"），但引擎没有据此对齐。
@@ -163,7 +163,7 @@ if (import.meta.url === `file://${process.argv[1]}`) { ... }
 ```
 
 - 左侧 `import.meta.url`：Node 规范化为 `file:///C:/Work/.../mission-check.mjs`（file URL，正斜杠，三斜杠前缀 + drive letter）。
-- 右侧 `` `file://${process.argv[1]}` ``：`process.argv[1]` 在 Windows 是 `C:\Work\...\mission-check.mjs`（反斜杠）或调用时传入的相对路径（如 `tools/mission-driver/src/mission-check.mjs`）。拼成 `file://C:\Work\...` 或 `file://tools/...`，既不是合法 file URL，也与左侧的规范化形式不等。
+- 右侧 `` `file://${process.argv[1]}` ``：`process.argv[1]` 在 Windows 是 `C:\Work\...\mission-check.mjs`（反斜杠）或调用时传入的相对路径（如 `$MISSION_DRIVER_HOME/src/mission-check.mjs`）。拼成 `file://C:\Work\...` 或 `file://tools/...`，既不是合法 file URL，也与左侧的规范化形式不等。
 
 两者在 Windows **永远** `!==` → CLI 主体（`:106-118` 的 `if` 块）从不执行 → 脚本不报错、不输出、走完模块顶层、exit 0。`&&` 链无法发现这个 no-op，下游照常执行。
 
@@ -500,7 +500,7 @@ mdr-remediate-4 后扩展到非 forEach 分支：`_executeSubflowStep` 在 `awai
 1. **单元测试**
    - `draft-desc-validate.test.js`：`""` / `" "` / `"d"` / `"test"` / `"asdf"` → reject；`"add audit count"` → pass。
    - `brief-gate.test.js`：mock runner 分别返回 `gate=pass` / `gate=blocked` / `gate=null`（无 marker），断言 Stage 2 执行 / 不执行 / 执行（兼容）。
-   - `draft-path-consistency.test.js`：设 `projectRoot = tools/mission-driver`，跑 draft，断言 brief / roadmap / mission.json **全部**落在 `tools/mission-driver/{docs/backlog,missions}/` 下（基准一致）。
+   - `draft-path-consistency.test.js`：设 `projectRoot = tools/mission-driver`，跑 draft，断言 brief / roadmap / mission.json **全部**落在 `$MISSION_DRIVER_HOME/{docs/backlog,missions}/` 下（基准一致）。
    - `mission-check-cli.test.js`：`spawnSync` 跑 `node mission-check.mjs <bad-mission> .`，断言 exit 1 + stderr 含 "does not exist"（锁住独立 CLI 真执行校验，防 Windows 静默失效回归）。
 2. **回归**：现有 `draft-brief.test.js`（`main.js:24` 提到的 testability seam）应继续通过（`--skip-brief` 路径不变）。
 3. **人工**：跑 `draft "d"`，确认被缺陷 1 拦下；跑 `draft "优化 draft 健壮性"`，确认 brief 输出 gate marker、Stage 2 正常。

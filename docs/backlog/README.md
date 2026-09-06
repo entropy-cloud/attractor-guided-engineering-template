@@ -10,7 +10,7 @@ The backlog is not a replacement for requirements, owner docs, or plans. It only
 
 | Priority | Item            | Requirement                | Owner Doc            | Plan                        | Status              | AI Autonomy | Blocker                              | Last Checked   |
 | -------- | --------------- | -------------------------- | -------------------- | --------------------------- | ------------------- | ----------- | ------------------------------------ | -------------- |
-| P0       | (none currently open; scan `docs/plans/` for `Plan Status: active` or `draft`) | — | `tools/mission-driver/CONTEXT.md` | `docs/plans/2026-07-27-0000-template-realproject-split-plan.md` (closing) | `in-progress` | `implement` | `none` | 2026-07-27 |
+| P0       | (none currently open; scan `docs/plans/` for `Plan Status: active` or `draft`) | — | `$MISSION_DRIVER_HOME/CONTEXT.md` | `docs/plans/2026-07-27-0000-template-realproject-split-plan.md` (closing) | `in-progress` | `implement` | `none` | 2026-07-27 |
 | P1       | Per-mission roadmaps under `docs/backlog/mission-driver-*-roadmap.md` drive their own work items; cross-reference those instead of duplicating here | `docs/requirements/mission-driver-convergence-and-cost-optimization.md` | `docs/architecture/mission-driver-baseline.md` | per-roadmap | `ready` | `plan-first` | `none` | 2026-07-27 |
 
 ## Readiness Invariants

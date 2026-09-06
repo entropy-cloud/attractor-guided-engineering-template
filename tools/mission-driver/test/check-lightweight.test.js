@@ -18,9 +18,20 @@ describe("OPT-4 CHECK lightweight — flow transitions (built-in mission-driver.
     return flow.steps.CHECK;
   }
 
-  it("CHECK.pass → REVIEW_PLANS (unchanged, sanity)", () => {
+  it("CHECK.pass → VALIDATE_PLANS (ledger hard gate, bug 2026-09-06-research-orm-plans-invisible)", () => {
     const step = checkStep();
-    assert.deepEqual(step.transitions.pass, { goto: "REVIEW_PLANS" });
+    assert.deepEqual(step.transitions.pass, { goto: "VALIDATE_PLANS" });
+    // The gate itself must be a script step wired pass→REVIEW_PLANS / fail→DRAFT_PLANS.
+    const flow = createMissionDriverFlow({ flowName: "mission-driver" });
+    const gate = flow.steps.VALIDATE_PLANS;
+    assert.ok(gate, "built-in flow must define a VALIDATE_PLANS step");
+    assert.equal(gate.type, "script");
+    assert.deepEqual(gate.transitions.pass, { goto: "REVIEW_PLANS" });
+    assert.deepEqual(gate.transitions.fail, { goto: "DRAFT_PLANS" });
+    // INJECT_PLAN_PREAMBLE must also route through the gate (in-run drafted plans).
+    const inject = flow.steps.INJECT_PLAN_PREAMBLE;
+    assert.deepEqual(inject.transitions.pass, { goto: "VALIDATE_PLANS" });
+    assert.deepEqual(inject.transitions.fail, { goto: "VALIDATE_PLANS" });
   });
 
   it("CHECK.fail is terminal done:failed (no retry-CHECK death-loop)", () => {

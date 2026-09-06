@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, existsSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
 import { resolve, dirname, basename, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { inspectPlan, missionDefaultVerifyKeys } from "./plan-check.mjs";
@@ -91,6 +91,20 @@ function _scanPlansByStatus(plansDir, statuses, defaultVerifyKeys) {
     if (state.format === "frontmatter" && Array.isArray(state.fieldErrors) && state.fieldErrors.length > 0) {
       console.warn(
         `[flow-loader] plan field validation failed: ${relative(process.cwd(), f)} — ${state.fieldErrors.join("; ")}`,
+      );
+    }
+    // Bug 2026-09-06-research-orm-plans-invisible (nop-app-iot iot-research):
+    // a frontmatter block that OPENS but fails SUBSET PARSING (e.g. an unquoted
+    // multi-word `work-item:` value) takes the readPlanStatus rejection path —
+    // status null, fieldErrors [] — which fell through every check below and
+    // vanished from draftPlans()/activePlans() with zero feedback. REVIEW_PLANS
+    // and EXEC_PLANS then empty-looped to a false "completed". The M2-WI42
+    // warn above covers only the validator face; this closes the parser face
+    // of the same silent channel. Membership stays status-based (the file is
+    // unqueueable until its syntax is fixed), but the scan now says why.
+    if (state.format === "frontmatter" && state.rejected) {
+      console.warn(
+        `[flow-loader] plan frontmatter rejected (file is invisible to draft/active queues): ${relative(process.cwd(), f)} — ${state.rejected}`,
       );
     }
     // normalized: frontmatter `status` (or derived "completed") / legacy line
@@ -303,7 +317,82 @@ async function injectPlanPreamble(delegates, flowVars) {
 const SCRIPT_REGISTRY = {
   "closure-script-check": (delegates, flowVars) => closureScriptCheck(delegates, flowVars),
   "inject-plan-preamble": (delegates, flowVars) => injectPlanPreamble(delegates, flowVars),
+  "validate-plans": (delegates, flowVars) => validatePlansLedger(delegates, flowVars),
 };
+
+/**
+ * validate-plans — hard ledger gate. Scans plansDir and FAILS when any plan's
+ * frontmatter is syntactically rejected or violates the field set. This is the
+ * structural counterpart to the scan-face warnings: a parse-rejected plan is
+ * invisible to draftPlans()/activePlans(), so REVIEW_PLANS/EXEC_PLANS would
+ * empty-loop over it forever (bug 2026-09-06-research-orm-plans-invisible).
+ * The gate fails LOUD instead, routes back to DRAFT_PLANS, and writes a
+ * human/machine-readable report at `_tmp/mission-driver-plan-validation.md`
+ * (stable path, gitignored) so the drafting agent can fix the named files.
+ * Legacy-format and non-plan markdown files are tolerated (not gated).
+ */
+export async function validatePlansLedger(delegates) {
+  const config = delegates?.config || {};
+  const mission = config.mission || {};
+  const projectRoot = config.projectRoot;
+  const plansDir = mission.plansDir
+    ? resolve(projectRoot, mission.plansDir)
+    : null;
+  if (!plansDir || !existsSync(plansDir)) {
+    return { marker: "pass", text: "plansDir not found — skipping" };
+  }
+
+  const defaultVerifyKeys = missionDefaultVerifyKeys(mission);
+  const problems = [];
+  const files = _walkMarkdown(plansDir)
+    .filter((f) => !basename(f).startsWith("00-"))
+    .sort();
+  for (const f of files) {
+    const content = readFileSync(f, "utf8");
+    const state = planLedgerState(content, defaultVerifyKeys ? { defaultVerifyKeys } : {});
+    const rel = relative(process.cwd(), f);
+    if (state.format === "frontmatter" && state.rejected) {
+      problems.push(`${rel}: frontmatter rejected — ${state.rejected}`);
+    } else if (
+      state.format === "frontmatter"
+      && Array.isArray(state.fieldErrors)
+      && state.fieldErrors.length > 0
+    ) {
+      problems.push(`${rel}: ${state.fieldErrors.join("; ")}`);
+    }
+  }
+
+  if (problems.length === 0) {
+    return { marker: "pass", text: `all ${files.length} plan ledger(s) parse cleanly` };
+  }
+
+  const report = [
+    "# Plan validation report",
+    "",
+    "These plan files have malformed ledger frontmatter and are INVISIBLE to",
+    "draftPlans()/activePlans() — the engine cannot review or execute them.",
+    "Fix each file (quote multi-word values, keep the flat field subset),",
+    "then re-enter the flow:",
+    "",
+    ...problems.map((p) => `- ${p}`),
+    "",
+  ].join("\n");
+  try {
+    const reportDir = resolve(projectRoot, "_tmp");
+    mkdirSync(reportDir, { recursive: true });
+    writeFileSync(resolve(reportDir, "mission-driver-plan-validation.md"), report, "utf8");
+  } catch {
+    // report write is best-effort; the fail marker + text carry the findings
+  }
+  console.warn(
+    `[flow-loader] validate-plans: ${problems.length} malformed plan ledger(s) — report at _tmp/mission-driver-plan-validation.md`,
+  );
+  return {
+    marker: "fail",
+    text: `${problems.length} malformed plan ledger(s) — see _tmp/mission-driver-plan-validation.md:\n`
+      + problems.map((p) => `  - ${p}`).join("\n"),
+  };
+}
 
 const TOOL_PROMPTS_DIR = resolve(TOOL_ROOT, "prompts");
 

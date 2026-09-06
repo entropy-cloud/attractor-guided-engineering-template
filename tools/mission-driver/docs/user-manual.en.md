@@ -65,7 +65,7 @@ By default each AI step invokes `opencode run`. If you prefer [`pi`](https://git
 - With `--driver pi` the engine auto-applies pi defaults (`-p --append-system-prompt @<persona>` + stdin prompt + a tool allowlist) — no extra config needed.
 - **Model id format differs**: opencode uses `zhipuai-coding-plan/glm-5.2`; pi uses its own `provider/model` (e.g. `zai-coding-cn/glm-5.2`).
 - **Known limitation**: pi has no cross-step session continuity — each step starts a fresh process and recovers state from disk (roadmap/plans), consistent with how the prompts are designed.
-- Full options: `tools/mission-driver/README.md` §Driver selection.
+- Full options: `$MISSION_DRIVER_HOME/README.md` §Driver selection.
 
 ## 2. Core Concepts
 
@@ -127,7 +127,7 @@ The description may also reference a directory or multiple files directly, witho
 
 **Option 2: hand-write**
 
-See `tools/mission-driver/mission.json.example`. A minimal viable mission.json:
+See `$MISSION_DRIVER_HOME/mission.json.example`. A minimal viable mission.json:
 
 ```json
 {
@@ -208,7 +208,7 @@ Open `http://localhost:9300` in a browser:
 `analyze` will:
 1. Scan all events/logs in the run directory.
 2. Run a postmortem agent that produces a structured report (highlights, problems, root causes, reusable lessons).
-3. Write the report to `tools/mission-driver/memory/` as long-term memory that future missions of the same kind will read.
+3. Write the report to `$MISSION_DRIVER_HOME/memory/` as long-term memory that future missions of the same kind will read.
 
 ---
 

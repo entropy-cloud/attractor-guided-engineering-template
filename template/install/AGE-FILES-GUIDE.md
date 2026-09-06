@@ -40,7 +40,7 @@ Install already replaced `<project-name>` placeholders. Verify the substitution,
 
 | File | Maintenance |
 |---|---|
-| `.env.example` → `.env` | Copy to `.env`, confirm `MISSION_DRIVER_HOME` points at your local template checkout's `tools/mission-driver/`. |
+| `.env.example` → `.env` | Copy to `.env`, confirm `MISSION_DRIVER_HOME` points at your local template checkout's `$MISSION_DRIVER_HOME/`. |
 | `AGENTS.md` | Verify project name substituted. **Many projects replace this entirely** with their own AI contract (e.g. project-specific task leveling, skill gates, verification rules). That is fine — just keep the `docs/context/project-context.md` read-gate so the engine still has its entry point. |
 
 ### C — Onboarding Fills (12 files) · run `onboarding` mission once

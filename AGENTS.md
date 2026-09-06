@@ -12,14 +12,14 @@ The repo is the source of truth. Chat is only a temporary working surface.
 
 This repository serves two audiences:
 
-1. **As a real project** — it develops `tools/mission-driver/` (a Node.js Flow DSL engine + Vue 3 monitor dashboard) using its own AGE workflow. The repo dogfoods its own methodology.
+1. **As a real project** — it develops `$MISSION_DRIVER_HOME/` (a Node.js Flow DSL engine + Vue 3 monitor dashboard) using its own AGE workflow. The repo dogfoods its own methodology.
 2. **As a template** — consumers run `./install-age.sh /path/to/target "Project Name"` from a clone of this repo. The installer copies a curated file set listed in `install-age.manifest` (sourcing fill-in files from `template/` and shared methodology guides from repo root) into a new project root, then auto-creates the mission-driver shim, `.env`, `missions/base.json`, `docs/logs/{year}/`, and `.gitignore`.
 
 Files at the repo root and under `docs/` are the **REAL PROJECT** versions (filled in for mission-driver development). Pristine template versions of fill-in files live under `template/`. For the manual fallback flow (no bash), see `template/START-HERE-after-copy.md`; for the primary automated flow, run `./install-age.sh` and read its NEXT STEPS output.
 
 ## In-Tree Tool
 
-`tools/mission-driver/` is a real, in-tree Node.js tool — NOT a scaffold example. It is the engine that automates this repo's own AGE loop. Read `tools/mission-driver/CONTEXT.md` for the 30-second overview. It is attached as subdirectory context when you read files under `tools/mission-driver/`.
+`$MISSION_DRIVER_HOME/` is a real, in-tree Node.js tool — NOT a scaffold example. It is the engine that automates this repo's own AGE loop. Read `$MISSION_DRIVER_HOME/CONTEXT.md` for the 30-second overview. It is attached as subdirectory context when you read files under `$MISSION_DRIVER_HOME/`.
 
 Before writing non-trivial code, agents must first understand:
 

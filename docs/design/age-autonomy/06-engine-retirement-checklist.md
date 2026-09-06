@@ -7,7 +7,7 @@
 
 ## 1. Purpose
 
-回答 00 §7 P4 判定门的问题：**门禁 + 守夜人是否已覆盖引擎（`tools/mission-driver/` FlowEngine）的全部无人值守职责，使引擎可退役？** 本清单给出可机械核对的判定面：
+回答 00 §7 P4 判定门的问题：**门禁 + 守夜人是否已覆盖引擎（`$MISSION_DRIVER_HOME/` FlowEngine）的全部无人值守职责，使引擎可退役？** 本清单给出可机械核对的判定面：
 
 1. **覆盖矩阵**（§2）：引擎职责 → 门禁/守夜人覆盖面 → 迁移证据（模块 + 测试 + plan 指针）→ 缺口 → 判定三态（已覆盖 ∨ 缺口阻塞 ∨ 引擎留任面）。
 2. **裁定记录**（§3）：累积 7 项 Deferred（D1–D7）逐项裁定（verdict / 理由 / 重开触发三要素齐备）。
@@ -25,7 +25,7 @@
 
 | # | 引擎职责（as-built） | 门禁+守夜人覆盖面 | 证据指针（模块 / 测试 / plan） | 缺口 | 判定 |
 | --- | --- | --- | --- | --- | --- |
-| 1 | transient 分类与退避：`engine.js` 纯分类器（`TRANSIENT_PROVIDER_SIGS`/quota 细分）+ correction retry（`_runCorrectionAgent` 步内共会话）+ parse fallback；`executor.js` 心跳/超时/SIGTERM | DSH 形态子代理由宿主生命周期 + 守夜人兜底（idle followup 超时 cancel、claim TTL 重派——03 §6/§7）；transient 重试沿引擎后端（03 §9 失败面诚实表：「守夜人形态沿用/重造」——重造未立项） | `tools/mission-driver/src/{engine,executor}.js`；`test/{transitions,parse-fallback,executor-suspend}.test.js`；plan 2026-08-27-0558-2（步内续用钉住） | 守夜人无自有 transient 分类器（沿用引擎 = 裁定结果）；独立形态该职责唯一承载 = 引擎 | 判定：**引擎留任面**（run 内退避随 run 语义存续；DSH 宿主域已由守夜人兜底） |
+| 1 | transient 分类与退避：`engine.js` 纯分类器（`TRANSIENT_PROVIDER_SIGS`/quota 细分）+ correction retry（`_runCorrectionAgent` 步内共会话）+ parse fallback；`executor.js` 心跳/超时/SIGTERM | DSH 形态子代理由宿主生命周期 + 守夜人兜底（idle followup 超时 cancel、claim TTL 重派——03 §6/§7）；transient 重试沿引擎后端（03 §9 失败面诚实表：「守夜人形态沿用/重造」——重造未立项） | `$MISSION_DRIVER_HOME/src/{engine,executor}.js`；`test/{transitions,parse-fallback,executor-suspend}.test.js`；plan 2026-08-27-0558-2（步内续用钉住） | 守夜人无自有 transient 分类器（沿用引擎 = 裁定结果）；独立形态该职责唯一承载 = 引擎 | 判定：**引擎留任面**（run 内退避随 run 语义存续；DSH 宿主域已由守夜人兜底） |
 | 2 | 循环防护：ping_pong / maxCycles / maxTotalSteps / maxRetries → `EXIT_MAP` 2（`engine.js` FAILISH 集） | plan 域振荡 = 守夜人往返检测（stagnation.ts ping-pong 腿 → 饱和注入 R4 同出口）+ 停滞指纹 R4 熔断；plan 级失败预算 = failures 三桶（见 #4） | `plugin/dsh/src/supervisor/stagnation.ts`、`src/exit-map.js`；`test/exit-map.test.js`、`plugin/dsh/test/supervisor-recovery.test.mjs`（往返腿）；plan 2026-08-26-1954-3 | run 内步数上限（maxCycles/maxTotalSteps）在守夜人面无对应——账本域无步数概念，由 R4 墙钟当量近似；run 内防护随 run 语义内在 | 判定：**引擎留任面**（run 内 max* 防护；plan 域振荡对应面已覆盖） |
 | 3 | 审计预算：`engine.js` maxAuditRounds 轮门（DEEP_AUDIT 轮计数与拒新轮） | law `audit-rounds-overflow` 门禁（roadmap DAR 新 dispatch 行时预算耗尽 → deny；max 双源 policy 权威，M5-WI47 校正 3→8）+ terminal-rules R1 预算硬门（收口 partial/blocked，不得静默 completed）+ 恢复重派同 occurrence 零自增（豁免面防死锁）——「双面一个预算」（1411-3 成文）**仅在 DSH/守夜人形态成立**（M5-WI47 收窄） | `src/law-rules.mjs`、`plugin/dsh/src/supervisor/terminal-rules.ts`；`plugin/dsh/test/{law-truth-table,supervisor-terminal}.test.mjs`；plan 2026-08-25-0815-3 / 2026-08-26-1411-3 / 2026-08-26-1954-2 / 2026-08-27-2122-1 | **G7**：引擎形态无全局 audit-rounds 执法点——轮门只读 per-run 计数（`engine.js:427` 每 run 置零）从不读 roadmap frontmatter 全局计数，law 三执法面（DSH pre-execute / 守夜人 exec-arm / gate-check CLI）均不在引擎写回链（R4–R6 三轮超预算派发实证） | 判定：**部分覆盖**（DSH/守夜人面已覆盖；引擎形态缺口 = retirement-gated G7，M5-WI47） |
 | 4 | 失败预算与熔断：step 级 maxRetries（transition/step 重试 → EXIT_MAP 2 `max_retries`） | plan 级 = failures.ts 三桶归因（executor-error/verification-red/claim-expired-no-output；不计清单防计数噪音）+ `applyCircuitBreaker`（≥ maxFailures → held 同写清 claim + 回执；全 held 经 R3 终态化）+ `mdcontrol.unlock` 人工处置（held→active failures 清零） | `plugin/dsh/src/supervisor/failures.ts`；`plugin/dsh/test/supervisor-failures.test.mjs`；plan 2026-08-26-1411-3 / 2026-08-26-1954-1 | step 级重试是 run 内机制（守夜人只见 plan 级归因）——随引擎留任 | 判定：**已覆盖**（plan 级熔断）；run 内 step 重试 = 引擎留任面 |

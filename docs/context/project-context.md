@@ -11,7 +11,7 @@ This file intentionally does **not** track "what is being worked on right now". 
 ## Project Identity
 
 - Project name: `mission-driver`
-- Product type: AGE development loop engine + monitor dashboard (in-tree tool under `tools/mission-driver/`)
+- Product type: AGE development loop engine + monitor dashboard (in-tree tool under `$MISSION_DRIVER_HOME/`)
 - Primary users: developers using AGE (Attractor-Guided Engineering) methodology with the `opencode` CLI; secondary: consumers of this repo as an AGE template
 - Documentation freshness: `fresh`
 
@@ -24,7 +24,7 @@ This file intentionally does **not** track "what is being worked on right now". 
 ## Current Technical Baseline
 
 - Frontend stack: Vue 3 + Naive UI 2 + TypeScript + Vite + xterm.js + Pinia (monitor dashboard; built `web/dist/` committed to git)
-- Backend stack: Node.js ≥ 18 ESM, **zero npm dependencies** in engine core (`commander` vendored under `tools/mission-driver/vendor/commander/`)
+- Backend stack: Node.js ≥ 18 ESM, **zero npm dependencies** in engine core (`commander` vendored under `$MISSION_DRIVER_HOME/vendor/commander/`)
 - Database/model source: N/A — runtime state is file-based JSON (`_tmp/<runDir>/run-state.json`, `draft-state.json`)
 
 ## Verification Commands
@@ -33,14 +33,14 @@ This file intentionally does **not** track "what is being worked on right now". 
 | ------------------------- | ------------------------------------------------------------- |
 | Install dependencies      | `pnpm --prefix tools/mission-driver install` (web only) / engine is zero-install |
 | Run app locally           | `./tools/mission-driver.sh monitor` (dashboard on :9300)      |
-| Typecheck / compile check | `pnpm --prefix tools/mission-driver/web run build` (web only; engine is plain JS) |
-| Build                     | `pnpm --prefix tools/mission-driver/web run build`            |
+| Typecheck / compile check | `pnpm --prefix $MISSION_DRIVER_HOME/web run build` (web only; engine is plain JS) |
+| Build                     | `pnpm --prefix $MISSION_DRIVER_HOME/web run build`            |
 | Lint / static check       | `pnpm --prefix tools/mission-driver test` (chains `prompt-check.mjs`) |
 | Unit tests                | `pnpm --prefix tools/mission-driver test`                    |
-| E2E / integration tests   | `node tools/mission-driver/src/mission-check.mjs missions/<name>.json .` (per-mission validation) |
+| E2E / integration tests   | `node $MISSION_DRIVER_HOME/src/mission-check.mjs missions/<name>.json .` (per-mission validation) |
 
 Notes:
-- Engine has zero npm deps → both `npm --prefix` and `pnpm --prefix` work; `pnpm` preferred (matches `tools/package.json:5` `"packageManager": "pnpm@10.0.0"` and `tools/mission-driver/web/pnpm-lock.yaml`).
+- Engine has zero npm deps → both `npm --prefix` and `pnpm --prefix` work; `pnpm` preferred (matches `tools/package.json:5` `"packageManager": "pnpm@10.0.0"` and `$MISSION_DRIVER_HOME/web/pnpm-lock.yaml`).
 - Frontend `web/pnpm-lock.yaml` is the only committed lockfile; CI `.github/workflows/web-dist-check.yml` enforces pnpm + dist freshness.
 
 ## Optional Layers Currently In Use
@@ -57,8 +57,8 @@ Notes:
 
 AI MUST stop and wait for human input before proceeding when:
 
-- any change touches the engine state-machine core (`tools/mission-driver/src/engine.js` central `_result` / `_wfClose` / `_executeSubflowStep` paths) without a plan covering the change
-- any change breaks the engine zero-npm-dependency invariant (introducing a new runtime dep in `tools/mission-driver/package.json` `dependencies`) without explicit human approval — the invariant is normative, see `tools/mission-driver/CONTEXT.md` "关键约束"
+- any change touches the engine state-machine core (`$MISSION_DRIVER_HOME/src/engine.js` central `_result` / `_wfClose` / `_executeSubflowStep` paths) without a plan covering the change
+- any change breaks the engine zero-npm-dependency invariant (introducing a new runtime dep in `$MISSION_DRIVER_HOME/package.json` `dependencies`) without explicit human approval — the invariant is normative, see `$MISSION_DRIVER_HOME/CONTEXT.md` "关键约束"
 - any change breaks the `web/dist/` committed-artifact invariant (e.g., re-adding `dist/` to `.gitignore`) without going through the CI freshness check
 - any change touches `memory/_index.md` (always-load contract) without understanding the Reflexion loop consequences
 - any change modifies `install-age.sh` personalization behavior (the `<project-name>` sed-replace at `:121-127`) without updating the Phase 3 closure-gate test

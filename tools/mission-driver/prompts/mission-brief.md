@@ -24,7 +24,7 @@ Keep the brief tight — it is a gate, not a design document. Avoid implementati
 
 ## Brief Gate
 
-After writing the brief, decide whether it is safe to proceed to roadmap + mission.json generation. Emit your decision via the `<BRIEF_GATE>` marker (the engine parses it — see §4.2 of `tools/mission-driver/design/draft-robustness-design.md`).
+After writing the brief, decide whether it is safe to proceed to roadmap + mission.json generation. Emit your decision via the `<BRIEF_GATE>` marker (the engine parses it — see §4.2 of `$MISSION_DRIVER_HOME/design/draft-robustness-design.md`).
 
 - `pass`: the description is enough to derive 目标 / 范围 / 产物 (even at coarse granularity). Examples: `"add audit count to dashboard"`, `"为 mission-driver 增加 draft 描述校验"`.
 - `blocked`: the description is too thin to safely generate roadmap + mission.json. Examples: a bare keyword like `"optimize"` with no target module / metric / acceptance signal; pure placeholder like `"asdf stuff"`; a goal with no observable acceptance criteria.

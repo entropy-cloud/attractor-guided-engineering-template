@@ -132,7 +132,7 @@ Notes:
 
 Every user-facing capability of the plugin (run / draft / analyze / any future one) MUST be defined as flow JSON + prompt templates executed by the Flow DSL state machine. The cordis service layer only resolves mission config and triggers runs — it contains no step logic. To change what a capability does, you edit its flow, not its TypeScript.
 
-### Anatomy (verified schema, from `tools/mission-driver/flows/plan-execution.json`)
+### Anatomy (verified schema, from `$MISSION_DRIVER_HOME/flows/plan-execution.json`)
 
 ```jsonc
 {
@@ -181,7 +181,7 @@ This dogfoods the engine against its own plugin backend and surfaces native-disp
 
 | Change touched | Must pass |
 | --- | --- |
-| Engine core (`tools/mission-driver/src/`) | full `node --test` suite green; CLI `run demo` unchanged |
+| Engine core (`$MISSION_DRIVER_HOME/src/`) | full `node --test` suite green; CLI `run demo` unchanged |
 | Native executor / dispatch | demo mission end-to-end in-host; identical run-state shape (monitor still renders it); subagents list healthy |
 | Flow JSON or prompts | `prompt-check.mjs` green; dry-run transitions traced; correction-retry exercised intentionally |
 | Patch / packaging | `--dump-config` grep shows mount; restart-reload behavior matches the chosen form |

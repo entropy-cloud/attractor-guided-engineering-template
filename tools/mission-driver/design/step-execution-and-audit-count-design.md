@@ -1,7 +1,7 @@
 # Step Execution Modes & Deep-Audit Count Design
 
 **Date**: 2026-07-20
-**Scope**: `tools/mission-driver/src/main.js`, `tools/mission-driver/src/engine.js`, `tools/mission-driver/flows/mission-driver.json`, `tools/mission-driver/prompts/draft-from-roadmap.md`, run-state schema
+**Scope**: `$MISSION_DRIVER_HOME/src/main.js`, `$MISSION_DRIVER_HOME/src/engine.js`, `$MISSION_DRIVER_HOME/flows/mission-driver.json`, `$MISSION_DRIVER_HOME/prompts/draft-from-roadmap.md`, run-state schema
 **Status**: proposal (analysis + recommended solution, no code change yet)
 **Related**: `mission-driver-flow-design.md`, `flow-engine-design.md`
 

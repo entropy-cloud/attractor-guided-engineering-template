@@ -13,8 +13,8 @@ The scripts in this directory inspect the parent repository.
 | Member | Path | Purpose |
 | ------ | ---- | ------- |
 | `age-template-tools` (root) | `tools/` | Shared devDeps (`jscpd`, `prettier`) + repo-level check/lint scripts |
-| `mission-driver` | `tools/mission-driver/` | The AGE dev-loop engine (zero npm deps; `commander` vendored) |
-| `mission-driver-monitor-web` | `tools/mission-driver/web/` | Vue 3 monitor dashboard frontend |
+| `mission-driver` | `$MISSION_DRIVER_HOME/` | The AGE dev-loop engine (zero npm deps; `commander` vendored) |
+| `mission-driver-monitor-web` | `$MISSION_DRIVER_HOME/web/` | Vue 3 monitor dashboard frontend |
 
 Single lockfile (`tools/pnpm-lock.yaml`); single `packageManager` pin (`pnpm@10.27.0`, inherited by members). The engine member stays zero-dep — workspace membership does not inject dependencies.
 
@@ -68,13 +68,13 @@ pnpm md:web:check:dist    # verify committed dist is fresh (CI guard, local mirr
 
 ## Mission Driver
 
-`tools/mission-driver/` is a **mission-driven development loop engine** — a generic opencode-based workflow that cycles through health-check → execute plans → draft plans → review plans → deep audit.
+`$MISSION_DRIVER_HOME/` is a **mission-driven development loop engine** — a generic opencode-based workflow that cycles through health-check → execute plans → draft plans → review plans → deep audit.
 
 It is the template's **single source of truth** for this tool. **Projects must NOT copy this directory.** Instead, reference it via a thin shell script setting `MISSION_DRIVER_HOME`. This keeps the engine single-sourced: fixes and improvements go into the template, and all projects that reference it get them automatically.
 
 ### Integration (Do NOT Copy — Only Reference)
 
-Create a thin `tools/mission-driver.sh` in your project. Do not copy `tools/mission-driver/`:
+Create a thin `tools/mission-driver.sh` in your project. Do not copy `$MISSION_DRIVER_HOME/`:
 
 ```bash
 #!/bin/bash

@@ -11,7 +11,7 @@ Use `docs/design/` for app-layer feature and business design. Use `docs/architec
 1. `project-vision.md`
 2. `system-baseline.md`
 3. `module-boundaries.md`
-4. `mission-driver-baseline.md` — public contracts for the `tools/mission-driver/` cross-cutting engine (CLI surface, `mission.json` / `draft-state.json` / `run-state.json` schemas, marker contracts, public exports vs test seams)
+4. `mission-driver-baseline.md` — public contracts for the `$MISSION_DRIVER_HOME/` cross-cutting engine (CLI surface, `mission.json` / `draft-state.json` / `run-state.json` schemas, marker contracts, public exports vs test seams)
 5. more specific owner docs as the project grows
 
 ## Owner-Doc Rules

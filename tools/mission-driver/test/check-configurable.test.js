@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { createMissionDriverFlow } from "../src/flow-loader.js";
 import { FlowEngine } from "../src/engine.js";
 import { makeMockDelegates } from "./helpers.js";
+import { mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 // mdr-fix-3: CHECK is a configurable deterministic-state gate. When
 // commands.check is configured, a failing-but-auto-fixable check emits the
@@ -47,44 +50,53 @@ describe("mdr-fix-3 CHECK configurable gate — engine behavior (needs_fix retry
   it("needs_fix once then pass reaches REVIEW_PLANS within maxRetries", async () => {
     const flow = createMissionDriverFlow({ flowName: "mission-driver" });
     // Cap the (by-design infinite) main loop right after REVIEW_PLANS is
-    // reached: CHECK(needs_fix) → CHECK(pass) → REVIEW_PLANS = 3 step visits.
-    flow.maxTotalSteps = 3;
+    // reached: CHECK(needs_fix) → CHECK(pass) → VALIDATE_PLANS → REVIEW_PLANS
+    // = 4 step visits (bug 2026-09-06-research-orm-plans-invisible inserted the
+    // ledger hard gate between CHECK/INJECT and REVIEW_PLANS).
+    flow.maxTotalSteps = 4;
 
     let checkCalls = 0;
     let reviewPlansCalls = 0;
-    const delegates = makeMockDelegates({
-      async runAgent(stepName) {
-        if (stepName === "CHECK") {
-          checkCalls++;
-          // First attempt: check failed but auto-fixable → needs_fix.
-          // Retry: fix applied, re-run succeeds → pass.
-          return {
-            text: checkCalls === 1
-              ? "<AI_STEP_RESULT>needs_fix</AI_STEP_RESULT>"
-              : "<AI_STEP_RESULT>pass</AI_STEP_RESULT>",
-            ok: true,
-          };
-        }
-        if (stepName === "REVIEW_PLANS") {
-          reviewPlansCalls++;
-          return { text: "<AI_STEP_RESULT>approved</AI_STEP_RESULT>", ok: true };
-        }
-        return { text: "<AI_STEP_RESULT>ok</AI_STEP_RESULT>", ok: true };
-      },
-      config: { projectRoot: process.cwd() },
-      expressionFuncs: {
-        draftPlans: () => ["plan-1.md"],
-        activePlans: () => [],
-        openAudits: () => [],
-      },
-    });
+    const emptyRoot = mkdtempSync(join(tmpdir(), "md-check-cfg-"));
+    try {
+      // Point projectRoot at an empty dir so the REAL validate-plans script
+      // step (now in the path) finds no plansDir and passes through.
+      const delegates = makeMockDelegates({
+        async runAgent(stepName) {
+          if (stepName === "CHECK") {
+            checkCalls++;
+            // First attempt: check failed but auto-fixable → needs_fix.
+            // Retry: fix applied, re-run succeeds → pass.
+            return {
+              text: checkCalls === 1
+                ? "<AI_STEP_RESULT>needs_fix</AI_STEP_RESULT>"
+                : "<AI_STEP_RESULT>pass</AI_STEP_RESULT>",
+              ok: true,
+            };
+          }
+          if (stepName === "REVIEW_PLANS") {
+            reviewPlansCalls++;
+            return { text: "<AI_STEP_RESULT>approved</AI_STEP_RESULT>", ok: true };
+          }
+          return { text: "<AI_STEP_RESULT>ok</AI_STEP_RESULT>", ok: true };
+        },
+        config: { projectRoot: emptyRoot },
+        expressionFuncs: {
+          draftPlans: () => ["plan-1.md"],
+          activePlans: () => [],
+          openAudits: () => [],
+        },
+      });
 
-    const engine = new FlowEngine(flow, delegates);
-    const result = await engine.run();
+      const engine = new FlowEngine(flow, delegates);
+      const result = await engine.run();
 
-    assert.equal(checkCalls, 2, "CHECK must be invoked twice (needs_fix retry then pass)");
-    assert.equal(reviewPlansCalls, 1, "after needs_fix→pass, control must reach REVIEW_PLANS");
-    assert.notEqual(result.status, "failed", "run must not end failed at CHECK (pass transition taken)");
+      assert.equal(checkCalls, 2, "CHECK must be invoked twice (needs_fix retry then pass)");
+      assert.equal(reviewPlansCalls, 1, "after needs_fix→pass, control must reach REVIEW_PLANS (via VALIDATE_PLANS)");
+      assert.notEqual(result.status, "failed", "run must not end failed at CHECK (pass transition taken)");
+    } finally {
+      rmSync(emptyRoot, { recursive: true, force: true });
+    }
   });
 
   it("needs_fix past maxRetries ends the run failed via onMaxRetries (terminal)", async () => {

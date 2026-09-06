@@ -1,7 +1,7 @@
 # Mission Driver Flow Design
 
 **Date**: 2026-06-16 (step name simplification: HEALTH_CHECK->CHECK, EXECUTE_ALL_ACTIVE_PLANS->PLANS, ROADMAP_CHECK->ROADMAP, PLAN_DRAFT->DRAFT, DEEP_AUDIT_LOOP->AUDIT)
-**Scope**: `tools/mission-driver/flows/mission-driver.json`, subflows `tools/mission-driver/flows/plan-execution.json`, `tools/mission-driver/flows/deep-audit-loop.json`
+**Scope**: `$MISSION_DRIVER_HOME/flows/mission-driver.json`, subflows `$MISSION_DRIVER_HOME/flows/plan-execution.json`, `$MISSION_DRIVER_HOME/flows/deep-audit-loop.json`
 **Status**: active
 **Replaces**: v3 `execute-all-active-plans` subflow + `plan-router` script
 **Changes**:

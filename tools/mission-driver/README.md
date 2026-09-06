@@ -32,8 +32,8 @@ vendored under `vendor/`), and the monitor frontend's built `web/dist/` is
 committed, so after extracting the release:
 
 ```bash
-node tools/mission-driver/src/main.js list       # verify it runs
-node tools/mission-driver/src/main.js monitor    # open the dashboard on :9300
+node $MISSION_DRIVER_HOME/src/main.js list       # verify it runs
+node $MISSION_DRIVER_HOME/src/main.js monitor    # open the dashboard on :9300
 ```
 
 To pin a known-good version, checkout the tag you downloaded, e.g.
@@ -159,8 +159,8 @@ stdout so you know which run was analyzed.
 
 | Artifact | Location |
 |---|---|
-| One-shot postmortem doc (evidence + fixes) | `tools/mission-driver/docs/postmortems/{date}-{mission}-postmortem.md` |
-| Self-memory update (harness-level lessons) | `tools/mission-driver/memory/{_index.md, lessons.md, runs.md}` |
+| One-shot postmortem doc (evidence + fixes) | `$MISSION_DRIVER_HOME/docs/postmortems/{date}-{mission}-postmortem.md` |
+| Self-memory update (harness-level lessons) | `$MISSION_DRIVER_HOME/memory/{_index.md, lessons.md, runs.md}` |
 | Module-memory update (domain/codebase lessons) | `docs/memory/<MODULE>/{_index.md, lessons.md, runs.md}` (skipped if module unresolvable) |
 
 The run's analysis artifacts are written to an isolated `_tmp/analyze-run-<ts>/`
@@ -186,7 +186,7 @@ Two strictly-separated stores by concern:
 
 ```
 # ① mission-driver self-memory — about the harness/loop itself (随工具走)
-tools/mission-driver/memory/
+$MISSION_DRIVER_HOME/memory/
 ├── _index.md      # always-load core: description + Top rules (≤2KB, injected into every mission prompt)
 ├── lessons.md     # accumulating procedural lessons (id/count/severity/evidence/fix schema)
 ├── runs.md        # episodic index: one row per analyzed run (append, capped ~50)
@@ -231,7 +231,7 @@ Curation keeps memory lean:
 Memory is useless if never read back. On every normal mission run,
 `src/main.js` reads both `_index.md` cores into `delegates.vars`:
 
-- `{{selfMemoryIndex}}` ← `tools/mission-driver/memory/_index.md`
+- `{{selfMemoryIndex}}` ← `$MISSION_DRIVER_HOME/memory/_index.md`
 - `{{moduleMemoryIndex}}` ← `docs/memory/<current-mission-module>/_index.md`
   (empty string when the module has no memory dir → block ignored)
 

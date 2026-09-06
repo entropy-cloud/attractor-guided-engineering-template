@@ -129,7 +129,7 @@ cd /c/Work/my-project
 只有修改 `web/` 前端源码时才需要装依赖并重建：
 
 ```bash
-cd tools/mission-driver/web
+cd $MISSION_DRIVER_HOME/web
 pnpm install                              # 装前端依赖（vue / naive-ui / xterm / vue-flow …）
 pnpm dev                                  # 热更新开发：vite 跑在 :5173，/api 代理到 :9300
 #   另开一个终端：./tools/mission-driver.sh monitor --dev   （只提供 API/SSE，不托管静态文件）
@@ -273,7 +273,7 @@ echo ".env" >> .gitignore   # 若尚未忽略
 - `--driver pi` 时引擎自动套用 pi 默认参数（`-p --append-system-prompt @<persona>` + stdin 传 prompt + 工具白名单），无需手填。
 - **模型 id 格式不同**：opencode 用 `zhipuai-coding-plan/glm-5.2`；pi 用自己的 `provider/model`（如 `zai-coding-cn/glm-5.2`）。
 - **已知限制**：pi 不支持跨 step 的 session 连续性，每个 step 起独立进程、靠 prompt 从磁盘读 roadmap/plans 恢复状态（与 prompt 设计一致）。
-- 完整配置项见 `tools/mission-driver/README.md` §Driver selection。
+- 完整配置项见 `$MISSION_DRIVER_HOME/README.md` §Driver selection。
 
 ## 2. 核心概念
 
@@ -335,7 +335,7 @@ description 也可以直接引用目录或多个文件，不传 `--target-file`�
 
 **方式二：手写**
 
-参考 `tools/mission-driver/mission.json.example`，最小可用的 mission.json：
+参考 `$MISSION_DRIVER_HOME/mission.json.example`，最小可用的 mission.json：
 
 ```json
 {
@@ -416,7 +416,7 @@ Roadmap 文档是 markdown，格式大致：
 `analyze` 会：
 1. 扫描 run 目录的所有事件/日志
 2. 跑一个 postmortem agent，生成结构化复盘报告（亮点、问题、根因、可复用经验）
-3. 报告写到 `tools/mission-driver/memory/` 形成长期记忆，下次跑同类 mission 时 agent 会读到
+3. 报告写到 `$MISSION_DRIVER_HOME/memory/` 形成长期记忆，下次跑同类 mission 时 agent 会读到
 
 ---
 

@@ -386,7 +386,7 @@ function run(entry):
 ## 5. File Organization
 
 ```
-tools/mission-driver/
+$MISSION_DRIVER_HOME/
 ├── src/
 │   ├── main.js                    # CLI entry: parse args, create flow + runner, start engine
 │   ├── config.js                  # Config: module directory discovery
@@ -424,12 +424,12 @@ tools/mission-driver/
 
 ## 6. Flow Diagram
 
-The actual flow definition is the authoritative source: `tools/mission-driver/flows/mission-driver.json`.
-Subflows: `tools/mission-driver/flows/plan-execution.json`, `tools/mission-driver/flows/deep-audit-loop.json`.
+The actual flow definition is the authoritative source: `$MISSION_DRIVER_HOME/flows/mission-driver.json`.
+Subflows: `$MISSION_DRIVER_HOME/flows/plan-execution.json`, `$MISSION_DRIVER_HOME/flows/deep-audit-loop.json`.
 
 ### 6.1 Top-level Flow
 
-> The authoritative source for the current flow is `tools/mission-driver/flows/mission-driver.json`. The diagram below is a conceptual overview; exact step names are `CHECK`, `EXEC_PLANS`, `DRAFT_PLANS`, `REVIEW_PLANS`, `DEEP_AUDIT` (as of v8).
+> The authoritative source for the current flow is `$MISSION_DRIVER_HOME/flows/mission-driver.json`. The diagram below is a conceptual overview; exact step names are `CHECK`, `EXEC_PLANS`, `DRAFT_PLANS`, `REVIEW_PLANS`, `DEEP_AUDIT` (as of v8).
 
 <!-- Top-level flow has 5 top-level steps in a cycle: CHECK → PLANS → ROADMAP → DRAFT or AUDIT → PLANS → ... Steps: CHECK (health-check agent), PLANS (group: scan + forEach plan-execution), ROADMAP (roadmap-check agent), DRAFT (plan draft + self-audit agent), AUDIT (deep-audit-loop subflow). See mission-driver-flow-design.md for the full mermaid diagram with transitions. -->
 
@@ -448,7 +448,7 @@ flowchart TD
 
 ### 6.3 deep-audit-loop Sub-flow
 
-> The authoritative source is `tools/mission-driver/flows/deep-audit-loop.json`. Post-M2-WI22 the sub-flow has steps: MULTI_AUDIT, OPEN_AUDIT (the open-audit scan channel and its CHECK_OPEN_AUDITS / SCAN_NEW_RESULTS / DRAFT_FROM_AUDITS steps were retired — plan `docs/plans/age-autonomy/2026-08-25-0950-2`; `OPEN_AUDIT` terminates directly via `done: completed`). See `mission-driver-flow-design.md` Section 6 for the current mermaid diagram.
+> The authoritative source is `$MISSION_DRIVER_HOME/flows/deep-audit-loop.json`. Post-M2-WI22 the sub-flow has steps: MULTI_AUDIT, OPEN_AUDIT (the open-audit scan channel and its CHECK_OPEN_AUDITS / SCAN_NEW_RESULTS / DRAFT_FROM_AUDITS steps were retired — plan `docs/plans/age-autonomy/2026-08-25-0950-2`; `OPEN_AUDIT` terminates directly via `done: completed`). See `mission-driver-flow-design.md` Section 6 for the current mermaid diagram.
 
 ### 6.4 Error Recovery
 
