@@ -146,19 +146,20 @@ function scanActivePlans(delegates, flowVars) {
 
 ## 5. plan-execution Subflow
 
+> **CLOSURE consolidated (2026-09-07, user-initiated from a nop-app-iot iot-platform run observation; full rationale in §11)**: BUILD_VERIFY is dissolved into CLOSURE_AUDIT — one independent closer visit now runs the verification suite, records `## Verification` pass lines, performs the semantic audit, writes the `## Closure` receipt, and applies the commit strategy. CLOSURE_SCRIPT_CHECK routes **both** `pass` and `fail` to CLOSURE_AUDIT: the closer visit is mandatory on every run (under the merged duties it is never redundant), replacing the old "pass skips the audit" shortcut. Prior state (until 2026-09-06): `pass → BUILD_VERIFY` skipped the audit; CLOSURE_AUDIT `approved` went back to BUILD_VERIFY; BUILD_VERIFY was the suite runner + committer + Verification writer.
+
 ```mermaid
 flowchart TD
     EX["EXECUTE<br/>AI agent"] -->|pass| CSC["CLOSURE_SCRIPT_CHECK<br/>script"]
     EX -->|fail x3| CSC
 
-    CSC -->|pass| BV["BUILD_VERIFY<br/>AI agent"]
-    CSC -->|fail| CA["CLOSURE_AUDIT<br/>AI agent"]
+    CSC -->|pass| CA["CLOSURE_AUDIT<br/>AI agent — single independent closer"]
+    CSC -->|fail| CA
 
-    CA -->|approved| BV
+    CA -->|approved| DONE["done: completed"]
+    CA -->|fixed| CSC
     CA -->|issues x3| EX
-
-    BV -->|pass| DONE
-    BV -->|fail x3| EX
+    CA -->|fail x3| EX
 ```
 
 ### Step Descriptions
@@ -166,36 +167,29 @@ flowchart TD
 **EXECUTE** (`prompts/execute.md`)
 - AI executes each Phase of the plan file (from the first `- [ ]` to all `[x]`).
 - Runs tests after each Phase to confirm.
-- Updates plan `Plan Status: completed` + roadmap item status.
+- Updates roadmap item status; does NOT write closure receipts or `completed` (completion is derived, 01 §5.2).
 - Returns `success` (alias -> `pass`) or `failed`.
 
 **CLOSURE_SCRIPT_CHECK** (`closureScriptCheck` script function)
 - Calls `plan-check.mjs`'s `inspectPlan()` to check:
   - All checklist items are checked `[x]`
-  - Status consistency (Status completed with Closure evidence)
-- **pass -> BUILD_VERIFY**: Mechanical check passed, skip AI audit (AI audit's core value is diagnosing failures; redundant on pass).
-- **fail -> CLOSURE_AUDIT**: Script found non-compliance, AI intervenes to diagnose and fix.
+  - The 01 §5.2 completion formula (receipt-aware, M2-WI41)
+- Both outcomes route to CLOSURE_AUDIT: `fail` carries the derivation reasons into the closer; `pass` (formula already satisfied, e.g. on resume) still gets the mandatory independent closer visit, which takes the light path (suite + semantics + commits; receipts already in place).
 
-**CLOSURE_AUDIT** (`prompts/closure-audit.md`)
-- AI-driven closure audit (only entered when script check fails):
-  - Strictly fixes per plan guide (mandatory section names, field names, Phase format).
-  - After fix returns `approved` -> BUILD_VERIFY.
-  - If unfixable returns `issues` -> retry EXECUTE with audit feedback appended.
-
-**BUILD_VERIFY** (`prompts/build-verify.md`)
-- Runs build command to confirm compilation passes.
-- Diagnoses and fixes on failure, then retries.
-- Returns `pass` -> subflow completes.
-- Returns `fail` -> retry EXECUTE (with build error info).
+**CLOSURE_AUDIT** (`prompts/closure-audit.md`) — the single independent closer
+- Runs the real verification suite (mission typecheck/build/lint/test, sequential; incremental-Maven scoping), fixes failures itself (bounded), re-runs until green.
+- Performs the semantic closure audit (Exit Criteria vs live repo, anti-hollow, deferred honesty, docs sync).
+- Records `## Verification` pass lines (only for keys that ran green in this visit) and the `## Closure` dispatch/accepted receipt — verify-then-record, never receipts for unrun commands.
+- Applies the commit strategy last (detects EXECUTE's commit mode; code/doc split), so the doc commit includes the receipts it just wrote.
+- Returns `approved` (full closure in this visit, `plan-check.mjs --strict` self-verified green) → done; `fixed` (edited but closure incomplete) → CLOSURE_SCRIPT_CHECK re-check; `issues` (genuinely unfinished) / `fail` (step-level error) → retry EXECUTE.
 
 ### Retry Strategy
 
 | Step | On Failure | Max Retries |
 |------|-----------|-------------|
 | EXECUTE | retry EXECUTE | 3 |
-| CLOSURE_AUDIT issues | retry EXECUTE | 3 (with audit feedback) |
-| BUILD_VERIFY | retry EXECUTE | 3 (with build errors) |
-| CLOSURE_AUDIT onMaxRetries | goto BUILD_VERIFY | -- |
+| CLOSURE_AUDIT issues/fail | retry EXECUTE | 3 (with audit feedback appended on issues) |
+| CLOSURE_AUDIT onMaxRetries | done: failed | -- |
 
 ---
 
@@ -294,3 +288,33 @@ DRAFT (inside deep-audit-loop subflow)
 - Flow definitions at `flows/mission-driver.json`, subflows at `flows/plan-execution.json`, `flows/deep-audit-loop.json`.
 - Script functions `scanActivePlans`, `closureScriptCheck` in `src/flow-loader.js`.
 - `flowArgs` template variables resolved per forEach iteration in `src/engine.js`.
+
+---
+
+## 11. Closure Gate Consolidation — CLOSURE_AUDIT absorbs BUILD_VERIFY (2026-09-07)
+
+**Motivation** (user-initiated, from a nop-app-iot iot-platform plan-execution run): every plan closure paid 3 agent visits (EXECUTE → CLOSURE_SCRIPT_CHECK fail → CLOSURE_AUDIT → CLOSURE_SCRIPT_CHECK → BUILD_VERIFY) and ran the verification suite twice (once in CLOSURE_AUDIT semantic verification, once again in BUILD_VERIFY). The FAIL-then-audit routing itself is by design and stays: the 01 §5.2 completion formula requires receipts only the independent auditor may write, so the first script check after EXECUTE must fail into CLOSURE_AUDIT (M2-WI41). The third visit was the removable cost.
+
+**Decision**: BUILD_VERIFY is dissolved into CLOSURE_AUDIT as the **single independent closer**, with in-visit ordering verify-then-record:
+
+1. run the real verification suite (mission `typecheck/build/lint/test`, sequential; incremental-Maven `-pl <module> -am` scoping), fix failures itself (bounded), re-run until green;
+2. perform the semantic closure audit (former PASS-path checks 0-5);
+3. record `## Verification` pass lines (only for keys that actually ran green in this visit) and the `## Closure` dispatch/accepted receipt;
+4. apply the commit strategy **last**, so the doc commit includes the receipts written in step 3.
+
+**Why independence is preserved**: the independence boundary is EXECUTE vs every downstream role — an executor must never self-close. The auditor and the verifier were both downstream; merging them keeps exactly one independent closer. The "mechanical gate must re-verify auditor edits" concern (the reason the 2026-09-06 `fixed` short-circuit routed through CLOSURE_SCRIPT_CHECK) is covered differently: before returning `approved` the closer itself runs `node plan-check.mjs <plan> --strict` — the same deterministic tool the script gate runs — so a second script visit adds no information on the full-closure path. The `fixed → CLOSURE_SCRIPT_CHECK` route is retained as the fallback for visits that edit the plan but cannot complete full closure.
+
+**Topology change**: CLOSURE_SCRIPT_CHECK `pass` now also routes to CLOSURE_AUDIT (previously `pass → BUILD_VERIFY` skipped the audit on the "audit is redundant on pass" rationale — void under the merged duties, since the closer visit now carries the suite + commit work and is never redundant). This also guarantees the mandatory independent closer visit on resumed runs whose formula is already satisfied.
+
+**Invariants unchanged**: the completion formula and its writer-agnostic evidence; EXECUTE forbidden from writing receipts or `completed`; `closureScriptCheck` logic (M2-WI41) untouched; retry budgets unchanged (3 per step).
+
+**Edge constraint**: plans should declare `verify` keys explicitly in frontmatter; when absent, the closer derives the mission default (`verify: [test]`, 01 §4.1) and records pass lines only for keys it actually ran green.
+
+**Supersedes**: §5 pre-2026-09-07 topology; the writer split wording ("BUILD_VERIFY records Verification / CLOSURE_AUDIT records Closure") in consumer-repo plan guides (nop-app-iot guide rule 11 updated in step). `runner.js` keeps the `BUILD_VERIFY` prompt-map entry for custom flows; `prompts/build-verify.md` is retained but unreferenced by stock flows.
+
+**Rejected alternatives**:
+| Alternative | Rejection Reason |
+|---|---|
+| Let EXECUTE run the closure audit itself | Destroys the independence law (self-closing must stay structurally impossible); loses the issues→EXECUTE enforcement loop; executor-asserted completion is exactly what the gate exists to check |
+| Reorder to BUILD_VERIFY before CLOSURE_AUDIT (keep both steps) | Keeps 3 visits and the duplicate suite run; the audit would still need to re-run the suite to trust it, so no cost is removed |
+| CLOSURE_SCRIPT_CHECK `pass` → done directly (skip closer when formula satisfied) | The suite/commit duties would have no owner on the resume path; the mandatory closer visit is cheap insurance and keeps one uniform post-EXECUTE shape |

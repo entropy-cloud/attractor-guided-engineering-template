@@ -1,7 +1,7 @@
 // M2-WI41 regression net (plan 2026-08-25-0925-1, bug
 // docs/bugs/2026-08-25-ledger-plan-closure-deadlock.md D2): closureScriptCheck
 // must be receipt-aware — a frontmatter plan whose counting domain is fully
-// ticked may only pass to BUILD_VERIFY when the 01 §5.2 completion formula
+// ticked may only pass the closure gate when the 01 §5.2 completion formula
 // (deriveCompleted) holds; otherwise it fails into CLOSURE_AUDIT (the only
 // ## Closure receipt writer) carrying each derivation reason.
 // Phase 2 additionally pins the engine read-path defaultVerifyKeys injection
@@ -113,7 +113,7 @@ describe("M2-WI41 Phase 1 — closureScriptCheck receipt-aware routing (three st
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
 
-  it("③ + successful pass line → pass (formula satisfied, routes to BUILD_VERIFY)", async () => {
+  it("③ + successful pass line → pass (formula satisfied; flow routes the pass to CLOSURE_AUDIT light path)", async () => {
     const text = buildFixture({ passes: ["- pass test run-001 basisHash={{HASH}} exit=0"] });
     const { file, dir } = tmpPlan("state3.md", text);
     try {
@@ -226,6 +226,18 @@ Exit Criteria:
         assert.match(r.text, /missing-pass:test|basis-hash-mismatch:test|no-verify-keys/);
       }
     }
+  });
+
+  it("⑦ CLOSURE_AUDIT is the single closer (design §11): approved completes, fixed re-checks, issues bounce to EXECUTE; BUILD_VERIFY dissolved", () => {
+    const flow = JSON.parse(readFileSync(join(TOOL_ROOT, "flows", "plan-execution.json"), "utf8"));
+    const transitions = flow.steps.CLOSURE_AUDIT.transitions;
+    assert.equal(transitions.approved.done, "completed");
+    assert.equal(transitions.fixed.goto, "CLOSURE_SCRIPT_CHECK");
+    assert.equal(transitions.issues.retry, "EXECUTE", "genuinely unfinished work must keep the EXECUTE bounce");
+    assert.equal(flow.steps.CLOSURE_AUDIT.onMaxRetries.done, "failed");
+    assert.equal(flow.steps.BUILD_VERIFY, undefined, "BUILD_VERIFY must stay dissolved into CLOSURE_AUDIT");
+    assert.equal(flow.steps.CLOSURE_SCRIPT_CHECK.transitions.pass.goto, "CLOSURE_AUDIT", "closer visit is mandatory on every run");
+    assert.equal(flow.steps.CLOSURE_SCRIPT_CHECK.transitions.fail.goto, "CLOSURE_AUDIT");
   });
 });
 

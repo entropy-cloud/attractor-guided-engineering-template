@@ -132,7 +132,7 @@ The stdout/stderr of the one `opencode run` for the step. Read two places:
 High-level flow trace, one line per transition. When a step "looks stuck", check here first to tell a genuine block from a quiet retry:
 
 - `[step N] STEP (visit #M)` → current step and how many times it has been entered this run. A high visit count on one step means the flow is looping (e.g. `DRAFT_PLANS (visit #5)`).
-- `marker: pass | fail | issues | all_complete` → the step outcome the transition logic consumes.
+- `marker: pass | fail | issues | fixed | approved | all_complete` → the step outcome the transition logic consumes.
 - `retry X→Y (n/3)` → the engine is retrying from step X back to Y, attempt n of 3.
 - `subflow NAME: forEach item K → …` → progress inside a group/forEach step.
 - indented `[child] …` lines → a subflow's own step trace.

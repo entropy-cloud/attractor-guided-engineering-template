@@ -347,20 +347,11 @@ sequenceDiagram
         OC-->>Child: marker = "pass"
 
         Child->>Child: CLOSURE_SCRIPT_CHECK step<br/>(type: script, scriptId: closure-script-check)
-        Child->>Child: closureScriptCheck() → inspectPlan(plan.md)<br/>检查未勾选项 + 闭包证据
-        alt 检查通过
-            Child->>Child: marker = "pass" → BUILD_VERIFY
-        else 检查失败
-            Child->>Child: marker = "fail" → CLOSURE_AUDIT
-            Child->>Runner: runAgent(CLOSURE_AUDIT)
-            Runner->>OC: spawn opencode run (AI 修复 plan 格式)
-            OC-->>Child: "approved" → BUILD_VERIFY<br/>或 "issues" → retry EXECUTE(带反馈)
-        end
-
-        Child->>Child: BUILD_VERIFY step
-        Child->>Runner: runAgent(BUILD_VERIFY)
-        Runner->>OC: spawn opencode run<br/>(跑 typecheck/build/lint/test + git commit)
-        OC-->>Child: "pass" → done:completed
+        Child->>Child: closureScriptCheck() → inspectPlan(plan.md)<br/>检查未勾选项 + 完成公式(01 §5.2)
+        Note over Child: pass 与 fail 均路由 CLOSURE_AUDIT<br/>(单一独立收口者，design §11)
+        Child->>Runner: runAgent(CLOSURE_AUDIT)
+        Runner->>OC: spawn opencode run<br/>(跑 typecheck/build/lint/test + 语义审计<br/>+ 补 pass 行/回执 + git commit)
+        OC-->>Child: "approved" → done:completed · "fixed" → CLOSURE_SCRIPT_CHECK(机械复检)<br/>或 "issues"/"fail" → retry EXECUTE(带反馈)
 
         Child-->>Parent: {status: "completed",<br/>childFlowVars: {...}}
         deactivate Child

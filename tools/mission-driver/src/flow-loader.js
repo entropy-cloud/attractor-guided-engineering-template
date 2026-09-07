@@ -199,11 +199,12 @@ async function closureScriptCheck(delegates, flowVars) {
     }
     // M2-WI41 receipt-aware routing (bug 2026-08-25-ledger-plan-closure-deadlock
     // D2): a frontmatter-format plan whose counting domain is fully ticked
-    // must satisfy the 01 §5.2 completion formula before it may pass to
-    // BUILD_VERIFY. Anything missing (## Closure dispatch/accepted receipt,
+    // must satisfy the 01 §5.2 completion formula before the flow may
+    // complete. Anything missing (## Closure dispatch/accepted receipt,
     // ## Verification pass line) fails here so
-    // the flow routes to CLOSURE_AUDIT — the only writer of the Closure
-    // receipt — instead of silently deadlocking the plan in activePlans.
+    // the flow routes to CLOSURE_AUDIT — the single independent closer and
+    // only writer of the Closure receipt (design §11) — instead of silently
+    // deadlocking the plan in activePlans.
     // Legacy / format:none plans are untouched (behavior byte-identical).
     if (
       result.format === "frontmatter" &&

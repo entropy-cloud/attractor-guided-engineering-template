@@ -33,7 +33,7 @@ $MISSION_DRIVER_HOME/
 │   └── platform.mjs       # 平台兼容层（Windows/macOS/Linux）
 ├── flows/                 # 流程定义 JSON
 │   ├── mission-driver.json    # 主流程: CHECK → REVIEW → EXEC → DRAFT → DEEP_AUDIT
-│   ├── plan-execution.json    # 子流程: EXECUTE → CLOSURE_SCRIPT → CLOSURE_AUDIT → BUILD_VERIFY
+│   ├── plan-execution.json    # 子流程: EXECUTE → CLOSURE_SCRIPT → CLOSURE_AUDIT(单一独立收口者: 套件+审计+回执+提交, design §11)
 │   └── deep-audit-loop.json   # 审计子流程
 ├── prompts/               # AI 指令模板（{{var}} 替换）
 ├── web/                   # Vue 3 前端（Naive UI + TypeScript + Vite）
@@ -67,7 +67,7 @@ sourcePaths（依赖模块源码路径，不同同事路径不同）
 
 **可选 mission 字段 `promptsDir`**（mdr-fix-2）：mission 可独立覆盖整套 prompt。Prompt 解析优先级链（高→低）：`mission.promptsDir` → `missions/prompts/`（全仓库共享覆盖）→ 内置 `TOOL_ROOT/prompts/`（`flow-loader.js loadPrompt` 兜底）。主流程（`createMissionDriverFlow`）与子流程（`loadSubFlow`）均读 `config.missionPromptsDir`（`config.js` 解析为绝对路径或空串），未设置时行为与旧版完全一致。`promptsDir` 为可选字段（不在 `REQUIRED_FIELDS`），但若设置则由 `mission-check.mjs` 校验路径存在（typo fail-fast，同 `moduleDir`/`contextDir`）。共享 `missions/prompts/` 的三份 pre-ledger plan-execution 覆盖（execute/closure-audit/build-verify）已删除（age-autonomy M1-WI45，plan `2026-08-27-1503-1`）——五个无 `promptsDir` mission 的 plan-execution prompt 解析回落内置双模式版，守卫测试 `test/prompt-shadow-guard.test.js` 钉住三名不可再被共享目录遮蔽；mission `prompts` map 仅 `multiAudit`/`openAudit` 两键为 live 消费面（orchestrator 注入 vars → deep-audit-loop `when` 门），键域 ⊆ 两键由同测试钉住（M1-WI46）。
 
-**CHECK 为可配置确定性状态门**（mdr-fix-3）：主流程 entry `CHECK`（`prompts/health-check.md`）按 `commands.check`（base.json 默认 `""` = 未配置）决定行为——配置时运行 `{{checkCmd}}`，失败且可自动修复则诊断+修复+重跑并 emit `needs_fix`（engine 经 `needs_fix → {retry:"CHECK",maxRetries:2}` 重试，耗尽则 `onMaxRetries:{done:"failed"}` 终止），不可修复或 `commands.test` 类问题 emit `fail`（`fail → {done:"failed"}` 终态，无重试）；未配置时回退 git 冲突标记检测（clean/dirty → `pass`，未解决冲突标记 → `fail`）。`needs_fix` 是新增 transition key（非 markerAlias），与 OPT-4 既有契约兼容——未配置 mission 的 `fail`/`onError`/`onMaxRetries` 仍一次性终止（`check-lightweight.test.js` 守护，无 repair death-loop）。CHECK 不跑 `commands.test`（那是 BUILD_VERIFY 的职责）。`checkCmd` 经 `main.js delegates.vars` 注入，已在 `context-map.mjs` VAR_PROVENANCE/EXPECTED_VARS 登记（drift gate）。
+**CHECK 为可配置确定性状态门**（mdr-fix-3）：主流程 entry `CHECK`（`prompts/health-check.md`）按 `commands.check`（base.json 默认 `""` = 未配置）决定行为——配置时运行 `{{checkCmd}}`，失败且可自动修复则诊断+修复+重跑并 emit `needs_fix`（engine 经 `needs_fix → {retry:"CHECK",maxRetries:2}` 重试，耗尽则 `onMaxRetries:{done:"failed"}` 终止），不可修复或 `commands.test` 类问题 emit `fail`（`fail → {done:"failed"}` 终态，无重试）；未配置时回退 git 冲突标记检测（clean/dirty → `pass`，未解决冲突标记 → `fail`）。`needs_fix` 是新增 transition key（非 markerAlias），与 OPT-4 既有契约兼容——未配置 mission 的 `fail`/`onError`/`onMaxRetries` 仍一次性终止（`check-lightweight.test.js` 守护，无 repair death-loop）。CHECK 不跑 `commands.test`（那是收口者 CLOSURE_AUDIT 的职责，design §11 合并后由单一独立收口者承担）。`checkCmd` 经 `main.js delegates.vars` 注入，已在 `context-map.mjs` VAR_PROVENANCE/EXPECTED_VARS 登记（drift gate）。
 
 
 **frontmatter 账本库**（age-autonomy M1-WI1/WI2）：`src/ledger-frontmatter.mjs`——零 import 纯函数模块（`parseFrontmatter`/`validatePlanFrontmatter`/`validateRoadmapFrontmatter` + 字段表常量，契约 `docs/design/age-autonomy/01-file-ledger.md` §2/§3.1/§4.1）；插件形态经 `plugin/nop-age/scripts/build-bundle.mjs` ALLOWED_MODULES 的 engine→assets 复制通道共享（模块进入 import 闭包后副本自动物化）。校验器经 `planLedgerState` 读 seam 接线全部生产读面（fieldErrors/fieldsValid 随 frontmatter 读透传——plan-check exit 1 / flow-loader 扫描 warn / monitor API 暴露 / roadmap-check `parseRoadmapMarkdown` 判定点，M2-WI42）；`verify: []` 被校验器拒绝且派生面按 no-verify-keys 处理（fail-closed 不回落 mission 默认，M2-WI44）。

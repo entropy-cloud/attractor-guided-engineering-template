@@ -100,7 +100,7 @@ The three flows each carry their own default, tuned to observed convergence:
 | Flow | File | Default `maxCycleVisits` | Scope |
 |---|---|---|---|
 | mission-driver (main) | `flows/mission-driver.json` | **8** | CHECK / REVIEW_PLANS / EXEC_PLANS / DRAFT_PLANS / DEEP_AUDIT cycle |
-| plan-execution (subflow) | `flows/plan-execution.json` | **6** | EXECUTE ↔ CLOSURE_AUDIT ↔ BUILD_VERIFY per plan |
+| plan-execution (subflow) | `flows/plan-execution.json` | **6** | EXECUTE ↔ CLOSURE_SCRIPT_CHECK ↔ CLOSURE_AUDIT (single closer: suite + audit + receipts + commits) per plan |
 | deep-audit-loop (subflow) | `flows/deep-audit-loop.json` | **6** | CHECK_OPEN_AUDITS / MULTI_AUDIT / OPEN_AUDIT / SCAN_NEW_RESULTS |
 
 `--max-cycles <n>` overrides the cap for **all three flows** at once (it

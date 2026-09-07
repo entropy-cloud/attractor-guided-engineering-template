@@ -36,10 +36,10 @@ const planExecPromptBasenames = Object.values(planExecution.steps)
   .filter((s) => s && typeof s.promptPath === "string")
   .map((s) => basename(s.promptPath));
 
-test("plan-execution flow exposes the three agent prompts", () => {
+test("plan-execution flow exposes the two agent prompts (BUILD_VERIFY dissolved into CLOSURE_AUDIT, design §11)", () => {
   assert.deepEqual(
     [...new Set(planExecPromptBasenames)].sort(),
-    ["build-verify.md", "closure-audit.md", "execute.md"],
+    ["closure-audit.md", "execute.md"],
   );
 });
 
