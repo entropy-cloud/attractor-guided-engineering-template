@@ -326,6 +326,58 @@ work-item: WI1
     assert.equal(r.closure.dispatches[0].valid, false);
   });
 
+  it("indented pass lines are tolerated by the gate + relaxed PASS_RE (WI05 re-exec regression, 2026-09-10)", () => {
+    // Before the fix: `line.startsWith("- pass ")` was a strict column-0 gate,
+    // so indented lines silently dropped out of `verification.passes`,
+    // `mechanicalVerification` flipped to false, `deriveCompleted` flipped to
+    // false, `activePlans()` re-fed it. After: the gate is `trimStart()` and
+    // PASS_RE accepts `[ \t]*` before `-`, so indented well-formed lines
+    // count as passes and indented malformed lines emit malformed-pass.
+    const plan = `---
+status: active
+mission: m
+work-item: WI1
+---
+# t
+
+## Phase 1
+
+- [x] item
+
+## Draft Review Record
+
+- dispatch review ${REVIEW_ID} to ses_r
+
+## Verification
+
+ - pass test run-001 exit=0
+\t- pass test run-002 exit=0
+   - pass test run-003 exit=0
+  - pass test run-004 badformat
+
+## Closure
+
+- dispatch audit ${AUDIT_ID} to ses_a
+- accepted ${AUDIT_ID}
+`;
+    const r = scanPlanLedger(plan);
+    // 3 well-formed indented pass lines + 1 indented-but-malformed →
+    // `verification.passes` carries the 3 well-formed entries; the
+    // malformed one is added to `errors` only. Regression target = the
+    // old code would have dropped ALL 4 silently (no errors, no passes).
+    assert.equal(r.verification.passes.length, 3);
+    assert.equal(r.verification.passes[0].key, "test");
+    assert.equal(r.verification.passes[0].runId, "run-001");
+    assert.equal(r.verification.passes[0].exit, 0);
+    assert.equal(r.verification.passes[1].runId, "run-002");
+    assert.equal(r.verification.passes[2].runId, "run-003");
+    assert.equal(
+      r.errors.filter((e) => e.code === "malformed-pass").length,
+      1,
+      `expected 1 malformed-pass error from run-004, got: ${JSON.stringify(r.errors)}`,
+    );
+  });
+
   it("dispatch without a same-id conclusion is a derived-state fact, not a structural error", () => {
     const r = scanPlanLedger(`---
 status: active

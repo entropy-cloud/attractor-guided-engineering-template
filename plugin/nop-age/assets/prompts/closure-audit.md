@@ -82,6 +82,14 @@ Only AFTER the suite ran green in this visit (Step 2) and semantics passed (Step
 
 `<commandKey>` must be exactly a key from the plan's `verify` array (its command must have actually run green in this visit); `<runId>` is any non-space run identifier (e.g. the run timestamp). Only write lines for keys that ran green — never fabricate a pass line.
 
+**Pass-line-format self-check (mandatory after writing each pass line; WI05 re-exec regression, 2026-09-10).** Indented pass lines (any leading whitespace before `-`) are now tolerated by the engine, but the writer must verify the line shape immediately to prevent future drift re-introducing the silent-drop channel that fed a fully-closed plan back to EXECUTE. After appending each pass line, run:
+
+```
+node tools/mission-driver/src/plan-check.mjs <absolute-or-relative-plan-path> --pass-line-format
+```
+
+Exit code MUST be `0`. If it returns `1`, the output `malformed` array lists each offending line by 1-based line number — fix each one with the Edit tool (typically: remove leading whitespace before `-`) and re-run until green. Do NOT proceed to Step 5 with any malformed pass line on disk.
+
 **`## Closure` receipt** (ledger format; append-only, create the section after `## Verification` if absent) — two lines sharing one id:
 
 ```

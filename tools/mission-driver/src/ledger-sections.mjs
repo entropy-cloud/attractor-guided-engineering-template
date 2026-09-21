@@ -32,7 +32,14 @@ const ACCEPTED_RE = new RegExp(`^- accepted (${ID_TOKEN})\\s*(.*)$`);
 // Historical ledger receipts may retain their former basisHash token. Accept it
 // for read compatibility but deliberately discard it: current verification is
 // proven by command key and exit code, never by a plan-content hash.
-const PASS_RE = /^- pass ([A-Za-z][A-Za-z0-9:_-]*) (\S+)(?: basisHash=[0-9a-f]{64})? exit=(\d+)\s*(.*)$/;
+// Leading whitespace (spaces / tabs) is tolerated — common when writers indent
+// for visual nesting under a phase heading, and a strict column-0 requirement
+// silently dropped those lines, blocking `mechanicalVerification` derivation
+// and re-feeding a fully-closed plan to EXECUTE (WI05 re-exec regression, fixed
+// 2026-09-10). The companion gate `line.trimStart().startsWith("- pass ")`
+// routes indented pass lines to this regex; plan-check.mjs --pass-line-format
+// is the writer-side linter that catches future occurrences at write time.
+const PASS_RE = /^[ \t]*- pass ([A-Za-z][A-Za-z0-9:_-]*) (\S+)(?: basisHash=[0-9a-f]{64})? exit=(\d+)\s*(.*)$/;
 const REVIEW_CONCLUSION_RE = new RegExp(
   `^- (\\d{4}-\\d{2}-\\d{2})[：:]iteration (\\d+)[，,]共识 (\\S+)\\s+(${ID_TOKEN})`,
 );
@@ -222,10 +229,10 @@ function scanRegistryLines(split, block, acceptedFindingsMode, errors) {
       accepted.push({ line: lineNo, id: m[1], findings, valid });
       continue;
     }
-    if (line.startsWith("- pass ")) {
+    if (line.trimStart().startsWith("- pass ")) {
       const m = line.match(PASS_RE);
       if (!m) {
-        pushError(errors, lineNo, "malformed-pass", "pass line must be `- pass <commandKey> <runId> exit=<code>`");
+        pushError(errors, lineNo, "malformed-pass", "pass line must be `- pass <commandKey> <runId> exit=<code>` (no leading whitespace before `-`)");
         continue;
       }
       passes.push({ line: lineNo, key: m[1], runId: m[2], exit: Number(m[3]) });
