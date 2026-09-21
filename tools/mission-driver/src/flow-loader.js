@@ -3,6 +3,7 @@ import { resolve, dirname, basename, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { inspectPlan, missionDefaultVerifyKeys } from "./plan-check.mjs";
 import { planLedgerState, normalizeLegacyStatus } from "./ledger-dualread.mjs";
+import { autoRepairFrontmatter } from "./ledger-autofix.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TOOL_ROOT = resolve(__dirname, "..");
@@ -331,6 +332,13 @@ const SCRIPT_REGISTRY = {
  * human/machine-readable report at `_tmp/mission-driver-plan-validation.md`
  * (stable path, gitignored) so the drafting agent can fix the named files.
  * Legacy-format and non-plan markdown files are tolerated (not gated).
+ *
+ * Mechanical auto-repair (2026-09-21, im-deep-analysis loop): frontmatter
+ * rejects that only need lossless quoting are repaired IN PLACE before the
+ * problem verdict — a pure quoting reject never blocks the flow or burns a
+ * DRAFT_PLANS round-trip again. Semantic residue (status vocabulary, missing
+ * Closure structure, unknown keys) is never auto-repaired; it still fails
+ * loud with the report.
  */
 export async function validatePlansLedger(delegates) {
   const config = delegates?.config || {};
@@ -344,15 +352,34 @@ export async function validatePlansLedger(delegates) {
   }
 
   const defaultVerifyKeys = missionDefaultVerifyKeys(mission);
+  const stateOpts = defaultVerifyKeys ? { defaultVerifyKeys } : {};
   const problems = [];
+  const autoRepairs = [];
   const files = _walkMarkdown(plansDir)
     .filter((f) => !basename(f).startsWith("00-"))
     .sort();
   for (const f of files) {
     const content = readFileSync(f, "utf8");
-    const state = planLedgerState(content, defaultVerifyKeys ? { defaultVerifyKeys } : {});
+    const state = planLedgerState(content, stateOpts);
     const rel = relative(process.cwd(), f);
     if (state.format === "frontmatter" && state.rejected) {
+      const fix = autoRepairFrontmatter(content);
+      if (fix.changed) {
+        const repaired = planLedgerState(fix.text, stateOpts);
+        const residue = repaired.rejected
+          ?? (Array.isArray(repaired.fieldErrors) && repaired.fieldErrors.length > 0
+            ? repaired.fieldErrors.join("; ")
+            : null);
+        if (!residue) {
+          writeFileSync(f, fix.text, "utf8");
+          autoRepairs.push(`${rel}: ${fix.repairs.length} value(s) quoted (lines ${fix.repairs.map((r) => r.line).join(", ")})`);
+          continue;
+        }
+        problems.push(
+          `${rel}: auto-quoting applied on paper but NOT written — semantic residue needs agent/human fix: ${residue}`,
+        );
+        continue;
+      }
       problems.push(`${rel}: frontmatter rejected — ${state.rejected}`);
     } else if (
       state.format === "frontmatter"
@@ -363,8 +390,14 @@ export async function validatePlansLedger(delegates) {
     }
   }
 
+  const repairedNote = autoRepairs.length > 0
+    ? `auto-repaired ${autoRepairs.length} mechanically-broken ledger(s) in place:\n${autoRepairs.map((r) => `  - ${r}`).join("\n")}\n`
+    : "";
   if (problems.length === 0) {
-    return { marker: "pass", text: `all ${files.length} plan ledger(s) parse cleanly` };
+    return {
+      marker: "pass",
+      text: `all ${files.length} plan ledger(s) parse cleanly${autoRepairs.length > 0 ? ` (${autoRepairs.length} auto-repaired in place)` : ""}`,
+    };
   }
 
   const report = [
@@ -377,6 +410,7 @@ export async function validatePlansLedger(delegates) {
     "",
     ...problems.map((p) => `- ${p}`),
     "",
+    repairedNote,
   ].join("\n");
   try {
     const reportDir = resolve(projectRoot, "_tmp");
@@ -386,12 +420,13 @@ export async function validatePlansLedger(delegates) {
     // report write is best-effort; the fail marker + text carry the findings
   }
   console.warn(
-    `[flow-loader] validate-plans: ${problems.length} malformed plan ledger(s) — report at _tmp/mission-driver-plan-validation.md`,
+    `[flow-loader] validate-plans: ${autoRepairs.length} auto-repaired, ${problems.length} malformed plan ledger(s) — report at _tmp/mission-driver-plan-validation.md`,
   );
   return {
     marker: "fail",
     text: `${problems.length} malformed plan ledger(s) — see _tmp/mission-driver-plan-validation.md:\n`
-      + problems.map((p) => `  - ${p}`).join("\n"),
+      + problems.map((p) => `  - ${p}`).join("\n")
+      + (autoRepairs.length > 0 ? `\n${autoRepairs.length} ledger(s) were auto-repaired in place (see report).` : ""),
   };
 }
 

@@ -68,16 +68,34 @@ describe("validate-plans ledger gate (bug 2026-09-06-research-orm-plans-invisibl
     }
   });
 
-  it("fails on parser-rejected frontmatter (unquoted multi-word value) and writes the report", async () => {
+  it("auto-repairs a pure-quoting reject in place and passes (2026-09-21 mechanical auto-fix)", async () => {
     const root = makeProject({ "2026-09-06-1400-1-a.md": MALFORMED_PLAN });
     try {
       const r = await validatePlansLedger(delegatesFor(root));
+      assert.equal(r.marker, "pass");
+      assert.match(r.text, /1 auto-repaired in place/);
+      // the file was rewritten losslessly: work-item value now quoted
+      const fixed = readFileSync(join(root, "docs", "plans", "2026-09-06-1400-1-a.md"), "utf8");
+      assert.match(fixed, /work-item: "多词 域 ORM"/);
+      assert.match(fixed, /group: "2026-09-06-1400"/); // already-quoted line untouched
+      // no failure report is left behind
+      assert.equal(existsSync(join(root, "_tmp", "mission-driver-plan-validation.md")), false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("auto-quoting does NOT rescue semantic rejects — still fails with residue named (status vocabulary)", async () => {
+    const SEMANTIC_PLAN = MALFORMED_PLAN.replace("status: draft", "status: done");
+    const root = makeProject({ "2026-09-06-1400-1-a.md": SEMANTIC_PLAN });
+    try {
+      const r = await validatePlansLedger(delegatesFor(root));
       assert.equal(r.marker, "fail");
-      assert.match(r.text, /2026-09-06-1400-1-a\.md/);
-      assert.match(r.text, /frontmatter rejected/);
-      const report = readFileSync(join(root, "_tmp", "mission-driver-plan-validation.md"), "utf8");
-      assert.match(report, /2026-09-06-1400-1-a\.md/);
-      assert.match(report, /quote multi-word values/);
+      assert.match(r.text, /invalid status "done"/);
+      // file untouched: quoting alone would have been lossless, but partial
+      // writes would leave the on-disk ledger half-fixed and the report stale
+      const onDisk = readFileSync(join(root, "docs", "plans", "2026-09-06-1400-1-a.md"), "utf8");
+      assert.match(onDisk, /work-item: 多词 域 ORM/);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
