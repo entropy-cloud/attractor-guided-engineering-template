@@ -10,7 +10,15 @@
     "ok": "pass",
     "done": "pass",
     "error": "fail",
-    "failed": "fail"
+    "failed": "fail",
+    "通过": "pass",
+    "成功": "pass",
+    "失败": "fail",
+    "未通过": "fail",
+    "已批准": "approved",
+    "批准": "approved",
+    "有问题": "issues",
+    "存在问题": "issues"
   },
 
   "steps": {

@@ -29,7 +29,19 @@
     "concerns": "issues",
     "none": "created",
     "revised": "created",
-    "approved": "all_complete"
+    "approved": "all_complete",
+    "通过": "pass",
+    "成功": "pass",
+    "失败": "fail",
+    "需修复": "needs_fix",
+    "全部完成": "all_complete",
+    "部分失败": "some_failed",
+    "全部失败": "all_failed",
+    "已创建": "created",
+    "无事项": "nothing",
+    "完成": "complete",
+    "待处理": "pending",
+    "有问题": "issues"
   },
 
   "steps": {

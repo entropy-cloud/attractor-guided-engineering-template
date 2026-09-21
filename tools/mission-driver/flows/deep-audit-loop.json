@@ -16,7 +16,12 @@
     "findings": "issues",
     "concerns": "issues",
     "none": "created",
-    "revised": "created"
+    "revised": "created",
+    "通过": "clean",
+    "干净": "clean",
+    "无问题": "clean",
+    "有问题": "issues",
+    "存在问题": "issues"
   },
 
   "steps": {
