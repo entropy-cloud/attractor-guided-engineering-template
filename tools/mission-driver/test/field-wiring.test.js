@@ -28,6 +28,16 @@ const REPO_ROOT = resolve(__dirname, "..", "..", "..");
 
 // Deep-audit R1 live probe 1: handwritten `status: completed` + fake basisHash
 // receipts — used to sail through `plan-check --strict` with exit 0.
+//
+// Contract flip (2026-09-21): `completed` is writable frontmatter now
+// (ledger-frontmatter WRITABLE_PLAN_STATUSES) and this probe — which has the
+// full closure structure (## Verification receipts + ## Closure record) — is a
+// LEGAL plan under the current validator. The original WI42 pins expected the
+// retired "completed is derived-only, never hand-written" ban and went red on
+// main when the contract evolved. The attack surface that remains is a
+// handwritten `completed` WITHOUT the `## Closure` structural gate, so that is
+// what the live probes target now (HANDWRITTEN_COMPLETED_NO_CLOSURE); this
+// with-Closure fixture stays as the legal-control pin.
 const HANDWRITTEN_COMPLETED = `---
 status: completed
 mission: demo
@@ -49,6 +59,26 @@ verify: [test]
 
 - dispatch audit #audit-run-1-demo-1-1a2b3c4d to ses_auditor_1
 - accepted #audit-run-1-demo-1-1a2b3c4d：ok
+`;
+
+// Deep-audit R1 live probe 1' (2026-09-21): handwritten `status: completed`
+// with NO `## Closure` block — the closure structural gate must reject it.
+const HANDWRITTEN_COMPLETED_NO_CLOSURE = `---
+status: completed
+mission: demo
+work-item: M9-WI99
+verify: [test]
+---
+
+# handwritten completed, no closure
+
+## Phase 1 — build
+
+- [x] task one
+
+## Verification
+
+- pass test run-1 basisHash=0000000000000000000000000000000000000000000000000000000000000000 exit=0
 `;
 
 // Deep-audit R1 live probe 2: unknown key / `verfy` typo sails through silently.
@@ -103,10 +133,14 @@ describe("WI42 read seam — fieldErrors ride readPlanStatus/planLedgerState", (
   });
 
   it("frontmatter read carries fieldErrors/fieldsValid (auto mode)", () => {
-    const r = readPlanStatus(HANDWRITTEN_COMPLETED);
+    const r = readPlanStatus(HANDWRITTEN_COMPLETED_NO_CLOSURE);
     assert.equal(r.format, "frontmatter");
     assert.equal(r.fieldsValid, false);
-    assert.ok(r.fieldErrors.some((e) => e.includes("derived status")));
+    assert.ok(r.fieldErrors.some((e) => e.includes('requires a "## Closure" section heading')));
+    // contract-flip control: the full closure-structured probe is legal now
+    const legalCompleted = readPlanStatus(HANDWRITTEN_COMPLETED);
+    assert.equal(legalCompleted.fieldsValid, true);
+    assert.deepEqual(legalCompleted.fieldErrors, []);
     const legal = readPlanStatus(LEGAL_FM_PLAN);
     assert.equal(legal.fieldsValid, true);
     assert.deepEqual(legal.fieldErrors, []);
@@ -121,7 +155,7 @@ describe("WI42 read seam — fieldErrors ride readPlanStatus/planLedgerState", (
 
   it("frontmatter tightening mode also validates (same seam, both modes)", () => {
     process.env.MISSION_DRIVER_LEDGER = "frontmatter";
-    const r = readPlanStatus(HANDWRITTEN_COMPLETED);
+    const r = readPlanStatus(HANDWRITTEN_COMPLETED_NO_CLOSURE);
     assert.equal(r.format, "frontmatter");
     assert.equal(r.fieldsValid, false);
   });
@@ -137,12 +171,12 @@ describe("WI42 read seam — fieldErrors ride readPlanStatus/planLedgerState", (
 });
 
 describe("WI42 plan-check consumption — field errors fail the check", () => {
-  it("handwritten status:completed → inspectPlan failed with `field:` detail naming the derived-status ban", () => {
-    const { dir, file } = tmpFile(HANDWRITTEN_COMPLETED, "wi42-hw-");
+  it("handwritten status:completed without ## Closure → inspectPlan failed with the closure-gate field detail", () => {
+    const { dir, file } = tmpFile(HANDWRITTEN_COMPLETED_NO_CLOSURE, "wi42-hw-");
     try {
       const r = inspectPlan(file, { strict: true });
       assert.equal(r.passed, false);
-      assert.ok(r.details.some((d) => d.startsWith("field:") && d.includes("derived status") && d.includes("never be written")));
+      assert.ok(r.details.some((d) => d.startsWith("field:") && d.includes('requires a "## Closure" section heading')));
       assert.equal(r.fieldsValid, false);
       assert.ok(r.fieldErrors.length > 0);
     } finally { rmSync(dir, { recursive: true, force: true }); }
@@ -170,16 +204,16 @@ describe("WI42 plan-check consumption — field errors fail the check", () => {
 });
 
 describe("WI42 plan-check CLI — exit codes (live-probe reverse pin)", () => {
-  it("handwritten status:completed → exit 1 with derived-status wording in stdout", () => {
-    const { dir, file } = tmpFile(HANDWRITTEN_COMPLETED, "wi42-cli-hw-");
+  it("handwritten status:completed without ## Closure → exit 1 with closure-gate wording in stdout", () => {
+    const { dir, file } = tmpFile(HANDWRITTEN_COMPLETED_NO_CLOSURE, "wi42-cli-hw-");
     try {
       const r = runCli(PLAN_CHECK, file, "--strict");
       assert.equal(r.code, 1, `stdout: ${r.stdout}`);
       const out = JSON.parse(r.stdout);
       assert.equal(out.passed, false);
       assert.ok(
-        out.details.some((d) => d.startsWith("field:") && d.includes("derived status") && d.includes("never be written")),
-        `expected derived-status field detail, got ${JSON.stringify(out.details)}`,
+        out.details.some((d) => d.startsWith("field:") && d.includes('requires a "## Closure" section heading')),
+        `expected closure-gate field detail, got ${JSON.stringify(out.details)}`,
       );
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
