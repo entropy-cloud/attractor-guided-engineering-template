@@ -133,6 +133,26 @@ Omit sections that do not apply.
 | Closure audit passes | Tick the work item `- [ ]` → `- [x]` | Must wait for closure audit to pass |
 | Closure reveals new reuse opportunity | Update the Reuse section and the work item | Closure complete |
 | New or adjusted owner doc | Check impact on work items | — |
+| Roadmap completes (last work item ticked) | Run the completion bugs/lessons summary (section below) | Last work item closure audit passed |
+
+## Completion: Bugs And Lessons Summary
+
+When the last work item of a roadmap is ticked, close the roadmap with a completion
+summary pass over the whole delivery instead of just walking away:
+
+1. **Summarize what needs recording.** Walk the delivered work items and decide
+   whether they surfaced fixed non-obvious regressions, discovered-but-unfixed
+   findings, or durable reusable lessons. Record fixed regressions per the
+   project's bug-fix note guide (this template family keeps them under
+   `docs/bugs/`), register unfixed findings in the project's defect ledger, and
+   record lessons under `docs/lessons/`.
+2. **Record the items that meet the bar, without duplicating existing records.**
+   Search the existing `docs/bugs/` and `docs/lessons/` entries first and write
+   only genuinely new ones; a recurrence of an already-recorded pattern is
+   promoted via the skill/checklist route instead of a second note.
+3. **State the outcome.** Record the summary conclusion — including "nothing new
+   to record" when that is the honest result — in the dev-log entry for the
+   roadmap closure.
 
 ## Multiple Roadmaps
 

@@ -237,9 +237,15 @@ nodes use ★. Must match the stage table.
 - Each `planned` stage is owned by its execution plan.
 - Status changes happen only in the Work Item Status block at the top.
 - Milestones are derived: 2 and 3 must both be `done` before the milestone is marked `done`.
+- When the roadmap completes (last item `done`), run the completion bugs/lessons summary:
+  record fixed-regression bug notes and lessons per the project's guides, de-duplicated
+  against existing `docs/bugs/` and `docs/lessons/` entries.
 ```
 
-**Why**: Fixed text reinforcing the authoring guide's core constraints.
+**Why**: Fixed text reinforcing the authoring guide's core constraints. The last bullet
+pins the roadmap-completion obligation from `00-roadmap-authoring-guide.md`
+§ Completion: Bugs And Lessons Summary — the delivery is not "closed" until someone
+has decided, on the record, whether anything needs to be written down.
 
 ---
 
@@ -331,3 +337,4 @@ Milestones are not independent states — they're derived from dependency status
 | Dependency graph disagrees with stage table | Confusing for everyone | Table wins; sync the graph |
 | Restating owner-doc business rules | Roadmap bloats | Reference the owner doc path instead |
 | Stage details carry their own status column | Second dynamic state | Status line says only "see Work Items above" |
+| Roadmap closed without a bugs/lessons summary | Non-obvious regressions and reusable lessons decay back into chat memory | At the last `done`, summarize what needs recording and write it per the project's bug/lesson guides, de-duplicated against existing records |
