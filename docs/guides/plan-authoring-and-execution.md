@@ -42,6 +42,8 @@ Draft review checks this property explicitly: "could a cold session execute this
 2. **Closure audit is performed by a different independent subagent** (not the executor, not the drafter where avoidable). The auditor checks behavior, proof, and doc alignment, then appends the closure receipt.
 3. Draft review before activation is likewise independent (a subagent or human reviewer distinct from the drafter).
 
+Receipts carry the sessions (`to <sessionId>` on dispatch lines), and independence is mechanically verifiable: `node tools/plan-status.mjs --check <plan>` fails a plan whose closure-audit session equals its draft-review session, or whose active status lacks the review receipt pair. Run it before activating and before closing.
+
 Reviewer-availability fallback: when no second agent is available at all, a solo cold-replay pass may close only non-protected, non-high-risk plans, and the closure record MUST state the fallback and its limitation. Protected areas, unresolved product risk, and source-of-truth conflicts stay open without independent review.
 
 ## Format

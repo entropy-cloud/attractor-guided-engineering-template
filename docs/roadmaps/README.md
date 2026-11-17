@@ -19,5 +19,6 @@ A roadmap is a milestone index and a work-item status surface — the planning l
 | `mission-driver-actionable-fixes-roadmap.md` | accumulated actionable fixes |
 | `multi-plugin-dsh-roadmap.md` | multi-plugin DSH composition |
 | `demo-roadmap.md` | onboarding/demo smoke roadmap |
+| `template-consumer-roadmap.md` | safe adoption, roadmap goal workflow, accepted-plan commits and consumer contract guards |
 
 When adding a roadmap, create `docs/plans/<slug>/` in the same change and add the row here.

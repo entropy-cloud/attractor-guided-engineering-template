@@ -21,7 +21,12 @@
 //   node tools/plan-status.mjs --list [plansDir]
 //       Inventory every plan under docs/plans/: status, mission, work-item, path.
 //
-//   node tools/plan-status.mjs --roadmap <roadmap.md>
+//   node tools/plan-status.mjs --check <plan.md>
+//       Receipt integrity + independence gate for a plan: an active plan must
+//       carry a draft-review dispatch + iteration receipt pair; a Closure section
+//       with a dispatch must carry an accepted line, and the closure-audit
+//       session MUST differ from the draft-review session (independence is
+//       machine-checked, not just prose).
 //       Completion verdict by checkbox count: remaining/done/percent, plus the
 //       open work-item lines. This is the "search the checkboxes" channel —
 //       a roadmap is complete iff it has zero unchecked column-0 boxes.
@@ -186,8 +191,83 @@ function cmdRoadmap(roadmapPath) {
   }
 }
 
+function cmdCheck(planPath) {
+  let content;
+  try {
+    content = readFileSync(planPath, "utf8");
+  } catch {
+    console.error("ERROR: cannot read plan:", planPath);
+    process.exit(2);
+  }
+  const { fmText, data, error } = parseFrontmatter(content);
+  if (error || fmText === null) {
+    console.error("FAIL: frontmatter missing or invalid:", error || "no frontmatter block");
+    process.exit(1);
+  }
+  const status = typeof data.status === "string" ? data.status : "(none)";
+  const section = (title) => {
+    const start = content.indexOf("## " + title);
+    if (start === -1) return "";
+    const next = content.indexOf("\n## ", start + 1);
+    return next === -1 ? content.slice(start) : content.slice(start, next);
+  };
+  const review = section("Draft Review Record");
+  const closure = section("Closure");
+  const dispatchRe = /^- dispatch (review|audit) #(\S+) to (\S+).*$/gm;
+  const results = [];
+  const rel = relative(REPO_ROOT, planPath).split("\\").join("/");
+
+  if (status === "active") {
+    const dispatches = [...review.matchAll(/^- dispatch review #(\S+) to (\S+).*$/gm)];
+    const iterations = [...review.matchAll(/^- .*iteration \d+，共识 (\S+) #(\S+).*$/gm)];
+    if (dispatches.length === 0 || iterations.length === 0) {
+      results.push("FAIL: status=active but Draft Review Record lacks a dispatch+iteration receipt pair");
+    } else {
+      results.push("ok: active plan carries draft-review receipt pair (" + dispatches.length + " dispatch, " + iterations.length + " iteration line)");
+    }
+  }
+
+  const reviewDispatch = [...review.matchAll(/^- dispatch review #(\S+) to (\S+).*$/gm)].pop();
+  const closureDispatch = [...closure.matchAll(/^- dispatch audit #(\S+) to (\S+).*$/gm)].pop();
+  const closureAccepted = /(^|\n)- accepted #(\S+) /.test(closure);
+
+  if (closureDispatch) {
+    if (!closureAccepted) {
+      results.push("FAIL: Closure has a dispatch but no accepted line — closure receipt incomplete");
+    } else {
+      results.push("ok: closure dispatch/accepted pair present");
+    }
+    if (reviewDispatch && closureDispatch[2] === reviewDispatch[2]) {
+      results.push("FAIL: independence gate — closure-audit session (" + closureDispatch[2] + ") is the SAME session as the draft-review session; the auditor must be a different independent subagent");
+    } else if (reviewDispatch) {
+      results.push("ok: independence gate — review session (" + reviewDispatch[2] + ") ≠ closure-audit session (" + closureDispatch[2] + ")");
+    }
+  } else if (/## Closure/.test(content)) {
+    results.push("note: Closure section empty — plan not yet closed (expected while work is in flight)");
+  }
+
+  // dispatch without any conclusion anywhere in the receipt regions → derived state, note only
+  const allDispatches = [...content.matchAll(dispatchRe)];
+  if (allDispatches.length === 0 && status === "active") {
+    results.push("FAIL: active plan has no dispatch line at all");
+  }
+
+  const fails = results.filter((r) => r.startsWith("FAIL")).length;
+  console.log("receipt check:", rel, "(status=" + status + ")");
+  for (const r of results) console.log("  " + r);
+  if (fails > 0) {
+    console.error(fails + " FAIL(s)");
+    process.exit(1);
+  }
+  console.log("receipt check: PASS");
+}
+
 function main() {
   const args = process.argv.slice(2);
+  if (args[0] === "--check") {
+    if (!args[1]) { console.error("usage: plan-status.mjs --check <plan.md>"); process.exit(2); }
+    return cmdCheck(args[1]);
+  }
   if (args[0] === "--list") return cmdList(args[1]);
   if (args[0] === "--roadmap") {
     if (!args[1]) { console.error("usage: plan-status.mjs --roadmap <roadmap.md>"); process.exit(2); }
@@ -198,6 +278,7 @@ function main() {
     console.error("usage:");
     console.error("  plan-status.mjs <plan.md> <status> [--hold \"reason\"] [--force]");
     console.error("  plan-status.mjs --list [plansDir]");
+    console.error("  plan-status.mjs --check <plan.md>");
     console.error("  plan-status.mjs --roadmap <roadmap.md>");
     console.error(`statuses: ${WRITABLE.join(" | ")} (completed is derived — never written)`);
     process.exit(2);
