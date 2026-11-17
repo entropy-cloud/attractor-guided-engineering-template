@@ -4,7 +4,7 @@
 
 ## Work Item Status
 
-### M1 — 基础验证
+### M1 — Baseline verification
 
 - [x] WI1 脚手架验证 (Owner: `AGENTS.md`)
 - [x] WI2 引擎冒烟 (Owner: `docs/context/project-context.md`; deps: WI1; reuse: echo demo-ok)

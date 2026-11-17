@@ -16,7 +16,8 @@ This file is the AI entry point. The following `docs/context/` companions are re
 |---|---|
 | `ai-autonomy-policy.md` | Before any task that changes code, model, or product behavior — autonomy levels, Protected Areas, reviewer availability |
 | `codebase-map.md` | When locating code, making cross-module changes, or entering an unfamiliar area — entry points, common change routes, fragile files |
-| `source-of-truth-and-precedence.md` | When facts conflict or it is unclear which doc is authoritative |
+
+When facts conflict or it is unclear which doc is authoritative, read `docs/guides/doc-organization.md` (Source-Of-Truth Precedence + Legacy Or Stale-Docs Mode).
 
 ## Project Identity
 

@@ -4,7 +4,6 @@ audit-rounds: 0
 
 # Demo Roadmap
 
-> Last Updated: 2026-07-14
 > Source: template self-demo
 
 ## Purpose
