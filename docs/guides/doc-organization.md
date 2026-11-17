@@ -100,15 +100,31 @@ On-demand (do NOT create until first real content exists — empty shells are th
 
 When you create one of these, add its role to `docs/index.md` Directory Roles in the same change.
 
+## Volume Partitioning (Year Subdirectories)
+
+Timeliness directories grow at very different rates. Partition by year **only where the historical volume proves it matters** (adapted projects produced 300–1200+ files/year here):
+
+| Directory | Partition | Trigger |
+| --- | --- | --- |
+| `docs/audits/` | `{year}/` from the start (`docs/audits/2026/...`) | highest-volume record class |
+| `docs/logs/` | `{year}/` from the start (established) | daily files accumulate fast |
+| `docs/testing/` | `{year}/` when created | follows the logs pattern |
+| `docs/bugs/` | flat until ~100 notes, then migrate into `{year}/` (by note date) | identity-referenced library; partition late |
+| `docs/plans/` | per-roadmap subdirectories (established) | partition by roadmap, not by year |
+| `docs/analysis/` `docs/lessons/` `docs/requirements/` | flat, no partition | topic/identity-referenced; low volume |
+
+Rules: partition at creation time where mandated; migrate an existing flat directory in one mechanical move (update inbound references, run the doc-reference checker), never file-by-file. Do not invent deeper nesting (no `{year}/{month}/` for records — grep-ability dies; the only exception is logs' per-day files, which are already single-day units).
+
 ## Naming Conventions (Quick Copy Set)
 
 ```text
 docs/logs/2026/05-21.md
+docs/logs/2026/05-21-frontend-ui.md               # roadmap-scoped worktree log
 docs/testing/2026/05-21.md
 docs/discussions/2026-05-21-0900-user-management-scope.md
 docs/analysis/2026-05-21-1030-auth-strategy-comparison.md
-docs/audits/2026-05-21-1410-document-audit-user-management.md
-docs/roadmaps/frontend-ui-roadmap.md
+docs/audits/2026/2026-05-21-1410-document-audit-user-management.md
+docs/roadmaps/frontend-ui-roadmap.md              # stable name — no date prefix (roadmapPath references it)
 docs/plans/frontend-ui/2026-05-21-1530-user-list-plan.md
 docs/requirements/2026-05-21-1100-order-refund-flow.md
 docs/retrospectives/2026-05-21-1630-checkout-prototype-gap.md
@@ -116,7 +132,7 @@ docs/bugs/01-order-status-double-submit.md        # numbered library style
 docs/bugs/2026-05-21-0000-login-token-loop.md     # dated style — either is fine, pick one per repo
 ```
 
-Bug notes are timeliness but referenced by identity: numbered names if the library will grow, dated names otherwise.
+Bug notes are timeliness but referenced by identity: numbered names if the library will grow, dated names otherwise. Roadmap files carry **no date prefix**: a roadmap is a living status surface referenced by stable paths (mission `roadmapPath`, plan `mission` frontmatter, AGENTS routing); its currency is carried by checkbox state, not by the filename.
 
 ## Archive
 

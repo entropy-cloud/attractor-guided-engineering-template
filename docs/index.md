@@ -34,7 +34,7 @@ This `docs/` tree is the durable memory and routing surface for `mission-driver`
 | Start or review a non-trivial implementation | `docs/guides/plan-authoring-and-execution.md` + the active plan |
 | Review audit workflows | `docs/guides/audit-execution.md` + the relevant prompt in `docs/skills/common/` |
 | Pre-flight a non-trivial change hand-off | `docs/guides/audit-prevention-checklist.md` |
-| Clarify a fuzzy requirement | `.agents/skills/grillme/SKILL.md` |
+| Clarify a fuzzy requirement | `.agents/skills/nop-grillme/SKILL.md` |
 | Read raw external inputs (on demand) | `docs/input/` |
 | Read methodology articles | `docs/articles/` |
 | Review tradeoffs or open investigations | `docs/analysis/README.md` |

@@ -25,9 +25,18 @@ Both ends are bounded:
 - **Too little**: a plan must carry at least one independently verifiable result. Bundle trivial edits into the next plan of the same roadmap instead of minting single-item plans.
 - **One plan, one result surface**: if the plan needs multiple independent closure criteria sets, it is too wide — split it. A multi-module change sharing one behavioral contract is still one result surface; do not over-split.
 
-## Independent Execution And Independent Audit
+## Cold-Start Continuity
 
-For every plan created under this guide:
+Chat is disposable. An executor session may be a brand-new window with zero prior conversation — the plan plus the docs tree must be sufficient to start (and resume) work. Hard rules:
+
+1. **Self-contained entry contract.** The plan must name everything a fresh session needs: owner-doc paths (Task Route), affected paths (each Phase's `Targets:`), exact verification commands (frontmatter `verify` + Proof items), and the current baseline. A reader with no chat history must be able to classify, locate, and verify — anything less forces reliance on chat memory and breaks continuation.
+2. **No decisions living only in chat.** If a decision was made in conversation, it lands in the plan body, the discussion note, or the owner doc before execution proceeds. Unwritten decisions do not exist.
+3. **Progress is readable from files only.** Which phases are done = the plan's checkboxes; which work items remain = the roadmap's checkboxes; what happened and why = logs. A new session reconstructs full state by reading files — never by asking "where were we".
+4. **Resume = re-read, not recall.** A session resuming a half-done plan re-reads the whole plan (plus owner docs) before its first tick; it does not continue from remembered context.
+
+Draft review checks this property explicitly: "could a cold session execute this plan with chat closed?" is a blocking review question.
+
+## Independent Execution And Independent AuditFor every plan created under this guide:
 
 1. **Execution is performed by an independent subagent.** The executor session reads the plan + owner docs, implements the phases, runs verification, and ticks checkboxes. It does not self-approve.
 2. **Closure audit is performed by a different independent subagent** (not the executor, not the drafter where avoidable). The auditor checks behavior, proof, and doc alignment, then appends the closure receipt.
@@ -146,7 +155,7 @@ Terminal states (`cancelled | superseded | deferred`) never revive; restarting =
 4. If a slice changes the live baseline or public contract, its exit criteria include the doc-update step — or state `No owner-doc update required` explicitly.
 5. Do not mark complete because the signature exists; verify behavior, error handling, coverage.
 6. Uncompletable items move to `Deferred But Adjudicated` with classification — never left fuzzy-unchecked.
-7. Keep `docs/logs/` in sync; one aggregate entry at closure when phases share one feature/sprint, per-day entries when phases span days or deliverables.
+7. Keep `docs/logs/` in sync with the decision/adjustment policy (`docs/guides/log-writing.md`): user rulings, major AI decisions, and repeats/oscillations get log entries; **plan progress and verification detail stay in the plan** and are not restated in the log. One aggregate closure entry when phases share one feature/sprint; per-day entries when phases span days or a distinct decision lands.
 
 ## When Closing
 

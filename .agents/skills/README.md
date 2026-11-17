@@ -2,13 +2,17 @@
 
 Operational skills the AI agent auto-loads during daily work. Canonical location for this template: `.agents/skills/` (cross-tool convention; do not scatter skill copies into tool-specific directories — if your runner only reads its own directory, mirror there from this source, never the reverse).
 
+## Naming Rule
+
+All skills shipped by this template carry the **`nop-` prefix** (`nop-git`, `nop-grillme`, `nop-mission-driver`). The prefix prevents name collisions with skills from other sources the same runner may load. Project-authored skills should pick their own consistent prefix.
+
 ## Current Set
 
 | Skill | One-liner |
 | --- | --- |
-| `git/` | daily git discipline: commits, rebase, history search, worktree policy |
-| `grillme/` | relentless interview that stress-tests a requirement, plan, or design |
-| `mission-driver/` | operator skill for the autonomous dev-loop engine (add-on; see `docs/guides/mission-driver-add-on.md`) |
+| `nop-git/` | daily git discipline: commits, rebase, history search, worktree policy |
+| `nop-grillme/` | relentless interview that stress-tests a requirement, plan, or design; outcome recorded under `docs/discussions/` |
+| `nop-mission-driver/` | operator skill for the autonomous dev-loop engine (add-on; see `docs/guides/mission-driver-add-on.md`) |
 
 ## Boundary With `docs/skills/`
 

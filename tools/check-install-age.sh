@@ -112,10 +112,10 @@ assert "docs/plans/onboarding/ NOT created by default" "$COND"
 [ ! -e "$TARGET/.env" ] && COND=1 || COND=0
 assert ".env NOT created by default" "$COND"
 
-[ -f "$TARGET/.agents/skills/grillme/SKILL.md" ] && COND=1 || COND=0
+[ -f "$TARGET/.agents/skills/nop-grillme/SKILL.md" ] && COND=1 || COND=0
 assert ".agents/skills/grillme copied" "$COND"
 
-[ -f "$TARGET/.agents/skills/git/SKILL.md" ] && COND=1 || COND=0
+[ -f "$TARGET/.agents/skills/nop-git/SKILL.md" ] && COND=1 || COND=0
 assert ".agents/skills/git copied" "$COND"
 
 [ -f "$TARGET/docs/skills/common/plan-audit-prompt.md" ] && COND=1 || COND=0
@@ -186,7 +186,7 @@ assert "mdh: docs/plans/onboarding/ directory exists" "$COND"
 [ -f "$TARGET2/.env.example" ] && COND=1 || COND=0
 assert "mdh: .env.example copied" "$COND"
 
-[ -f "$TARGET2/.agents/skills/mission-driver/SKILL.md" ] && COND=1 || COND=0
+[ -f "$TARGET2/.agents/skills/nop-mission-driver/SKILL.md" ] && COND=1 || COND=0
 assert "mdh: mission-driver skill copied" "$COND"
 
 [ -f "$TARGET2/docs/roadmaps/demo-roadmap.md" ] && COND=1 || COND=0

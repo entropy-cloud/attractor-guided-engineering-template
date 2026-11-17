@@ -20,7 +20,7 @@ If your workflow is interactive (human + agent pairs working plan by plan), you 
 | Launcher shim | `template/install/tools/mission-driver.sh` | `tools/mission-driver.sh` |
 | Env example | `template/install/.env.example` | `.env` (`MISSION_DRIVER_HOME=<path>`) |
 | Mission configs | `template/install/missions/{base,demo,onboarding}.json` | `missions/` |
-| Operator skill | `.agents/skills/mission-driver/` | copied with the add-on |
+| Operator skill | `.agents/skills/nop-mission-driver/` | copied with the add-on |
 | Structural gates | `tools/mission-driver/src/{gate-check,roadmap-check,mission-check}.mjs` | pre-commit sections (plans/roadmaps/missions) |
 
 ## Installation

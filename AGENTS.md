@@ -26,7 +26,7 @@ This repo is dual-audience: a real project (the mission-driver engine's home, de
 | `docs/bugs/` | regression and root-cause notes |
 | `docs/logs/{year}/` | daily dev log (append-only) |
 | `docs/skills/{common,frontend,java}/` | reusable method/audit prompts |
-| `.agents/skills/` | operational skills (git, grillme, mission-driver) |
+| `.agents/skills/` | operational skills (nop-git, nop-grillme, nop-mission-driver) |
 | on-demand: `discussions/ input/ testing/ references/ retrospectives/ examples/ archive/` | created only when first real content exists (`docs/guides/doc-organization.md`) |
 
 ## Task Routing
@@ -40,12 +40,12 @@ Classify the task before acting; then read the matching guide/owner doc first:
 | write/execute/review/close a plan | `docs/guides/plan-authoring-and-execution.md` |
 | run any audit or review | `docs/guides/audit-execution.md` + `docs/skills/README.md` |
 | hand off a non-trivial change | `docs/guides/audit-prevention-checklist.md` |
-| clarify a fuzzy requirement | `.agents/skills/grillme/SKILL.md` |
-| commit, rebase, search history | `.agents/skills/git/SKILL.md` |
+| clarify a fuzzy requirement | `.agents/skills/nop-grillme/SKILL.md` |
+| commit, rebase, search history | `.agents/skills/nop-git/SKILL.md` |
 | synthesize requirements | `docs/guides/requirements-synthesis.md` |
 | fix a non-obvious bug | `docs/guides/bug-fix-note.md` |
 | write the daily log | `docs/guides/log-writing.md` |
-| run the engine | `docs/guides/mission-driver-add-on.md` + `.agents/skills/mission-driver/` |
+| run the engine | `docs/guides/mission-driver-add-on.md` + `.agents/skills/nop-mission-driver/` |
 
 ## Hard Rules
 

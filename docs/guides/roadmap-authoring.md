@@ -48,6 +48,10 @@ docs/plans/frontend-ui/2026-05-24-1010-form-validation-plan.md
 
 Create the subdirectory when the roadmap is created. Plans of one roadmap never live in another roadmap's directory. This isolation prevents bookkeeping collisions between parallel roadmaps.
 
+**Roadmap files carry no date prefix.** A roadmap is a living status surface, not a one-shot record: missions reference it by stable `roadmapPath`, plans carry its slug in `mission:` frontmatter, and routing tables link it by name. Its currency lives in the checkbox state; a date-stamped name would rot the references without adding information. (Plans, by contrast, are one-shot records — they get dated names.)
+
+**Single-home execution.** One roadmap is executed in exactly one place at a time — one worktree (or the mainline checkout), never two in parallel. This makes per-roadmap state conflict-free by construction: plans already live in `docs/plans/<slug>/`, and roadmap-scoped log entries go to `docs/logs/{year}/{month}-{day}-{roadmap-slug}.md` (`docs/guides/log-writing.md`), so parallel worktrees writing different roadmaps never touch the same files.
+
 ## Roadmap Structure
 
 A roadmap usually contains, in order (omit what does not apply):

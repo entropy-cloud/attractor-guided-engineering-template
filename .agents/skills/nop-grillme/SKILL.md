@@ -20,7 +20,7 @@ Work the target as a **design tree**: every decision branches into the decisions
 1. **Map the tree first** (silently): goal → constraints → success criteria → affected surfaces → risks.
 2. **Ask in rounds — the frontier**. The frontier is every question whose prerequisites are already settled. Ask the whole frontier in one round: number each question (`Q1`, `Q2`, …), and **attach your recommended answer** to every question (`➡️ recommended: …`). Then wait.
 3. **Answers reshape the tree**: settled decisions push the frontier outward. Recompute and ask the next round. A question whose answer depends on something still open belongs to a later round.
-4. **Facts are your job, decisions are the user's.** When a question can be answered by reading the codebase, docs, or running a check — go answer it yourself (dispatch a subagent for exploration if available) instead of asking. Decisions go to the user, always.
+4. **Facts are your job, decisions are the user's.** When a question can be answered by reading the codebase, docs, or running a check — go answer it yourself (dispatch a subagent for exploration if one is available; otherwise read the files directly — never downgrade this to asking the user). Decisions go to the user, always. A running exploration does not block the round: only questions downstream of it wait; ask the rest of the frontier now.
 5. **Challenge against the project's language**: when the user's term conflicts with an owner doc or glossary, call it out immediately ("your design doc defines X as A, but you seem to mean B — which is it?").
 
 ## Question Quality
@@ -36,9 +36,7 @@ The session is done when the frontier is empty — every branch visited, nothing
 
 1. Sanity pass over the three dimensions: **goal clarity** (one sentence?), **constraints** (boundaries and non-goals explicit?), **success criteria** (testable?). If any is still fuzzy, it reopens the interview.
 2. Summarize the resolved decision tree in one screen.
-3. **Write the outcome to a file** (this is the durable part):
-   - requirement clarified → a file under `docs/requirements/` (or `docs/discussions/` if still unresolved at closing)
-   - plan/design grilled → revisions recorded in the plan's `## Draft Review Record` or the plan body itself
+3. **Write the outcome to a file — this is the durable part, and chat may be discarded at any moment.** Every grillme session records a discussion note: `docs/discussions/YYYY-MM-DD-HHmm-grillme-<topic>.md` (local time; create the directory with this first note if needed). The note captures: the target (requirement/plan/design under grill), the resolved decision tree (each decision: question, options considered, chosen answer, rationale), the still-open branches, and pointers to follow-up artifacts. If the grilling produced requirement content, additionally synthesize it into `docs/requirements/` and link the two; if it revised a plan/design, record the revision in the artifact itself and link it from the note.
 4. Do not act on the result until the user confirms the shared understanding.
 
 ## Round Format

@@ -33,14 +33,14 @@ template/install/missions/demo.json > missions/demo.json :: mdh-only
 template/install/missions/onboarding.json > missions/onboarding.json :: mdh-only
 template/install/docs/roadmaps/demo-roadmap.md > docs/roadmaps/demo-roadmap.md :: mdh-only
 template/install/AGE-FILES-GUIDE.md > docs/references/age-files-guide.md :: mdh-only
-.agents/skills/mission-driver/SKILL.md :: mdh-only
-.agents/skills/mission-driver/references/mission-config-schema.md :: mdh-only
-.agents/skills/mission-driver/references/roadmap-template.md :: mdh-only
+.agents/skills/nop-mission-driver/SKILL.md :: mdh-only
+.agents/skills/nop-mission-driver/references/mission-config-schema.md :: mdh-only
+.agents/skills/nop-mission-driver/references/roadmap-template.md :: mdh-only
 
 # --- engine skill, pi runner bridge (--with-mission-driver AND --pi) ---
-.agents/skills/mission-driver/SKILL.md > .pi/skills/mission-driver/SKILL.md :: mdh-only,pi-only
-.agents/skills/mission-driver/references/mission-config-schema.md > .pi/skills/mission-driver/references/mission-config-schema.md :: mdh-only,pi-only
-.agents/skills/mission-driver/references/roadmap-template.md > .pi/skills/mission-driver/references/roadmap-template.md :: mdh-only,pi-only
+.agents/skills/nop-mission-driver/SKILL.md > .pi/skills/mission-driver/SKILL.md :: mdh-only,pi-only
+.agents/skills/nop-mission-driver/references/mission-config-schema.md > .pi/skills/mission-driver/references/mission-config-schema.md :: mdh-only,pi-only
+.agents/skills/nop-mission-driver/references/roadmap-template.md > .pi/skills/mission-driver/references/roadmap-template.md :: mdh-only,pi-only
 
 # --- root ---
 template/AGENTS.md
@@ -128,8 +128,8 @@ docs/skills/java/backend-regression-audit-prompt.md :: profile-java
 
 # --- .agents/skills (general operational skills) ---
 .agents/skills/README.md
-.agents/skills/git/SKILL.md
-.agents/skills/grillme/SKILL.md
+.agents/skills/nop-git/SKILL.md
+.agents/skills/nop-grillme/SKILL.md
 
 # --- tools (curated standalone doc-hygiene scripts, zero npm deps) ---
 tools/check-docs-garbled.mjs
