@@ -67,7 +67,7 @@ These are mission-driver-specific protected areas (in addition to AGENTS.md glob
 
 ## Source-of-Truth Precedence
 
-When facts conflict, follow `docs/context/source-of-truth-and-precedence.md`. In summary:
+When facts conflict, follow `docs/guides/doc-organization.md` (Source-Of-Truth Precedence). In summary:
 
 1. Human-confirmed statement (chat or doc marked human-approved)
 2. Active requirement / owner doc (`docs/requirements/`, `docs/design/`, `docs/architecture/`)
