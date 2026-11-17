@@ -1,6 +1,6 @@
 # Document Organization
 
-This guide is the single authority for where documents live, how they are named, and how normative and timeliness content stay separated. It replaces the former `docs/context/conventions.md`, `docs/context/source-of-truth-and-precedence.md`, and `docs/references/document-naming-and-timeliness.md`.
+This guide is the single authority for where documents live, how they are named, and how normative and timeliness content stay separated.
 
 ## The Two Categories
 
@@ -48,8 +48,19 @@ Status/bookkeeping surfaces are the files that historically caused merge conflic
 | Database truth? | the project's model/schema files | docs only interpret |
 | API contract? | schema/route definition files | docs only interpret |
 | How is this slice executed and closed? | `docs/plans/<roadmap-slug>/` | WIP is read from active plans |
+| External integration truth? | the integration's own contract artifacts | OpenAPI/protobuf/SDK files; docs only interpret |
+| Environment and deployment truth? | deployment/config files (IaC, env templates, CI) | docs describe intent, files define reality |
 | What happened, and when? | `docs/logs/` | then `docs/audits/`, `docs/bugs/` |
 | What should future sessions learn? | `docs/skills/`, `docs/lessons/` | promotion ladder: repeated lesson → skill prompt → check script |
+
+## Legacy Or Stale-Docs Mode
+
+When part of the normative baseline is known-stale (a doc lags the implementation and the fix is queued):
+
+1. AI defaults to `plan-first` (or tighter) for work in the stale area — never `implement` against a known-stale owner doc.
+2. The stale state is made explicit: mark the affected section in the owner doc (e.g. `> stale: pending <work-item>`), or open a roadmap work item to fix it. Silent tolerance is not allowed.
+3. If code and normative doc conflict, do not silently pick a side: either fix the doc in the same change, or record the conflict as a work item before proceeding.
+4. Stale-doc conflicts on protected areas escalate to human review regardless of autonomy level.
 
 On conflict: the owner doc for the question wins; code and normative docs must not silently diverge — either fix the doc or fix the code in the same change, and record the decision. When two docs both claim ownership, that is itself a defect: pick one owner and turn the other into a link.
 
@@ -81,7 +92,7 @@ On-demand (do NOT create until first real content exists — empty shells are th
 | --- | --- | --- |
 | `docs/discussions/` | a requirement ambiguity needs a durable clarification record | `YYYY-MM-DD-HHmm-topic.md` |
 | `docs/input/` | raw external material (PM notes, cards, prototypes) must be kept | keep original name, add date prefix if ambiguous |
-| `docs/testing/` | manual/explatory testing needs durable records | `YYYY/MM-DD.md` |
+| `docs/testing/` | manual/exploratory testing needs durable records | `YYYY/MM-DD.md` |
 | `docs/references/` | stable lookup material that is not a rule (external doc transcriptions, stack guides) | stable name |
 | `docs/retrospectives/` | a landed result materially missed expectation and the pipeline needs diagnosis | `YYYY-MM-DD-HHmm-topic.md` |
 | `docs/examples/` | copyable skeletons prove their value | `.example.md` suffix |
@@ -110,6 +121,22 @@ Bug notes are timeliness but referenced by identity: numbered names if the libra
 ## Archive
 
 Files move to `docs/archive/` only by human decision, keeping their original relative path. AI agents never archive automatically; when a referenced file is missing, check `docs/archive/` before concluding it does not exist.
+
+## Upgrading From The v1 Layout
+
+Projects copied from the pre-v2 template (with `docs/backlog/`, `docs/process/`, `00-*-guide.md` files, and a default-installed engine) migrate as follows:
+
+| v1 | v2 |
+| --- | --- |
+| `docs/backlog/<slug>-roadmap.md` | `docs/roadmaps/<slug>-roadmap.md` |
+| plan files flat in `docs/plans/` | per-roadmap dirs `docs/plans/<slug>/` |
+| `docs/process/*` + `00-*-guide.md` in each dir | consolidated under `docs/guides/` |
+| `docs/context/{conventions,source-of-truth-and-precedence}.md` | absorbed into this guide |
+| `docs/references/document-naming-and-timeliness.md` | absorbed into this guide |
+| `.opencode/skills/` (or other tool dirs) | canonical home is `.agents/skills/` |
+| engine via sibling-checkout `MISSION_DRIVER_HOME` | vendor the engine copy (`docs/guides/mission-driver-add-on.md`) |
+
+Move (don't copy) the files; keep git history. Old cross-references break silently — run the doc-reference checker after the move and fix what it reports. Status-table roadmaps convert to column-0 checkbox milestone blocks per `docs/guides/roadmap-authoring.md`.
 
 ## Workspace Hygiene
 

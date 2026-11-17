@@ -44,6 +44,7 @@ template/install/AGE-FILES-GUIDE.md > docs/references/age-files-guide.md :: mdh-
 
 # --- root ---
 template/AGENTS.md
+template/START-HERE-after-copy.md > START-HERE-after-copy.md
 
 # --- docs root ---
 template/docs/index.md
@@ -98,6 +99,7 @@ template/docs/architecture/system-baseline.md
 docs/audits/README.md
 docs/analysis/README.md
 docs/lessons/README.md
+docs/bugs/README.md
 docs/logs/index.md
 
 # --- docs/skills (common always; shelves by --profile) ---

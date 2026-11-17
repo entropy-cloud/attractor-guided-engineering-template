@@ -123,7 +123,7 @@ AGE 从一个问题开始：
 5. 如果输入仍不明确，在实现前在 `docs/discussions/` 中捕获澄清。
 6. 在要求 AI 编码之前，将确定的范围转换为 `docs/requirements/`。
 
-无 bash 环境的手动 fallback：按 `template/START-HERE-after-copy.md` 的 Day-0 清单操作（`install-age.sh` 会把它装到目标项目的 `template/` 目录）。
+无 Node 环境的手动 fallback：按 `START-HERE-after-copy.md` 的 Day-0 清单操作（`install-age.sh` 会把它装到目标项目根目录）。
 
 ## 许可证
 

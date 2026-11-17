@@ -1,31 +1,31 @@
-# Implementation Roadmap
+# <project-name> Implementation Roadmap
 
-> Last Updated: <YYYY-MM-DD>
-> Source: `docs/requirements/<path>`, `docs/design/*.md`
+> Source: `docs/requirements/`, `docs/design/`. Format rules: `docs/guides/roadmap-authoring.md`.
 
 ## Purpose
 
-This file is the global status index from design to implementation. After reading it, an AI or maintainer knows what is not started, ready, or completed without re-walking every doc and the codebase.
+Milestone index and work-item status surface from design to implementation. After reading it, an AI or maintainer knows which work items are done (checkbox) and which remain, without re-walking every doc and the codebase. It contains no implementation detail — per-item action contracts live in the delivering plans under `docs/plans/implementation/`.
 
-It contains no implementation detail. Each `ready` work item has been draft-reviewed and is queued for implementation.
+> This roadmap is optional. Small projects can delete it and work from `docs/requirements/` directly.
 
-> This roadmap is optional. See `docs/guides/roadmap-authoring.md` for authoring and update rules. Small projects can delete this file and rely on the backlog table alone.
+## Work Item Status
 
-## Status Values
+A work item is done iff its checkbox is `[x]` (closure audit passed). "Draft-reviewed and queued" is carried by the delivering plan's `status: active`, not by a status value here.
 
-| Status | Meaning |
-| --- | --- |
-| `todo` | Not started |
-| `ready` | Draft-reviewed, queued for implementation |
-| `done` | Completed and passed closure audit |
+### M1 — <name>
+
+- [ ] WI1 <work item> (Owner: `docs/design/<path>`; deps: —)
+- [ ] WI2 <work item> (Owner: `docs/design/<path>`; deps: WI1)
+
+### M2 — <name>
+
+- [ ] WI3 <work item> (Owner: `docs/design/<path>`; deps: M1)
 
 ## Framework / Platform Reuse
 
 Capabilities already provided by the stack, so the project does not rebuild them:
 
-| Capability | Provided by | Notes |
-| --- | --- | --- |
-| <capability> | <module/package/service> | <already-introduced / not-introduced> |
+- <capability — provided by <module/package/service>>
 
 ## Current Baseline
 
@@ -37,47 +37,13 @@ Capabilities already provided by the stack, so the project does not rebuild them
 
 - <summary of the main gaps>
 
----
-
-## Milestones
-
-### Milestone 1 — <name>
-
-| Work Item | Status | Owner Doc | Dependencies | Reuse |
-| --- | --- | --- | --- | --- |
-| <work item> | `todo` | `docs/design/<path>` | — | — |
-
-### Milestone 2 — <name>
-
-| Work Item | Status | Owner Doc | Dependencies | Reuse |
-| --- | --- | --- | --- | --- |
-| <work item> | `todo` | `docs/design/<path>` | — | — |
-
----
-
-## Work Item Details
-
-### <work item>
-
-> Status: see Milestones table above
-
-**Goal:** <one sentence>
-
-**Delivery scope:**
-
-- <short list>
-
-**Out of scope:** <optional>
-
-**Modules / areas:** <optional>
-
----
-
 ## Dependency Graph
 
 ```mermaid
 graph TD
-    M1WI1["M1 / <work item>"]
+    WI1["WI1 <work item>"]
+    WI2["WI2 <work item>"]
+    WI1 --> WI2
 ```
 
 ## Cross-Cutting
@@ -90,10 +56,10 @@ graph TD
 | Owner-doc sync | update design/architecture when a work item closes |
 | Dev log | update `docs/logs/` after each implementation |
 
-## Rule
+## Rules
 
 - This file is a status index and coarse-grained split, not an implementation specification.
-- Each `ready` work item has been draft-reviewed and is queued for implementation.
-- Status lives on work items only; a milestone never carries a status.
-- Work-item status changes update the Milestones table only.
-- AI takes the first `todo` work item in order, implements it automatically (humans do not review individual implementation), and writes it back to `done` on closure audit. See `docs/guides/roadmap-authoring.md` (Containment, Closed Loop).
+- Status lives on work-item checkboxes only; a milestone never carries a status; no status tables or suffixes.
+- Work-item ids `WI<n>` increment file-globally.
+- AI takes the first unchecked work item in order and delivers it via a plan under `docs/plans/implementation/` (independent execution + independent closure audit); the checkbox is ticked only after the audit passes. Humans steer; AI does not re-arbitrate priority or invent work items.
+- When the last work item is ticked, run the completion bugs/lessons summary (`docs/guides/roadmap-authoring.md`).

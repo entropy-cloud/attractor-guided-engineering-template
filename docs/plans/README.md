@@ -1,17 +1,12 @@
-# Plans Index
+# Plans
 
-Use this directory for non-trivial implementation plans.
+Use this directory for non-trivial implementation plans. Format authority: `docs/guides/plan-authoring-and-execution.md`.
 
-- start from `00-plan-authoring-and-execution-guide.md`
-- keep each plan focused on one result surface
-- archive or supersede plans by status, not by deleting history
-- for small and medium projects, prefer `docs/plans/YYYY-MM-DD-HHmm-topic-plan.md`
-- if the plan count grows large, a numeric prefix such as `NNN-YYYY-MM-DD-HHmm-topic-plan.md` is acceptable
+- plans live in a per-roadmap subdirectory: `docs/plans/<roadmap-slug>/` — create the subdirectory in the same change that creates the roadmap (`docs/guides/roadmap-authoring.md`)
+- keep each plan focused on one result surface; 2–6 phases (oversized → successor plan + split the work item)
+- every created plan is executed by an independent subagent and closed by a different independent subagent, with receipts in the plan
+- this directory (the root level) holds only the subdirectories and this README — no loose plan files
 
-Every created plan requires independent draft review before implementation and independent closure audit before completion. Self-review is not enough to close a created plan.
+Recommended filenames inside a roadmap subdirectory:
 
-Recommended filenames:
-
-- `2026-05-21-1000-user-list-plan.md`
-- `2026-05-21-1000-role-permission-alignment-plan.md`
-- `012-2026-05-21-1000-checkout-validation-plan.md`
+- `docs/plans/frontend-ui/2026-05-21-1000-user-list-plan.md` style: `YYYY-MM-DD-HHmm-topic-plan.md`

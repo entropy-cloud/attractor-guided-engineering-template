@@ -133,7 +133,7 @@ Independent review found the template direction useful but warned about two risk
 
 The default install copies the docs skeleton, all guides, the `common` skills shelf, the operational skills (`.agents/skills/git`, `grillme`), the document-hygiene tools, and a fail-open pre-commit hook. The engine, missions, and demo roadmaps are only installed with `--with-mission-driver` (see `docs/guides/mission-driver-add-on.md`).
 
-For a manual fallback flow (no Node) or the full Day-0 checklist, see `template/START-HERE-after-copy.md`.
+For a manual fallback flow (no Node) or the full Day-0 checklist, see `START-HERE-after-copy.md` (installed into the target project root).
 
 Do not ask AI to implement features until the Day 0 checklist is complete enough for the first slice.
 
@@ -289,13 +289,13 @@ Do not push important work through chat alone.
 ## How To Start A New Project
 
 1. Clone this repository.
-2. Run `./install-age.sh /path/to/your-new-project-root "Project Name"` — copies the curated file set listed in `install-age.manifest` (fill-in files from `template/`, shared methodology guides from root), sed-replaces `<project-name>` in fill-in docs, creates the mission-driver shim, `.env`, `missions/base.json`, `missions/demo.json`, `missions/onboarding.json`, `docs/logs/{year}/`, and updates `.gitignore`.
-3. From the target project, run `./tools/mission-driver.sh run demo` (smoke test) then `./tools/mission-driver.sh run onboarding` (AI personalizes the docs by reading your codebase).
-4. Put PM notes, prototype links, card-set docs, article extracts, and external references into `docs/input/`.
+2. Run `./install-age.sh /path/to/your-new-project-root "Project Name"` — copies the curated file set listed in `install-age.manifest` (fill-in files from `template/`, shared methodology guides from root), sed-replaces `<project-name>` in fill-in docs, creates `docs/logs/{year}/`, and updates `.gitignore`. Optional: `--profile frontend|java|all` adds the matching skills shelf; `--with-mission-driver` installs the engine add-on (shim, `.env`, `missions/`, demo/onboarding roadmaps) — not installed by default.
+3. Fill `docs/context/project-context.md` with the project's real verification commands (no verification claim may be made while they are placeholders). With the engine add-on: run `./tools/mission-driver.sh run demo` (smoke test), then `run onboarding` (AI personalizes the docs by reading your codebase).
+4. Put PM notes, prototype links, card-set docs, article extracts, and external references into `docs/input/` (create it when the first material arrives).
 5. If the input is still ambiguous, capture clarification in `docs/discussions/` before implementation.
 6. Convert settled scope into `docs/requirements/` before asking AI to code.
 
-For a manual fallback (no bash), follow the Day-0 checklist in `template/START-HERE-after-copy.md` (shipped into the target's `template/` directory by `install-age.sh`).
+For a manual fallback (no Node), follow the Day-0 checklist in `START-HERE-after-copy.md` (installed into the target project root by `install-age.sh`).
 
 ## What NOT To Copy
 

@@ -130,6 +130,12 @@ assert "doc-organization guide copied" "$COND"
 [ -f "$TARGET/.githooks/pre-commit" ] && COND=1 || COND=0
 assert "consumer pre-commit hook copied" "$COND"
 
+[ -f "$TARGET/START-HERE-after-copy.md" ] && COND=1 || COND=0
+assert "START-HERE-after-copy.md installed at target root" "$COND"
+
+[ -f "$TARGET/docs/bugs/README.md" ] && COND=1 || COND=0
+assert "docs/bugs/README.md copied (default skeleton dir)" "$COND"
+
 [ ! -d "$TARGET/docs/discussions" ] && COND=1 || COND=0
 assert "on-demand dir docs/discussions NOT pre-created" "$COND"
 
@@ -182,6 +188,9 @@ assert "mdh: .env.example copied" "$COND"
 
 [ -f "$TARGET2/.agents/skills/mission-driver/SKILL.md" ] && COND=1 || COND=0
 assert "mdh: mission-driver skill copied" "$COND"
+
+[ -f "$TARGET2/docs/roadmaps/demo-roadmap.md" ] && COND=1 || COND=0
+assert "mdh: demo-roadmap delivered (demo mission roadmapPath resolvable)" "$COND"
 
 rm -rf "$TARGET2"
 
