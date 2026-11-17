@@ -484,7 +484,7 @@ mission 运行期间，状态分散在三类磁盘文件里：
 graph LR
     subgraph 配置["配置(人工/AI 起草, 只读)"]
         MJSON["missions/&lt;name&gt;.json"]
-        RM["docs/backlog/&lt;topic&gt;-roadmap.md"]
+        RM["docs/roadmaps/&lt;topic&gt;-roadmap.md"]
     end
 
     subgraph 工作产物["工作产物(AI 读写)"]
@@ -517,7 +517,7 @@ graph LR
 | `docs/plans/<USER>/*.md` | AI 子进程（DRAFT_PLANS / EXECUTE） | 起草时建、执行时勾 `[x]` | **真正的进度持久化**，恢复靠扫它 |
 | `docs/plans/*.md` 的 `> Plan Status:` | AI 子进程 | 草案审查通过→active；闭包→completed | `activePlans()`/`draftPlans()` 扫它决定 forEach |
 | `docs/audits/*.md` 的 `> Audit Status:` | AI 子进程 | MULTI/OPEN_AUDIT 写 open；起草后改 planned | `openAudits()` 扫它 |
-| `docs/backlog/*-roadmap.md` | AI 子进程（EXECUTE 末尾） | 工作项 done 时 | 全局状态表面 |
+| `docs/roadmaps/*-roadmap.md` | AI 子进程（EXECUTE 末尾） | 工作项 done 时 | 全局状态表面 |
 | `_tmp/<ts>-mission-driver/*.log` | `executor.execute()` | 子进程 stdout/stderr | 排障与抠 marker/sessionId |
 
 **workflow 字段原子写**（`engine.js:130-141`）：用 `tmp` 文件 + `rename` 保证不会写一半崩溃留下损坏的 JSON。
@@ -588,5 +588,5 @@ flowchart LR
 | mission.json 字段语义 | `design/mission-design.md` |
 | 卡住时怎么诊断（进程、日志、socket） | `TROUBLESHOOTING.md` |
 | group step / 表达式引擎细节 | `design/flow-engine-design.md`、`design/group-step-design.md` |
-| roadmap/plan 格式契约 | `docs/backlog/00-roadmap-authoring-guide.md`、`docs/plans/00-plan-authoring-and-execution-guide.md` |
-| 如何用 skill 创建 roadmap 与 mission | `.opencode/skills/mission-driver/SKILL.md` |
+| roadmap/plan 格式契约 | `docs/guides/roadmap-authoring.md`、`docs/guides/plan-authoring-and-execution.md` |
+| 如何用 skill 创建 roadmap 与 mission | `.agents/skills/mission-driver/SKILL.md` |

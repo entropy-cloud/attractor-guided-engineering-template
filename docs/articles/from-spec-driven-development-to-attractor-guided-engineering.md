@@ -37,7 +37,7 @@ Flux/AGE is not centered on spec evolution. It is centered on attractor definiti
 
 ## Real Development History
 
-> The file paths below reference the source project's actual naming convention at the time (`YYYY-MM-DD`). For new projects using this template, use the naming convention in `docs/references/document-naming-and-timeliness.md` (`YYYY-MM-DD-HHmm`).
+> The file paths below reference the source project's actual naming convention at the time (`YYYY-MM-DD`). For new projects using this template, use the naming convention in `docs/guides/doc-organization.md` (`YYYY-MM-DD-HHmm`).
 
 "Architecture docs define the attractor" may sound like ordinary documentation governance at first. But if you look closely at the actual development records under `docs/logs/`, the difference becomes visible.
 

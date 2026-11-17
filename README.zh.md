@@ -25,7 +25,7 @@ AGE 从一个问题开始：
 对于应用项目，吸引子由一组持久的 owner 文件承载：
 
 - `docs/context/` - 强制项目上下文和真相源规则
-- `docs/backlog/` - 优先级候选工作和 AI 就绪的下一步行动
+- `docs/roadmaps/` - 优先级候选工作和 AI 就绪的下一步行动
 - `docs/requirements/` - 实现就绪的需求解释
 - `docs/design/` - 稳定的应用层行为和功能 owner docs
 - `docs/architecture/` - 稳定的技术结构和模块边界
@@ -36,7 +36,7 @@ AGE 从一个问题开始：
 
 `$MISSION_DRIVER_HOME/` 是一个 Flow DSL 引擎，自动化 AGE 开发循环。它读取 `missions/<name>.json`，驱动状态机经过健康检查 → 审查 → 执行 → 草拟 → 深度审计，并为每个 AI 步骤生成 `opencode run`。
 
-**本仓库是引擎的单一来源。** 消费者通过 `MISSION_DRIVER_HOME` 环境变量引用它（`install-age.sh` 自动生成一个 thin `tools/mission-driver.sh` shim）；**不**复制引擎目录。
+**本仓库是引擎的单一来源。** 消费者缺省**不**安装引擎——给 `install-age.sh` 传 `--with-mission-driver` 才会安装 shim、`.env` 和 mission 缺省配置。兄弟仓库相对路径引用是被历史证伪的断链模式；启用 add-on 时推荐 vendor 一份引擎副本（见 `docs/guides/mission-driver-add-on.md`）。
 
 **核心能力：**
 
@@ -47,7 +47,7 @@ AGE 从一个问题开始：
 - **Monitor Dashboard**：Vue 3 前端，含运行历史、日志查看器、资源图表和 SSE 事件流
 - **Onboarding mission**（通过 `install-age.sh` 提供给消费者）：AI 读消费者的 codebase，把复制过来的模板文档（`docs/context/*`、`docs/architecture/*` 等）填为真实内容
 
-**快速开始（在跑过 `install-age.sh` 的目标项目里）：**
+**快速开始（在跑过 `install-age.sh --with-mission-driver` 的目标项目里）：**
 
 ```bash
 # 冒烟测试（秒级）
@@ -70,22 +70,21 @@ AGE 从一个问题开始：
 
 ## 模板包含的内容
 
-- `AGENTS.md` - AI agent 的应用层操作契约
-- `START-HERE-after-copy.md` - 复制模板后的 Day 0 设置清单
-- `docs/index.md` - 文档路由器和目录所有权基线
-- `docs/context/` - 强制 AI 上下文、真相源优先级和项目范围约定
-- `docs/backlog/` - 优先级候选工作、AI 自主标签和可选的路线图层
-- `docs/requirements/` - 精炼的实现就绪需求文件
-- `docs/design/` - 稳定的应用层 owner docs
-- `docs/architecture/` - 跨领域技术基线和模块边界
-- `docs/plans/` - 含关闭规则和技能选择记录的执行计划
-- `docs/audits/` - 审计工作流指导和可选的存储审计记录
-- `docs/skills/` - 可复用提示、审查剧本和审计提示模板
-- `docs/logs/` - 每日开发日志指南
-- `docs/testing/` - 手动和自动测试记录指南
-- `docs/bugs/` - 复杂回归和根因笔记指南
-- `docs/lessons/` - 从重复失败和恢复中提取的持久经验
-- `docs/retrospectives/` - 可选的实现后差距分析和流程改进笔记
+缺省骨架（复制即得）：
+
+- `AGENTS.md` - AI agent 操作契约：文档地图、任务路由、硬规则
+- `docs/index.md` - 文档路由器
+- `docs/context/` - 强制 AI 上下文（project-context、自主策略、codebase-map）
+- `docs/guides/` - 全部 how-to 指南集中地（目录组织、roadmap/计划编写、审计、日志、需求、bug 笔记、审计预防清单……）
+- `docs/roadmaps/` + `docs/plans/<roadmap-slug>/` - 路线图与按路线图隔离的计划目录
+- `docs/requirements/` `docs/design/` `docs/architecture/` - owner docs（建什么 / 行为基线 / 结构基线）
+- `docs/audits/` `docs/analysis/` `docs/lessons/` `docs/bugs/` `docs/logs/` - 时效性记录
+- `docs/skills/common/`（+ `frontend/` / `java/`，经 `--profile`）- 可复用方法/审计提示
+- `.agents/skills/` - 操作型技能：`git`（日常 git 纪律含 worktree 政策）、`grillme`（需求/计划无情质询）
+- `tools/` - 独立的文档卫生检查器（时效性、引用、乱码）
+- `.githooks/pre-commit` - fail-open 的文档卫生门
+
+按需目录（`docs/discussions/`、`docs/input/`、`docs/testing/`、`docs/references/`、`docs/retrospectives/`、`docs/examples/`、`docs/archive/`）有意**不**预创建——创建时机见 `docs/guides/doc-organization.md`。
 
 ## 默认工作流
 
@@ -107,7 +106,7 @@ AGE 从一个问题开始：
 
 - 原始信息进入 `docs/input/`
 - 强制上下文和 owner 优先级进入 `docs/context/`
-- 优先级下一步行动进入 `docs/backlog/`
+- 优先级下一步行动进入 `docs/roadmaps/`
 - 不明确的点进入 `docs/discussions/`
 - 确定的需求进入 `docs/requirements/`
 - 稳定的设计决策进入 `docs/design/` 和 `docs/architecture/`
@@ -118,8 +117,8 @@ AGE 从一个问题开始：
 ## 如何开始新项目
 
 1. Clone 本仓库。
-2. 跑 `./install-age.sh /path/to/your-new-project-root "项目名"` — 按 `install-age.manifest` 复制精选文件集（fill-in 文件从 `template/`，共享方法论指南从根），sed 替换 fill-in 文档里的 `<project-name>`，创建 mission-driver shim、`.env`、`missions/base.json`、`missions/demo.json`、`missions/onboarding.json`、`docs/logs/{year}/`，更新 `.gitignore`。
-3. 在目标项目里，先跑 `./tools/mission-driver.sh run demo`（冒烟），再跑 `./tools/mission-driver.sh run onboarding`（AI 读你的 codebase，个性化文档）。
+2. 跑 `./install-age.sh /path/to/your-new-project-root "项目名"` — 按 `install-age.manifest` 复制精选文件集（fill-in 文件从 `template/`，共享方法论指南从根），sed 替换 fill-in 文档里的 `<project-name>`，创建 `docs/logs/{year}/`，更新 `.gitignore`。可选：`--profile frontend|java|all` 追加对应技能货架；`--with-mission-driver` 启用引擎 add-on（缺省不装）。
+3. 填 `docs/context/project-context.md` 的真实验证命令（占位期间不得声称任何验证通过）；启用引擎 add-on 的项目可先跑 `./tools/mission-driver.sh run demo`（冒烟），再跑 `run onboarding`（AI 读你的 codebase，个性化文档）。
 4. 将 PM 笔记、原型链接、卡片文档、文章摘录和外部引用放入 `docs/input/`。
 5. 如果输入仍不明确，在实现前在 `docs/discussions/` 中捕获澄清。
 6. 在要求 AI 编码之前，将确定的范围转换为 `docs/requirements/`。

@@ -112,7 +112,7 @@ Example update:
 
 Target file:
 
-- `docs/backlog/README.md`
+- `docs/roadmaps/README.md`
 
 Example row:
 

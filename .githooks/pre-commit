@@ -13,11 +13,15 @@
 #              legacy-plan-freeze face fails closed on the no-actor structural
 #              face by design (M2-WI22) and the human git-commit channel is a
 #              documented legal surface (02 §2 A1).
-#   roadmaps — staged docs/backlog/*.md: roadmap-check.mjs field-set face
+#   roadmaps — staged docs/roadmaps/*.md: roadmap-check.mjs field-set face
 #              (M2-WI42 CLI), exit 0 required.
 #   missions — staged missions/*.json: mission-check.mjs. Base configs without
 #              a roadmapPath key are skipped with a note (shared defaults, not
 #              missions — monitor.js GET /api/configs filter precedent).
+#   hygiene  — normative-doc timeliness face: tools/check-doc-timeliness.mjs
+#              over docs/{architecture,design,context,requirements,guides,skills}
+#              + AGENTS.md — rejects changelog headings, dated headings, and
+#              dated bullets in normative docs (v2 normative/timeliness law).
 #
 # Fail-open discipline (02 §6): no missions/ directory or policy/mission
 # context (template consumer / never-ran projects) → skip the section with a
@@ -25,7 +29,8 @@
 # not be more fragile than the repo's existing toolchain).
 #
 # Real-project file — NOT part of the install-age.sh template manifest
-# (template consumers have no plugin/nop-age and no gate-check executable face).
+# (template consumers have no plugin/nop-age and no gate-check executable face;
+# the consumer variant ships via template/install/githooks/pre-commit).
 
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
@@ -63,7 +68,7 @@ done <<< "$staged"
 # ---- section: roadmaps (field-set validation) ------------------------------
 while IFS= read -r f; do
   case "$f" in
-    docs/backlog/*.md) ;;
+    docs/roadmaps/*.md) ;;
     *) continue ;;
   esac
   [ -f "$f" ] || continue
@@ -100,6 +105,17 @@ else
       break
     fi
   done <<< "$staged"
+fi
+
+# ---- section: hygiene (normative-doc timeliness, v2) -----------------------
+if [ -f tools/check-doc-timeliness.mjs ]; then
+  if out=$(node tools/check-doc-timeliness.mjs 2>&1); then
+    echo "[pre-commit][hygiene] ok: normative docs carry no history"
+  else
+    echo "[pre-commit][hygiene] DENY:"
+    printf '%s\n' "$out" | head -20
+    fail=1
+  fi
 fi
 
 exit "$fail"

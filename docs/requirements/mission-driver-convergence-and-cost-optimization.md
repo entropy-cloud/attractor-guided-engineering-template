@@ -21,7 +21,7 @@
 
 ## 一、上一次运行的事实（证据）
 
-启动时 `docs/backlog/mission-driver-draft-robustness-roadmap.md` 的 5 个 work item（WI1–WI5）**已全部 `done`**。因此第一轮 `DRAFT_PLANS` 立即返回 `nothing`，整段 5h38m 本质是**在一个已完成目标上做自我审计-修复**。
+启动时 `docs/roadmaps/mission-driver-draft-robustness-roadmap.md` 的 5 个 work item（WI1–WI5）**已全部 `done`**。因此第一轮 `DRAFT_PLANS` 立即返回 `nothing`，整段 5h38m 本质是**在一个已完成目标上做自我审计-修复**。
 
 ### 时间分布（`run-state.json` 各步 `durationMs`）
 

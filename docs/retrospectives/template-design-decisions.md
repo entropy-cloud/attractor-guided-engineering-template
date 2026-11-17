@@ -29,15 +29,15 @@ The template was used for 30 days by a real project (19 business domains, 634+ c
 
 Added 11 net-new changes to the template (1 already existed):
 
-1. **Development Wisdom Gate** (`docs/skills/development-wisdom-gate-prompt.md`) — a 6-dimension AI self-check gate (Assumption Surfacing, Completeness Depth Charge, Cross-Layer Consistency, Intent Fidelity, Ecosystem Constraints, First-Principles Verification) to be run before declaring completion, embedding the human's "self-doubt" pattern directly into the development flow.
+1. **Development Wisdom Gate** (`docs/skills/common/development-wisdom-gate-prompt.md`) — a 6-dimension AI self-check gate (Assumption Surfacing, Completeness Depth Charge, Cross-Layer Consistency, Intent Fidelity, Ecosystem Constraints, First-Principles Verification) to be run before declaring completion, embedding the human's "self-doubt" pattern directly into the development flow.
 2. **Generated code warning** (`START-HERE-after-copy.md`) — a bold warning in the startup checklist: never edit generated files, write custom logic in hand-written layers through the framework's extension mechanism.
-3. **Status/checkbox consistency rule** (`docs/plans/00-plan-authoring-and-execution-guide.md`) — new Rule 12 requiring `Status: completed` to have all checkboxes ticked, with a `grep` verification command to detect mismatches.
+3. **Status/checkbox consistency rule** (`docs/guides/plan-authoring-and-execution.md`) — new Rule 12 requiring `Status: completed` to have all checkboxes ticked, with a `grep` verification command to detect mismatches.
 4. **Log-first debugging protocol** (`docs/references/playwright-e2e-guide.md`) — diagnostic rules: check server log before adjusting timeouts, use fresh instance + isolated data source, health polling until HTTP 200, minimum reproduction before full suite, reverse log reading from tail.
 5. **Project Customization Layer** (`docs/skills/README.md`) — structured customization fields (protected areas, known failure modes, verification commands, naming conventions, context constraints) that each skill must include to carry project-specific memory.
 6. **Skill dual-track model** (`docs/skills/README.md`) — expanded "Relationship With Tool-Native Skills" with a Which- goes-where table clarifying when content belongs in `docs/skills/` vs. tool-native skill directories.
 7. **Module registration checklist** (`START-HERE-after-copy.md`) — pre-built checklist for adding new modules (root build file, aggregator dependency, route/menu registration, data model merge point).
-8. **Multi-roadmap pattern** (`docs/backlog/00-roadmap-authoring-guide.md`) — guide for creating multiple orthogonal roadmaps when a project has independent dimensions (e.g. core logic vs. frontend UI vs. integrations), with scope entirely user-defined.
-9. **Cross-reference renumbering scan** (`docs/references/maintenance-checklist.md`) — mandatory `grep -rn "§<old-number>"` check before committing after document section renumbering.
+8. **Multi-roadmap pattern** (`docs/roadmaps/00-roadmap-authoring-guide.md`) — guide for creating multiple orthogonal roadmaps when a project has independent dimensions (e.g. core logic vs. frontend UI vs. integrations), with scope entirely user-defined.
+9. **Cross-reference renumbering scan** (`docs/guides/maintenance-checklist.md`) — mandatory `grep -rn "§<old-number>"` check before committing after document section renumbering.
 10. **Scoped≠full verification gate** — added to three places: closure audit prompt (check item), plan closing guide (step 6), and plan template (Closure Gates checkbox). Partial verification must be explicitly noted as scope-limited.
 11. **Port conflict repetition note** (`docs/references/playwright-e2e-guide.md`) — guidance to record the fix in a shared reference on first encounter instead of rediscovering across plans.
 12. **Known-good baseline exercise** — already existed in `START-HERE-after-copy.md` ("Add the first known-good verification row").
@@ -115,7 +115,7 @@ Wiring an automated development loop (the `goal-driver` in `nop-chaos-flux`) ont
 
 - Removed the Active Work block from `docs/context/project-context.md`. Freshness gating rules moved under Project Identity. AI autonomy is no longer a global field here — it is a per-work-item label living on backlog/roadmap items, with `implement` as the default set in `ai-autonomy-policy.md`. "What is being worked on now" is read from unfinished plans in `docs/plans/`, not maintained as a field here.
 - Updated `START-HERE-after-copy.md`, `docs/context/ai-autonomy-policy.md`, and `AGENTS.md` to drop references to the removed fields; the old "active requirement is none" gate became "no requirement or owner doc describes the intended behavior" (existence-checked against `docs/requirements/` / `docs/design/`, not a field value).
-- Added three sections to `docs/backlog/00-roadmap-authoring-guide.md`: **Roadmap Role** (human–AI alignment + AI work queue; plans are AI-authored/executed and humans do not review individual plans), **Phase Granularity** (the markable unit must equal one plan's delivery scope; a phase larger than a plan stalls the loop), and **Closed Loop** (read Phase Status → take first `todo` → draft/execute plan → write back `done` → next). Added four anti-patterns (phasing coarser than a plan, a second per-item status column, AI re-arbitrating priority, Active Work fields in `project-context.md`).
+- Added three sections to `docs/roadmaps/00-roadmap-authoring-guide.md`: **Roadmap Role** (human–AI alignment + AI work queue; plans are AI-authored/executed and humans do not review individual plans), **Phase Granularity** (the markable unit must equal one plan's delivery scope; a phase larger than a plan stalls the loop), and **Closed Loop** (read Phase Status → take first `todo` → draft/execute plan → write back `done` → next). Added four anti-patterns (phasing coarser than a plan, a second per-item status column, AI re-arbitrating priority, Active Work fields in `project-context.md`).
 - Annotated the `implementation-roadmap.md` skeleton's Phase Status block with the alignment/loop summary.
 
 ### Rationale
@@ -159,8 +159,8 @@ The skill set covered document, plan, closure, code, and refactor audits, but la
 
 ### Decision
 
-- Added `docs/skills/state-machine-business-review-prompt.md`
-- Added `docs/skills/design-doc-audit-prompt.md`
+- Added `docs/skills/common/state-machine-business-review-prompt.md`
+- Added `docs/skills/common/design-doc-audit-prompt.md`
 - Registered both in `docs/skills/README.md`
 
 ### Rationale
@@ -181,8 +181,8 @@ The backlog was a flat work-item table. For larger projects this could not expre
 
 ### Decision
 
-- Added `docs/backlog/00-roadmap-authoring-guide.md`
-- Added `docs/backlog/implementation-roadmap.md` as a placeholder skeleton
+- Added `docs/roadmaps/00-roadmap-authoring-guide.md`
+- Added `docs/roadmaps/implementation-roadmap.md` as a placeholder skeleton
 - Made the roadmap explicitly optional, with status transitions tied to the plan lifecycle (draft review -> `active`, closure audit -> `done`)
 
 ### Rationale
@@ -228,7 +228,7 @@ The archive rule only said files keep their original relative name, with no pred
 
 ### Decision
 
-- Added an Archive Organization section to `docs/references/document-naming-and-timeliness.md` (design/architecture by module or topic, plans under `YYYY-MM/`, other dated records by original relative path).
+- Added an Archive Organization section to `docs/guides/doc-organization.md` (design/architecture by module or topic, plans under `YYYY-MM/`, other dated records by original relative path).
 - Added an Isolating The E2E Runtime section to `docs/references/playwright-e2e-guide.md`: isolated data source/port/profile, a `SKIP_WEBSERVER` mode for running against an already-running server, and a no-output troubleshooting checklist.
 
 ### Rationale
@@ -251,7 +251,7 @@ The template had already introduced independent draft review and closure audit, 
 
 - Kept `Draft Review Record` in plans, but changed it to a lightweight iteration record instead of a formal `Plan Audit` block
 - Updated the plan guide so created plans normally start as `Plan Status: draft`, move to `active` only after independent draft review converges, and close only after independent closure audit
-- Slimmed `AGENTS.md` so it points plan work to `docs/plans/00-plan-authoring-and-execution-guide.md` instead of repeating most plan-state details
+- Slimmed `AGENTS.md` so it points plan work to `docs/guides/plan-authoring-and-execution.md` instead of repeating most plan-state details
 - Updated examples to show `draft` plus iteration-style `Draft Review Record`
 
 ### Rationale
@@ -274,7 +274,7 @@ The template had `docs/logs/` and `00-log-writing-guide.md`, but AGENTS.md only 
 
 - Updated AGENTS.md Operating Rule 7: added mandatory trigger "After completing any significant code change, you MUST update the daily dev log"
 - Added `Docs Maintenance` section to AGENTS.md with two mandatory items (log update + owner doc update) and a full-green baseline recording rule
-- Expanded `docs/logs/00-log-writing-guide.md` from a 19-line skeleton to a full guide with Purpose, Rules (6 items), Path Convention, Entry Format example, and step-by-step Adding A New Entry instructions
+- Expanded `docs/guides/log-writing.md` from a 19-line skeleton to a full guide with Purpose, Rules (6 items), Path Convention, Entry Format example, and step-by-step Adding A New Entry instructions
 - Added log directory initialization step to `START-HERE-after-copy.md` Required checklist
 
 ### Rationale
@@ -295,10 +295,10 @@ The template now includes a broader reusable engineering surface: bug diagnosis,
 
 ### Decision
 
-- Added `docs/skills/bug-diagnosis-prompt.md`
-- Added `docs/skills/code-quality-audit-prompt.md`
-- Added `docs/skills/code-refactor-discovery-prompt.md`
-- Added `docs/skills/code-refactor-prompt.md`
+- Added `docs/skills/common/bug-diagnosis-prompt.md`
+- Added `docs/skills/common/code-quality-audit-prompt.md`
+- Added `docs/skills/common/code-refactor-discovery-prompt.md`
+- Added `docs/skills/common/code-refactor-prompt.md`
 - Updated `docs/skills/README.md`
 - Added `.editorconfig`, `.gitattributes`, and `.gitignore`
 - Added `tools/` as an optional pnpm subproject for reusable repository-local utilities
@@ -321,7 +321,7 @@ Existing audit skills cover document quality and plan/decision auditing, but non
 
 ### Decision
 
-- Added `docs/skills/index-routing-audit-prompt.md`
+- Added `docs/skills/common/index-routing-audit-prompt.md`
 
 ### Rationale
 

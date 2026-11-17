@@ -78,7 +78,7 @@ Protected-area rule meanings:
 
 ## Backlog Selection Rule
 
-If the user asks AI to continue work without naming a task, choose the highest-priority item in `docs/backlog/README.md` whose autonomy is `implement` and whose blockers are `none`.
+If the user asks AI to continue work without naming a task, choose the highest-priority item in `docs/roadmaps/README.md` whose autonomy is `implement` and whose blockers are `none`.
 
 Before implementing the selected item, re-check planning triggers. `Plan: none` does not waive the plan guide.
 

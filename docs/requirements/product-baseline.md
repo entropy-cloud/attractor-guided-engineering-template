@@ -38,4 +38,4 @@ This first loop is not a disposable prototype. Unsupported capabilities remain p
 
 This file owns the implementation-ready product baseline and first complete loop.
 
-Do not duplicate long-term vision from `docs/architecture/project-vision.md` or stable app behavior from `docs/design/app-overview.md`. Put implementation sequencing into `docs/backlog/` or a roadmap, not into every design doc.
+Do not duplicate long-term vision from `docs/architecture/project-vision.md` or stable app behavior from `docs/design/app-overview.md`. Put implementation sequencing into `docs/roadmaps/` or a roadmap, not into every design doc.

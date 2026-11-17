@@ -110,7 +110,7 @@ With a requirements doc in hand, generate the mission's two core configs.
 ```
 
 The `draft` command:
-1. Runs a brief agent that asks scope questions and emits a short brief (`docs/backlog/<slug>-brief.md`).
+1. Runs a brief agent that asks scope questions and emits a short brief (`docs/roadmaps/<slug>-brief.md`).
 2. Runs a draft agent that generates mission.json + a Roadmap doc.
 
 `--target-file` is an optional input aid — the description may reference any path (a single file, a directory, multiple files, or an abstract goal); `--target-file` just points the brief agent at one file or directory to ground the brief. `--flow-hint` names the flow:
@@ -135,7 +135,7 @@ See `$MISSION_DRIVER_HOME/mission.json.example`. A minimal viable mission.json:
   "name": "my-mission",
   "description": "One sentence describing what this mission does",
   "flowName": "mission-driver",
-  "roadmapPath": "docs/backlog/my-mission-roadmap.md",
+  "roadmapPath": "docs/roadmaps/my-mission-roadmap.md",
   "plansDir": "docs/plans/my-mission",
   "commands": {
     "test": "pnpm test",
@@ -272,7 +272,7 @@ OPENCODE_PURE=1                 # run opencode with --pure (skip external plugin
 ```
 
 Two stages:
-1. **Brief stage**: produces a scope-gate brief (written to `docs/backlog/<slug>-brief.md`) — a brief agent judges whether the scope is clear.
+1. **Brief stage**: produces a scope-gate brief (written to `docs/roadmaps/<slug>-brief.md`) — a brief agent judges whether the scope is clear.
 2. **Draft stage**: based on the brief, generates mission.json + a Roadmap.
 
 Flags: `--target-file <path>` (optional input aid — point at a target file or directory; the description may reference any path), `--flow-hint <name>` (name the flow), `--skip-brief` (skip the brief stage; collapse to single-stage draft).
@@ -424,7 +424,7 @@ You can tune this. Audit-heavy work: raise it (5-10). Fast iteration: lower it (
   "name": "my-mission",                     // mission name (unique)
   "description": "One sentence.",           // shown to the agent as the mission's purpose
   "flowName": "mission-driver",             // which flow to use (default: mission-driver)
-  "roadmapPath": "docs/backlog/roadmap.md", // roadmap doc path
+  "roadmapPath": "docs/roadmaps/roadmap.md", // roadmap doc path
   "plansDir": "docs/plans/my-mission",      // where plan files live
   "planGuide": "docs/plans/00-plan-...md",  // plan-authoring guide (agent consults this when drafting)
   "auditsDir": "docs/audits/my-mission",    // where audit reports go
@@ -438,8 +438,8 @@ You can tune this. Audit-heavy work: raise it (5-10). Fast iteration: lower it (
     "check": ""                             // optional deterministic-state gate for CHECK; empty/omitted = git conflict-marker fallback
   },
   "prompts": {                              // audit prompt templates
-    "multiAudit": "docs/skills/multi-dimensional-audit-prompt.md",
-    "openAudit": "docs/skills/open-ended-audit-prompt.md"
+    "multiAudit": "docs/skills/common/multi-dimensional-audit-prompt.md",
+    "openAudit": "docs/skills/common/open-ended-audit-prompt.md"
   },
   "commitFormat": "feat(<scope>): <desc>"   // commit message format
 }
@@ -515,11 +515,11 @@ Requirements doc: `docs/design/feature-fsd.md` (an FSD).
 
 ### 7.3 Tech-debt cleanup mission
 
-Requirements doc: `docs/backlog/tech-debt-2026-q3.md` (a checklist).
+Requirements doc: `docs/roadmaps/tech-debt-2026-q3.md` (a checklist).
 
 ```bash
 ./tools/mission-driver.sh draft "Clean up Q3 tech-debt list" \
-  --target-file docs/backlog/tech-debt-2026-q3.md
+  --target-file docs/roadmaps/tech-debt-2026-q3.md
 ```
 
 ### 7.4 Audit-only (no execution)

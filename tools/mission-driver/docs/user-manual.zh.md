@@ -208,7 +208,7 @@ echo ".env" >> .gitignore   # 若尚未忽略
   "model": "zhipuai-coding-plan/glm-5.2",
   "agent": "build",
   "maxCycles": 8,
-  "planGuide": "docs/plans/00-plan-authoring-and-execution-guide.md",
+  "planGuide": "docs/guides/plan-authoring-and-execution.md",
   "auditsDir": "docs/audits",
   "contextDir": "docs/context",
   "moduleDir": "CORE",
@@ -318,7 +318,7 @@ mission-driver 不接受口头需求。你必须先有一份**结构化的需求
 ```
 
 `draft` 命令会：
-1. 跑一个 brief agent，问清范围、生成简短的 brief 文档（`docs/backlog/<slug>-brief.md`）
+1. 跑一个 brief agent，问清范围、生成简短的 brief 文档（`docs/roadmaps/<slug>-brief.md`）
 2. 跑一个 draft agent，生成 mission.json + Roadmap 文档
 
 `--target-file` 是可选输入辅助——description 可引用任意路径（单个文件、目录、多个文件或抽象目标），`--target-file` 只是把某个文件/目录喂给 brief agent 锚定范围；`--flow-hint` 指定 flow 类型：
@@ -343,7 +343,7 @@ description 也可以直接引用目录或多个文件，不传 `--target-file`�
   "name": "my-mission",
   "description": "一句话描述这个 mission 干什么",
   "flowName": "mission-driver",
-  "roadmapPath": "docs/backlog/my-mission-roadmap.md",
+  "roadmapPath": "docs/roadmaps/my-mission-roadmap.md",
   "plansDir": "docs/plans/my-mission",
   "commands": {
     "test": "pnpm test",
@@ -480,7 +480,7 @@ OPENCODE_PURE=1                 # opencode 以 --pure 模式运行（跳过外�
 ```
 
 两阶段：
-1. **brief 阶段**：生成 scope-gate brief（写到 `docs/backlog/<slug>-brief.md`），让 brief agent 判断范围是否清晰
+1. **brief 阶段**：生成 scope-gate brief（写到 `docs/roadmaps/<slug>-brief.md`），让 brief agent 判断范围是否清晰
 2. **draft 阶段**：基于 brief 生成 mission.json + Roadmap
 
 flag：`--target-file <path>`（可选输入辅助——指向目标文件/目录；description 可引用任意路径）、`--flow-hint <name>`（指定 flow）、`--skip-brief`（跳过 brief 阶段、退化成单阶段 draft）。
@@ -632,7 +632,7 @@ CHECK_OPEN_AUDITS → MULTI_AUDIT → OPEN_AUDIT → SCAN_NEW_RESULTS
   "name": "my-mission",                    // mission 名称（唯一）
   "description": "一段话描述",              // 给 agent 看的使命说明
   "flowName": "mission-driver",            // 用哪个 flow（默认 mission-driver）
-  "roadmapPath": "docs/backlog/roadmap.md",// roadmap 文档路径
+  "roadmapPath": "docs/roadmaps/roadmap.md",// roadmap 文档路径
   "plansDir": "docs/plans/my-mission",     // plan 文件存放目录
   "planGuide": "docs/plans/00-plan-...md", // plan 编写指南（agent 起草 plan 时参考）
   "auditsDir": "docs/audits/my-mission",   // 审计报告存放目录
@@ -646,8 +646,8 @@ CHECK_OPEN_AUDITS → MULTI_AUDIT → OPEN_AUDIT → SCAN_NEW_RESULTS
     "check": ""                             // 可选：CHECK 的确定性状态门；留空/省略 = git 冲突标记兜底
   },
   "prompts": {                             // 审计 prompt 模板路径
-    "multiAudit": "docs/skills/multi-dimensional-audit-prompt.md",
-    "openAudit": "docs/skills/open-ended-audit-prompt.md"
+    "multiAudit": "docs/skills/common/multi-dimensional-audit-prompt.md",
+    "openAudit": "docs/skills/common/open-ended-audit-prompt.md"
   },
   "commitFormat": "feat(<scope>): <desc>"  // commit message 格式
 }
@@ -723,11 +723,11 @@ mission.json 里 `"flowName": "my-flow"` 引用即可。
 
 ### 7.3 Tech debt 清理 mission
 
-需求文档：`docs/backlog/tech-debt-2026-q3.md`（一个清单）。
+需求文档：`docs/roadmaps/tech-debt-2026-q3.md`（一个清单）。
 
 ```bash
 ./tools/mission-driver.sh draft "清理 Q3 tech debt 清单" \
-  --target-file docs/backlog/tech-debt-2026-q3.md
+  --target-file docs/roadmaps/tech-debt-2026-q3.md
 ```
 
 ### 7.4 只想审计、不想执行（dry-run audit）

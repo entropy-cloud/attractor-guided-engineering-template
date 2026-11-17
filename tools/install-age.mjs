@@ -153,10 +153,11 @@ export function ensureGitignoreEntry(gitignorePath, entry) {
 
 /**
  * Run the full AGE scaffold installation.
- * @param {{target: string, projectName: string}} opts
+ * @param {{target: string, projectName: string, withPi?: boolean,
+ *          withMissionDriver?: boolean, profile?: string}} opts
  */
 export async function installAge(opts) {
-  const { target, projectName, withPi = false } = opts;
+  const { target, projectName, withPi = false, withMissionDriver = false, profile = "none" } = opts;
   const templateRoot = resolve(__dirname, "..");
   const manifestPath = join(templateRoot, "install-age.manifest");
   const mdhAbs = join(templateRoot, "tools", "mission-driver");
@@ -168,7 +169,12 @@ export async function installAge(opts) {
 
   console.log("Target:             ", target);
   console.log("Project name:       ", projectName);
-  console.log("Mission-driver home:", relMdh, "(relative from target)");
+  if (withMissionDriver) {
+    console.log("Mission-driver home:", relMdh, "(relative from target)");
+  } else {
+    console.log("Engine add-on:      not installed (pass --with-mission-driver to enable)");
+  }
+  if (profile !== "none") console.log("Skills profile:     ", profile);
   console.log("");
 
   // Pre-flight
@@ -176,7 +182,7 @@ export async function installAge(opts) {
     console.error("ERROR: manifest not found:", manifestPath);
     process.exit(1);
   }
-  if (!existsSync(join(mdhAbs, "src", "main.js"))) {
+  if (withMissionDriver && !existsSync(join(mdhAbs, "src", "main.js"))) {
     console.error("ERROR: mission-driver engine not found at:", join(mdhAbs, "src", "main.js"));
     console.error("       Run this script from inside the attractor-guided-engineering-template repo.");
     process.exit(1);
@@ -199,6 +205,16 @@ export async function installAge(opts) {
     }
     // pi-only entries (.pi/skills native copy) are skipped unless --pi is passed.
     if (entry.flags.includes("pi-only") && !withPi) continue;
+    // mdh-only entries (engine bootstrap) are skipped unless --with-mission-driver.
+    if (entry.flags.includes("mdh-only") && !withMissionDriver) continue;
+    // profile-<shelf> entries copy only for the matching --profile (or --profile all).
+    if (
+      entry.flags.some((f) => f.startsWith("profile-")) &&
+      profile !== "all" &&
+      !entry.flags.includes(`profile-${profile}`)
+    ) {
+      continue;
+    }
 
     if (existsSync(dst)) {
       skipped.push(entry.dst);
@@ -227,25 +243,33 @@ export async function installAge(opts) {
 
   console.log(`      copied ${copied.length} files, skipped ${skipped.length} existing.`);
 
-  // --- 2. Create .env ---
-  console.log("[2/6] Ensuring .env...");
-  const envPath = join(target, ".env");
-  if (!existsSync(envPath)) {
-    writeFileSync(envPath, `MISSION_DRIVER_HOME=${relMdh}\n`, "utf8");
-    console.log("      created.");
-  } else {
-    const envContent = readFileSync(envPath, "utf8");
-    if (!/^MISSION_DRIVER_HOME=/m.test(envContent)) {
-      appendFileSync(envPath, `MISSION_DRIVER_HOME=${relMdh}\n`, "utf8");
+  // --- 2. Create .env (engine add-on only) ---
+  if (withMissionDriver) {
+    console.log("[2/6] Ensuring .env...");
+    const envPath = join(target, ".env");
+    if (!existsSync(envPath)) {
+      writeFileSync(envPath, `MISSION_DRIVER_HOME=${relMdh}\n`, "utf8");
+      console.log("      created.");
+    } else {
+      const envContent = readFileSync(envPath, "utf8");
+      if (!/^MISSION_DRIVER_HOME=/m.test(envContent)) {
+        appendFileSync(envPath, `MISSION_DRIVER_HOME=${relMdh}\n`, "utf8");
+      }
+      console.log("      .env exists (MISSION_DRIVER_HOME ensured).");
     }
-    console.log("      .env exists (MISSION_DRIVER_HOME ensured).");
+  } else {
+    console.log("[2/6] .env skipped (engine add-on not installed).");
   }
 
-  // --- 3. Create plan directories ---
-  console.log("[3/6] Creating plan directories...");
-  mkdirSync(join(target, "docs", "plans", "demo"), { recursive: true });
-  mkdirSync(join(target, "docs", "plans", "onboarding"), { recursive: true });
-  console.log("      done.");
+  // --- 3. Create plan directories (engine add-on only) ---
+  if (withMissionDriver) {
+    console.log("[3/6] Creating plan directories...");
+    mkdirSync(join(target, "docs", "plans", "demo"), { recursive: true });
+    mkdirSync(join(target, "docs", "plans", "onboarding"), { recursive: true });
+    console.log("      done.");
+  } else {
+    console.log("[3/6] Plan dirs skipped (create docs/plans/<roadmap-slug>/ with your first roadmap).");
+  }
 
   // --- 4. Create docs/logs/{year}/ ---
   console.log(`[4/6] Creating docs/logs/${year}/...`);
@@ -275,24 +299,34 @@ export async function installAge(opts) {
   console.log("==============================================");
   console.log("");
   console.log("Also created (runtime):");
-  console.log(`  - .env                               (MISSION_DRIVER_HOME=${relMdh})`);
-  console.log("  - docs/plans/demo/                    (empty — engine scans at runtime)");
-  console.log("  - docs/plans/onboarding/              (empty — engine scans at runtime)");
+  if (withMissionDriver) {
+    console.log(`  - .env                               (MISSION_DRIVER_HOME=${relMdh})`);
+    console.log("  - docs/plans/demo/, docs/plans/onboarding/ (empty — engine scans at runtime)");
+  }
   console.log(`  - docs/logs/${year}/                    (daily log dir)`);
   console.log("");
-  console.log(`Manifest-copied scaffold: ${copied.length} files (incl. tools/mission-driver.sh shim, .env.example,`);
-  console.log("  missions/{base,demo,onboarding}.json, demo-roadmap.md + all docs/ methodology files).");
+  if (withMissionDriver) {
+    console.log(`Manifest-copied scaffold: ${copied.length} files (incl. engine shim, .env.example,`);
+    console.log("  missions/{base,demo,onboarding}.json + all docs/ methodology files).");
+  } else {
+    console.log(`Manifest-copied scaffold: ${copied.length} files (docs skeleton, guides, skills,`);
+    console.log("  .agents/skills, doc-hygiene tools — engine NOT included by default).");
+  }
   console.log("");
   console.log("NEXT STEPS:");
-  console.log("  1. (smoke) ./tools/mission-driver.sh run demo");
-  console.log("  2. (personalize) ./tools/mission-driver.sh run onboarding");
-  console.log("  3. (optional) Fill docs/context/project-context.md verification commands.");
-  console.log("  4. (optional) Fill missions/base.json commands.* for YOUR stack.");
-  console.log("  5. (manual fallback) Read template/START-HERE-after-copy.md");
-  console.log("  6. Verify: ./tools/mission-driver.sh list");
-  if (withPi) {
-    console.log("  7. (pi driver) trust the project in pi, then:");
-    console.log("     MISSION_DRIVER_EXEC=pi OPENCODE_MODEL=<pi-model-id> ./tools/mission-driver.sh run demo");
+  console.log("  1. (required) Fill docs/context/project-context.md verification commands.");
+  console.log("  2. (required) Read docs/guides/doc-organization.md — directory map and naming.");
+  console.log("  3. (hook)    git config core.hooksPath .githooks");
+  console.log("  4. (skills)  Prune docs/skills/ shelves; customize prompt customization layers.");
+  if (withMissionDriver) {
+    console.log("  5. (smoke)   ./tools/mission-driver.sh run demo");
+    console.log("  6.           Fill missions/base.json commands.* for YOUR stack.");
+    if (withPi) {
+      console.log("  7. (pi driver) trust the project in pi, then:");
+      console.log("     MISSION_DRIVER_EXEC=pi OPENCODE_MODEL=<pi-model-id> ./tools/mission-driver.sh run demo");
+    }
+  } else {
+    console.log("  5. (optional engine) See docs/guides/mission-driver-add-on.md");
   }
 }
 
@@ -301,16 +335,28 @@ export async function installAge(opts) {
 // ---------------------------------------------------------------------------
 
 async function main() {
-  // Parse argv: positional (target, projectName) + flags (--pi, ...). Flags
-  // may appear anywhere after the script name, so scan rather than index fixed
-  // positions (supports both `/p "Name" --pi` and `--pi /p "Name"`).
+  // Parse argv: positional (target, projectName) + flags (--pi,
+  // --with-mission-driver, --profile <shelf|all>). Flags may appear anywhere
+  // after the script name, so scan rather than index fixed positions.
   const flags = new Set();
   const positional = [];
-  for (const a of process.argv.slice(2)) {
-    if (a.startsWith("--")) flags.add(a.slice(2));
-    else positional.push(a);
+  let profile = "none";
+  const argv = process.argv.slice(2);
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--profile") {
+      profile = argv[i + 1] || "none";
+      i++;
+    } else if (a.startsWith("--profile=")) {
+      profile = a.slice("--profile=".length);
+    } else if (a.startsWith("--")) {
+      flags.add(a.slice(2));
+    } else {
+      positional.push(a);
+    }
   }
   const withPi = flags.has("pi");
+  const withMissionDriver = flags.has("with-mission-driver");
 
   let targetRaw, projectName;
 
@@ -333,7 +379,7 @@ async function main() {
     process.exit(1);
   }
 
-  await installAge({ target, projectName, withPi });
+  await installAge({ target, projectName, withPi, withMissionDriver, profile });
 }
 
 // Run only when invoked directly (not when imported by tests).

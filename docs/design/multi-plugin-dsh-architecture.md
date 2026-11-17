@@ -1,6 +1,6 @@
 # Multi-Plugin DSH Architecture (nop-* Plugin Family)
 
-> **Status: AUDITED (2026-08-28) — DELIVERED (2026-08-28, all five milestones closed)** — design doc authored 2026-08-27 as the planning anchor for the multi-plugin refactor; doc-audited 2026-08-28 against the live baseline, five deviations dispositioned (plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-1-m1-wi1-wi2-design-doc-audit-consistency.md` — M1-WI1). The technical roadmap lives in `docs/backlog/multi-plugin-dsh-roadmap.md`; concrete execution plans under `docs/plans/multi-plugin-dsh/` convert each work item into one deliverable. Landed: M1 (doc audit), M2 (`plugin/dsh/` → `plugin/nop-age/` migration, plan `2026-08-28-0149-2`), M3 (`plugin-manifest.yml` + `load-plugins.sh` + dual-layer verification, plan `2026-08-28-0149-3`), M4 (nop-route bundle + e2e, plans `2026-08-28-1312-1/-2/-3`), M5 (joint-mount verification WI17 plan `2026-08-28-1540-1` + full-gate closure & owner-docs final rewrite WI18 plan `2026-08-28-1540-2`). Success Criteria reconciliation at closure: §Success Criteria → Reconciliation below.
+> **Status: AUDITED (2026-08-28) — DELIVERED (2026-08-28, all five milestones closed)** — design doc authored 2026-08-27 as the planning anchor for the multi-plugin refactor; doc-audited 2026-08-28 against the live baseline, five deviations dispositioned (plan `docs/plans/multi-plugin-dsh/2026-08-28-0149-1-m1-wi1-wi2-design-doc-audit-consistency.md` — M1-WI1). The technical roadmap lives in `docs/roadmaps/multi-plugin-dsh-roadmap.md`; concrete execution plans under `docs/plans/multi-plugin-dsh/` convert each work item into one deliverable. Landed: M1 (doc audit), M2 (`plugin/dsh/` → `plugin/nop-age/` migration, plan `2026-08-28-0149-2`), M3 (`plugin-manifest.yml` + `load-plugins.sh` + dual-layer verification, plan `2026-08-28-0149-3`), M4 (nop-route bundle + e2e, plans `2026-08-28-1312-1/-2/-3`), M5 (joint-mount verification WI17 plan `2026-08-28-1540-1` + full-gate closure & owner-docs final rewrite WI18 plan `2026-08-28-1540-2`). Success Criteria reconciliation at closure: §Success Criteria → Reconciliation below.
 
 ## Purpose
 
@@ -31,7 +31,7 @@ The pattern is the same across the host: each bundle declares its own isolate re
 - Provide `plugin/load-plugins.sh` — a POSIX shell script that, given a profile name and a manifest file, mounts every declared plugin into the profile and starts the DSH web host. Idempotent re-mount. Failure of one plugin does not abort the script unless explicitly requested.
 - Provide `plugin/plugin-manifest.yml` — the source of truth listing every plugin to mount, its local path, its realm key, its service name, and any per-plugin config.
 - Provide `plugin/nop-age/preset/age/` (moved from `plugin/dsh/preset/age/`) and the corresponding AGE agent preset, **with the same zero-service-row discipline** as the existing baseline.
-- Update all owner docs (`docs/design/dsh-plugin-integration.md`, `docs/architecture/dsh-plugin-packaging.md`, `docs/process/dsh-plugin-development-guide.md`, `$MISSION_DRIVER_HOME/CONTEXT.md`) to reflect the new naming and directory shape.
+- Update all owner docs (`docs/design/dsh-plugin-integration.md`, `docs/architecture/dsh-plugin-packaging.md`, `docs/references/dsh-plugin-development-guide.md`, `$MISSION_DRIVER_HOME/CONTEXT.md`) to reflect the new naming and directory shape.
 
 ## Non-Goals
 
@@ -175,7 +175,7 @@ Script requirements:
 - `preset/age/`: same directory, same files; `preset.yml` may add a tag line referencing the new package name.
 - All other source files (`src/native-executor.ts`, `src/mdcontrol-routes.ts`, `src/mdcontrol-skills.ts`, `src/law/host-adapter.ts`, `src/supervisor/*.ts`, `src/efficiency/*.ts`) remain functionally unchanged.
 
-#### Migration Surface (doc-audit 2026-08-28 — supersedes the earlier "mv + 4-token replace in three files" sketch)
+#### Migration Surface
 
 The migration is still purely mechanical — `mv plugin/dsh plugin/nop-age` plus literal token updates, no semantic change — but the surface has three faces:
 
@@ -206,7 +206,7 @@ The migration is still purely mechanical — `mv plugin/dsh plugin/nop-age` plus
 
 **Engine zero-diff semantics (ruled 2026-08-28).** Roadmap WI4's "引擎零 diff" means engine **behavior** zero diff, not literal zero diff: the law-module path literals above (items 1–4) MUST update with the migration — the P8 protection family and the policy gate match track the bundle directory; stale literals mean the protection set no longer covers `plugin/nop-age/src/law/**` and the engine suite goes red. No other file under `$MISSION_DRIVER_HOME/` may change (items 5–8 are repo-infrastructure references, not engine code). The M2 plan pins this boundary as a grep-enforced diff list.
 
-**(c) Owner-docs path sync face**: `$MISSION_DRIVER_HOME/CONTEXT.md` (14 `plugin/dsh` hits), `docs/architecture/dsh-plugin-packaging.md` (17), `docs/process/dsh-plugin-development-guide.md` (7) — as-built statements are rewritten at M2 close, not before. `install-age.sh` / `install-age.manifest`: zero literal `plugin/dsh` references (grep-verified 2026-08-28; re-checked at M2-WI5).
+**(c) Owner-docs path sync face**: `$MISSION_DRIVER_HOME/CONTEXT.md` (14 `plugin/dsh` hits), `docs/architecture/dsh-plugin-packaging.md` (17), `docs/references/dsh-plugin-development-guide.md` (7) — as-built statements are rewritten at M2 close, not before. `install-age.sh` / `install-age.manifest`: zero literal `plugin/dsh` references (grep-verified 2026-08-28; re-checked at M2-WI5).
 
 No semantic change anywhere. All tests must remain green.
 
@@ -340,7 +340,7 @@ The work lands when:
 7. All owner docs reflect the new naming and directory shape.
 8. `./verify-age.sh` L1+L2+L2.5 GREEN with the migrated plugin tests.
 
-### Reconciliation (M5-WI18 closure, 2026-08-28 — plan `docs/plans/multi-plugin-dsh/2026-08-28-1540-2`)
+### Reconciliation (M5-WI18)
 
 | # | Criterion | Evidence |
 | --- | --- | --- |
@@ -350,7 +350,7 @@ The work lands when:
 | 4 | dump shows both bundles under their realms, zero `dsh-mission-control`/`missionControl` residue | M5-WI17 dump leg: single dump hits `isolate: { nopAge: true }` + `isolate: { nopRoute: true }`, `missionControl` zero hits; M2 migration grep closure zero hits (plan `2026-08-28-0149-2`) |
 | 5 | `--unmount-all` → re-mount = single-run end state | M5-WI17 leg ⑤: dump `diff` empty after unmount-remount (also proven per-bundle at M3-WI8 / M4-WI15) |
 | 6 | AGE preset zero service rows; three skills intact | M5-WI17 preset/skills face: `verify:e2e:preset` exit 0 + L2 age-preset D3 zero-service-row gate + skills three-row tests; structural pin `plugin/nop-age/test/age-preset.test.mjs` |
-| 7 | Owner docs reflect new naming/directory shape | M2-WI2 forward-reference pass (plan `2026-08-28-0149-1` Phase 2) → M4-WI15 as-built increments (plan `2026-08-28-1312-2` Phase 3) → **M5-WI18 final two-bundle structural rewrite** (plan `2026-08-28-1540-2` Phase 3): `docs/architecture/dsh-plugin-packaging.md` / `docs/design/dsh-plugin-integration.md` / `docs/process/dsh-plugin-development-guide.md` §family as-built + this reconciliation |
+| 7 | Owner docs reflect new naming/directory shape | M2-WI2 forward-reference pass (plan `2026-08-28-0149-1` Phase 2) → M4-WI15 as-built increments (plan `2026-08-28-1312-2` Phase 3) → **M5-WI18 final two-bundle structural rewrite** (plan `2026-08-28-1540-2` Phase 3): `docs/architecture/dsh-plugin-packaging.md` / `docs/design/dsh-plugin-integration.md` / `docs/references/dsh-plugin-development-guide.md` §family as-built + this reconciliation |
 | 8 | `./verify-age.sh` L1+L2+L2.5 GREEN | M5-WI18 fresh run: exit 0 GREEN — engine 992/992 + nop-age 423/423 + nop-route 97/97 + launcher 18/18 + policy ok + corpus 30 ok + law truth table 119/119 |
 
 ## Deferred But Adjudicated

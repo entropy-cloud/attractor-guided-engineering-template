@@ -8,7 +8,7 @@ This repo develops `$MISSION_DRIVER_HOME/` — a Node.js Flow DSL engine that au
 
 ## AGE workflow
 
-Development follows [AGENTS.md](AGENTS.md) and [docs/process/application-development-workflow.md](docs/process/application-development-workflow.md). Key points:
+Development follows [AGENTS.md](AGENTS.md) and [docs/guides/application-development-workflow.md](docs/guides/application-development-workflow.md). Key points:
 
 - The repo is the source of truth. Chat is only a temporary working surface.
 - Active work-in-progress is read from unfinished plans in [docs/plans/](docs/plans/), not from a field in `project-context.md`.

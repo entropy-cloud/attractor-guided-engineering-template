@@ -16,10 +16,10 @@ Prior to 2026-07-27, the repo was structured only for audience (2): root files w
 | Surface | Owner | Notes |
 | --- | --- | --- |
 | **Repo root** (`AGENTS.md`, `README.md`, `README.zh.md`, `DEVELOPMENT.md`, `install-age.sh`, `install-age.manifest`) | **Real project** | opencode auto-loads root `AGENTS.md` at every session start (opencode convention). These files describe this repo's own development of mission-driver. |
-| **Root `docs/` (shared methodology)** | **Shared (template + real project)** | Methodology guides (`00-*-guide.md`, `docs/skills/*`, `docs/references/*`, `docs/process/README.md`, `docs/articles/*`, `docs/examples/*`, directory-level `README.md`s except those flagged below) are identical for both audiences. Consumers copy them as-is via `install-age.manifest`. |
-| **Root `docs/` (real-project filled)** | **Real project** | `docs/context/{project-context,ai-autonomy-policy,codebase-map}.md`, `docs/architecture/{README,module-boundaries,project-vision,system-baseline}.md`, `docs/process/application-development-workflow.md`, `docs/backlog/README.md`, `docs/index.md`, `docs/testing/known-good-baselines.md` — these were template stubs, now filled with mission-driver-specific content. |
-| **`template/` subdirectory** | **Template** | Pristine copies of the 16 fill-in files + `README.md` + `README.zh.md` + `START-HERE-after-copy.md` (deprecated manual fallback). Consumers receive these via `install-age.sh`. |
-| **`$MISSION_DRIVER_HOME/`** | **Real project (NOT copied)** | The engine itself. Consumers reference it via `MISSION_DRIVER_HOME`, never copy it. See `tools/README.md`. |
+| **Root `docs/` (shared methodology)** | **Shared (template + real project)** | Methodology guides (`docs/guides/*`, `docs/skills/*`, `docs/skills/{common,frontend,java}/*`, `docs/references/*`, `docs/articles/*`, `docs/examples/*`, directory-level `README.md`s except those flagged below) are identical for both audiences. Consumers copy them as-is via `install-age.manifest`. |
+| **Root `docs/` (real-project filled)** | **Real project** | `docs/context/{project-context,ai-autonomy-policy,codebase-map}.md`, `docs/architecture/{README,module-boundaries,project-vision,system-baseline}.md`, `docs/roadmaps/README.md`, `docs/index.md`, `docs/testing/known-good-baselines.md` — these were template stubs, now filled with mission-driver-specific content. |
+| **`template/` subdirectory** | **Template** | Pristine fill-in files (`AGENTS.md`, `docs/index.md`, context×3, design×2, architecture×4, roadmaps×3) + the consumer install kit under `template/install/` (engine add-on artifacts + consumer pre-commit hook) + `START-HERE-after-copy.md` (manual fallback). Consumers receive these via `install-age.sh`. |
+| **`$MISSION_DRIVER_HOME/`** | **Real project (add-on for consumers)** | The engine itself. Consumers do NOT get it by default; `--with-mission-driver` installs the shim/env/mission defaults, and vendoring a copy is the recommended posture (sibling-checkout references are the proven breakage mode). See `docs/guides/mission-driver-add-on.md`. |
 | **`install-age.sh` + `install-age.manifest`** | **Shared** | The single copy-flow mechanism. Manifest entries with `template/` prefix source from `template/`; entries without prefix source from root (shared methodology). |
 
 ## What `install-age.sh` Does (Consumer Flow)
@@ -33,10 +33,10 @@ For each manifest entry:
 
 After all copies:
 
-5. Sed-replace `<project-name>` → project name in every fill-in `.md` file that was sourced from `template/` (i.e., the `TEMPLATE_COPIED` array — manifest entries whose source path starts with `template/`). Shared methodology files (sourced from root paths) are NOT touched, so they can legitimately reference `<project-name>` as a literal placeholder in their prose.
-6. Create `tools/mission-driver.sh` shim + `.env` + `missions/base.json` + `missions/demo.json` + `missions/onboarding.json` + `docs/logs/{year}/` + `.gitignore` entries.
+5. Sed-replace `<project-name>` → project name in every fill-in `.md` file that was sourced from `template/`. Shared methodology files (sourced from root paths) are NOT touched, so they can legitimately reference `<project-name>` as a literal placeholder in their prose.
+6. Create `docs/logs/{year}/` + `.gitignore` entries. With `--with-mission-driver` additionally: `tools/mission-driver.sh` shim + `.env` + `missions/{base,demo,onboarding}.json` + `docs/plans/{demo,onboarding}/`.
 
-The consumer receives a personalized AGE project scaffold, ready for them to fill in their own stack details. The mission-driver engine itself stays in this repo; consumers reference it via `MISSION_DRIVER_HOME`.
+The consumer receives a personalized AGE project scaffold, ready for them to fill in their own stack details. Manifest gating flags: `mdh-only` (engine add-on, `--with-mission-driver`), `profile-frontend` / `profile-java` (skills shelves, `--profile frontend|java|all`), `pi-only` (pi runner bridge, `--pi`). The mission-driver engine itself stays in this repo unless the consumer vendors a copy per the add-on guide.
 
 ## Why This Design (Not Alternatives)
 

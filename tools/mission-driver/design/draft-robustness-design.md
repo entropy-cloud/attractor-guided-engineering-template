@@ -326,7 +326,7 @@ resolveTemplateVars(rawPrompt, {
 `mission-brief.md`：把所有字面量 `docs/backlog/<slug>-brief.md` 换成 `{{backlogDir}}/<slug>-brief.md`（`:13,27,30` 三处）。
 
 `mission-draft.md`：
-- `:13`：一行内**三处**字面量 `docs/backlog/` 全部替换为 `{{backlogDir}}/`：`docs/backlog/{mission-name}-roadmap.md`（存在性检查）、`docs/backlog/00-roadmap-authoring-guide.md`（编写指南引用）、`docs/backlog/{mission-name}-roadmap.md`（保存目标）。早期版本遗漏了 `00-roadmap-authoring-guide.md` 这一处——它会被 grep 锚点（test/draft-path-consistency.test.js Case E）抓出，故一并替换。
+- `:13`：一行内**三处**字面量 `docs/backlog/` 全部替换为 `{{backlogDir}}/`：`docs/backlog/{mission-name}-roadmap.md`（存在性检查）、`docs/guides/roadmap-authoring.md`（编写指南引用）、`docs/backlog/{mission-name}-roadmap.md`（保存目标）。早期版本遗漏了 `docs/guides/roadmap-authoring.md` 这一处——它会被 grep 锚点（test/draft-path-consistency.test.js Case E）抓出，故一并替换。
 - `:19`：`{{missionsDir}}/{mission-name}.json`（已经是变量，不变）
 
 这样 brief / roadmap / mission.json **全部**按 `projectRoot` 解析，基准统一。

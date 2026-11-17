@@ -11,7 +11,7 @@ The multi-plugin refactor (mission `multi-plugin-dsh`, design owner `docs/design
 - **Verification posture for consumers**: the aggregate gate `./verify-age.sh` (L1 engine + L2 both plugin suites + launcher stubs + L2.5 law gates) is the merge/CI face; the e2e legs (`nop-route` `verify:e2e` environment-independent; `nop-age` `verify:e2e` self-contained stub model endpoint; `nop-age` `verify:e2e:preset`) are explicit local gates outside CI — family map with counts in `docs/architecture/dsh-plugin-packaging.md` §Multi-Plugin Family As-Built.
 - **Known boundaries**: neither bundle exposes a package entry (`main`/`exports`) — real-host boot import is an independent successor item (M2-WI4 record); cross-plugin composition (`nop-route` consuming `mdcontrol` results) stays an explicit Non-Goal with recorded reopen triggers (design §Deferred But Adjudicated).
 
-## nop-route Plugin (as-built product surface, M4 landed 2026-08-28)
+## nop-route Plugin (as-built product surface)
 
 The second bundle is a pure decision service for upstream AI call results — classify an error, then decide Retry (same model after backoff) / Fallback (next model in the configured chain) / Transform (extract the `<AI_STEP_RESULT>` marker from a partial success) / Give-up (original error unchanged). Product surface:
 
@@ -121,4 +121,4 @@ Out of scope (this feature): rewriting prompts for DSH-native tool names; replac
 
 - This feature does not make DSH a required dependency. If the plugin layer were removed, the standalone product remains complete.
 - This feature does not fork the engine. There is exactly one engine codebase; backends differ behind one interface.
-- This feature does not bypass AGE planning rules. Implementation still requires plans per `docs/plans/00-plan-authoring-and-execution-guide.md` when triggers apply.
+- This feature does not bypass AGE planning rules. Implementation still requires plans per `docs/guides/plan-authoring-and-execution.md` when triggers apply.

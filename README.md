@@ -25,7 +25,7 @@ In this template, an attractor is the stable product, design, and architecture s
 For application projects, the attractor is carried by a small set of durable owner files:
 
 - `docs/context/` - mandatory project context and source-of-truth rules
-- `docs/backlog/` - prioritized candidate work and AI-ready next actions
+- `docs/roadmaps/` - prioritized candidate work and AI-ready next actions
 - `docs/requirements/` - implementation-ready requirement interpretation
 - `docs/design/` - stable app-layer behavior and feature owner docs
 - `docs/architecture/` - stable technical structure and module boundaries
@@ -120,23 +120,24 @@ Independent review found the template direction useful but warned about two risk
 
 ## First Use
 
-After installing this template into a new project, the primary automated flow is:
-
 ```bash
 # From a clone of this repo, into your new project root:
 ./install-age.sh /path/to/target-project "Project Name"
 
-# Then from the target project:
-cd /path/to/target-project
-./tools/mission-driver.sh run demo           # smoke test (秒级, verifies scaffold + engine + monitor)
-./tools/mission-driver.sh run onboarding     # personalize (30-60 min, AI reads your codebase and fills docs/context/* / architecture/* / etc.)
+# Optional: add the skills shelf matching your project type
+./install-age.sh /path/to/target-project "Project Name" --profile frontend   # or: java | all
+
+# Optional: enable the autonomous dev-loop engine (NOT installed by default)
+./install-age.sh /path/to/target-project "Project Name" --with-mission-driver
 ```
 
-For a manual fallback flow (no bash) or the full Day-0 checklist, see `template/START-HERE-after-copy.md` (shipped via `install-age.sh` into the target's `template/` directory).
+The default install copies the docs skeleton, all guides, the `common` skills shelf, the operational skills (`.agents/skills/git`, `grillme`), the document-hygiene tools, and a fail-open pre-commit hook. The engine, missions, and demo roadmaps are only installed with `--with-mission-driver` (see `docs/guides/mission-driver-add-on.md`).
+
+For a manual fallback flow (no Node) or the full Day-0 checklist, see `template/START-HERE-after-copy.md`.
 
 Do not ask AI to implement features until the Day 0 checklist is complete enough for the first slice.
 
-The most important setup step is filling `docs/context/project-context.md` with real active work and real verification commands — `onboarding` mission's WI2 does this automatically by reading your codebase.
+The most important setup step is filling `docs/context/project-context.md` with real active work and real verification commands — no verification claim may be made while they are placeholders.
 
 ## What Problem This Template Solves
 
@@ -158,38 +159,31 @@ This template turns the repo into a durable execution surface with a lean defaul
 7. verification
 8. closure
 
-For created plans, independent draft review and closure audit are part of the default control loop. See `docs/plans/00-plan-authoring-and-execution-guide.md` for the detailed status flow, draft-review record format, and closure rules. For more ambiguous or risky work, the template also provides optional document audit, multi-dimensional audit, open-ended audit, retrospective, skill-extraction, and lesson layers.
+For created plans, independent draft review and closure audit are part of the default control loop. See `docs/guides/plan-authoring-and-execution.md` for the detailed status flow, draft-review record format, and closure rules. For more ambiguous or risky work, the template also provides optional document audit, multi-dimensional audit, open-ended audit, retrospective, skill-extraction, and lesson layers.
 
 ## What This Template Includes
 
-- `AGENTS.md` - app-layer operating contract for AI agents
-- `START-HERE-after-copy.md` - Day 0 setup checklist after copying the template
-- `docs/index.md` - docs router and directory ownership baseline
-- `docs/articles/` - outward-facing methodology articles in English
-- `docs/context/` - mandatory AI context, source-of-truth precedence, and project-wide conventions
-- `docs/backlog/` - prioritized candidate work, AI autonomy labels for next actions, and an optional roadmap layer for milestone-level progress
-- `docs/process/` - lightweight development workflow
-- `docs/input/` - raw PM, prototype, card-set, article, and external source material
-- `docs/discussions/` - multi-round clarification records for ambiguous requirements
-- `docs/requirements/` - refined implementation-ready requirement files
-- `docs/design/` - stable app-layer owner docs for features, roles, flows, and app surfaces
-- `docs/architecture/` - cross-cutting technical baseline and module boundaries
-- `docs/lessons/` - durable lessons extracted from repeated failures and recoveries
-- `docs/plans/` - execution plans with closure rules and skill selection records
-- `docs/audits/` - audit workflow guidance and optional stored audit records for non-trivial or reusable review results
-- `docs/skills/` - optional reusable prompts, review playbooks, and audit prompt templates; copied projects should tune them to local owner docs and risk areas
-- `docs/logs/` - daily development log guide and starter index
-- `docs/testing/` - manual and automated testing note guides
-- `docs/testing/known-good-baselines.md` - latest meaningful verification baselines
-- `docs/bugs/` - complex regression and root-cause note guide
-- `docs/analysis/` - research and design investigation notes
-- `docs/retrospectives/` - optional post-implementation gap analysis and process improvement notes
+Default skeleton (created by the copy):
+
+- `AGENTS.md` - operating contract for AI agents: documentation map, task routing, hard rules
+- `docs/index.md` - docs router
+- `docs/context/` - mandatory AI context (project-context, autonomy policy, codebase map)
+- `docs/guides/` - all how-to guides in one place (doc organization, roadmap/plan authoring, audits, logs, requirements, bug notes, audit-prevention checklist, ...)
+- `docs/roadmaps/` + `docs/plans/<roadmap-slug>/` - roadmaps and their per-roadmap plan directories
+- `docs/requirements/` `docs/design/` `docs/architecture/` - owner docs (what to build / behavior baseline / structure baseline)
+- `docs/audits/` `docs/analysis/` `docs/lessons/` `docs/bugs/` `docs/logs/` - timeliness records
+- `docs/skills/common/` (+ `frontend/` / `java/` via `--profile`) - reusable method/audit prompts
+- `.agents/skills/` - operational skills: `git` (daily git discipline incl. worktree policy), `grillme` (relentless requirement/plan stress-interview)
+- `tools/` - standalone document-hygiene checkers (timeliness, references, garbled text)
+- `.githooks/pre-commit` - fail-open document hygiene gate
+
+On-demand directories (`docs/discussions/`, `docs/input/`, `docs/testing/`, `docs/references/`, `docs/retrospectives/`, `docs/examples/`, `docs/archive/`) are intentionally NOT pre-created — see `docs/guides/doc-organization.md` for when to create each.
 
 ## Mission Driver — Automated Development Loop Engine
 
 `$MISSION_DRIVER_HOME/` is a Flow DSL engine that automates the AGE development loop. It reads `missions/<name>.json`, drives a state machine through health-check → review → execute → draft → deep-audit, and spawns `opencode run` for each AI step.
 
-**This repository is the engine's source of truth.** Consumers reference it via the `MISSION_DRIVER_HOME` env var (a thin `tools/mission-driver.sh` shim is created by `install-age.sh`); they do NOT copy the engine directory.
+**This repository is the engine's source of truth.** Consumers do NOT get the engine by default — pass `--with-mission-driver` to `install-age.sh` to install the shim, `.env`, and mission defaults. Sibling-checkout engine references are the historically proven breakage mode; when you enable the add-on, vendoring a copy of the engine is the recommended posture (see `docs/guides/mission-driver-add-on.md`).
 
 **Core capabilities:**
 
@@ -200,7 +194,7 @@ For created plans, independent draft review and closure audit are part of the de
 - **Monitor Dashboard**: Vue 3 frontend with run history, log viewer, resource charts, and SSE event streaming
 - **Onboarding mission** (shipped to consumers via `install-age.sh`): AI reads the consumer's codebase and fills the copied template docs (`docs/context/*`, `docs/architecture/*`, etc.) with real content
 
-**Quick start (from a target project that has run `install-age.sh`):**
+**Quick start (from a target project that has run `install-age.sh --with-mission-driver`):**
 
 ```bash
 # Smoke test (秒级)
@@ -225,14 +219,14 @@ See `$MISSION_DRIVER_HOME/README.md` for full documentation.
 
 These are on-demand owner-doc shapes for larger or integration-heavy projects. They ship as placeholder skeletons and should be adopted only when the project justifies them; small projects can ignore or delete them.
 
-- `docs/backlog/implementation-roadmap.md` (+ `00-roadmap-authoring-guide.md`) - coarse-grained phase index and global status surface
+- `docs/roadmaps/implementation-roadmap.md` (+ `docs/guides/roadmap-authoring.md`) - coarse-grained phase index and global status surface
 - `docs/requirements/product-baseline.md` - product baseline and first complete loop
 - `docs/design/domain-design-guidelines.md` - domain-to-owner-doc ownership map
 - `docs/design/flow-overview.md` - global flow overview (macro flow, state machines, cross-domain rules)
 - `docs/architecture/api-response-conventions.md` - shared API response conventions
 - `docs/architecture/integration-and-transaction-patterns.md` - external-integration and transaction safety patterns
 
-The skills set also includes two audit methods for recurring high-risk review: `docs/skills/design-doc-audit-prompt.md` (design docs as app-layer baseline) and `docs/skills/state-machine-business-review-prompt.md` (business state machine correctness and reachability).
+The skills set also includes two audit methods for recurring high-risk review: `docs/skills/common/design-doc-audit-prompt.md` (design docs as app-layer baseline) and `docs/skills/common/state-machine-business-review-prompt.md` (business state machine correctness and reachability).
 
 ## Default Minimal Setup
 
@@ -241,8 +235,8 @@ For most small and medium projects, you only need these to start coding the firs
 - `AGENTS.md`
 - `docs/index.md`
 - `docs/context/`
-- `docs/backlog/`
-- `docs/process/application-development-workflow.md`
+- `docs/roadmaps/`
+- `docs/guides/application-development-workflow.md`
 - `docs/input/`
 - `docs/requirements/`
 - `docs/design/`
@@ -257,7 +251,7 @@ Trigger-based folders:
 - `docs/bugs/` when a non-obvious bug is fixed or needs memory
 - `docs/skills/` when a repeatable method is stable enough to reuse
 
-Created plans require independent draft review before implementation and independent closure audit before completion. The detailed workflow lives in `docs/plans/00-plan-authoring-and-execution-guide.md`.
+Created plans require independent draft review before implementation and independent closure audit before completion. The detailed workflow lives in `docs/guides/plan-authoring-and-execution.md`.
 
 Everything else is optional and should be used only when the project complexity justifies it.
 
@@ -276,7 +270,7 @@ Examples:
 - dated: `docs/analysis/2026-05-21-0000-topic.md`, `docs/discussions/2026-05-21-0000-topic.md`, `docs/plans/2026-05-21-0000-topic-plan.md`
 - year-organized daily records: `docs/logs/YYYY/MM-DD.md`, `docs/testing/YYYY/MM-DD.md`
 
-See `docs/references/document-naming-and-timeliness.md`.
+See `docs/guides/doc-organization.md`.
 
 ## Core Principle
 
@@ -284,7 +278,7 @@ Do not push important work through chat alone.
 
 - raw information goes into `docs/input/`
 - mandatory context and owner precedence go into `docs/context/`
-- prioritized next actions go into `docs/backlog/`
+- prioritized next actions go into `docs/roadmaps/`
 - unclear points go into `docs/discussions/`
 - settled requirements go into `docs/requirements/`
 - stable design decisions go into `docs/design/` and `docs/architecture/`
@@ -341,7 +335,7 @@ Use these only when needed:
 
 If repeated error patterns keep reappearing, do not stop at prose-only notes. Consider promoting them progressively into reusable audit prompts, checklists, heuristic scripts, static checks, lint rules, CI guards, or codemods, tuned to the copied project's real conventions and false-positive tolerance.
 
-The full workflow is documented in `docs/process/application-development-workflow.md`.
+The full workflow is documented in `docs/guides/application-development-workflow.md`.
 
 ## Non-Goals
 

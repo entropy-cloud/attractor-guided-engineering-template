@@ -25,7 +25,7 @@ Use it when the project has more than a few business domains and a reader needs 
 - Keep the distinction between end-user actions, admin actions, and system-automatic actions clear.
 - Even when implementation advances in small slices, keep behavior definitions formal, not throwaway demo semantics.
 - Persisted field sets, status codes, and dictionary values are owned by the project's contract/model source of truth, not restated as prose here.
-- Implementation order belongs in `docs/backlog/` or `docs/plans/`, not in domain design docs.
+- Implementation order belongs in `docs/roadmaps/` or `docs/plans/`, not in domain design docs.
 
 ## Update Rule
 

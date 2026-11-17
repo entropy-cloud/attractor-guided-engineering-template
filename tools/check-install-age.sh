@@ -89,38 +89,52 @@ if [ -f "$TARGET/AGENTS.md" ] && grep -q "$PROJECT_NAME" "$TARGET/AGENTS.md"; th
 assert "AGENTS.md contains project name" "$COND"
 
 # Gate 3: shared methodology copied from root
-[ -f "$TARGET/docs/plans/00-plan-authoring-and-execution-guide.md" ] && COND=1 || COND=0
+[ -f "$TARGET/docs/guides/plan-authoring-and-execution.md" ] && COND=1 || COND=0
 assert "shared methodology copied (plan guide)" "$COND"
 
 # Gate 4: fill-in file copied from template/
 [ -f "$TARGET/docs/context/project-context.md" ] && COND=1 || COND=0
 assert "fill-in file copied (project-context.md)" "$COND"
 
-# === Onboarding assertions (from 2026-07-27-0100 plan Phase 2) ===
+# === Onboarding assertions (from 2026-07-27-0100 plan Phase 2, v2: fill-ins only) ===
 
-[ -f "$TARGET/docs/backlog/onboarding-roadmap.md" ] && COND=1 || COND=0
+[ -f "$TARGET/docs/roadmaps/onboarding-roadmap.md" ] && COND=1 || COND=0
 assert "onboarding roadmap copied" "$COND"
 
-# missions/onboarding.json exists + valid JSON + key fields
-ONBOARDING_VALID=0
-if [ -f "$TARGET/missions/onboarding.json" ]; then
-  # Validate JSON via node (always available per install-age.sh prerequisites).
-  if node -e "
-    const cfg = JSON.parse(require('node:fs').readFileSync(process.argv[1], 'utf8'));
-    process.exit(cfg.name === 'onboarding'
-      && cfg.roadmapPath === 'docs/backlog/onboarding-roadmap.md'
-      && cfg.plansDir === 'docs/plans/onboarding' ? 0 : 1);
-  " "$TARGET/missions/onboarding.json" 2>/dev/null; then
-    ONBOARDING_VALID=1
-  fi
-fi
-assert "missions/onboarding.json exists and valid" "$ONBOARDING_VALID"
+# === v2 default-shape assertions (engine add-on OFF by default) ===
 
-[ -d "$TARGET/docs/plans/onboarding" ] && COND=1 || COND=0
-assert "docs/plans/onboarding/ directory exists" "$COND"
+[ ! -e "$TARGET/missions/onboarding.json" ] && COND=1 || COND=0
+assert "missions/ NOT installed by default (engine add-on off)" "$COND"
+
+[ ! -d "$TARGET/docs/plans/onboarding" ] && COND=1 || COND=0
+assert "docs/plans/onboarding/ NOT created by default" "$COND"
+
+[ ! -e "$TARGET/.env" ] && COND=1 || COND=0
+assert ".env NOT created by default" "$COND"
+
+[ -f "$TARGET/.agents/skills/grillme/SKILL.md" ] && COND=1 || COND=0
+assert ".agents/skills/grillme copied" "$COND"
+
+[ -f "$TARGET/.agents/skills/git/SKILL.md" ] && COND=1 || COND=0
+assert ".agents/skills/git copied" "$COND"
+
+[ -f "$TARGET/docs/skills/common/plan-audit-prompt.md" ] && COND=1 || COND=0
+assert "docs/skills/common shelf copied" "$COND"
+
+[ ! -f "$TARGET/docs/skills/frontend/README.md" ] && COND=1 || COND=0
+assert "frontend shelf NOT copied without --profile" "$COND"
+
+[ -f "$TARGET/docs/guides/doc-organization.md" ] && COND=1 || COND=0
+assert "doc-organization guide copied" "$COND"
+
+[ -f "$TARGET/.githooks/pre-commit" ] && COND=1 || COND=0
+assert "consumer pre-commit hook copied" "$COND"
+
+[ ! -d "$TARGET/docs/discussions" ] && COND=1 || COND=0
+assert "on-demand dir docs/discussions NOT pre-created" "$COND"
 
 # onboarding-roadmap.md <project-name> replaced
-ROADMAP_COUNT=$(count_in "$TARGET/docs/backlog/onboarding-roadmap.md" '<project-name>')
+ROADMAP_COUNT=$(count_in "$TARGET/docs/roadmaps/onboarding-roadmap.md" '<project-name>')
 [ "$ROADMAP_COUNT" = "0" ] && COND=1 || COND=0
 assert "onboarding-roadmap.md <project-name> replaced" "$COND" "found $ROADMAP_COUNT occurrence(s)"
 
@@ -133,6 +147,64 @@ assert "docs/index.md <project-name> replaced" "$COND" "found $INDEX_COUNT occur
 PC_COUNT=$(count_in "$TARGET/docs/context/project-context.md" '<project-name>')
 [ "$PC_COUNT" = "0" ] && COND=1 || COND=0
 assert "docs/context/project-context.md <project-name> replaced" "$COND" "found $PC_COUNT occurrence(s)"
+
+# === v2 engine add-on pass (--with-mission-driver into a fresh target) ===
+
+TARGET2="$(mktemp -d /tmp/age-test-mdh-XXXX)"
+echo ""
+echo "--- running ./install-age.sh --with-mission-driver (second target) ---"
+if ! "$REPO_ROOT/install-age.sh" "$TARGET2" "$PROJECT_NAME" --with-mission-driver > /tmp/age-test-output-mdh.log 2>&1; then
+  echo "FAIL: install-age.sh --with-mission-driver errored:" >&2
+  tail -20 /tmp/age-test-output-mdh.log >&2
+  rm -rf "$TARGET2"
+  [ "$OWNED_TEMP" = "1" ] && rm -rf "$TARGET"
+  exit 1
+fi
+
+MDH_ONBOARDING_VALID=0
+if [ -f "$TARGET2/missions/onboarding.json" ]; then
+  if node -e "
+    const cfg = JSON.parse(require('node:fs').readFileSync(process.argv[1], 'utf8'));
+    process.exit(cfg.name === 'onboarding'
+      && cfg.roadmapPath === 'docs/roadmaps/onboarding-roadmap.md'
+      && cfg.plansDir === 'docs/plans/onboarding' ? 0 : 1);
+  " "$TARGET2/missions/onboarding.json" 2>/dev/null; then
+    MDH_ONBOARDING_VALID=1
+  fi
+fi
+assert "mdh: missions/onboarding.json exists and valid" "$MDH_ONBOARDING_VALID"
+
+[ -d "$TARGET2/docs/plans/onboarding" ] && COND=1 || COND=0
+assert "mdh: docs/plans/onboarding/ directory exists" "$COND"
+
+[ -f "$TARGET2/.env.example" ] && COND=1 || COND=0
+assert "mdh: .env.example copied" "$COND"
+
+[ -f "$TARGET2/.agents/skills/mission-driver/SKILL.md" ] && COND=1 || COND=0
+assert "mdh: mission-driver skill copied" "$COND"
+
+rm -rf "$TARGET2"
+
+# === Profile pass (--profile frontend into a fresh target) ===
+
+TARGET3="$(mktemp -d /tmp/age-test-prof-XXXX)"
+echo ""
+echo "--- running ./install-age.sh --profile frontend (third target) ---"
+if ! "$REPO_ROOT/install-age.sh" "$TARGET3" "$PROJECT_NAME" --profile frontend > /tmp/age-test-output-prof.log 2>&1; then
+  echo "FAIL: install-age.sh --profile frontend errored:" >&2
+  tail -20 /tmp/age-test-output-prof.log >&2
+  rm -rf "$TARGET3"
+  [ "$OWNED_TEMP" = "1" ] && rm -rf "$TARGET"
+  exit 1
+fi
+
+[ -f "$TARGET3/docs/skills/frontend/component-design-review-prompt.md" ] && COND=1 || COND=0
+assert "profile: frontend shelf copied with --profile frontend" "$COND"
+
+[ ! -f "$TARGET3/docs/skills/java/README.md" ] && COND=1 || COND=0
+assert "profile: java shelf NOT copied with --profile frontend" "$COND"
+
+rm -rf "$TARGET3"
 
 # === Report ===
 echo ""

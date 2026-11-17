@@ -156,7 +156,7 @@ node $MISSION_DRIVER_HOME/src/main.js <mission-name> --step CHECK --dry-run --no
 git config core.hooksPath .githooks
 ```
 
-pre-commit hook（age-autonomy M2-WI23）：对暂存区 `docs/plans/**/*.md`（gate-check 结构子集，legacy 形注记跳过）、`docs/backlog/*.md`（roadmap-check 字段集）、`missions/*.json`（mission-check，无 roadmapPath 的 base 配置跳过）逐段校验；missions/ 缺失或 node 不可用语境 fail-open + 注记（模板消费者合法面，02 §6）。CI（`.github/workflows/age-ci.yml`，M2-WI23）触发路径含账本与执法数据面（`docs/plans/**`/`docs/backlog/**`/`missions/**`/`.githooks/**`）——账本类提交不绕过 CI；单 job 跑同一 `verify-age.sh`（L1+L2+L2.5，本地=CI 同构）。
+pre-commit hook（age-autonomy M2-WI23）：对暂存区 `docs/plans/**/*.md`（gate-check 结构子集，legacy 形注记跳过）、`docs/roadmaps/*.md`（roadmap-check 字段集）、`missions/*.json`（mission-check，无 roadmapPath 的 base 配置跳过）逐段校验；missions/ 缺失或 node 不可用语境 fail-open + 注记（模板消费者合法面，02 §6）。CI（`.github/workflows/age-ci.yml`，M2-WI23）触发路径含账本与执法数据面（`docs/plans/**`/`docs/roadmaps/**`/`missions/**`/`.githooks/**`）——账本类提交不绕过 CI；单 job 跑同一 `verify-age.sh`（L1+L2+L2.5，本地=CI 同构）。
 
 
 ## 关键约束
@@ -186,4 +186,4 @@ pre-commit hook（age-autonomy M2-WI23）：对暂存区 `docs/plans/**/*.md`（
 | 引擎设计 | `$MISSION_DRIVER_HOME/design/mission-design.md` |
 | 流程设计 | `$MISSION_DRIVER_HOME/design/mission-driver-flow-design.md` |
 | 执行原则 | `$MISSION_DRIVER_HOME/EXECUTION-PRINCIPLE.md` |
-| plan 编写指南 | `docs/plans/00-plan-authoring-and-execution-guide.md` |
+| plan 编写指南 | `docs/guides/plan-authoring-and-execution.md` |

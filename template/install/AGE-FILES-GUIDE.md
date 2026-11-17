@@ -30,9 +30,9 @@ These make the mission-driver engine work in your repo. Install drops them in pl
 | `tools/mission-driver.sh` | Do not edit. Thin shim that calls the external engine via `MISSION_DRIVER_HOME`. |
 | `missions/base.json` | **Fill `commands.*`** for your stack (test/build/lint/typecheck). Other fields inherit safely. |
 | `missions/demo.json`, `missions/onboarding.json` | Do not edit unless you change which roadmap a mission points to. |
-| `.opencode/skills/mission-driver/SKILL.md` | Do not edit. Operator skill for the engine. Sync on template upgrades. |
-| `.opencode/skills/mission-driver/references/mission-config-schema.md` | Do not edit. mission.json schema reference. |
-| `.opencode/skills/mission-driver/references/roadmap-template.md` | Do not edit. Roadmap structure reference. |
+| `.agents/skills/mission-driver/SKILL.md` | Do not edit. Operator skill for the engine. Sync on template upgrades. |
+| `.agents/skills/mission-driver/references/mission-config-schema.md` | Do not edit. mission.json schema reference. |
+| `.agents/skills/mission-driver/references/roadmap-template.md` | Do not edit. Roadmap structure reference. |
 
 ### B — One-time Install Config (2 files) · verify then leave
 
@@ -45,7 +45,7 @@ Install already replaced `<project-name>` placeholders. Verify the substitution,
 
 ### C — Onboarding Fills (12 files) · run `onboarding` mission once
 
-These are the context/architecture skeletons the **onboarding mission fills automatically** (WI2–WI8 in `docs/backlog/onboarding-roadmap.md`). After onboarding, keep them current as your stack/codebase evolves.
+These are the context/architecture skeletons the **onboarding mission fills automatically** (WI2–WI8 in `docs/roadmaps/onboarding-roadmap.md`). After onboarding, keep them current as your stack/codebase evolves.
 
 | File | Filled by | What goes here |
 |---|---|---|
@@ -57,10 +57,10 @@ These are the context/architecture skeletons the **onboarding mission fills auto
 | `docs/architecture/module-boundaries.md` | WI6 | Module/package/domain ownership boundaries. |
 | `docs/architecture/project-vision.md` | WI6 | Product direction + non-goals. |
 | `docs/architecture/system-baseline.md` | WI6 | Stack, runtime, deployment shape. |
-| `docs/process/application-development-workflow.md` | WI7 | Review body for project-specific flow adjustments. |
-| `docs/backlog/README.md` | WI7 | First work-item line (or explicit "no active work item"). |
+| `docs/guides/application-development-workflow.md` | WI7 | Review body for project-specific flow adjustments. |
+| `docs/roadmaps/README.md` | WI7 | First work-item line (or explicit "no active work item"). |
 | `docs/testing/known-good-baselines.md` | WI8 | First green baseline row (run real verification, record date/SHA/commands). |
-| `docs/backlog/onboarding-roadmap.md` | WI5 | Self: verify project name in title. |
+| `docs/roadmaps/onboarding-roadmap.md` | WI5 | Self: verify project name in title. |
 
 ### D — Requirement/Design Phase Fills (9 files) · NOT covered by onboarding
 
@@ -76,7 +76,7 @@ These remain empty skeletons after onboarding. They get filled when you do **rea
 | `docs/design/flow-overview.md` | Multi-domain projects only — L1 macro flow, L2 state machines, L3 cross-domain rules. Small/single-domain projects may omit. |
 | `docs/design/feature-inventory.md` | Once features stabilize — feature map with status and owner doc. |
 | `docs/design/domain-design-guidelines.md` | When domain-specific design conventions emerge. |
-| `docs/backlog/implementation-roadmap.md` | When a multi-stage implementation is planned. **Small projects may delete this file** (it self-documents as optional). |
+| `docs/roadmaps/implementation-roadmap.md` | When a multi-stage implementation is planned. **Small projects may delete this file** (it self-documents as optional). |
 
 ### E — As-shipped Methodology (57 files) · use as-is, sync on template upgrade
 
@@ -101,7 +101,7 @@ These are NOT installed — they are created at runtime by the mission-driver fl
 | `docs/plans/{USER}/...` | Your manual plans (if you keep a user-scoped plan dir). |
 | `docs/logs/{year}/{month}-{day}.md` | You / `BUILD_VERIFY` (full-green records). Append-only daily dev log. |
 | `docs/audits/*.md` | `MULTI_AUDIT` / `OPEN_AUDIT` steps (if enabled); or manual document audits. |
-| `docs/backlog/implementation-roadmap.md` (status) | `DRAFT_PLANS`/`EXECUTE` flip work items `todo`→`done`. |
+| `docs/roadmaps/implementation-roadmap.md` (status) | `DRAFT_PLANS`/`EXECUTE` flip work items `todo`→`done`. |
 
 ---
 
@@ -123,7 +123,7 @@ The mission-driver flow does not read all 88 files — it reads a small set and 
 - **CHECK** reads `git status` only.
 - **DRAFT_PLANS / REVIEW_PLANS** read `project-context.md` + the plan guide + roadmap.
 - **EXECUTE** reads the plan file + `AGENTS.md` + roadmap.
-- **MULTI_AUDIT / OPEN_AUDIT** (if enabled) read the audit-prompt files (`docs/skills/multi-dimensional-audit-prompt.md`, `open-ended-audit-prompt.md`) + architecture docs.
+- **MULTI_AUDIT / OPEN_AUDIT** (if enabled) read the audit-prompt files (`docs/skills/common/multi-dimensional-audit-prompt.md`, `open-ended-audit-prompt.md`) + architecture docs.
 
 The other context files (`ai-autonomy-policy.md`, `codebase-map.md`, `source-of-truth-and-precedence.md`) are reached via the **Companion Context Files** table in `project-context.md`. Keep that table current so the engine routes correctly.
 

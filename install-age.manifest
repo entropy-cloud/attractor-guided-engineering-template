@@ -6,47 +6,41 @@
 #   <src> > <dst> :: <flag>[,<flag>]   → with flags
 #
 # Flags:
-#   exec    chmod +x the destination
-#   fill    replace <project-name> with the project name
-#   rel-mdh replace __REL_MDH__ with the computed engine path (relative from target)
+#   exec             chmod +x the destination
+#   fill             replace <project-name> with the project name
+#   rel-mdh          replace __REL_MDH__ with the computed engine path (relative from target)
+#   mdh-only         copied only with --with-mission-driver (engine add-on)
+#   pi-only          copied only with --pi (pi runner bridge)
+#   profile-frontend copied only with --profile frontend (or --profile all)
+#   profile-java     copied only with --profile java (or --profile all)
 #
 # Lines starting with # are comments. The installer skips existing target files.
 #
-# This manifest intentionally EXCLUDES template-internal artifacts:
-#   - docs/articles/                  (methodology articles, not project content)
-#   - docs/architecture/mission-driver-baseline.md   (engine's own baseline)
-#   - docs/audits/mission-driver-*/   (engine's own audit records)
-#   - docs/backlog/mission-driver-*-roadmap.md, demo-roadmap.md  (engine's roadmaps)
-#   - docs/discussions/2026-*         (engine's own discussions)
-#   - docs/logs/2026/                 (engine's own daily logs)
-#   - docs/plans/mission-driver-*/, docs/plans/2026-*  (engine's own plans)
-#   - docs/requirements/mission-driver-convergence-and-cost-optimization.md
-#   - docs/retrospectives/template-design-decisions.md  (template's evolution record)
+# v2 default excludes (by design, not omission):
+#   mission-driver engine/missions/.env (add-on: --with-mission-driver)
+#   docs/discussions|input|testing|references|retrospectives|examples|archive
+#     (on-demand directories — created by the consumer when first needed,
+#      see docs/guides/doc-organization.md)
+#   docs/articles/ (methodology articles, template-repo only)
+#   engine's own roadmaps/plans/audits/logs/requirements/retrospectives
 # When adding new scaffold files to the template, add them HERE too.
 
-# --- engine bootstrap (install-only artifacts from template/install/) ---
-# Consumer-facing shim + env + mission defaults. Diverge from dogfood root files —
-# see template/install/README.md. Do NOT swap for the root dogfood versions.
-template/install/tools/mission-driver.sh > tools/mission-driver.sh :: exec
-template/install/.env.example > .env.example :: rel-mdh
-template/install/missions/base.json > missions/base.json
-template/install/missions/demo.json > missions/demo.json
-template/install/missions/onboarding.json > missions/onboarding.json
-template/install/docs/backlog/demo-roadmap.md > docs/backlog/demo-roadmap.md
-template/install/AGE-FILES-GUIDE.md > docs/references/age-files-guide.md
+# --- engine bootstrap (OPTIONAL: --with-mission-driver) ---
+template/install/tools/mission-driver.sh > tools/mission-driver.sh :: exec,mdh-only
+template/install/.env.example > .env.example :: rel-mdh,mdh-only
+template/install/missions/base.json > missions/base.json :: mdh-only
+template/install/missions/demo.json > missions/demo.json :: mdh-only
+template/install/missions/onboarding.json > missions/onboarding.json :: mdh-only
+template/install/docs/roadmaps/demo-roadmap.md > docs/roadmaps/demo-roadmap.md :: mdh-only
+template/install/AGE-FILES-GUIDE.md > docs/references/age-files-guide.md :: mdh-only
+.agents/skills/mission-driver/SKILL.md :: mdh-only
+.agents/skills/mission-driver/references/mission-config-schema.md :: mdh-only
+.agents/skills/mission-driver/references/roadmap-template.md :: mdh-only
 
-# --- .opencode/skills/mission-driver (operator skill for the engine, ALL) ---
-.opencode/skills/mission-driver/SKILL.md
-.opencode/skills/mission-driver/references/mission-config-schema.md
-.opencode/skills/mission-driver/references/roadmap-template.md
-
-# --- .pi/skills/mission-driver (pi native skill copy, --pi only) ---
-# Same SKILL.md source as .opencode above; pi scans .pi/skills/ for SKILL.md
-# natively (no settings.json bridge needed — tested unreliable). pi-only flag
-# → skipped unless --pi passed to install-age.
-.opencode/skills/mission-driver/SKILL.md > .pi/skills/mission-driver/SKILL.md :: pi-only
-.opencode/skills/mission-driver/references/mission-config-schema.md > .pi/skills/mission-driver/references/mission-config-schema.md :: pi-only
-.opencode/skills/mission-driver/references/roadmap-template.md > .pi/skills/mission-driver/references/roadmap-template.md :: pi-only
+# --- engine skill, pi runner bridge (--with-mission-driver AND --pi) ---
+.agents/skills/mission-driver/SKILL.md > .pi/skills/mission-driver/SKILL.md :: mdh-only,pi-only
+.agents/skills/mission-driver/references/mission-config-schema.md > .pi/skills/mission-driver/references/mission-config-schema.md :: mdh-only,pi-only
+.agents/skills/mission-driver/references/roadmap-template.md > .pi/skills/mission-driver/references/roadmap-template.md :: mdh-only,pi-only
 
 # --- root ---
 template/AGENTS.md
@@ -54,118 +48,92 @@ template/AGENTS.md
 # --- docs root ---
 template/docs/index.md
 
-# --- docs/context (mandatory AI context — ALL) ---
+# --- docs/context (mandatory AI context) ---
 template/docs/context/project-context.md
 template/docs/context/ai-autonomy-policy.md
 template/docs/context/codebase-map.md
 docs/context/README.md
-docs/context/conventions.md
-docs/context/source-of-truth-and-precedence.md
 
-# --- docs/backlog (guides + skeleton + onboarding roadmap template, NOT engine roadmaps) ---
-template/docs/backlog/README.md
-docs/backlog/00-roadmap-authoring-guide.md
-template/docs/backlog/implementation-roadmap.md
-template/docs/backlog/onboarding-roadmap.md
+# --- docs/guides (ALL how-to guides, shared methodology) ---
+docs/guides/README.md
+docs/guides/doc-organization.md
+docs/guides/application-development-workflow.md
+docs/guides/requirements-synthesis.md
+docs/guides/input-processing.md
+docs/guides/discussion-writing.md
+docs/guides/roadmap-authoring.md
+docs/guides/plan-authoring-and-execution.md
+docs/guides/audit-execution.md
+docs/guides/audit-prevention-checklist.md
+docs/guides/bug-fix-note.md
+docs/guides/log-writing.md
+docs/guides/testing-note.md
+docs/guides/implementation-guide.md
+docs/guides/maintenance-checklist.md
+docs/guides/mission-driver-add-on.md
 
-# --- docs/process ---
-docs/process/README.md
-template/docs/process/application-development-workflow.md
+# --- docs/roadmaps (fill-in skeletons) ---
+template/docs/roadmaps/README.md
+template/docs/roadmaps/implementation-roadmap.md
+template/docs/roadmaps/onboarding-roadmap.md
 
-# --- docs/input ---
-docs/input/README.md
-docs/input/00-input-processing-guide.md
-
-# --- docs/requirements (guides + skeletons, NOT engine requirements) ---
+# --- core doc dirs (READMEs + skeletons) ---
+docs/plans/README.md
 docs/requirements/README.md
-docs/requirements/00-requirement-synthesis-guide.md
 docs/requirements/product-baseline.md
 docs/requirements/product-scope.md
 docs/requirements/mvp.md
-
-# --- docs/design ---
 docs/design/README.md
 docs/design/app-overview.md
 template/docs/design/domain-design-guidelines.md
 docs/design/feature-inventory.md
 template/docs/design/flow-overview.md
 docs/design/roles-and-permissions.md
-
-# --- docs/architecture (NOT mission-driver-baseline.md) ---
 template/docs/architecture/README.md
 docs/architecture/api-response-conventions.md
 docs/architecture/integration-and-transaction-patterns.md
 template/docs/architecture/module-boundaries.md
 template/docs/architecture/project-vision.md
 template/docs/architecture/system-baseline.md
-
-# --- docs/plans (guide only, NOT engine plans) ---
-docs/plans/README.md
-docs/plans/00-plan-authoring-and-execution-guide.md
-
-# --- docs/logs (guide + index only, NOT dated logs) ---
-docs/logs/00-log-writing-guide.md
+docs/audits/README.md
+docs/analysis/README.md
+docs/lessons/README.md
 docs/logs/index.md
 
-# --- docs/testing ---
-docs/testing/00-testing-note-guide.md
-docs/testing/index.md
-template/docs/testing/known-good-baselines.md
-
-# --- docs/audits (guide only, NOT engine audit records) ---
-docs/audits/README.md
-docs/audits/00-audit-execution-guide.md
-
-# --- docs/skills (ALL generic defaults) ---
+# --- docs/skills (common always; shelves by --profile) ---
 docs/skills/README.md
-docs/skills/age-practice-gap-audit-prompt.md
-docs/skills/bug-diagnosis-prompt.md
-docs/skills/closure-audit-prompt.md
-docs/skills/code-quality-audit-prompt.md
-docs/skills/code-refactor-discovery-prompt.md
-docs/skills/code-refactor-prompt.md
-docs/skills/design-doc-audit-prompt.md
-docs/skills/development-wisdom-gate-prompt.md
-docs/skills/document-audit-prompt.md
-docs/skills/index-routing-audit-prompt.md
-docs/skills/multi-dimensional-audit-prompt.md
-docs/skills/open-ended-audit-prompt.md
-docs/skills/plan-audit-prompt.md
-docs/skills/requirement-gap-retrospective-prompt.md
-docs/skills/state-machine-business-review-prompt.md
+docs/skills/common/age-practice-gap-audit-prompt.md
+docs/skills/common/bug-diagnosis-prompt.md
+docs/skills/common/closure-audit-prompt.md
+docs/skills/common/code-quality-audit-prompt.md
+docs/skills/common/code-refactor-discovery-prompt.md
+docs/skills/common/code-refactor-prompt.md
+docs/skills/common/design-doc-audit-prompt.md
+docs/skills/common/development-wisdom-gate-prompt.md
+docs/skills/common/document-audit-prompt.md
+docs/skills/common/index-routing-audit-prompt.md
+docs/skills/common/multi-dimensional-audit-prompt.md
+docs/skills/common/open-ended-audit-prompt.md
+docs/skills/common/plan-audit-prompt.md
+docs/skills/common/requirement-gap-retrospective-prompt.md
+docs/skills/common/state-machine-business-review-prompt.md
+docs/skills/frontend/README.md :: profile-frontend
+docs/skills/frontend/component-design-review-prompt.md :: profile-frontend
+docs/skills/frontend/exploratory-e2e-testing-prompt.md :: profile-frontend
+docs/skills/java/README.md :: profile-java
+docs/skills/java/api-and-transaction-design-review-prompt.md :: profile-java
+docs/skills/java/backend-regression-audit-prompt.md :: profile-java
 
-# --- docs/lessons ---
-docs/lessons/README.md
+# --- .agents/skills (general operational skills) ---
+.agents/skills/README.md
+.agents/skills/git/SKILL.md
+.agents/skills/grillme/SKILL.md
 
-# --- docs/bugs ---
-docs/bugs/00-bug-fix-note-writing-guide.md
+# --- tools (curated standalone doc-hygiene scripts, zero npm deps) ---
+tools/check-docs-garbled.mjs
+tools/check-doc-references.mjs
+tools/check-doc-timeliness.mjs
+tools/code-stats.mjs
 
-# --- docs/retrospectives (NOT template-design-decisions.md) ---
-docs/retrospectives/README.md
-docs/retrospectives/00-retrospective-writing-guide.md
-
-# --- docs/discussions (guide only, NOT dated) ---
-docs/discussions/README.md
-docs/discussions/00-discussion-writing-guide.md
-
-# --- docs/analysis ---
-docs/analysis/README.md
-
-# --- docs/references (ALL) ---
-docs/references/README.md
-docs/references/document-naming-and-timeliness.md
-docs/references/implementation-guide.md
-docs/references/maintenance-checklist.md
-docs/references/playwright-e2e-guide.md
-
-# --- docs/examples (ALL format references) ---
-docs/examples/README.md
-docs/examples/2026-05-21-0900-feature-requirement.example.md
-docs/examples/2026-05-21-1000-requirement-discussion.example.md
-docs/examples/2026-05-21-1030-feature-plan.example.md
-docs/examples/2026-05-21-1430-document-audit.example.md
-docs/examples/2026-05-21-1700-retrospective.example.md
-docs/examples/complete-small-app-walkthrough.md
-
-# --- docs/archive ---
-docs/archive/README.md
+# --- githooks (consumer version: doc hygiene, fail-open) ---
+template/install/githooks/pre-commit > .githooks/pre-commit :: exec

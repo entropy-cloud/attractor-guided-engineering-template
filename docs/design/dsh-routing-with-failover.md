@@ -553,9 +553,3 @@ Response:
 | Q3 | wait-check 期间 monitor 是否仍可用？SSE 心跳如何兼容？ | 沿用现有 SSE，wait-check 状态作为新事件类型 |
 | Q4 | 跨 mission 的状态共享边界在哪？ | 全局，routing-state.json 跨 mission 共享 |
 | Q5 | "max_retries_per_step" 的语义？ | "尝试 N 个不同模型" |
-
-## 15. Changelog
-
-- 2026-08-31 — **重设计**：加入熔断三态 + 冷却指数递增、分层路由、请求超时、wait-check 永不放弃、用户暂停；移除所有代码骨架和实现伪码（技术细节唯一真相源为代码）
-- 2026-08-31 — **追加**：持久化对齐 nop-age context-profile atomic write 模式；UI 复用 monitor dashboard statusTagType/useClock/StepTimeline；调用统计 in-memory 累加（counter + gauge + token 消耗）
-- 2026-08-27 — Initial design

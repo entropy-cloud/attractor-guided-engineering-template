@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+#
+# pre-commit (consumer version) — document hygiene, fail-open.
+#
+# Enable (one-time, per clone):  git config core.hooksPath .githooks
+#
+# Runs the two standalone hygiene guards shipped with the template (zero npm
+# deps; skipped individually when missing):
+#   tools/check-doc-timeliness.mjs  — normative docs must carry no history
+#                                     (docs/guides/doc-organization.md)
+#   tools/check-docs-garbled.mjs    — encoding-garbled text detection
+#
+# Fail-open discipline: node unavailable → skip everything with a note (the
+# hook must not be more fragile than the project's existing toolchain).
+#
+# Projects that enabled the mission-driver add-on should additionally copy the
+# plans/roadmaps/missions sections from the template repo's .githooks/pre-commit.
+
+set -uo pipefail
+cd "$(git rev-parse --show-toplevel)" || exit 0
+
+fail=0
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "[pre-commit] (note) node not found — hygiene checks skipped (fail-open)"
+  exit 0
+fi
+
+if [ -f tools/check-doc-timeliness.mjs ]; then
+  if out=$(node tools/check-doc-timeliness.mjs 2>&1); then
+    echo "[pre-commit][timeliness] ok"
+  else
+    echo "[pre-commit][timeliness] DENY:"
+    printf '%s\n' "$out" | head -20
+    fail=1
+  fi
+fi
+
+if [ -f tools/check-docs-garbled.mjs ]; then
+  if out=$(node tools/check-docs-garbled.mjs 2>&1); then
+    echo "[pre-commit][garbled] ok"
+  else
+    echo "[pre-commit][garbled] DENY:"
+    printf '%s\n' "$out" | head -20
+    fail=1
+  fi
+fi
+
+exit "$fail"

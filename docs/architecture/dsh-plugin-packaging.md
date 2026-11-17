@@ -4,7 +4,7 @@
 
 ## Multi-Plugin Family As-Built (nop-age + nop-route, final-state rewrite M5-WI18)
 
-The repository hosts a **two-bundle DSH plugin family** under `plugin/` (mission `multi-plugin-dsh`, design owner `docs/design/multi-plugin-dsh-architecture.md`, roadmap `docs/backlog/multi-plugin-dsh-roadmap.md` — all five milestones closed 2026-08-28). This doc is the **architecture deep-dive of the `nop-age` bundle** (everything from §Purpose down) **plus the family-level packaging faces** (this section): directory shape, realm/service matrix, unified launcher, verification gate family map, and known boundaries. The `nop-route` bundle's own as-built faces follow below. This section supersedes the earlier「Multi-Plugin Forward Reference + nop-route increment」juxtaposition (structural rewrite at M5-WI18, plan `docs/plans/multi-plugin-dsh/2026-08-28-1540-2`).
+The repository hosts a **two-bundle DSH plugin family** under `plugin/` (mission `multi-plugin-dsh`, design owner `docs/design/multi-plugin-dsh-architecture.md`, roadmap `docs/roadmaps/multi-plugin-dsh-roadmap.md` — all five milestones closed 2026-08-28). This doc is the **architecture deep-dive of the `nop-age` bundle** (everything from §Purpose down) **plus the family-level packaging faces** (this section): directory shape, realm/service matrix, unified launcher, verification gate family map, and known boundaries. The `nop-route` bundle's own as-built faces follow below. This section supersedes the earlier「Multi-Plugin Forward Reference + nop-route increment」juxtaposition (structural rewrite at M5-WI18, plan `docs/plans/multi-plugin-dsh/2026-08-28-1540-2`).
 
 ### Directory shape (family as-built)
 
@@ -60,7 +60,7 @@ The e2e legs stay out of `verify-age.sh` L2 / CI by the `2026-08-28-1312-3` Deci
 - **HTTP dispatcher real-runtime e2e face**: `/noproute/api/*` and `/mdcontrol/api/*` registration shapes are pinned by stub-domain unit tests; a real-runtime HTTP-consumer e2e leg is absent. Reopen trigger: a real consumer of the HTTP face appears.
 - **Cross-plugin composition** (`nop-route` consuming `mdcontrol` results): explicitly designed Non-Goal; the structural prerequisite (own realm + own RPC namespace) is what landed. Reopen triggers in design §Deferred But Adjudicated.
 
-## nop-route Bundle (as-built, M4 landed 2026-08-28)
+## nop-route Bundle (as-built)
 
 The second bundle of the family — a pure decision service over upstream AI call results, zero engine diff (plans `docs/plans/multi-plugin-dsh/2026-08-28-1312-1` + `-2` + `-3`; design owner `docs/design/multi-plugin-dsh-architecture.md` §nop-route Plugin):
 
@@ -477,7 +477,7 @@ Each run child registers ONE durable descriptor at create (WI11, landed): mode `
 
 Terminology glosses for reviewers unfamiliar with the DSH host: **isolate realm** — a cordis service scope that keeps a plugin's mounted instances private instead of process-global; **wire error** — a structured RPC error surfaced to the client UI; **`dsh.bundle.patch`** — the package.json manifest field declaring this package as a mountable DSH bundle plugin.
 
-### Implementation state and boundaries (M2-WI7, landed 2026-08-23)
+### Implementation state and boundaries (M2-WI7)
 
 The dispatch chain above is implemented in `plugin/nop-age/src/native-executor.ts` (`DshNativeExecutor`) and wired by `plugin/nop-age/src/engine-bridge.ts` (`resolveExecutor` + `bootstrapNativeConfig` + `runNativeMission`). Verified in the fake-agents unit domain only (no real host — L3 belongs to WI9; native end-to-end belongs to WI10). Implementation boundaries, all deliberate:
 
@@ -515,7 +515,7 @@ Draft jobs — as-built split (M3-WI12 adjudication, plan `2026-08-23-1852-2` Ph
 
 Monitor: unchanged. It reads run-state files from disk; whether the engine runs as CLI or in-host is invisible to it. As-adjudicated (2026-08-23, M4-WI15, plan `2026-08-23-2202-2`): a native client panel is **deferred** — the decision record verified the host's static client-plugin surface is reachable from this bundle form (package.json `dsh.client` + `exports['./client']`, scanned per loader entry — the bundle patch's own service row makes `nop-age` a loader entry; better-sidebar dual-form precedent) with zero new shipped dependencies, but found it developer-preview and undocumented for external authors, poll-only over this plugin's data plane (`/mdcontrol/api/status|list` — no SSE-equivalent push exists there; the monitor's SSE lives in the separate monitor server, which the bundle does not ship), and without recorded demand. Reopen triggers live in the plan's `Deferred But Adjudicated` (T1 stable documented client-plugin API / T2 recorded in-DSH visibility demand with the monitor unreachable / T3 monitor embedding ruled out while demand holds).
 
-## AGE Preset (M4-WI14, landed 2026-08-23 — plan `2026-08-23-2202-1`)
+## AGE Preset (M4-WI14)
 
 The AGE mode ships as a **host-discoverable agent preset** at `plugin/nop-age/preset/age/` — a directory holding `agent.cordis.yml` (the composition), `preset.yml` (display-only name/description/order), and `age-mode.mjs` (the one local row). Host-loader facts this shape rests on are the R1 §7 verification record (closed by the plan's Phase 1 D1, host source `packages/preset/agent-presets/`): a preset = its directory (id = directory name), mounted ONCE per process under a standing scope, sessions join by scope parentage; bare package names resolve from the HOST composition base while relative names travel with the directory; a preset row publishing into the root realm makes the whole mount REJECTED — the core of the realm posture below.
 
@@ -525,7 +525,7 @@ The AGE mode ships as a **host-discoverable agent preset** at `plugin/nop-age/pr
   1. Interactive sessions — the `age:mode` section documents the surface; the three `mission-control-*` skills are ALREADY registered globally by the service mount (§Service Surface) and reach AGE sessions through the merged skill catalog. Reuse, no preset-side re-registration (the skills registry is layered per scope; a preset-local duplicate is at best double-render).
   2. Mission children — `NativeExecutor`'s create calls pass a `setup` that mounts `meta.agentPreset` (the engine config `agent` field) through the host roster (`agentCtx.get('agentPresets')`): roster absent / id not on it / no agent field → no-op (roster-less compositions and leftover non-DSH agent values never brick native runs; the roster's own unjoined advisory covers observability); preset on the roster → `mount()` — a broken composition rejects and rolls the child creation back (fail-loud for real AGE deployments). This wiring exists because `meta.agentPreset` is passive metadata — no host code mounts it for direct `agents.create` calls (only a caller-provided `setup` composes; the subagent-tool path does it via `composeFrom`, host source `packages/subagent/subagent/src/child-agent.ts`). `agents.resume` needs no setup (durable scope parentage).
 - **Agent-field plumbing**: the engine's run path resolves `agent` as `args.agent || env.OPENCODE_AGENT || "build"` and never consults `missions/base.json` (only the draft/analyze return points do). `bootstrapNativeConfig` therefore defaults the native run config's `agent` from base.json when no explicit arg/env names one — explicit args/env keep precedence; engine untouched. Consumers select AGE mode per project via `missions/base.json` `"agent": "age"` (runs, drafts, and analyze then share one knob).
-- **Distribution**: copy the `plugin/nop-age/preset/age/` directory into the host's user preset root (`${DSH_HOME:-$HOME/.dsh}/.agent-presets/age/`) — or register an extra configured root pointing at a copy — then restart the host. Step-by-step in `docs/process/dsh-plugin-development-guide.md` §AGE Mode.
+- **Distribution**: copy the `plugin/nop-age/preset/age/` directory into the host's user preset root (`${DSH_HOME:-$HOME/.dsh}/.agent-presets/age/`) — or register an extra configured root pointing at a copy — then restart the host. Step-by-step in `docs/references/dsh-plugin-development-guide.md` §AGE Mode.
 - **Verification**: structural gate `test/age-preset.test.mjs` (11 cases) in the CI plugin chain; unit wiring tests in `test/native-executor.test.mjs` (5 cases) + `test/engine-bridge.test.mjs` (base.json defaulting); the composition gate `npm run verify:e2e:preset` (explicit local, never CI-blocking — R3 §5 posture) proves the P4 claim same-tree: roster health, interactive mount model-visible (section + AGENTS.md digest coexistence + preset-only grep/glob tools), mission-child composition with valid markers, `mdcontrol` collision-free before/after, skills intact (four consecutive green runs, `docs/testing/2026/08-23.md`). Real-host roster registration is the documented manual env leg; true-model AGE-session natural-language quality is the plan's deferred watch-only residual.
 
 ### Execution Model (where the long-running loop lives)
@@ -569,7 +569,7 @@ Realtime leader is channel 1 (SSE pushes step-level events). The M4 RPC-direct p
 
 ## Phased Delivery
 
-Day-to-day development procedure (host setup, Creator-mode online loop, flow-customization checklist) lives in `docs/process/dsh-plugin-development-guide.md`.
+Day-to-day development procedure (host setup, Creator-mode online loop, flow-customization checklist) lives in `docs/references/dsh-plugin-development-guide.md`.
 
 | Phase | Deliverable | Verification gate |
 | --- | --- | --- |
