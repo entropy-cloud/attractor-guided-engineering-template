@@ -25,7 +25,7 @@ This skill is for finding the real cause with a reproducible feedback loop befor
 
 ## Execution Pattern
 
-1. Establish a tight feedback loop.
+1. Establish a tight feedback loop using the project real verification commands from `docs/context/project-context.md`.
 2. Reproduce the failure and reduce it to the smallest reliable case.
 3. List 3-5 falsifiable hypotheses.
 4. Run targeted experiments that eliminate hypotheses quickly.
@@ -39,3 +39,7 @@ This skill is for finding the real cause with a reproducible feedback loop befor
 - rejected hypotheses and why they were rejected
 - regression proof path
 - residual risks or follow-up items
+
+## Output
+
+Record the confirmed cause and proof path as a bug-fix note under `docs/bugs/` following `docs/guides/bug-fix-note.md` (identity-referenced naming; the fix itself lands in the delivering plan). If the diagnosis does not reach a confirmed cause, record the hypotheses tested and disconfirmed so far under `docs/analysis/` (`YYYY-MM-DD-HHmm-topic.md`) instead of leaving them in chat.

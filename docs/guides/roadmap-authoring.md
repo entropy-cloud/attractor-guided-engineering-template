@@ -97,6 +97,18 @@ audit-rounds: 0
 - The accepted line MUST carry `findings=none|items` (distinct from plan-closure accepted lines, which carry no `findings=` lexeme). Findings land as unchecked roadmap work items; closing them = ticking the checkbox.
 - Same dispatch/conclusion pairing and append-only rules as plan records (see `docs/guides/plan-authoring-and-execution.md`).
 
+## Completion By Checkbox Search
+
+Done/remaining is a search query, never a second status surface:
+
+```bash
+grep -c "^- [ ]" docs/roadmaps/<slug>-roadmap.md     # remaining work items
+grep -c "^- [x]" docs/roadmaps/<slug>-roadmap.md     # completed work items
+node tools/plan-status.mjs --roadmap docs/roadmaps/<slug>-roadmap.md   # verdict + remaining lines
+```
+
+Zero unchecked boxes = the roadmap is complete (then run the completion summary, section below). The same channel reads plans: a plan is complete iff its counting-domain boxes are all `[x]` plus its Verification/Closure receipts — never a written status.
+
 ## Two Audiences
 
 - **Humans** steer: they decide which milestones and work items exist and in what order; they read checkboxes to see progress; they do not review individual implementation work.

@@ -11,7 +11,7 @@ Read these files first:
 - `AGENTS.md`
 - `docs/index.md`
 - `docs/context/project-context.md`
-- `docs/context/source-of-truth-and-precedence.md`
+- `docs/guides/doc-organization.md (Source-Of-Truth Precedence)`
 - the owner doc that defines this state machine
 - the relevant requirement file
 

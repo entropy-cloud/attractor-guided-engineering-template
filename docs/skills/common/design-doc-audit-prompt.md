@@ -9,7 +9,7 @@ Read these files first:
 - `AGENTS.md`
 - `docs/index.md`
 - `docs/context/project-context.md`
-- `docs/context/source-of-truth-and-precedence.md`
+- `docs/guides/doc-organization.md (Source-Of-Truth Precedence)`
 - `docs/design/README.md`
 - `docs/design/domain-design-guidelines.md` when it exists
 - the relevant requirement file named by the task, plan, backlog item, or user request

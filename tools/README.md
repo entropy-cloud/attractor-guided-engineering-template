@@ -107,3 +107,11 @@ See `mission.json.example` and `design/mission-design.md` for the full schema.
   Uses `AGE_DUPLICATE_SCAN_ROOTS`.
 - `audit/`
   Uses `AGE_AUDIT_ROOTS`.
+
+## Plan / Roadmap State Tools
+
+- `plan-status.mjs` — plan frontmatter status transitions (transition law enforced: `completed` derived-never-written, `held` requires a hold reason, terminal states never revive), whole-repo plan inventory (`--list`), and roadmap completion verdict by checkbox count (`--roadmap`). See `docs/guides/plan-authoring-and-execution.md`.
+
+## Vendored Libraries
+
+- `vendor/js-yaml.mjs` — js-yaml 4.1.1 (MIT), single-file ESM copy. The reusable YAML parser for all tools in this directory; do not add npm dependencies for YAML — import this file.

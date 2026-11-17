@@ -29,7 +29,7 @@ Read at minimum:
 - `docs/context/project-context.md`
 - `docs/context/ai-autonomy-policy.md`
 - `docs/context/codebase-map.md`
-- `docs/context/source-of-truth-and-precedence.md`
+- `docs/guides/doc-organization.md (Source-Of-Truth Precedence)`
 - `docs/skills/README.md`
 - `docs/roadmaps/README.md` if it exists
 - `docs/guides/plan-authoring-and-execution.md` if it exists

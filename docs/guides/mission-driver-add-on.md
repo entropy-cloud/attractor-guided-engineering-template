@@ -20,7 +20,7 @@ If your workflow is interactive (human + agent pairs working plan by plan), you 
 | Launcher shim | `template/install/tools/mission-driver.sh` | `tools/mission-driver.sh` |
 | Env example | `template/install/.env.example` | `.env` (`MISSION_DRIVER_HOME=<path>`) |
 | Mission configs | `template/install/missions/{base,demo,onboarding}.json` | `missions/` |
-| Operator skill | `.agents/skills/nop-mission-driver/` | copied with the add-on |
+| Operator guidance | in the engine itself: `tools/mission-driver/CONTEXT.md` + `docs/user-manual.{en,zh}.md` + `./tools/mission-driver.sh --help` | no separate skill — retires with v2 to avoid skill/engine version drift |
 | Structural gates | `tools/mission-driver/src/{gate-check,roadmap-check,mission-check}.mjs` | pre-commit sections (plans/roadmaps/missions) |
 
 ## Installation
@@ -31,11 +31,11 @@ With the installer flag (from a clone of the template repo):
 ./install-age.sh /path/to/target "Project Name" --with-mission-driver
 ```
 
-This additionally copies the shim, `.env.example`, mission defaults, and the mission-driver skill, and enables the mission-related pre-commit sections.
+This additionally **vendors the engine** into `tools/mission-driver/` (a real copy — never a sibling-checkout reference; sibling-relative engine paths are the historically proven breakage mode), copies the shim, `.env` (`MISSION_DRIVER_HOME=tools/mission-driver`), mission defaults, and the demo/onboarding roadmaps, and creates the engine's plan directories. There is no separate operator skill: guidance lives in the vendored engine itself (`tools/mission-driver/CONTEXT.md`, `docs/user-manual.{en,zh}.md`, `./tools/mission-driver.sh --help`) so it can never drift from the engine version.
 
-Manually, after a plain install:
+Manually, after a plain install (no Node installer flags available):
 
-1. Copy `tools/mission-driver/` into the target repo (vendored copy — do **not** point `MISSION_DRIVER_HOME` at a sibling checkout; sibling-relative engine paths are the historically proven breakage mode).
+1. Copy `tools/mission-driver/` from the template repo into the target repo (vendored copy).
 2. Copy `template/install/tools/mission-driver.sh` → `tools/mission-driver.sh`, `template/install/.env.example` → `.env`, `template/install/missions/` → `missions/`.
 3. Point mission configs at your docs: `roadmapPath` → `docs/roadmaps/<slug>-roadmap.md`, `plansDir` → `docs/plans/<slug>/`, `contextDir` → `docs/context`.
 4. Fill `missions/base.json` `commands.*` with your real verification commands.

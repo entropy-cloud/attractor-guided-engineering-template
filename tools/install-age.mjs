@@ -12,6 +12,7 @@ import {
   copyFileSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   writeFileSync,
   appendFileSync,
@@ -163,14 +164,15 @@ export async function installAge(opts) {
   const mdhAbs = join(templateRoot, "tools", "mission-driver");
   const year = new Date().getFullYear();
 
-  // Compute relative MISSION_DRIVER_HOME (target → engine), forward slashes.
-  let relMdh = relative(target, mdhAbs).split("\\").join("/");
-  if (!relMdh) relMdh = mdhAbs;
+  // With the add-on the engine is VENDORED into the target (copy, not reference —
+  // sibling-checkout references are the proven breakage mode), so the runtime
+  // MISSION_DRIVER_HOME is the target-local copy.
+  const relMdh = withMissionDriver ? "tools/mission-driver" : "";
 
   console.log("Target:             ", target);
   console.log("Project name:       ", projectName);
   if (withMissionDriver) {
-    console.log("Mission-driver home:", relMdh, "(relative from target)");
+    console.log("Mission-driver home:", relMdh, "(vendored into the target)");
   } else {
     console.log("Engine add-on:      not installed (pass --with-mission-driver to enable)");
   }
@@ -242,6 +244,30 @@ export async function installAge(opts) {
   }
 
   console.log(`      copied ${copied.length} files, skipped ${skipped.length} existing.`);
+
+  // --- 1b. Vendor the engine (add-on only) ---
+  if (withMissionDriver) {
+    console.log("[1b/6] Vendoring mission-driver engine into tools/mission-driver/...");
+    const vendorRoot = join(target, "tools", "mission-driver");
+    let vendored = 0;
+    const walkCopy = (srcDir, dstDir) => {
+      for (const name of readdirSync(srcDir)) {
+        if (name === "node_modules" || name === ".git") continue;
+        const s = join(srcDir, name);
+        const d = join(dstDir, name);
+        if (statSync(s).isDirectory()) {
+          mkdirSync(d, { recursive: true });
+          walkCopy(s, d);
+        } else {
+          if (existsSync(d)) continue; // never overwrite an existing vendored engine
+          copyFileSync(s, d);
+          vendored++;
+        }
+      }
+    };
+    walkCopy(mdhAbs, vendorRoot);
+    console.log(`      vendored ${vendored} engine files (existing files never overwritten).`);
+  }
 
   // --- 2. Create .env (engine add-on only) ---
   if (withMissionDriver) {

@@ -145,6 +145,15 @@ Every in-scope item lands in exactly one state: `landed`, `adjudicated as residu
 4. Verification pass lines are recorded in `## Verification`
 5. Independent closure auditor records `## Closure` receipts — completion derives
 
+Update the frontmatter status with the tool, not by hand-editing YAML (it enforces the transition law: `completed` unwritable, `held` requires a hold reason, terminal states never revive):
+
+```bash
+node tools/plan-status.mjs docs/plans/<slug>/<plan>.md active        # reviewer, on accept
+node tools/plan-status.mjs docs/plans/<slug>/<plan>.md held --hold "waiting on X"
+node tools/plan-status.mjs docs/plans/<slug>/<plan>.md cancelled
+node tools/plan-status.mjs --list                                    # whole-repo inventory
+```
+
 Terminal states (`cancelled | superseded | deferred`) never revive; restarting = a new plan.
 
 ## When Executing

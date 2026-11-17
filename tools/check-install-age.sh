@@ -127,6 +127,9 @@ assert "frontend shelf NOT copied without --profile" "$COND"
 [ -f "$TARGET/docs/guides/doc-organization.md" ] && COND=1 || COND=0
 assert "doc-organization guide copied" "$COND"
 
+[ -f "$TARGET/tools/plan-status.mjs" ] && COND=1 || COND=0
+assert "plan-status tool copied" "$COND"
+
 [ -f "$TARGET/.githooks/pre-commit" ] && COND=1 || COND=0
 assert "consumer pre-commit hook copied" "$COND"
 
@@ -186,8 +189,10 @@ assert "mdh: docs/plans/onboarding/ directory exists" "$COND"
 [ -f "$TARGET2/.env.example" ] && COND=1 || COND=0
 assert "mdh: .env.example copied" "$COND"
 
-[ -f "$TARGET2/.agents/skills/nop-mission-driver/SKILL.md" ] && COND=1 || COND=0
-assert "mdh: mission-driver skill copied" "$COND"
+[ ! -e "$TARGET2/.agents/skills/nop-mission-driver" ] && COND=1 || COND=0
+assert "mdh: operator skill retired (guidance lives in engine docs)" "$COND"
+[ -f "$TARGET2/tools/mission-driver/CONTEXT.md" ] && COND=1 || COND=0
+assert "mdh: engine vendored with its own operator docs" "$COND"
 
 [ -f "$TARGET2/docs/roadmaps/demo-roadmap.md" ] && COND=1 || COND=0
 assert "mdh: demo-roadmap delivered (demo mission roadmapPath resolvable)" "$COND"
