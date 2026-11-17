@@ -12,7 +12,7 @@
 #   - The 2026-07-27-0100 plan (onboarding mission) Phase 2 closure gate
 #
 # Usage (from repo root, in bash / Git Bash):
-#   ./tools/check-install-age.sh                          # auto-create /tmp target
+#   ./tools/check-install-age.sh                          # auto-create _tmp target
 #   ./tools/check-install-age.sh /path/to/target          # use existing target dir
 #
 # Exit codes: 0 = all assertions PASS; 1 = at least one FAIL; 2 = bad usage.
@@ -23,9 +23,14 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd | tr -d '\r')"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd | tr -d '\r')"
 
 TARGET_RAW="${1:-}"
+mkdir -p "$REPO_ROOT/_tmp"
+SCRATCH="$(mktemp -d "$REPO_ROOT/_tmp/age-install-check-XXXXXX")" || exit 2
+# Only this invocation's generated targets/logs are removed, including on failure.
+trap 'rm -rf "$SCRATCH"' EXIT
 OWNED_TEMP=0
 if [ -z "$TARGET_RAW" ]; then
-  TARGET_RAW="$(mktemp -d /tmp/age-test-XXXX)"
+  TARGET_RAW="$SCRATCH/default"
+  mkdir -p "$TARGET_RAW"
   OWNED_TEMP=1
 fi
 
@@ -43,13 +48,13 @@ echo ""
 
 # Run install-age.sh from repo root (pnpm sets cwd to tools/, so use absolute).
 echo "--- running ./install-age.sh ---"
-if ! "$REPO_ROOT/install-age.sh" "$TARGET" "$PROJECT_NAME" > /tmp/age-test-output.log 2>&1; then
+if ! "$REPO_ROOT/install-age.sh" "$TARGET" "$PROJECT_NAME" > "$SCRATCH/default.log" 2>&1; then
   echo "FAIL: install-age.sh errored:" >&2
-  tail -20 /tmp/age-test-output.log >&2
+  tail -20 "$SCRATCH/default.log" >&2
   [ "$OWNED_TEMP" = "1" ] && rm -rf "$TARGET"
   exit 1
 fi
-tail -8 /tmp/age-test-output.log
+tail -8 "$SCRATCH/default.log"
 echo ""
 
 # Count helper. Returns single integer (grep -c output, 0 if no matches / file missing).
@@ -162,12 +167,13 @@ assert "docs/context/project-context.md <project-name> replaced" "$COND" "found 
 
 # === v2 engine add-on pass (--with-mission-driver into a fresh target) ===
 
-TARGET2="$(mktemp -d /tmp/age-test-mdh-XXXX)"
+TARGET2="$SCRATCH/engine"
+mkdir -p "$TARGET2"
 echo ""
 echo "--- running ./install-age.sh --with-mission-driver (second target) ---"
-if ! "$REPO_ROOT/install-age.sh" "$TARGET2" "$PROJECT_NAME" --with-mission-driver > /tmp/age-test-output-mdh.log 2>&1; then
+if ! "$REPO_ROOT/install-age.sh" "$TARGET2" "$PROJECT_NAME" --with-mission-driver > "$SCRATCH/engine.log" 2>&1; then
   echo "FAIL: install-age.sh --with-mission-driver errored:" >&2
-  tail -20 /tmp/age-test-output-mdh.log >&2
+  tail -20 "$SCRATCH/engine.log" >&2
   rm -rf "$TARGET2"
   [ "$OWNED_TEMP" = "1" ] && rm -rf "$TARGET"
   exit 1
@@ -200,16 +206,27 @@ assert "mdh: engine vendored with its own operator docs" "$COND"
 [ -f "$TARGET2/docs/roadmaps/demo-roadmap.md" ] && COND=1 || COND=0
 assert "mdh: demo-roadmap delivered (demo mission roadmapPath resolvable)" "$COND"
 
+# Exercise the installed launcher and validator, not a sibling checkout.
+if (cd "$TARGET2" && unset MISSION_DRIVER_HOME && bash tools/mission-driver.sh --help > "$SCRATCH/help.log" 2>&1) && grep -q Usage "$SCRATCH/help.log"; then COND=1; else COND=0; fi
+if [ "$COND" = "0" ]; then cat "$SCRATCH/help.log" >&2; fi
+assert "mdh: installed launcher --help runs standalone" "$COND"
+if (cd "$TARGET2" && unset MISSION_DRIVER_HOME && bash tools/mission-driver.sh list > "$SCRATCH/list.log" 2>&1) && grep -q onboarding "$SCRATCH/list.log"; then COND=1; else COND=0; fi
+if [ "$COND" = "0" ]; then cat "$SCRATCH/list.log" >&2; fi
+assert "mdh: installed launcher lists consumer missions" "$COND"
+if (cd "$TARGET2" && node tools/mission-driver/src/mission-check.mjs missions/onboarding.json . > "$SCRATCH/mission.log" 2>&1); then COND=1; else COND=0; fi
+assert "mdh: vendored mission validator runs standalone" "$COND"
+
 rm -rf "$TARGET2"
 
 # === Profile pass (--profile frontend into a fresh target) ===
 
-TARGET3="$(mktemp -d /tmp/age-test-prof-XXXX)"
+TARGET3="$SCRATCH/frontend"
+mkdir -p "$TARGET3"
 echo ""
 echo "--- running ./install-age.sh --profile frontend (third target) ---"
-if ! "$REPO_ROOT/install-age.sh" "$TARGET3" "$PROJECT_NAME" --profile frontend > /tmp/age-test-output-prof.log 2>&1; then
+if ! "$REPO_ROOT/install-age.sh" "$TARGET3" "$PROJECT_NAME" --profile frontend > "$SCRATCH/frontend.log" 2>&1; then
   echo "FAIL: install-age.sh --profile frontend errored:" >&2
-  tail -20 /tmp/age-test-output-prof.log >&2
+  tail -20 "$SCRATCH/frontend.log" >&2
   rm -rf "$TARGET3"
   [ "$OWNED_TEMP" = "1" ] && rm -rf "$TARGET"
   exit 1

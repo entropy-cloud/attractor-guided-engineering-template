@@ -1,9 +1,8 @@
 #!/bin/bash
 # tools/mission-driver.sh — Mission driver launcher (thin shim).
 #
-# The mission-driver ENGINE is NOT copied into this repo. It lives in the shared
-# attractor-guided-engineering-template and is located via MISSION_DRIVER_HOME,
-# read from (in priority order):
+# The installer vendors the engine into tools/mission-driver/. Its location is
+# selected via MISSION_DRIVER_HOME, read from (in priority order):
 #   1. the process environment (export MISSION_DRIVER_HOME=...)
 #   2. the repo-root .env file (copy .env.example to .env and edit)
 #

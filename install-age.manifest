@@ -34,7 +34,9 @@ template/install/missions/onboarding.json > missions/onboarding.json :: mdh-only
 template/install/docs/roadmaps/demo-roadmap.md > docs/roadmaps/demo-roadmap.md :: mdh-only
 template/install/AGE-FILES-GUIDE.md > docs/references/age-files-guide.md :: mdh-only
 
-# --- engine skill, pi runner bridge (--with-mission-driver AND --pi) ---
+# --- pi file bridge (--pi); derived from canonical operational skills ---
+.agents/skills/nop-git/SKILL.md > .pi/skills/nop-git/SKILL.md :: pi-only
+.agents/skills/nop-grillme/SKILL.md > .pi/skills/nop-grillme/SKILL.md :: pi-only
 
 # --- root ---
 template/AGENTS.md
@@ -131,6 +133,7 @@ tools/check-doc-references.mjs
 tools/check-doc-timeliness.mjs
 tools/code-stats.mjs
 tools/plan-status.mjs
+tools/age-drift.mjs
 tools/vendor/js-yaml.mjs
 
 # --- githooks (consumer version: doc hygiene, fail-open) ---

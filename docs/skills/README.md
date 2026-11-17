@@ -10,6 +10,8 @@ These prompts are generic defaults. After adapting the template, customize them 
 
 Skills are organized by audience; when adapting the template, copy `common/` plus the shelf that matches the project type (installer `--profile`), and prune what you will not use.
 
+This file is the canonical catalog. The installer renders its registry sections for `none` (common only), `frontend`, `java`, or `all`: selected entries are marked installed; unselected shelves are optional without unavailable prompt-path rows. It checks exact registry/delivered-prompt parity before writing. Optional shelves require a separately reviewed integration after adoption; reinstallation is not a profile updater.
+
 | Shelf | Audience |
 | --- | --- |
 | `common/` | every project — document/plan/closure audits, diagnosis, refactor methods |
@@ -68,6 +70,6 @@ Do not add broad business-scenario skills as replacements for owner docs. Promot
 Two layers, one repo:
 
 - **`docs/skills/`** (this directory): method/audit prompts. Portable, referenced by plans (`Skill: <name>`), executed by any reviewer — human or AI — that can read a file.
-- **`.agents/skills/`**: operational skills the AI tool auto-loads (daily git operations, grilling sessions, the mission-driver operator skill). See `.agents/skills/README.md`.
+- **`.agents/skills/`**: canonical operational skills (daily git operations and grilling sessions). The optional pi file mirror is derived from these files; engine operator guidance lives with the optional engine, not a separate skill. See `.agents/skills/README.md`.
 
 Review/audit prompts stay here because any independent reviewer must be able to discover them; tool auto-loading is not guaranteed across tools.

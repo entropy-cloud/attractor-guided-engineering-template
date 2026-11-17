@@ -20,8 +20,8 @@ If your workflow is interactive (human + agent pairs working plan by plan), you 
 | Launcher shim | `template/install/tools/mission-driver.sh` | `tools/mission-driver.sh` |
 | Env example | `template/install/.env.example` | `.env` (`MISSION_DRIVER_HOME=<path>`) |
 | Mission configs | `template/install/missions/{base,demo,onboarding}.json` | `missions/` |
-| Operator guidance | in the engine itself: `tools/mission-driver/CONTEXT.md` + `docs/user-manual.{en,zh}.md` + `./tools/mission-driver.sh --help` | no separate skill — retires with v2 to avoid skill/engine version drift |
-| Structural gates | `tools/mission-driver/src/{gate-check,roadmap-check,mission-check}.mjs` | pre-commit sections (plans/roadmaps/missions) |
+| Operator guidance | in the engine itself: `tools/mission-driver/CONTEXT.md` + `docs/user-manual.{en,zh}.md` + `./tools/mission-driver.sh --help` | no separate operator skill |
+| Structural gates | `tools/mission-driver/src/{gate-check,roadmap-check,mission-check}.mjs` | available for explicit invocation/hook wiring, not automatically enabled by installation |
 
 ## Installation
 
@@ -31,19 +31,32 @@ With the installer flag (from a clone of the template repo):
 ./install-age.sh /path/to/target "Project Name" --with-mission-driver
 ```
 
-This additionally **vendors the engine** into `tools/mission-driver/` (a real copy — never a sibling-checkout reference; sibling-relative engine paths are the historically proven breakage mode), copies the shim, `.env` (`MISSION_DRIVER_HOME=tools/mission-driver`), mission defaults, and the demo/onboarding roadmaps, and creates the engine's plan directories. There is no separate operator skill: guidance lives in the vendored engine itself (`tools/mission-driver/CONTEXT.md`, `docs/user-manual.{en,zh}.md`, `./tools/mission-driver.sh --help`) so it can never drift from the engine version.
+This **vendors the engine** into `tools/mission-driver/`, copies the shim, env example, mission defaults and demo/onboarding roadmaps, and creates plan directories. The default engine path is target-local, so no sibling checkout is required. Existing `.env` values and custom hooks are preserved; an absent engine-path assignment is appended on a separate line. An existing `MISSION_DRIVER_HOME` assignment remains authoritative and may intentionally point elsewhere. Operator guidance ships with the engine, not a separate operator skill.
 
-Manually, after a plain install (no Node installer flags available):
+Installation records `.age-origin.json` and delivers the standalone read-only `tools/age-drift.mjs`. A nonempty engine with unknown/incompatible origin, or modified/missing/extra engine files, blocks preflight before any target writes. Reinstallation is not an upgrade or profile/add-on reconfiguration command. Full installer safety, source identity, bridge and drift contracts live in the template repository's architecture document titled Template vs Real-Project Boundary; it is not delivered as consumer project architecture.
+
+Inspect from the consumer root without model credentials:
+
+```bash
+./tools/mission-driver.sh --help
+./tools/mission-driver.sh list
+node tools/mission-driver/src/mission-check.mjs missions/onboarding.json .
+node tools/age-drift.mjs
+```
+
+Drift exits `0` unchanged, `1` changed/missing managed files or extra engine files, and `2` unknown/invalid origin or inspection error. It does not overwrite, synchronize or fetch anything. `.env` and other runtime secrets are not recorded or checked. Fill the project context and mission verification commands before any actual mission run; help/list/validation are not business verification.
+
+For a project with an existing plain installation, first inspect a separate clean add-on installation and manually reconcile the desired files. The installer intentionally refuses in-place option changes. A manual integration consists of:
 
 1. Copy `tools/mission-driver/` from the template repo into the target repo (vendored copy).
-2. Copy `template/install/tools/mission-driver.sh` → `tools/mission-driver.sh`, `template/install/.env.example` → `.env`, `template/install/missions/` → `missions/`.
+2. Copy the launcher, env example and mission defaults from the separate installation without overwriting local configuration. Ensure `.env` points at the local engine.
 3. Point mission configs at your docs: `roadmapPath` → `docs/roadmaps/<slug>-roadmap.md`, `plansDir` → `docs/plans/<slug>/`, `contextDir` → `docs/context`.
 4. Fill `missions/base.json` `commands.*` with your real verification commands.
-5. Enable the plans/roadmaps/missions sections of the pre-commit hook (see `.githooks/pre-commit` in the template repo).
+5. Wire explicit structural gate invocations into your hook/CI if required. The installed consumer hook checks document hygiene only; the engine's invocation of gates does not install commit-time enforcement. A manually integrated engine has no installer-attested origin until a separately reviewed adoption procedure records one; do not fabricate or copy another project's metadata.
 
 ## What Changes When Enabled
 
-- Plan/roadmap ledger grammar becomes machine-checked (pre-commit + CI): frontmatter fields, receipt lines, checkbox counting domains, roadmap `## Work Item Status` milestone grammar.
+- Engine operations can machine-check ledger grammar: frontmatter fields, receipt lines, checkbox counting domains and roadmap milestone grammar. Commit/CI enforcement requires explicit wiring.
 - Roadmap `audit-rounds` frontmatter and `## Deep Audit Record` become live (audit budgets).
 - `verify: [keys]` in plan frontmatter maps to `missions/base.json` command keys.
 - Run state lives in `_tmp/<ts>-mission-driver/` (gitignored); Reflexion memory in `tools/mission-driver/memory/`.

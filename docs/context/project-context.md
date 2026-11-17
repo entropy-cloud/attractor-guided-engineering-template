@@ -38,6 +38,8 @@ This file intentionally does **not** track "what is being worked on right now". 
 | Lint / static check       | `pnpm --prefix tools/mission-driver test` (chains `prompt-check.mjs`) |
 | Unit tests                | `pnpm --prefix tools/mission-driver test`                    |
 | E2E / integration tests   | `node $MISSION_DRIVER_HOME/src/mission-check.mjs missions/<name>.json .` (per-mission validation) |
+| Consumer installer contract (scoped) | `node --test tools/install-age.test.mjs tools/install-age.integration.test.mjs` |
+| Consumer installation closure gate (scoped) | `bash tools/check-install-age.sh` |
 
 Notes:
 - Engine has zero npm deps → both `npm --prefix` and `pnpm --prefix` work; `pnpm` preferred (matches `tools/package.json:5` `"packageManager": "pnpm@10.0.0"` and `$MISSION_DRIVER_HOME/web/pnpm-lock.yaml`).

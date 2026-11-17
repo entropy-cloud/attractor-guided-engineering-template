@@ -9,7 +9,6 @@
 //               node tools/install-age.mjs (universal)
 
 import {
-  copyFileSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -19,10 +18,11 @@ import {
   chmodSync,
   statSync,
 } from "node:fs";
-import { resolve, relative, dirname, basename, join } from "node:path";
+import { resolve, dirname, basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
+import { hash, safePath, listFiles, readOrigin, ORIGIN_FILE } from "./age-drift.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -74,6 +74,14 @@ export function parseManifestLine(raw) {
     dst = src.startsWith("template/") ? src.slice("template/".length) : src;
   }
 
+  const allowed = new Set(["exec", "fill", "rel-mdh", "mdh-only", "pi-only", "profile-frontend", "profile-java"]);
+  if (flags.some((flag) => !allowed.has(flag)) || new Set(flags).size !== flags.length) {
+    throw new Error(`Invalid manifest flags: ${raw}`);
+  }
+  for (const path of [src, dst]) safePath(__dirname, path);
+  if ([src, dst].some((path) => path.includes(">") || path.includes("::"))) {
+    throw new Error(`Invalid manifest entry: ${raw}`);
+  }
   return { src, dst, flags };
 }
 
@@ -115,12 +123,12 @@ export function applyFlag(filePath, flag, ctx) {
       break;
     case "fill": {
       const content = readFileSync(filePath, "utf8");
-      writeFileSync(filePath, content.replace(/<project-name>/g, ctx.projectName));
+      writeFileSync(filePath, content.replace(/<project-name>/g, () => ctx.projectName));
       break;
     }
     case "rel-mdh": {
       const content = readFileSync(filePath, "utf8");
-      writeFileSync(filePath, content.replace(/__REL_MDH__/g, ctx.relMdh));
+      writeFileSync(filePath, content.replace(/__REL_MDH__/g, () => ctx.relMdh));
       break;
     }
   }
@@ -152,237 +160,235 @@ export function ensureGitignoreEntry(gitignorePath, entry) {
 // Main install logic
 // ---------------------------------------------------------------------------
 
+const PROFILES = ["none", "frontend", "java", "all"];
+
+export function selectEntries(entries, { withPi = false, withMissionDriver = false, profile = "none" }) {
+  if (!PROFILES.includes(profile)) throw new Error(`Invalid profile: ${profile}`);
+  return entries.filter(({ flags }) =>
+    (!flags.includes("pi-only") || withPi) &&
+    (!flags.includes("mdh-only") || withMissionDriver) &&
+    (!flags.some((f) => f.startsWith("profile-")) || profile === "all" || flags.includes(`profile-${profile}`)));
+}
+
+// Render the catalog from the canonical registry; do not maintain a second list.
+export function renderRegistry(content, profile) {
+  return content.replace(/### (common|frontend|java)\/[^]*?(?=\n### |\n## |$)/g, (section, shelf) => {
+    const installed = shelf === "common" || profile === "all" || profile === shelf;
+    return installed ? section.replace(`### ${shelf}/`, `### ${shelf}/ (installed)`)
+      : `### ${shelf} (optional — not installed)\n\nAvailable from the template with --profile ${shelf} or --profile all.\n`;
+  });
+}
+
+function renderEntry(entry, bytes, ctx, profile) {
+  if (entry.flags.includes("fill") || (entry.src.startsWith("template/") && entry.dst.endsWith(".md"))) {
+    bytes = Buffer.from(bytes.toString("utf8").replace(/<project-name>/g, () => ctx.projectName));
+  }
+  if (entry.flags.includes("rel-mdh")) {
+    bytes = Buffer.from(bytes.toString("utf8").replace(/__REL_MDH__/g, () => ctx.relMdh));
+  }
+  if (entry.dst === "docs/skills/README.md") bytes = Buffer.from(renderRegistry(bytes.toString("utf8"), profile));
+  return bytes;
+}
+
+// Catalog and pi parity are preflight invariants, not just happy-path tests.
+export function validateParity(files, withPi) {
+  const registry = files.get("docs/skills/README.md")?.bytes.toString("utf8");
+  if (!registry) throw new Error("Missing skill registry");
+  const declared = [...registry.matchAll(/`((?:common|frontend|java)\/[^`]+\.md)`/g)].map((m) => `docs/skills/${m[1]}`);
+  const delivered = [...files.keys()].filter((p) => /^docs\/skills\/(common|frontend|java)\/.*\.md$/.test(p) && !p.endsWith("/README.md"));
+  if (!declared.length || !delivered.length || new Set(declared).size !== declared.length || declared.some((p) => !files.has(p)) || delivered.some((p) => !declared.includes(p))) {
+    throw new Error("Skill registry/profile parity mismatch");
+  }
+  if (withPi) {
+    const canonical = [...files.keys()].filter((p) => p.startsWith(".agents/skills/") && !p.endsWith("/README.md"));
+    const mirrors = [...files.keys()].filter((p) => p.startsWith(".pi/skills/"));
+    if (!canonical.length || canonical.length !== mirrors.length || canonical.some((p) => {
+      const mirror = files.get(p.replace(".agents/", ".pi/"));
+      return !mirror || !files.get(p).bytes.equals(mirror.bytes);
+    })) throw new Error("Pi bridge/canonical skill parity mismatch");
+  }
+}
+
 /**
- * Run the full AGE scaffold installation.
+ * Preflight and install the scaffold without overwriting existing files.
  * @param {{target: string, projectName: string, withPi?: boolean,
  *          withMissionDriver?: boolean, profile?: string}} opts
  */
 export async function installAge(opts) {
   const { target, projectName, withPi = false, withMissionDriver = false, profile = "none" } = opts;
   const templateRoot = resolve(__dirname, "..");
-  const manifestPath = join(templateRoot, "install-age.manifest");
-  const mdhAbs = join(templateRoot, "tools", "mission-driver");
-  const year = new Date().getFullYear();
-
-  // With the add-on the engine is VENDORED into the target (copy, not reference —
-  // sibling-checkout references are the proven breakage mode), so the runtime
-  // MISSION_DRIVER_HOME is the target-local copy.
-  const relMdh = withMissionDriver ? "tools/mission-driver" : "";
-
-  console.log("Target:             ", target);
-  console.log("Project name:       ", projectName);
-  if (withMissionDriver) {
-    console.log("Mission-driver home:", relMdh, "(vendored into the target)");
-  } else {
-    console.log("Engine add-on:      not installed (pass --with-mission-driver to enable)");
-  }
-  if (profile !== "none") console.log("Skills profile:     ", profile);
-  console.log("");
-
-  // Pre-flight
-  if (!existsSync(manifestPath)) {
-    console.error("ERROR: manifest not found:", manifestPath);
-    process.exit(1);
-  }
-  if (withMissionDriver && !existsSync(join(mdhAbs, "src", "main.js"))) {
-    console.error("ERROR: mission-driver engine not found at:", join(mdhAbs, "src", "main.js"));
-    console.error("       Run this script from inside the attractor-guided-engineering-template repo.");
-    process.exit(1);
-  }
-
-  const ctx = { projectName, relMdh };
-  const entries = readManifest(manifestPath);
-  const copied = [];
-  const skipped = [];
-
-  // --- 1. Copy from manifest ---
-  console.log("[1/6] Copying scaffold files from manifest...");
-  for (const entry of entries) {
-    const src = join(templateRoot, entry.src);
-    const dst = join(target, entry.dst);
-
-    if (!existsSync(src)) {
-      console.error(`  WARN: manifest lists '${entry.src}' but source missing — skipped.`);
-      continue;
+  if (!existsSync(target) || !statSync(target).isDirectory()) throw new Error("Target must be an existing directory");
+  if (typeof projectName !== "string" || !projectName.trim()) throw new Error("Project name must not be empty");
+  const options = { withPi, withMissionDriver, profile };
+  const previous = readOrigin(target);
+  const entries = selectEntries(readManifest(join(templateRoot, "install-age.manifest")), options);
+  const ctx = { projectName, relMdh: "tools/mission-driver" };
+  const files = new Map();
+  const destinations = new Set();
+  const sourceHashes = [];
+  const add = (entry) => {
+    const key = entry.dst.toLowerCase(); // Keep manifests portable to case-insensitive filesystems.
+    if (destinations.has(key) || [ORIGIN_FILE, ".env", ".gitignore"].includes(key)) {
+      throw new Error(`Duplicate/reserved manifest destination: ${entry.dst}`);
     }
-    // pi-only entries (.pi/skills native copy) are skipped unless --pi is passed.
-    if (entry.flags.includes("pi-only") && !withPi) continue;
-    // mdh-only entries (engine bootstrap) are skipped unless --with-mission-driver.
-    if (entry.flags.includes("mdh-only") && !withMissionDriver) continue;
-    // profile-<shelf> entries copy only for the matching --profile (or --profile all).
-    if (
-      entry.flags.some((f) => f.startsWith("profile-")) &&
-      profile !== "all" &&
-      !entry.flags.includes(`profile-${profile}`)
-    ) {
-      continue;
-    }
-
-    if (existsSync(dst)) {
-      skipped.push(entry.dst);
-      continue;
-    }
-
-    mkdirSync(dirname(dst), { recursive: true });
-    copyFileSync(src, dst);
-
-    // Apply explicit flags.
-    for (const flag of entry.flags) {
-      applyFlag(dst, flag, ctx);
-    }
-    // Implicit fill: template/*.md files get <project-name> replaced
-    // (backward compat; matches the original bash behavior).
-    if (entry.src.startsWith("template/") && entry.dst.endsWith(".md")) {
-      if (!entry.flags.includes("fill")) {
-        applyFlag(dst, "fill", ctx);
-      }
-    }
-
-    const flagStr = entry.flags.length ? ` (${entry.flags.join(",")})` : "";
-    console.log(`  + ${entry.dst}${flagStr}`);
-    copied.push(entry.dst);
-  }
-
-  console.log(`      copied ${copied.length} files, skipped ${skipped.length} existing.`);
-
-  // --- 1b. Vendor the engine (add-on only) ---
-  if (withMissionDriver) {
-    console.log("[1b/6] Vendoring mission-driver engine into tools/mission-driver/...");
-    const vendorRoot = join(target, "tools", "mission-driver");
-    let vendored = 0;
-    const walkCopy = (srcDir, dstDir) => {
-      for (const name of readdirSync(srcDir)) {
-        if (name === "node_modules" || name === ".git") continue;
-        const s = join(srcDir, name);
-        const d = join(dstDir, name);
-        if (statSync(s).isDirectory()) {
-          mkdirSync(d, { recursive: true });
-          walkCopy(s, d);
-        } else {
-          if (existsSync(d)) continue; // never overwrite an existing vendored engine
-          copyFileSync(s, d);
-          vendored++;
+    destinations.add(key);
+    const src = safePath(templateRoot, entry.src);
+    if (!existsSync(src) || !statSync(src).isFile()) throw new Error(`Required source missing: ${entry.src}`);
+    const bytes = readFileSync(src);
+    sourceHashes.push([entry.src, entry.dst, hash(bytes), entry.flags]);
+    files.set(entry.dst, { ...entry, mode: statSync(src).mode & 0o777, bytes: renderEntry(entry, bytes, ctx, profile) });
+  };
+  for (const entry of entries) add(entry);
+  validateParity(files, withPi);
+  // A consumer's canonical operational skill wins over the template. The opt-in
+  // mirror is derived from those effective bytes, never the other way around.
+  if (withPi) {
+    for (const [path, file] of files) {
+      if (!path.startsWith(".agents/skills/") || path.endsWith("/README.md")) continue;
+      const canonical = safePath(target, path);
+      if (existsSync(canonical) && statSync(canonical).isFile()) {
+        const effective = readFileSync(canonical);
+        if (previous && hash(effective) !== previous.files[path]) {
+          throw new Error(`Canonical skill drift (no files written): ${path}`);
         }
+        file.bytes = effective;
       }
-    };
-    walkCopy(mdhAbs, vendorRoot);
-    console.log(`      vendored ${vendored} engine files (existing files never overwritten).`);
-  }
-
-  // --- 2. Create .env (engine add-on only) ---
-  if (withMissionDriver) {
-    console.log("[2/6] Ensuring .env...");
-    const envPath = join(target, ".env");
-    if (!existsSync(envPath)) {
-      writeFileSync(envPath, `MISSION_DRIVER_HOME=${relMdh}\n`, "utf8");
-      console.log("      created.");
-    } else {
-      const envContent = readFileSync(envPath, "utf8");
-      if (!/^MISSION_DRIVER_HOME=/m.test(envContent)) {
-        appendFileSync(envPath, `MISSION_DRIVER_HOME=${relMdh}\n`, "utf8");
-      }
-      console.log("      .env exists (MISSION_DRIVER_HOME ensured).");
+      const mirror = files.get(path.replace(".agents/", ".pi/"));
+      if (mirror) mirror.bytes = file.bytes;
     }
-  } else {
-    console.log("[2/6] .env skipped (engine add-on not installed).");
   }
-
-  // --- 3. Create plan directories (engine add-on only) ---
+  validateParity(files, withPi);
   if (withMissionDriver) {
-    console.log("[3/6] Creating plan directories...");
-    mkdirSync(join(target, "docs", "plans", "demo"), { recursive: true });
-    mkdirSync(join(target, "docs", "plans", "onboarding"), { recursive: true });
-    console.log("      done.");
-  } else {
-    console.log("[3/6] Plan dirs skipped (create docs/plans/<roadmap-slug>/ with your first roadmap).");
-  }
-
-  // --- 4. Create docs/logs/{year}/ ---
-  console.log(`[4/6] Creating docs/logs/${year}/...`);
-  mkdirSync(join(target, "docs", "logs", String(year)), { recursive: true });
-  console.log("      done.");
-
-  // --- 5. Update .gitignore ---
-  console.log("[5/6] Updating .gitignore...");
-  const giPath = join(target, ".gitignore");
-  ensureGitignoreEntry(giPath, ".env");
-  ensureGitignoreEntry(giPath, "_tmp/");
-  ensureGitignoreEntry(giPath, "tmp/");
-  console.log("      done.");
-
-  // --- 6. Report ---
-  console.log("[6/6] Report");
-  console.log("");
-  console.log(`Copied ${copied.length} files, skipped ${skipped.length} existing.`);
-  if (skipped.length > 0) {
-    console.log("");
-    console.log("===== SKIPPED (already exists) =====");
-    for (const f of skipped) console.log(`  = ${f}`);
-  }
-  console.log("");
-  console.log("==============================================");
-  console.log(`  AGE scaffold installed for: ${projectName}`);
-  console.log("==============================================");
-  console.log("");
-  console.log("Also created (runtime):");
-  if (withMissionDriver) {
-    console.log(`  - .env                               (MISSION_DRIVER_HOME=${relMdh})`);
-    console.log("  - docs/plans/demo/, docs/plans/onboarding/ (empty — engine scans at runtime)");
-  }
-  console.log(`  - docs/logs/${year}/                    (daily log dir)`);
-  console.log("");
-  if (withMissionDriver) {
-    console.log(`Manifest-copied scaffold: ${copied.length} files (incl. engine shim, .env.example,`);
-    console.log("  missions/{base,demo,onboarding}.json + all docs/ methodology files).");
-  } else {
-    console.log(`Manifest-copied scaffold: ${copied.length} files (docs skeleton, guides, skills,`);
-    console.log("  .agents/skills, doc-hygiene tools — engine NOT included by default).");
-  }
-  console.log("");
-  console.log("NEXT STEPS:");
-  console.log("  1. (required) Fill docs/context/project-context.md verification commands.");
-  console.log("  2. (required) Read docs/guides/doc-organization.md — directory map and naming.");
-  console.log("  3. (hook)    git config core.hooksPath .githooks");
-  console.log("  4. (skills)  Prune docs/skills/ shelves; customize prompt customization layers.");
-  if (withMissionDriver) {
-    console.log("  5. (smoke)   ./tools/mission-driver.sh run demo");
-    console.log("  6.           Fill missions/base.json commands.* for YOUR stack.");
-    if (withPi) {
-      console.log("  7. (pi driver) trust the project in pi, then:");
-      console.log("     MISSION_DRIVER_EXEC=pi OPENCODE_MODEL=<pi-model-id> ./tools/mission-driver.sh run demo");
+    const engine = safePath(templateRoot, "tools/mission-driver");
+    if (!existsSync(join(engine, "src", "main.js"))) throw new Error("Required engine source missing: src/main.js");
+    for (const path of listFiles(engine)) {
+      add({ src: `tools/mission-driver/${path}`, dst: `tools/mission-driver/${path}`, flags: [] });
     }
-  } else {
-    console.log("  5. (optional engine) See docs/guides/mission-driver-add-on.md");
   }
+  // Hash source bytes and mappings, not repository path, git remote, configuration or secrets.
+  const sourceHash = hash(JSON.stringify([
+    hash(readFileSync(__filename)), hash(readFileSync(join(templateRoot, "install-age.manifest"))), sourceHashes,
+  ]));
+  if (previous && JSON.stringify(previous.options) !== JSON.stringify(options)) {
+    throw new Error("Installation options differ from origin; no automatic reconfiguration (no files written)");
+  }
+  const engineTarget = safePath(target, "tools/mission-driver");
+  if (withMissionDriver && existsSync(engineTarget) && readdirSync(engineTarget).length) {
+    if (!previous?.options?.withMissionDriver || previous.sourceHash !== sourceHash) {
+      throw new Error("Engine conflict: unknown/incompatible origin; no files written");
+    }
+    const actual = listFiles(engineTarget).map((p) => `tools/mission-driver/${p}`);
+    const expected = [...files.keys()].filter((p) => p.startsWith("tools/mission-driver/"));
+    if (actual.length !== expected.length || actual.some((p) => !files.has(p)) || expected.some((p) =>
+      !existsSync(safePath(target, p)) || hash(readFileSync(safePath(target, p))) !== hash(files.get(p).bytes))) {
+      throw new Error("Engine conflict: content/inventory differs; no files written");
+    }
+  }
+  if (previous && previous.sourceHash !== sourceHash) {
+    throw new Error("Origin source conflict; no automatic upgrade (no files written)");
+  }
+  const conflicts = [];
+  for (const [path, file] of files) {
+    const dst = safePath(target, path);
+    if (existsSync(dst)) {
+      if (!statSync(dst).isFile()) throw new Error(`Destination is not a file: ${path}`);
+      if (!readFileSync(dst).equals(file.bytes)) conflicts.push(path);
+    }
+    // Detect a file where a parent directory is needed before writing anything.
+    let parent = dirname(dst);
+    while (parent !== resolve(target)) {
+      if (existsSync(parent) && !statSync(parent).isDirectory()) throw new Error(`Destination parent is not a directory: ${path}`);
+      parent = dirname(parent);
+    }
+  }
+  // Report all existing scaffold conflicts before copying any missing files.
+  if (previous && conflicts.length) throw new Error(`Scaffold conflict (no files written): ${conflicts.join(", ")}`);
+  if (conflicts.some((path) => path.startsWith(".pi/skills/") || path === "docs/skills/README.md")) {
+    throw new Error(`Capability parity conflict (no files written): ${conflicts.join(", ")}`);
+  }
+  const year = new Date().getFullYear();
+  const dirs = [`docs/logs/${year}`, ...(withMissionDriver ? ["docs/plans/demo", "docs/plans/onboarding"] : [])];
+  for (const path of [".gitignore", ...(withMissionDriver ? [".env"] : []), ...dirs]) {
+    const full = safePath(target, path);
+    if (existsSync(full) && (dirs.includes(path) ? !statSync(full).isDirectory() : !statSync(full).isFile())) {
+      throw new Error(`Invalid dynamic destination: ${path}`);
+    }
+  }
+  console.log(`Target: ${target}\nProject name: ${projectName}\nSkills profile: ${profile}`);
+  const recorded = { ...(previous?.files || {}) };
+  let copied = 0;
+  for (const [path, file] of files) {
+    const dst = safePath(target, path);
+    if (conflicts.includes(path)) {
+      console.log(`CONFLICT preserved existing customization (not managed): ${path}`);
+      continue;
+    }
+    if (!existsSync(dst)) {
+      mkdirSync(dirname(dst), { recursive: true });
+      writeFileSync(dst, file.bytes, { mode: file.mode });
+      if (file.flags.includes("exec")) applyFlag(dst, "exec", ctx);
+      copied++;
+    }
+    recorded[path] = hash(file.bytes);
+  }
+  if (withMissionDriver) {
+    const envPath = safePath(target, ".env");
+    const content = existsSync(envPath) ? readFileSync(envPath, "utf8") : "";
+    if (!/^\s*(?:export\s+)?MISSION_DRIVER_HOME\s*=/m.test(content)) {
+      appendFileSync(envPath, `${content && !content.endsWith("\n") ? "\n" : ""}MISSION_DRIVER_HOME=tools/mission-driver\n`, "utf8");
+    }
+  }
+  for (const path of dirs) mkdirSync(safePath(target, path), { recursive: true });
+  for (const entry of [".env", "_tmp/", "tmp/"]) ensureGitignoreEntry(safePath(target, ".gitignore"), entry);
+  const origin = { schema: 1, sourceHash, options, files: recorded };
+  const metadata = JSON.stringify(origin, null, 2) + "\n";
+  const originPath = safePath(target, ORIGIN_FILE);
+  if (!existsSync(originPath) || readFileSync(originPath, "utf8") !== metadata) writeFileSync(originPath, metadata);
+  console.log(`Copied ${copied} files; preserved ${conflicts.length} existing customizations.`);
+  console.log("Fill docs/context/project-context.md verification commands before executing work.");
+  console.log("Read docs/guides/doc-organization.md; enable hooks with git config core.hooksPath .githooks.");
+  console.log("Read-only drift: node tools/age-drift.mjs (exit 0 unchanged, 1 drift, 2 invalid/unknown origin).");
+  if (withPi) console.log("Pi skill mirror delivered; host loading/trust has not been tested by this installer.");
+  if (withMissionDriver) console.log("Engine vendored locally. Fill missions/base.json commands before running missions.");
+  return { copied, conflicts, sourceHash };
 }
 
 // ---------------------------------------------------------------------------
 // CLI entry
 // ---------------------------------------------------------------------------
 
-async function main() {
+export function parseArgs(argv) {
   // Parse argv: positional (target, projectName) + flags (--pi,
   // --with-mission-driver, --profile <shelf|all>). Flags may appear anywhere
   // after the script name, so scan rather than index fixed positions.
   const flags = new Set();
   const positional = [];
   let profile = "none";
-  const argv = process.argv.slice(2);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--profile") {
-      profile = argv[i + 1] || "none";
+      profile = argv[i + 1];
+      if (!profile || profile.startsWith("-")) throw new Error("--profile requires a value");
       i++;
     } else if (a.startsWith("--profile=")) {
       profile = a.slice("--profile=".length);
-    } else if (a.startsWith("--")) {
+    } else if (["--pi", "--with-mission-driver"].includes(a)) {
       flags.add(a.slice(2));
+    } else if (a.startsWith("-")) {
+      throw new Error(`Unknown option: ${a}`);
     } else {
       positional.push(a);
     }
   }
+  if (!PROFILES.includes(profile)) throw new Error(`Invalid profile: ${profile}`);
+  if (positional.length > 2) throw new Error("Expected target and optional project name only");
   const withPi = flags.has("pi");
   const withMissionDriver = flags.has("with-mission-driver");
+  return { positional, withPi, withMissionDriver, profile };
+}
+
+async function main() {
+  const { positional, withPi, withMissionDriver, profile } = parseArgs(process.argv.slice(2));
 
   let targetRaw, projectName;
 
@@ -394,6 +400,7 @@ async function main() {
     const rl = createInterface({ input, output });
     targetRaw = (await rl.question("Target project path (e.g. /c/Work/my-project): ")).trim();
     rl.close();
+    if (!targetRaw) throw new Error("Target path must not be empty");
     projectName = basename(resolve(targetRaw));
     console.log(`(project name derived from directory: ${projectName})`);
   }

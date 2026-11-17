@@ -12,7 +12,7 @@
 #   ./install-age.sh /path/to/target "Name" --profile frontend   # + frontend skills shelf
 #   ./install-age.sh /path/to/target "Name" --profile java       # + java skills shelf
 #   ./install-age.sh /path/to/target "Name" --with-mission-driver # + engine add-on
-#   ./install-age.sh /path/to/target "Name" --pi        # also bridge pi → .pi/skills
+#   ./install-age.sh /path/to/target "Name" --pi        # mirror canonical .agents/skills → .pi/skills
 #
 # Prerequisites: Node.js >= 18 in PATH.
 

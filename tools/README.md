@@ -41,6 +41,8 @@ Do not keep one-off migration scripts, repo-specific cleanup scripts, or tools t
 - `check-oversized-code-files.mjs`: flag tracked code files that exceed line thresholds
 - `check-docs-garbled.mjs`: scan docs for suspicious Unicode and mojibake
 - `check-install-age.sh`: closure-gate test for `install-age.sh` — runs the installer into a throwaway target and verifies scaffold correctness (used by the template-realproject-split plan + onboarding-mission plan)
+- `install-age.mjs`: cross-platform manifest installer; shell/Windows launchers delegate to it. Consumer contract tests: `node --test tools/install-age.test.mjs tools/install-age.integration.test.mjs` from the repository root.
+- `age-drift.mjs`: installed standalone, read-only origin inspection; run `node tools/age-drift.mjs [target]`. Exit 0 unchanged, 1 drift, 2 unknown/invalid origin or inspection error. No overwrite, upgrade, remote fetch or secret configuration storage. See `docs/architecture/template-vs-realproject-boundary.md` for installation safety and limits.
 
 These are lightweight, generic, and reasonable to keep enabled by default.
 
@@ -70,24 +72,21 @@ pnpm md:web:check:dist    # verify committed dist is fresh (CI guard, local mirr
 
 `$MISSION_DRIVER_HOME/` is a **mission-driven development loop engine** — a generic opencode-based workflow that cycles through health-check → execute plans → draft plans → review plans → deep audit.
 
-It is the template's **single source of truth** for this tool. **Projects must NOT copy this directory.** Instead, reference it via a thin shell script setting `MISSION_DRIVER_HOME`. This keeps the engine single-sourced: fixes and improvements go into the template, and all projects that reference it get them automatically.
+It is the template's source for the optional consumer add-on. `--with-mission-driver` vendors an independent copy into the consumer; no sibling checkout or runtime npm dependencies are required. The launcher defaults to the consumer-local path. Engine upgrades are explicit, reviewed integrations, not automatic changes inherited from a shared checkout.
 
-### Integration (Do NOT Copy — Only Reference)
+### Consumer Integration
 
-Create a thin `tools/mission-driver.sh` in your project. Do not copy `$MISSION_DRIVER_HOME/`:
+From a template checkout, install into an existing target directory:
 
 ```bash
-#!/bin/bash
-MISSION_DRIVER_HOME="${MISSION_DRIVER_HOME:-$HOME/app/attractor-guided-engineering-template/tools/mission-driver}"
-DIR="$(cd "$(dirname "$0")" && pwd)"
-exec node "$MISSION_DRIVER_HOME/src/main.js" --dir "$DIR/.." --missions-dir "missions" "$@"
+./install-age.sh /path/to/target "Project Name" --with-mission-driver
 ```
 
-Set `MISSION_DRIVER_HOME` env var if the template lives elsewhere.
+For safety, installation refuses a nonempty engine with unknown/incompatible provenance before copying anything. Reinstallation does not overwrite files or reconfigure installed options. See `docs/guides/mission-driver-add-on.md` for setup, manual integration and current gate-wiring limits.
 
 ### Per-Project Setup
 
-1. `tools/mission-driver.sh` — the thin script above
+1. `tools/mission-driver.sh` — the installed launcher
 2. `missions/<name>.json` — mission config with project paths and commands
 
 Run `draft <description>` to have the AI generate a mission.json:
