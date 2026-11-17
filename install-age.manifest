@@ -131,6 +131,7 @@ tools/check-doc-references.mjs
 tools/check-doc-timeliness.mjs
 tools/code-stats.mjs
 tools/plan-status.mjs
+tools/vendor/js-yaml.mjs
 
 # --- githooks (consumer version: doc hygiene, fail-open) ---
 template/install/githooks/pre-commit > .githooks/pre-commit :: exec

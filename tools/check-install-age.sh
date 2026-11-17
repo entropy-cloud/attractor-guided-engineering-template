@@ -130,6 +130,9 @@ assert "doc-organization guide copied" "$COND"
 [ -f "$TARGET/tools/plan-status.mjs" ] && COND=1 || COND=0
 assert "plan-status tool copied" "$COND"
 
+[ -f "$TARGET/tools/vendor/js-yaml.mjs" ] && COND=1 || COND=0
+assert "vendored js-yaml copied (plan-status dependency)" "$COND"
+
 [ -f "$TARGET/.githooks/pre-commit" ] && COND=1 || COND=0
 assert "consumer pre-commit hook copied" "$COND"
 
