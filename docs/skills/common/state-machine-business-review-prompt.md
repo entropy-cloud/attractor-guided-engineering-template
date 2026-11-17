@@ -84,7 +84,8 @@ Severity guidance:
 - P2 minor: not best-practice but the path still works
 - P3 suggestion: optimization suggestion
 
-Return findings first, ordered by severity. For each finding include: severity, location (state/transition), issue, why it matters, recommended fix, and reference (business rule or doc).
+Return findings first, ordered by severity.
+Severity uses the project scale (see `docs/guides/audit-execution.md` Finding Format And Disposition): `P0` blocker / `P1` major / `P2` minor / `P3` nit — keep the domain calibration above, mapped onto this scale. Every finding also carries why-new (dedup against existing findings, WIs, and bug notes) and a suggested carrier (roadmap WI / fixing plan / ledger row). For each finding include: severity, location (state/transition), issue, why it matters, recommended fix, and reference (business rule or doc).
 
 Then return:
 - Verdict: pass/fail

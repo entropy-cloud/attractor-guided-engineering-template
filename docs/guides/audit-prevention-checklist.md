@@ -41,6 +41,10 @@ Each item cites the historical failure class it prevents.
 - [ ] No scratch files at the repo root; one-off scripts in the plan dir or `_tmp/`; no `tmp/`/`.tmp/` duplicates; no crash logs or generated data committed. *(Prevents: the root-litter finding class that every historical project accumulated.)*
 - [ ] Nothing landed that depends on an untracked local state (env vars, sibling checkouts, absolute paths). *(Prevents: works-on-my-machine — e.g. engines resolved via sibling-repo relative paths.)*
 
+## Findings Disposition
+
+- [ ] Every P0–P2 finding names exactly one carrier (roadmap WI / defect-ledger row / fixing plan); closure gate: findings without a carrier = 0. The report stays frozen — no disposition annotations, no progress headers. (Prevents: dead-account audit reports, see `docs/guides/audit-execution.md`.)
+
 ## After Closure
 
 - [ ] A recurring defect pattern was evaluated for promotion: lesson → reusable prompt under `docs/skills/` → check script (`tools/check-*.mjs`) when it keeps recurring. *(Prevents: the same audit finding reappearing every round because only prose lessons were written.)*

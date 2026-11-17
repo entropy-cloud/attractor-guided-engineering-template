@@ -21,6 +21,7 @@ Check at least these dimensions:
 Do not assume the template's default dimensions are enough for every repository. Add project-specific dimensions when the copied project has protected domains, integration-heavy flows, security-sensitive paths, regulated workflows, or unusual deployment constraints.
 
 Return findings first, ordered by severity.
+Severity uses the project scale (see `docs/guides/audit-execution.md` Finding Format And Disposition): `P0` blocker / `P1` major / `P2` minor / `P3` nit — keep the domain calibration above, mapped onto this scale. Every finding also carries why-new (dedup against existing findings, WIs, and bug notes) and a suggested carrier (roadmap WI / fixing plan / ledger row).
 If blocking issues are found, say `needs revision` and list the exact files, dimensions, and missing evidence.
 If no blocking issue remains, say `passes multi-dimensional audit` and list residual risks by dimension.
 ```

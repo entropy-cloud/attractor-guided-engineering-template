@@ -88,7 +88,8 @@ Severity guidance:
 - `minor`: improves clarity or navigation but does not block implementation.
 - `note`: residual risk, watch item, or optional cleanup.
 
-Return findings first, ordered by severity. For each finding include: severity, affected file and line when available, issue, why it matters, and recommended disposition (fix in design, update requirement, move to architecture, move to contract/model owner, move to roadmap/backlog, or ask human decision).
+Return findings first, ordered by severity.
+Severity uses the project scale (see `docs/guides/audit-execution.md` Finding Format And Disposition): `P0` blocker / `P1` major / `P2` minor / `P3` nit — keep the domain calibration above, mapped onto this scale. Every finding also carries why-new (dedup against existing findings, WIs, and bug notes) and a suggested carrier (roadmap WI / fixing plan / ledger row). For each finding include: severity, affected file and line when available, issue, why it matters, and recommended disposition (fix in design, update requirement, move to architecture, move to contract/model owner, move to roadmap/backlog, or ask human decision).
 
 Then return:
 - Verdict: pass/fail

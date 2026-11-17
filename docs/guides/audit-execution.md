@@ -85,6 +85,39 @@ Minimum durable draft-review evidence:
 
 Keep this evidence in a short `Draft Review Record` section inside the plan by default. Escalate to `docs/logs/` or `docs/audits/` only when the review is non-trivial, disputed, reusable, or likely to matter later. The canonical expectations for when a plan is `draft`, `active`, and `completed` belong in the plan guide.
 
+## Finding Format And Disposition
+
+Findings are the product of every audit. Their format and disposition path are fixed so findings can never become dead accounts — the historically proven failure mode: reports pile up, findings never get dispositioned, the same P1 rolls forward across audit rounds.
+
+### Severity Scale
+
+| Level | Meaning | Calibration |
+| --- | --- | --- |
+| `P0` | blocker — wrong/unsafe behavior likely, or a format-law violation | always blocks the verdict |
+| `P1` | major — contract/scope gap that will resurface as rework or a live defect | blocks unless explicitly adjudicated with rationale |
+| `P2` | minor — clarity, consistency, robustness | never blocks; must still get a carrier |
+| `P3` | nit | may be recorded without a carrier when purely cosmetic |
+
+Verdict calibration: `pass` = zero P0 and zero unadjudicated P1. Minors never block.
+
+### Finding Entry Format
+
+Every finding carries: **anchor** (file + section/symbol — not bare line numbers), **evidence** (quoted or reproduced), **severity + rating rationale** (why this level), **why-new** (checked against existing findings, bug notes, and work items — dedup), and a **suggested carrier**. A finding without these fields is incomplete.
+
+### Disposition: Carrier, Not Report
+
+**The audit report is evidence and is frozen after writing.** Disposition status lives only at the carrier — never annotated into the report later, never re-maintained in a report header, never duplicated into logs:
+
+1. Every P0–P2 finding MUST name exactly one carrier: an unchecked roadmap work item, a defect-ledger row (high-volume projects that run one), or the fixing plan (when the audit is part of a plan loop). **Closure gate: findings without a carrier = 0.**
+2. Disposition progress = the carrier's own state (roadmap checkbox / ledger status). The report's per-finding `Disposition:` line carries a single pointer written once at recording time (`Disposition: → WI9`); it is never updated afterwards.
+3. Report-level "processed" status is **derived, never written**: a report is fully handled when every finding's carrier is closed. Do not add remediation-progress headers to reports — that is a second status surface and it drifts.
+4. Inline receipts with `findings=items` (roadmap `## Deep Audit Record` or a plan receipt): the findings land as unchecked roadmap work items **in the same edit that records the receipt**. Recording findings without landing carriers is a format violation.
+5. High-volume projects (audit rounds producing dozens of findings) may adopt a defect ledger as the carrier of choice: one row per finding; the status column carries closure evidence (date + WI + commit); closed rows rotate to an append-only history file. The ledger then replaces roadmap WIs as the sanctioned carrier — still exactly one disposition writer.
+
+### Stored Audit Reports
+
+When an audit outgrows the inline receipt (non-trivial, disputed, reusable): store it under `docs/audits/{year}/` as a dated file, or as a round directory `docs/audits/{year}/<YYYY-MM-DD-HHmm>-<style>-<label>/` with fixed numbering (`00-README.md` coverage account + verdict, `01-summary.md`, `02-findings-<domain>.md`) when it spans multiple files or domains. Finding IDs inside a round are namespaced by the round directory — bare counters never reset across rounds.
+
 ## Output Rule
 
 Review results must be recorded durably for every created plan. Use a separate file when the audit is non-trivial, disputed, reusable, or likely to matter later.

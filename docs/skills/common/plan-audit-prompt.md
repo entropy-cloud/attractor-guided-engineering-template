@@ -26,6 +26,7 @@ Focus on:
 Severity levels: `blocker` (format violation, dishonest closure gate, hidden dependency, downgraded defect), `major` (weak proof strategy, unclear boundary), `minor` (clarity).
 
 Return findings first, ordered by severity.
+Severity uses the project scale (see `docs/guides/audit-execution.md` Finding Format And Disposition): `P0` blocker / `P1` major / `P2` minor / `P3` nit — keep the domain calibration above, mapped onto this scale. Every finding also carries why-new (dedup against existing findings, WIs, and bug notes) and a suggested carrier (roadmap WI / fixing plan / ledger row).
 Do not praise the plan unless it changes the risk assessment.
 Also answer the cold-start question explicitly: could a fresh session execute this plan with chat closed? (see the guide's Cold-Start Continuity rules).
 

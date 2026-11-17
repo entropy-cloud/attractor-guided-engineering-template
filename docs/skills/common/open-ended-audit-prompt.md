@@ -22,6 +22,7 @@ Act like an adversarial reviewer looking for what the default process may have m
 If the repository's copied project has known high-cost defects, protected domains, or recurring mistake patterns, bias the search toward those areas explicitly.
 
 Return findings first, ordered by severity.
+Severity uses the project scale (see `docs/guides/audit-execution.md` Finding Format And Disposition): `P0` blocker / `P1` major / `P2` minor / `P3` nit — keep the domain calibration above, mapped onto this scale. Every finding also carries why-new (dedup against existing findings, WIs, and bug notes) and a suggested carrier (roadmap WI / fixing plan / ledger row).
 If blocking issues are found, say `needs revision` and list the exact hidden risks or missing follow-up artifacts.
 If no blocking issue remains, say `passes open-ended audit` and list residual unknowns that still deserve watchfulness.
 ```

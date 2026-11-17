@@ -94,7 +94,7 @@ audit-rounds: 0
 - accepted #audit-2026-08-25-063133-mission-driver-age-roadmap-1-1a2b3c4d findings=none: conclusion (written by that auditor)
 ```
 
-- The accepted line MUST carry `findings=none|items` (distinct from plan-closure accepted lines, which carry no `findings=` lexeme). Findings land as unchecked roadmap work items; closing them = ticking the checkbox.
+- The accepted line MUST carry `findings=none|items` (distinct from plan-closure accepted lines, which carry no `findings=` lexeme). `findings=items` findings land as unchecked roadmap work items **in the same edit that records the receipt** — recording findings without landing carriers is a format violation (closure gate: findings without a carrier = 0, see `docs/guides/audit-execution.md` Finding Format And Disposition). Closing them = ticking the checkbox.
 - Same dispatch/conclusion pairing and append-only rules as plan records (see `docs/guides/plan-authoring-and-execution.md`).
 
 ## Completion By Checkbox Search
