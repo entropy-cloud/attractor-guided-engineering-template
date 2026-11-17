@@ -4,7 +4,7 @@
 
 A roadmap under `docs/roadmaps/` is a milestone index and a work-item status surface. It is the planning layer between owner docs and plans: owner docs define what is true; the roadmap decides which work items remain, in what order, with which dependencies; plans execute the work items.
 
-A roadmap is optional. Use it when a project is large enough that a flat list no longer shows global progress.
+A roadmap is recommended for substantial goal-directed work; small low-risk tasks can stay direct. The task-oriented loop and completion-update procedure live in `roadmap-goal-workflow.md`.
 
 ## Terminology
 
@@ -20,7 +20,7 @@ Every plan born from a roadmap is:
 2. **Audited by a different independent subagent** — the closure auditor re-checks behavior, proof, and doc alignment, then records the closure receipt. The auditor must not be the executor.
 3. After the closure audit passes, the **roadmap checkbox is ticked** — by the auditor's pass (or by the coordinating session recording that pass). This is the only step that writes roadmap status.
 
-When no second agent is available, a solo cold-replay pass is acceptable only for non-protected, non-high-risk plans, and the plan must record that fallback and its limitation (see `docs/guides/plan-authoring-and-execution.md`).
+Independent acceptance is required; reviewer unavailability leaves a plan open (see `docs/guides/plan-authoring-and-execution.md`).
 
 ## Work-Item Sizing And The Work-Item ↔ Plan Mapping
 
@@ -50,7 +50,7 @@ Create the subdirectory when the roadmap is created. Plans of one roadmap never 
 
 **Roadmap files carry no date prefix.** A roadmap is a living status surface, not a one-shot record: missions reference it by stable `roadmapPath`, plans carry its slug in `mission:` frontmatter, and routing tables link it by name. Its currency lives in the checkbox state; a date-stamped name would rot the references without adding information. (Plans, by contrast, are one-shot records — they get dated names.)
 
-**Single-home execution.** One roadmap is executed in exactly one place at a time — one worktree (or the mainline checkout), never two in parallel. This makes per-roadmap state conflict-free by construction: plans already live in `docs/plans/<slug>/`, and roadmap-scoped log entries go to `docs/logs/{year}/{month}-{day}-{roadmap-slug}.md` (`docs/guides/log-writing.md`), so parallel worktrees writing different roadmaps never touch the same files.
+**Single-home execution.** One roadmap has one execution home and selector at a time. This avoids duplicate dispatch, not all shared-file conflicts. Pending human/AI edits follow the built-in-tool completion-update procedure in `roadmap-goal-workflow.md`; worktree log naming follows `docs/guides/log-writing.md`.
 
 ## Roadmap Structure
 
@@ -102,8 +102,6 @@ audit-rounds: 0
 Done/remaining is a search query, never a second status surface:
 
 ```bash
-grep -c "^- [ ]" docs/roadmaps/<slug>-roadmap.md     # remaining work items
-grep -c "^- [x]" docs/roadmaps/<slug>-roadmap.md     # completed work items
 node tools/plan-status.mjs --roadmap docs/roadmaps/<slug>-roadmap.md   # verdict + remaining lines
 ```
 
@@ -112,7 +110,7 @@ Zero unchecked boxes = the roadmap is complete (then run the completion summary,
 ## Two Audiences
 
 - **Humans** steer: they decide which milestones and work items exist and in what order; they read checkboxes to see progress; they do not review individual implementation work.
-- **AI** executes: it takes the first unchecked work item in set order, delivers it via a plan (independent execution + independent audit), and ticks the checkbox on audit pass. AI does not re-arbitrate priority, skip ahead, or invent work items — structural roadmap changes are flagged for human review.
+- **AI** coordinates eligible work in order, preserving dependencies, and delivers through independent execution/audit. Pending research/audit/decision items may be added, split or reordered with evidence inside the approved objective/autonomy; changes to business scope, protected areas or acceptance authority need their original authority. In-flight scope remains fixed. See `roadmap-goal-workflow.md` for ordinary completion updating and delivery before next selection.
 
 ## Writing Rules
 
@@ -130,7 +128,7 @@ Zero unchecked boxes = the roadmap is complete (then run the completion summary,
 | Closure audit passes | tick `- [ ]` → `- [x]` | audit receipt recorded in the plan |
 | Closure reveals a reuse opportunity | update Reuse section + the work item | closure complete |
 | New or adjusted owner doc | check impact on work items | — |
-| A work item turns out to need multiple plans | **split the work item** (this guide) | human confirms the split |
+| A pending work item needs multiple plans | **split the work item** (this guide) | approved objective/autonomy preserved; in-flight scope changes reconciled explicitly |
 | Roadmap completes (last work item ticked) | run the completion bugs/lessons summary (section below) | last work item closure audit passed |
 
 ## Completion: Bugs And Lessons Summary
@@ -150,5 +148,5 @@ When the last work item of a roadmap is ticked, close the roadmap with a complet
 - One work item spread across several plans instead of being split
 - Plans of this roadmap living outside `docs/plans/<roadmap-slug>/`
 - Any second status channel; dotted milestone headings (`M0.3`); per-milestone WI counter resets
-- AI re-arbitrating priority or inventing work items
+- AI changing business scope/acceptance authority or breaking dependencies without approval
 - Changelog sections or dated update entries inside the roadmap file (it is a status surface, not a history log — evidence pointers ride on the work-item line)

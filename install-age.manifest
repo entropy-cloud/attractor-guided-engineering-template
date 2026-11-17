@@ -59,6 +59,7 @@ docs/guides/requirements-synthesis.md
 docs/guides/input-processing.md
 docs/guides/discussion-writing.md
 docs/guides/roadmap-authoring.md
+docs/guides/roadmap-goal-workflow.md
 docs/guides/plan-authoring-and-execution.md
 docs/guides/audit-execution.md
 docs/guides/audit-prevention-checklist.md
@@ -133,6 +134,8 @@ tools/check-doc-references.mjs
 tools/check-doc-timeliness.mjs
 tools/code-stats.mjs
 tools/plan-status.mjs
+tools/consumer-ledger.mjs
+tools/commit-plan.mjs
 tools/age-drift.mjs
 tools/vendor/js-yaml.mjs
 

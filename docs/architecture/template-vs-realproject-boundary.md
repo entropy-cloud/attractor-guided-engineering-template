@@ -21,6 +21,7 @@ Root context describes the real project; pristine consumer fill-in files live un
 | **`template/` subdirectory** | **Template** | Pristine fill-in files (`AGENTS.md`, `docs/index.md`, context×3, design×2, architecture×4, roadmaps×3) + the consumer install kit under `template/install/` (engine add-on artifacts + consumer pre-commit hook) + `START-HERE-after-copy.md` (manual fallback). Consumers receive these via `install-age.sh`. |
 | **`$MISSION_DRIVER_HOME/`** | **Real project (add-on for consumers)** | `--with-mission-driver` vendors the engine and its operator docs into the consumer, plus launcher/env/mission defaults. No sibling checkout is required. See `docs/guides/mission-driver-add-on.md`. |
 | **`tools/install-age.mjs` + `install-age.manifest`** | **Shared** | Node ≥18, zero npm dependencies. Shell and Windows launchers delegate to this installer. Manifest entries support explicit destination overrides and gating flags. |
+| **Consumer workflow helpers** | **Shared** | `consumer-ledger.mjs`, `plan-status.mjs` and `commit-plan.mjs` ship without the engine; their usage/compatibility contract is `docs/guides/roadmap-goal-workflow.md`. Engine files are vendored only with the add-on, not silently borrowed as reference-only dependencies. |
 
 ## What `install-age.sh` Does (Consumer Flow)
 

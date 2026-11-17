@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines the default lightweight workflow for AI-assisted application development in `mission-driver` (the in-tree AGE loop engine this repo develops).
+This document defines the default lightweight workflow for AI-assisted application development. For task-oriented roadmap/goal execution and accepted-plan delivery, follow `roadmap-goal-workflow.md`.
 
 It exists because app-layer projects often fail before coding quality becomes the main issue:
 
@@ -19,7 +19,7 @@ This workflow makes those failure modes explicit.
 For most small and medium app projects, use this path:
 
 1. `context`
-2. `backlog` when choosing work
+2. `roadmap` when choosing substantial work
 3. `input`
 4. `requirements`
 5. `design`
@@ -29,7 +29,7 @@ For most small and medium app projects, use this path:
 9. `implementation`
 10. `verification`
 11. `closure audit` for created plans
-12. `logs / bugs`
+12. `logs / bugs` and one accepted-plan delivery commit before next selection
 
 Use document audits, retrospectives, skill extraction, and extra testing notes only when the work is ambiguous, risky, or repeatedly failing.
 

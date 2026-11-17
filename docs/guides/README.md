@@ -8,6 +8,7 @@ Before doing any of the following, read the matching guide first — `AGENTS.md`
 | --- | --- |
 | place/names any document, or wonder where a file belongs | `doc-organization.md` |
 | write or update a roadmap | `roadmap-authoring.md` |
+| execute requirement → roadmap → goal-directed delivery | `roadmap-goal-workflow.md` |
 | write, execute, review, or close a plan | `plan-authoring-and-execution.md` |
 | run a document audit, draft review, or closure audit | `audit-execution.md` |
 | hand off a non-trivial change (pre-flight self-check) | `audit-prevention-checklist.md` |

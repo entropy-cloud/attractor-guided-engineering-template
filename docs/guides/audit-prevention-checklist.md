@@ -15,7 +15,7 @@ Each item cites the historical failure class it prevents.
 - [ ] Phases are 2–6, one result surface, work-item mapping legal (no work item spread across plans). *(Prevents: unclosable plans, stalled loops.)*
 - [ ] Every exit criterion has a proof strategy (command, test, or explicit justification). *(Prevents: dishonest closure gates.)*
 - [ ] Every in-scope item avoids `optional / maybe / if time permits`. *(Prevents: anti-slacking violations found at closure.)*
-- [ ] The draft was mechanically validated (engine mode: `gate-check.mjs --strict` clean). *(Prevents: invisible plans — a parser-rejected frontmatter silently excludes the plan from review/execution.)*
+- [ ] The draft was mechanically validated (engine mode: `gate-check.mjs <plan>` clean). *(Prevents: invisible plans — a parser-rejected frontmatter silently excludes the plan from review/execution.)*
 
 ## Verification Reality
 
@@ -34,7 +34,7 @@ Each item cites the historical failure class it prevents.
 ## Independence
 
 - [ ] Draft review and closure audit were performed by a subagent other than the executor; receipts recorded in the plan. *(Prevents: self-closure, which the format makes impossible when receipts are enforced.)*
-- [ ] Solo fallback (if used) is recorded with its limitation and only on non-protected plans. *(Prevents: silent quality downgrade.)*
+- [ ] Actual executor/reviewer/auditor evidence is recorded, with independent acceptance available; cold replay is not a substitute. *(Prevents: silent quality downgrade.)*
 
 ## Workspace Hygiene
 

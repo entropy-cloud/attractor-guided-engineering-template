@@ -20,6 +20,7 @@ This `docs/` tree is the durable memory and routing surface for `mission-driver`
 | --- | --- |
 | Understand mandatory AI context | `docs/context/README.md` → `project-context.md`, `ai-autonomy-policy.md`, `codebase-map.md` |
 | Follow the default development workflow | `docs/guides/application-development-workflow.md` |
+| Run the roadmap → goal-directed → accepted-plan delivery loop | `docs/guides/roadmap-goal-workflow.md` |
 | Know where a document belongs / how to name it | `docs/guides/doc-organization.md` |
 | Choose the next work item | the roadmap in `docs/roadmaps/` + `docs/guides/roadmap-authoring.md` |
 | Understand the project goal and product shape | `docs/architecture/project-vision.md` → `docs/design/app-overview.md` |

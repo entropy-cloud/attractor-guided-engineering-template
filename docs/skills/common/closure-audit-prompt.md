@@ -12,6 +12,7 @@ Audit whether the claimed implementation is truly closed.
 Check `docs/context/ai-autonomy-policy.md` reviewer availability. Cold replay is not a second reviewer and never approves protected areas, unresolved product risk, or source-of-truth conflicts.
 
 This audit must be run by an independent subagent or reviewer, not the implementing agent continuing the same closure decision.
+Follow `docs/guides/roadmap-goal-workflow.md` for current-payload acceptance and coordinator delivery. Use built-in Read/Edit/Write tools for plan/roadmap content and handle their reported conflicts; do not use shell/script document writers. Record your actual session, distinct from executor and draft reviewer. The coordinator, not this audit prompt, owns the subsequent one-plan commit.
 
 Focus on:
 - whether live behavior matches the stated requirement

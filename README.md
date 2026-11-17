@@ -120,6 +120,8 @@ Independent review found the template direction useful but warned about two risk
 
 ## First Use
 
+After setup, follow the task-oriented [roadmap/goal workflow](docs/guides/roadmap-goal-workflow.md): requirement → roadmap → independent execution/acceptance → one local commit per plan → next item. Goal is a host capability, not a scaffold CLI; the guide covers interactive and optional-engine use.
+
 ```bash
 # From a clone of this repo, into your new project root:
 ./install-age.sh /path/to/target-project "Project Name"
@@ -188,17 +190,18 @@ On-demand directories (`docs/discussions/`, `docs/input/`, `docs/testing/`, `doc
 **Core capabilities:**
 
 - **Flow DSL**: Declarative JSON state machine with 5 step types (script/tool/agent/group/subflow), result-driven transitions, and subflow composition
-- **Plan system**: Full lifecycle (draft → active → completed) with independent draft review and closure audit
+- **Plan system**: Plan lifecycle and review/audit steps; coordinator acceptance and backend compatibility are explained in the workflow guide
 - **Roadmap guidance**: `roadmap.md` drives task selection — DRAFT_PLANS reads remaining items and creates 1-3 plans per cycle
-- **Reflexion memory**: `--analyze-run` produces postmortems; durable lessons feed back into future runs via `_index.md`
+- **Reflexion memory**: `analyze` produces postmortems; durable lessons feed back into future runs via `_index.md`
 - **Monitor Dashboard**: Vue 3 frontend with run history, log viewer, resource charts, and SSE event streaming
 - **Onboarding mission** (shipped to consumers via `install-age.sh`): AI reads the consumer's codebase and fills the copied template docs (`docs/context/*`, `docs/architecture/*`, etc.) with real content
 
 **Quick start (from a target project that has run `install-age.sh --with-mission-driver`):**
 
 ```bash
-# Smoke test (秒级)
-./tools/mission-driver.sh run demo
+# Inspect installation without invoking a model
+./tools/mission-driver.sh --help
+./tools/mission-driver.sh list
 
 # Personalize (30-60 min): AI reads your codebase, fills the copied docs
 ./tools/mission-driver.sh run onboarding
@@ -207,10 +210,10 @@ On-demand directories (`docs/discussions/`, `docs/input/`, `docs/testing/`, `doc
 ./tools/mission-driver.sh draft "Build the component library"
 
 # Run a mission loop
-./tools/mission-driver.sh <mission-name>
+./tools/mission-driver.sh run <mission-name>
 
 # Analyze a completed run
-./tools/mission-driver.sh --analyze-run
+./tools/mission-driver.sh analyze
 ```
 
 See `$MISSION_DRIVER_HOME/README.md` for full documentation.

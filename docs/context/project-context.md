@@ -40,6 +40,8 @@ This file intentionally does **not** track "what is being worked on right now". 
 | E2E / integration tests   | `node $MISSION_DRIVER_HOME/src/mission-check.mjs missions/<name>.json .` (per-mission validation) |
 | Consumer installer contract (scoped) | `node --test tools/install-age.test.mjs tools/install-age.integration.test.mjs` |
 | Consumer installation closure gate (scoped) | `bash tools/check-install-age.sh` |
+| Consumer plan/workflow/delivery contract (scoped) | `node --test tools/plan-status.test.mjs tools/commit-plan.test.mjs tools/workflow-contract.test.mjs` |
+| Diff whitespace | `git diff --check` |
 
 Notes:
 - Engine has zero npm deps → both `npm --prefix` and `pnpm --prefix` work; `pnpm` preferred (matches `tools/package.json:5` `"packageManager": "pnpm@10.0.0"` and `$MISSION_DRIVER_HOME/web/pnpm-lock.yaml`).
@@ -65,6 +67,7 @@ AI MUST stop and wait for human input before proceeding when:
 - any change touches `memory/_index.md` (always-load contract) without understanding the Reflexion loop consequences
 - any change modifies `install-age.sh` personalization behavior (the `<project-name>` sed-replace at `:121-127`) without updating the Phase 3 closure-gate test
 - no requirement or owner doc describes the intended behavior of the change — do not implement into a vacuum (this replaces the old "active requirement is none" gate; whether a requirement/owner doc exists is checked against `docs/requirements/` and `docs/design/`, not a field here)
+- independent acceptance or accepted-plan delivery fails — stop next-item selection and report the blocker; consumer helpers do not authorize engine/law or other protected-area edits
 
 These are project-specific hard stops in addition to `AGENTS.md`, `docs/context/ai-autonomy-policy.md`, source-of-truth conflict rules, and required plan/closure audit rules.
 

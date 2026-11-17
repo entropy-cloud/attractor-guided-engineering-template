@@ -41,17 +41,18 @@ AGE 从一个问题开始：
 **核心能力：**
 
 - **Flow DSL**：声明式 JSON 状态机，5 种步骤类型（script/tool/agent/group/subflow），结果驱动的转换，子流程组合
-- **Plan 系统**：完整生命周期（draft → active → completed），含独立草案审查和结束审计
+- **Plan 系统**：计划生命周期与 review/audit 步骤；独立接受与后端兼容边界见使用指南
 - **Roadmap 指导**：`roadmap.md` 驱动任务选择 — DRAFT_PLANS 每次循环读取剩余项并创建 1-3 个计划
-- **Reflexion 记忆**：`--analyze-run` 生成事后分析；持久教训通过 `_index.md` 反馈到后续运行
+- **Reflexion 记忆**：`analyze` 生成事后分析；持久教训通过 `_index.md` 反馈到后续运行
 - **Monitor Dashboard**：Vue 3 前端，含运行历史、日志查看器、资源图表和 SSE 事件流
 - **Onboarding mission**（通过 `install-age.sh` 提供给消费者）：AI 读消费者的 codebase，把复制过来的模板文档（`docs/context/*`、`docs/architecture/*` 等）填为真实内容
 
 **快速开始（在跑过 `install-age.sh --with-mission-driver` 的目标项目里）：**
 
 ```bash
-# 冒烟测试（秒级）
-./tools/mission-driver.sh run demo
+# 不调用模型的安装检查
+./tools/mission-driver.sh --help
+./tools/mission-driver.sh list
 
 # 个性化（30-60 分钟）：AI 读你的 codebase，填好复制过来的文档
 ./tools/mission-driver.sh run onboarding
@@ -60,10 +61,10 @@ AGE 从一个问题开始：
 ./tools/mission-driver.sh draft "构建组件库"
 
 # 运行 mission 循环
-./tools/mission-driver.sh <mission-name>
+./tools/mission-driver.sh run <mission-name>
 
 # 分析已完成的运行
-./tools/mission-driver.sh --analyze-run
+./tools/mission-driver.sh analyze
 ```
 
 完整文档见 `$MISSION_DRIVER_HOME/README.md`。
@@ -87,6 +88,8 @@ AGE 从一个问题开始：
 按需目录（`docs/discussions/`、`docs/input/`、`docs/testing/`、`docs/references/`、`docs/retrospectives/`、`docs/examples/`、`docs/archive/`）有意**不**预创建——创建时机见 `docs/guides/doc-organization.md`。
 
 ## 默认工作流
+
+任务向入口：[roadmap/goal 使用指南](docs/guides/roadmap-goal-workflow.md)。推荐需求 → roadmap → 独立执行与验收 → 每计划一次本地提交 → 下一项；支持调研、审计和运行中调整待办。goal 是宿主能力，不是脚手架提供的通用命令。
 
 1. 在 `docs/input/` 中收集原材料
 2. 如有需要，在 `docs/discussions/` 中澄清歧义

@@ -36,21 +36,23 @@ Chat is disposable. An executor session may be a brand-new window with zero prio
 
 Draft review checks this property explicitly: "could a cold session execute this plan with chat closed?" is a blocking review question.
 
-## Independent Execution And Independent AuditFor every plan created under this guide:
+## Independent Execution And Independent Audit
+
+For every plan created under this guide:
 
 1. **Execution is performed by an independent subagent.** The executor session reads the plan + owner docs, implements the phases, runs verification, and ticks checkboxes. It does not self-approve.
 2. **Closure audit is performed by a different independent subagent** (not the executor, not the drafter where avoidable). The auditor checks behavior, proof, and doc alignment, then appends the closure receipt.
 3. Draft review before activation is likewise independent (a subagent or human reviewer distinct from the drafter).
 
-Receipts carry the sessions (`to <sessionId>` on dispatch lines), and independence is mechanically verifiable: `node tools/plan-status.mjs --check <plan>` fails a plan whose closure-audit session equals its draft-review session, or whose active status lacks the review receipt pair. Run it before activating and before closing.
+Receipts carry actual coordinator-dispatched sessions (`to <sessionId>`); execution is recorded in `## Execution` as `- Executor: <sessionId>`. `node tools/plan-status.mjs --check <plan>` checks latest paired acceptance and declared reviewer/auditor/executor independence. The ids are portable evidence, not authentication. Current-payload Git delivery is specified once in `roadmap-goal-workflow.md`.
 
-Reviewer-availability fallback: when no second agent is available at all, a solo cold-replay pass may close only non-protected, non-high-risk plans, and the closure record MUST state the fallback and its limitation. Protected areas, unresolved product risk, and source-of-truth conflicts stay open without independent review.
+If an independent reviewer/executor/auditor is unavailable, keep the plan open and report the blocker. Cold replay is useful preparation, not independent acceptance.
 
 ## Format
 
 The format is the **ledger format**: a YAML frontmatter block plus `## Phase <n>` body sections. Completion is **derived**, never written — there is no `completed` status text to keep consistent with the checkboxes.
 
-When the mission-driver add-on is enabled, this format is machine-checked (`tools/mission-driver/src/gate-check.mjs --strict`, pre-commit and CI). Without the engine it is reviewer-checked structural discipline — the same format, enforced by the independent draft review and closure audit instead of the parser.
+The standalone `tools/plan-status.mjs --check <plan>` checks receipt integrity; consumer `deliveryReady` also checks counting domains and verification. With the optional engine, `node tools/mission-driver/src/gate-check.mjs <plan>` provides engine-specific structural checks; hook/CI wiring is explicit, not implied by installation. Do not pass an unsupported `--strict` flag to gate-check. Compatibility boundaries are in `roadmap-goal-workflow.md`.
 
 ### Frontmatter Field Table
 
@@ -59,11 +61,11 @@ Format subset (hard boundary): flat scalar keys plus single-level flow arrays; s
 | Field | Type | Writer | Rules |
 | --- | --- | --- | --- |
 | `status` | `draft \| active \| held \| cancelled \| superseded \| deferred` | per transitions | required; `completed` is derived and must never be written |
-| `mission` | non-empty string | drafter | required; the roadmap slug (the roadmap file's name without `-roadmap.md`) |
-| `work-item` | non-empty string | drafter | required; the roadmap work-item label `M<n>-WI<a>` |
+| `mission` | non-empty string | drafter | required; roadmap slug, or `standalone` for a local consumer task |
+| `work-item` | non-empty string | drafter | required; roadmap label `M<n>-WI<a>`, or `local:<task-id>` for standalone use |
 | `group` | string | drafter | optional review-batch id; omit for independent plans |
 | `failures` | non-negative int | supervisor | optional; attribution only |
-| `verify` | flow array of command keys | drafter | optional; defaults to mission defaults (engine mode) |
+| `verify` | flow array of command keys | drafter | explicit nonempty keys for consumer delivery; bind each to real commands in prerequisites/context (engine defaults are not consumer proof) |
 | `hold` | string | reviewer | required while `status: held`, forbidden otherwise |
 
 Example:
@@ -117,6 +119,7 @@ verify: [test]
 - Dispatch lines: `- dispatch (review|audit) #<id> to <sessionId>`, written before dispatch.
 - ids: `#review-<runId>-<plan>-<iter>-<nonce8>` / `#audit-<runId>-<plan>-<round>-<nonce8>`; `<plan>` is the filename stem; `<nonce8>` is 8 hex chars.
 - Pass lines: `- pass <commandKey> <runId> exit=<code>`; satisfies mechanical verification when the key is required by the plan and `exit=0`.
+- Consumer commit delivery adds a payload suffix and ownership evidence to verification/closure; see `roadmap-goal-workflow.md` for the exact command sequence and finalization metadata.
 
 ## Minimum Rules
 
@@ -131,9 +134,9 @@ verify: [test]
 9. **Record Decisions with rationale** — choice, alternatives, residual risk; constrained/obvious choices can be noted as such.
 10. **Checklist integrity**: no in-scope item unchecked at closure; scope narrowing after approval is a recorded scope change, never silent deletion.
 11. **Completion is derived**: `status: active` ∧ all counting-domain checkboxes `[x]` ∧ every required `verify` key has a passing `## Verification` line ∧ `## Closure` has a dispatch + same-id accepted line. Nobody writes `completed`.
-12. **Independence is receipt-enforced**: activation requires a draft-review receipt; closure requires an audit receipt from an agent other than the executor. Self-closing is structurally impossible.
+12. **Independent acceptance**: activation requires paired draft-review acceptance; closure requires paired audit acceptance by a different actor from executor and draft reviewer. Check actual dispatch provenance as well as recorded ids.
 13. **Non-degradable items** (confirmed defects, contract drift, owner-doc drift, fixed CI rules) cannot be downgraded to fuzzy follow-ups.
-14. **Validate the draft before hand-off.** Engine mode: run `node tools/mission-driver/src/gate-check.mjs <plan> --strict` until clean (a plan the parser rejects is invisible to review/execution). Without the engine: self-check against this guide's checklist and let the independent draft review confirm.
+14. **Validate the draft before hand-off.** Engine mode: run `node tools/mission-driver/src/gate-check.mjs <plan>` until clean. Without the engine: self-check against this guide's checklist and let independent draft review confirm; use the standalone receipt check after recording its result.
 
 ### Anti-Slacking Rule
 
@@ -147,13 +150,12 @@ Every in-scope item lands in exactly one state: `landed`, `adjudicated as residu
 4. Verification pass lines are recorded in `## Verification`
 5. Independent closure auditor records `## Closure` receipts — completion derives
 
-Update the frontmatter status with the tool, not by hand-editing YAML (it enforces the transition law: `completed` unwritable, `held` requires a hold reason, terminal states never revive):
+AI reads and updates plan content/status with built-in Read/Edit/Write tools. Activation follows independent draft acceptance; `held` requires a reason, and terminal states do not revive. The legacy human-facing setter retains admission checks but is not an AI document-editing channel. Read-only queries:
 
 ```bash
-node tools/plan-status.mjs docs/plans/<slug>/<plan>.md active        # reviewer, on accept
-node tools/plan-status.mjs docs/plans/<slug>/<plan>.md held --hold "waiting on X"
-node tools/plan-status.mjs docs/plans/<slug>/<plan>.md cancelled
-node tools/plan-status.mjs --list                                    # whole-repo inventory
+node tools/plan-status.mjs --check docs/plans/<slug>/<plan>.md
+node tools/plan-status.mjs --list
+node tools/plan-status.mjs --unfinished
 ```
 
 Terminal states (`cancelled | superseded | deferred`) never revive; restarting = a new plan.
@@ -175,7 +177,7 @@ Terminal states (`cancelled | superseded | deferred`) never revive; restarting =
 3. Run the real verification commands (they become `## Verification` lines). Visual/UX result surfaces customize gates with explicit justification in the plan.
 4. **Scoped verification is not full verification**: note "verification scope limited" and evaluate residual risk; a scoped pass is never reported as full green.
 5. The closure audit is independent (subagent/human ≠ executor); its receipt is the machine-checked evidence.
-6. Solo-fallback closures record the fallback and the cold-replay self-check performed against plan, docs, actual diff, real commands.
+6. If independent acceptance is unavailable, leave closure open; cold replay does not substitute for it.
 7. Full closure (multi-session/multi-module/high-risk): re-read the entire plan from the top.
 8. On pass, tick the roadmap work-item checkbox (the only roadmap write).
 

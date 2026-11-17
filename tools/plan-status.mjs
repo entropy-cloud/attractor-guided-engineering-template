@@ -5,7 +5,7 @@
 // tools/vendor/js-yaml.mjs (js-yaml 4.1.1, MIT — reuse this file for any
 // tool that needs YAML; do not add npm dependencies).
 //
-// Three faces:
+// Interfaces (receipt/payload delivery semantics: roadmap-goal-workflow.md):
 //
 //   node tools/plan-status.mjs <plan.md> <status> [--hold "reason"] [--force]
 //       Validate and rewrite a plan's frontmatter `status` field.
@@ -15,8 +15,8 @@
 //         active      → from held removes the hold: line
 //         cancelled | superseded | deferred → terminal states; leaving them
 //                       requires --force (restart = a new plan)
-//       Warns (non-blocking) when draft→active without any Draft Review Record
-//       receipt. Malformed YAML frontmatter is a hard error.
+//       Legacy human-facing writer. AI task edits use built-in Edit/Write tools.
+//       Activation requires a paired accepted draft review.
 //
 //   node tools/plan-status.mjs --list [plansDir]
 //       Inventory every plan under docs/plans/: status, mission, work-item, path.
@@ -25,16 +25,16 @@
 //       Receipt integrity + independence gate for a plan: an active plan must
 //       carry a draft-review dispatch + iteration receipt pair; a Closure section
 //       with a dispatch must carry an accepted line, and the closure-audit
-//       session MUST differ from the draft-review session (independence is
-//       machine-checked, not just prose).
-//       Completion verdict by checkbox count: remaining/done/percent, plus the
-//       open work-item lines. This is the "search the checkboxes" channel —
-//       a roadmap is complete iff it has zero unchecked column-0 boxes.
+//       session MUST differ from draft reviewer and recorded executor.
+//       Shows deliveryReady separately; receipt success alone is not delivery.
+//   --unfinished [plansDir]       read-only unfinished consumer-plan query
+//   --roadmap <roadmap.md>        checkbox count + remaining lines
 
 import { readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { load as yamlLoad } from "./vendor/js-yaml.mjs";
+import { interpretPlan } from "./consumer-ledger.mjs";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const REPO_ROOT = process.env.AGE_REPO_ROOT
@@ -91,7 +91,7 @@ function cmdSet(planPath, newStatus, hold, force) {
     console.error("ERROR: frontmatter has no string `status` field.");
     process.exit(2);
   }
-  if (TERMINAL.includes(current) && !force) {
+  if ([...TERMINAL, "completed"].includes(current) && !force) {
     console.error(`DENY: '${current}' is terminal — a terminal plan never revives; restarting = a new plan.`);
     console.error("      (override with --force only with an explicit human decision)");
     process.exit(1);
@@ -100,12 +100,9 @@ function cmdSet(planPath, newStatus, hold, force) {
     console.error("DENY: held requires a reason — rerun with --hold \"<reason>\".");
     process.exit(1);
   }
-  if (newStatus === "active" && current === "draft") {
-    const record = content.slice(bodyStart);
-    if (!/## Draft Review Record[\s\S]*?(dispatch|：iteration)/.test(record)) {
-      console.warn("WARN: draft→active without a Draft Review Record receipt — activation is");
-      console.warn("      receipt-enforced by format; record the independent review before executing.");
-    }
+  if (newStatus === "active" && !interpretPlan(content).review.accepted) {
+    console.error("DENY: activation requires latest paired accepted draft review.");
+    process.exit(1);
   }
   // Surgical line-level write-back (diff-minimal; the rest of the block is untouched).
   let nextFm = /^status:/m.test(fmText)
@@ -113,10 +110,10 @@ function cmdSet(planPath, newStatus, hold, force) {
     : `status: ${newStatus}\n${fmText}`;
   if (/^hold:/m.test(nextFm)) {
     nextFm = newStatus === "held"
-      ? nextFm.replace(/^hold:.*$/m, `hold: "${hold}"`)
+      ? nextFm.replace(/^hold:.*$/m, `hold: ${JSON.stringify(hold)}`)
       : nextFm.replace(/^hold:.*\n?/m, "");
   } else if (newStatus === "held") {
-    nextFm += `\nhold: "${hold}"`;
+    nextFm += `\nhold: ${JSON.stringify(hold)}`;
   }
   writeFileSync(planPath, `---\n${nextFm}${content.slice(bodyStart)}`);
   console.log(`ok: ${relative(REPO_ROOT, planPath).split("\\").join("/")} :: ${current} → ${newStatus}${newStatus === "held" ? ` (hold: ${hold})` : ""}`);
@@ -131,7 +128,7 @@ function collectPlans(dir, out) {
   return out;
 }
 
-function cmdList(rootArg) {
+function cmdList(rootArg, unfinished = false) {
   const plansDir = rootArg ? rootArg : join(REPO_ROOT, "docs", "plans");
   let plans;
   try {
@@ -154,13 +151,15 @@ function cmdList(rootArg) {
     const status = typeof data.status === "string" ? data.status : "(legacy/none)";
     const mission = typeof data.mission === "string" ? data.mission : "—";
     const workItem = typeof data["work-item"] === "string" ? data["work-item"] : "—";
-    rows.push({ status, mission, workItem, path: relative(REPO_ROOT, p).split("\\").join("/") });
+    const ledger = interpretPlan(content);
+    if (unfinished && (ledger.deliveryReady || ["completed", ...TERMINAL].includes(status))) continue;
+    rows.push({ status, mission, workItem, ready: ledger.deliveryReady, path: relative(REPO_ROOT, p).split("\\").join("/") });
     byStatus.set(status, (byStatus.get(status) || 0) + 1);
   }
   rows.sort((x, y) => x.path.localeCompare(y.path));
-  for (const r of rows) console.log(`${r.status.padEnd(14)} ${r.mission.padEnd(26)} ${r.workItem.padEnd(12)} ${r.path}`);
+  for (const r of rows) console.log(`raw=${r.status.padEnd(14)} deliveryReady=${!!r.ready} ${r.mission.padEnd(26)} ${r.workItem.padEnd(12)} ${r.path}`);
   console.log(`\n${rows.length} plan(s): ${[...byStatus.entries()].map(([k, v]) => `${k}=${v}`).join(", ")}`);
-  console.log("reminder: completion is derived (all boxes [x] + Verification pass lines + Closure receipt), not a status value.");
+  console.log("Consumer delivery eligibility is derived; historical records are not automatically queued. Git payload acceptance is a separate delivery check.");
 }
 
 function cmdRoadmap(roadmapPath) {
@@ -199,67 +198,14 @@ function cmdCheck(planPath) {
     console.error("ERROR: cannot read plan:", planPath);
     process.exit(2);
   }
-  const { fmText, data, error } = parseFrontmatter(content);
-  if (error || fmText === null) {
-    console.error("FAIL: frontmatter missing or invalid:", error || "no frontmatter block");
-    process.exit(1);
-  }
-  const status = typeof data.status === "string" ? data.status : "(none)";
-  const section = (title) => {
-    const start = content.indexOf("## " + title);
-    if (start === -1) return "";
-    const next = content.indexOf("\n## ", start + 1);
-    return next === -1 ? content.slice(start) : content.slice(start, next);
-  };
-  const review = section("Draft Review Record");
-  const closure = section("Closure");
-  const dispatchRe = /^- dispatch (review|audit) #(\S+) to (\S+).*$/gm;
-  const results = [];
-  const rel = relative(REPO_ROOT, planPath).split("\\").join("/");
-
-  if (status === "active") {
-    const dispatches = [...review.matchAll(/^- dispatch review #(\S+) to (\S+).*$/gm)];
-    const iterations = [...review.matchAll(/^- .*iteration \d+，共识 (\S+) #(\S+).*$/gm)];
-    if (dispatches.length === 0 || iterations.length === 0) {
-      results.push("FAIL: status=active but Draft Review Record lacks a dispatch+iteration receipt pair");
-    } else {
-      results.push("ok: active plan carries draft-review receipt pair (" + dispatches.length + " dispatch, " + iterations.length + " iteration line)");
-    }
-  }
-
-  const reviewDispatch = [...review.matchAll(/^- dispatch review #(\S+) to (\S+).*$/gm)].pop();
-  const closureDispatch = [...closure.matchAll(/^- dispatch audit #(\S+) to (\S+).*$/gm)].pop();
-  const closureAccepted = /(^|\n)- accepted #(\S+) /.test(closure);
-
-  if (closureDispatch) {
-    if (!closureAccepted) {
-      results.push("FAIL: Closure has a dispatch but no accepted line — closure receipt incomplete");
-    } else {
-      results.push("ok: closure dispatch/accepted pair present");
-    }
-    if (reviewDispatch && closureDispatch[2] === reviewDispatch[2]) {
-      results.push("FAIL: independence gate — closure-audit session (" + closureDispatch[2] + ") is the SAME session as the draft-review session; the auditor must be a different independent subagent");
-    } else if (reviewDispatch) {
-      results.push("ok: independence gate — review session (" + reviewDispatch[2] + ") ≠ closure-audit session (" + closureDispatch[2] + ")");
-    }
-  } else if (/## Closure/.test(content)) {
-    results.push("note: Closure section empty — plan not yet closed (expected while work is in flight)");
-  }
-
-  // dispatch without any conclusion anywhere in the receipt regions → derived state, note only
-  const allDispatches = [...content.matchAll(dispatchRe)];
-  if (allDispatches.length === 0 && status === "active") {
-    results.push("FAIL: active plan has no dispatch line at all");
-  }
-
-  const fails = results.filter((r) => r.startsWith("FAIL")).length;
-  console.log("receipt check:", rel, "(status=" + status + ")");
-  for (const r of results) console.log("  " + r);
-  if (fails > 0) {
-    console.error(fails + " FAIL(s)");
-    process.exit(1);
-  }
-  console.log("receipt check: PASS");
+  const ledger = interpretPlan(content);
+  console.log(`receipt check: ${relative(REPO_ROOT, planPath)} rawStatus=${ledger.rawStatus}`);
+  console.log(`receipt integrity: ${ledger.receiptIntegrity ? "PASS" : "FAIL"}`);
+  for (const reason of ledger.receiptReasons) console.log(`  FAIL: ${reason}`);
+  console.log(ledger.deliveryReady ? "delivery-ready (Git payload check still required)" : "not delivery-ready");
+  for (const reason of ledger.reasons) console.log(`  ${reason}`);
+  for (const note of ledger.compatibility) console.log(`  note: ${note}`);
+  if (!ledger.receiptIntegrity) process.exitCode = 1;
 }
 
 function main() {
@@ -269,6 +215,7 @@ function main() {
     return cmdCheck(args[1]);
   }
   if (args[0] === "--list") return cmdList(args[1]);
+  if (args[0] === "--unfinished") return cmdList(args[1], true);
   if (args[0] === "--roadmap") {
     if (!args[1]) { console.error("usage: plan-status.mjs --roadmap <roadmap.md>"); process.exit(2); }
     return cmdRoadmap(args[1]);
@@ -278,6 +225,7 @@ function main() {
     console.error("usage:");
     console.error("  plan-status.mjs <plan.md> <status> [--hold \"reason\"] [--force]");
     console.error("  plan-status.mjs --list [plansDir]");
+    console.error("  plan-status.mjs --unfinished [plansDir]");
     console.error("  plan-status.mjs --check <plan.md>");
     console.error("  plan-status.mjs --roadmap <roadmap.md>");
     console.error(`statuses: ${WRITABLE.join(" | ")} (completed is derived — never written)`);
