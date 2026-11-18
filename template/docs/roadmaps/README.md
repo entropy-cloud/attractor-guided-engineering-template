@@ -12,7 +12,6 @@ A roadmap is a milestone index and a work-item status surface — the planning l
 
 | Roadmap | Scope |
 | --- | --- |
-| `implementation-roadmap.md` | the main implementation roadmap |
 | `onboarding-roadmap.md` | first-session orientation work items |
 
 When adding a roadmap, create `docs/plans/<slug>/` in the same change and add the row here.

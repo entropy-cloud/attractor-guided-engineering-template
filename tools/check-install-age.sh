@@ -203,9 +203,6 @@ assert "mdh: operator skill retired (guidance lives in engine docs)" "$COND"
 [ -f "$TARGET2/tools/mission-driver/CONTEXT.md" ] && COND=1 || COND=0
 assert "mdh: engine vendored with its own operator docs" "$COND"
 
-[ -f "$TARGET2/docs/roadmaps/demo-roadmap.md" ] && COND=1 || COND=0
-assert "mdh: demo-roadmap delivered (demo mission roadmapPath resolvable)" "$COND"
-
 # Exercise the installed launcher and validator, not a sibling checkout.
 if (cd "$TARGET2" && unset MISSION_DRIVER_HOME && bash tools/mission-driver.sh --help > "$SCRATCH/help.log" 2>&1) && grep -q Usage "$SCRATCH/help.log"; then COND=1; else COND=0; fi
 if [ "$COND" = "0" ]; then cat "$SCRATCH/help.log" >&2; fi

@@ -14,7 +14,7 @@ The default scaffold (docs skeleton, guides, skills, hygiene tools, pre-commit h
 |---|---|
 | `tools/mission-driver.sh` | Do not edit. Thin shim that calls the engine via `MISSION_DRIVER_HOME`. |
 | `missions/base.json` | **Fill `commands.*`** for your stack (test/build/lint/typecheck). Other fields inherit safely. |
-| `missions/demo.json`, `missions/onboarding.json` | Do not edit unless you change which roadmap a mission points to. |
+| `missions/onboarding.json` | Do not edit unless you change which roadmap a mission points to. |
 | `tools/mission-driver/CONTEXT.md` | Operator guidance lives in the vendored engine; no separate operator skill is installed. |
 
 ### B — One-time Install Config · verify then leave
@@ -30,7 +30,7 @@ Context/architecture skeletons the **onboarding mission fills automatically** (s
 
 ### D — Requirement/Design Phase Fills · NOT covered by onboarding
 
-`docs/requirements/{product-baseline,product-scope,mvp}.md`, `docs/design/{app-overview,roles-and-permissions,flow-overview,feature-inventory,domain-design-guidelines}.md`, `docs/roadmaps/implementation-roadmap.md` — filled when you do real requirement/design work. Small projects may delete the ones they do not use.
+`docs/requirements/{product-baseline,product-scope,mvp}.md`, `docs/design/{app-overview,roles-and-permissions,flow-overview,feature-inventory,domain-design-guidelines}.md`, and the roadmap you author under `docs/roadmaps/` — filled when you do real requirement/design work. Small projects may delete the ones they do not use.
 
 ### E — As-shipped Methodology · use as-is, sync on template upgrade
 
@@ -40,7 +40,7 @@ Everything under `docs/guides/`, `docs/skills/`, plus the architecture conventio
 
 | Path | Who writes |
 |---|---|
-| `docs/plans/{demo,onboarding}/*.md` | DRAFT_PLANS creates; independent execution/closure-audit steps update. |
+| `docs/plans/onboarding/*.md` | DRAFT_PLANS creates; independent execution/closure-audit steps update. |
 | `docs/logs/{year}/{month}-{day}.md` | You / the closure-audit step (full-green records). Append-only. |
 | `docs/audits/...` | Stored audit records when a review is non-trivial. |
 | roadmap checkboxes | Ticked only by the closure-audit pass of the delivering plan. |

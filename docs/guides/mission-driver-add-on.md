@@ -19,7 +19,7 @@ If your workflow is interactive (human + agent pairs working plan by plan), you 
 | Engine (Node, zero npm deps) | `tools/mission-driver/` | copy into the project (`tools/mission-driver/`) — vendoring is recommended |
 | Launcher shim | `template/install/tools/mission-driver.sh` | `tools/mission-driver.sh` |
 | Env example | `template/install/.env.example` | `.env` (`MISSION_DRIVER_HOME=<path>`) |
-| Mission configs | `template/install/missions/{base,demo,onboarding}.json` | `missions/` |
+| Mission configs | `template/install/missions/{base,onboarding}.json` | `missions/` |
 | Operator guidance | in the engine itself: `tools/mission-driver/CONTEXT.md` + `docs/user-manual.{en,zh}.md` + `./tools/mission-driver.sh --help` | no separate operator skill |
 | Structural gates | `tools/mission-driver/src/{gate-check,roadmap-check,mission-check}.mjs` | invoked by the installed hook's add-on sections after the consumer enables hooks |
 
@@ -31,7 +31,7 @@ With the installer flag (from a clone of the template repo):
 ./install-age.sh /path/to/target "Project Name" --with-mission-driver
 ```
 
-This **vendors the engine** into `tools/mission-driver/`, copies the shim, env example, mission defaults and demo/onboarding roadmaps, and creates plan directories. The default engine path is target-local, so no sibling checkout is required. Existing `.env` values and custom hooks are preserved; an absent engine-path assignment is appended on a separate line. An existing `MISSION_DRIVER_HOME` assignment remains authoritative and may intentionally point elsewhere. Operator guidance ships with the engine, not a separate operator skill.
+This **vendors the engine** into `tools/mission-driver/`, copies the shim, env example, mission defaults and the onboarding roadmap, and creates plan directories. The default engine path is target-local, so no sibling checkout is required. Existing `.env` values and custom hooks are preserved; an absent engine-path assignment is appended on a separate line. An existing `MISSION_DRIVER_HOME` assignment remains authoritative and may intentionally point elsewhere. Operator guidance ships with the engine, not a separate operator skill.
 
 Installation records `.age-origin.json` and delivers the standalone read-only `tools/age-drift.mjs`. A nonempty engine with unknown/incompatible origin, or modified/missing/extra engine files, blocks preflight before any target writes. Reinstallation is not an upgrade or profile/add-on reconfiguration command. Full installer safety, source identity, bridge and drift contracts live in the template repository's architecture document titled Template vs Real-Project Boundary; it is not delivered as consumer project architecture.
 

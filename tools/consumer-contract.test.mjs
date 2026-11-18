@@ -44,12 +44,12 @@ test('installed hook invokes actual local engine sections; invalid inputs and mi
   ok(run(dir, process.execPath, ['tools/mission-driver/src/mission-check.mjs', 'missions/onboarding.json', '.']));
   const plan = 'docs/plans/fixture/plan.md';
   put(dir, plan, '---\nstatus: draft\nmission: fixture\nwork-item: M1-WI1\nverify: [test]\n---\n# Fixture\n## Phase 1 — Work\n- [ ] Add: result\n## Phase 2 — Proof\n- [ ] Proof: test\n');
-  ok(run(dir, 'git', ['add', '--', plan, 'docs/roadmaps/demo-roadmap.md', 'missions/onboarding.json', 'missions/base.json']));
+  ok(run(dir, 'git', ['add', '--', plan, 'docs/roadmaps/onboarding-roadmap.md', 'missions/onboarding.json', 'missions/base.json']));
   const valid = run(dir, 'bash', ['.githooks/pre-commit']); ok(valid);
   for (const checker of ['gate-check', 'roadmap-check', 'mission-check']) assert.match(valid.stdout, new RegExp(`\\[${checker}\\] ok:`));
   for (const [file, invalid, checker] of [
     [plan, '---\nstatus: impossible\n---\n', 'gate-check'],
-    ['docs/roadmaps/demo-roadmap.md', '---\naudit-rounds: invalid\n---\n', 'roadmap-check'],
+    ['docs/roadmaps/onboarding-roadmap.md', '---\naudit-rounds: invalid\n---\n', 'roadmap-check'],
     ['missions/onboarding.json', '{"name":"broken","extends":"missing"}', 'mission-check'],
     ['missions/onboarding.json', '{}', 'mission-check'],
     ['missions/onboarding.json', '{', 'mission-check'],
