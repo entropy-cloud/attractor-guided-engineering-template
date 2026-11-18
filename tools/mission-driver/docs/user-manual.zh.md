@@ -100,7 +100,7 @@ cd attractor-guided-engineering-template       # 进入模板仓库
 | ① 拷脚手架 | 77 个 docs/ 文件（manifest 精确控制，排除 template-internal 产物） |
 | ② 建 shim | `tools/mission-driver.sh`（引擎不复制，经 `MISSION_DRIVER_HOME` 引用） |
 | ③ 配环境 | `.env` + `.env.example`（自动算相对路径） |
-| ④ 建 mission | `missions/base.json`（commands 占位待填）+ `demo.json` + `demo-roadmap.md` |
+| ④ 建 mission | `missions/base.json`（commands 占位待填）+ `onboarding.json` + `onboarding-roadmap.md` |
 | ⑤ 建日志目录 | `docs/logs/{year}/` |
 | ⑥ 补 .gitignore | `.env`、`_tmp/` |
 | ⑦ 报告 | 打印 COPIED / SKIPPED 清单 |
