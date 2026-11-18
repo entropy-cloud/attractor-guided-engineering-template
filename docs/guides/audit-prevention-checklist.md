@@ -23,6 +23,7 @@ Each item cites the historical failure class it prevents.
 - [ ] No placeholder commands remain anywhere in active docs. *(Prevents: template placeholders reported as verification.)*
 - [ ] Scoped passes are labeled "verification scope limited" with residual risk — never reported as full green. *(Prevents: false full-green baselines.)*
 - [ ] Analytical claims ("this still works after my change") are backed by a trace, not asserted. *(Prevents: mental dry-run asserted as verified.)*
+- [ ] Template/shared-guide changes run the source consumer aggregate and its key negative controls; diagnostic output and scoped consumer passes are not global source-document certification.
 
 ## Document Placement
 

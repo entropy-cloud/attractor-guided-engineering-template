@@ -130,7 +130,7 @@ Add 1-2 bullets on what review, test, or process step was missing that let this 
 
 For small and medium projects, either style is acceptable:
 
-- numbered: `docs/bugs/01-short-bug-name.md`
+- numbered: `docs/bugs/01-short-bug-name.md` <!-- doc-ref: example reason="filename illustration" -->
 - dated: `docs/bugs/YYYY-MM-DD-HHmm-short-bug-name.md`
 
 If you expect bug notes to become a long-lived reference library, prefer numbered filenames.

@@ -128,8 +128,8 @@ Use `docs/skills/` for reusable prompt templates and `docs/logs/` for small audi
 
 Audit records are the highest-volume record class — store them under a year subdirectory with dated filenames:
 
-- `docs/audits/2026/2026-05-21-1410-document-audit-user-management.md`
-- `docs/audits/2026/2026-05-21-1420-draft-review-checkout-flow.md`
-- `docs/audits/2026/2026-05-22-0900-closure-audit-order-list.md`
+- `docs/audits/2026/2026-05-21-1410-document-audit-user-management.md` <!-- doc-ref: example reason="filename illustration" -->
+- `docs/audits/2026/2026-05-21-1420-draft-review-checkout-flow.md` <!-- doc-ref: example reason="filename illustration" -->
+- `docs/audits/2026/2026-05-22-0900-closure-audit-order-list.md` <!-- doc-ref: example reason="filename illustration" -->
 
 Create the `{year}/` directory with the first record of the year (see `docs/guides/doc-organization.md` Volume Partitioning).

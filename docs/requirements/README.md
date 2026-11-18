@@ -12,7 +12,7 @@ This preserves the distinction between raw input and settled requirement intent.
 
 ## Suggested Files
 
-- `00-requirement-synthesis-guide.md`
+- Follow `docs/guides/requirements-synthesis.md` for the synthesis method
 - `product-scope.md`
 - `mvp.md`
 - `feature-001-<name>.md`

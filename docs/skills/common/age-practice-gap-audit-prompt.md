@@ -36,7 +36,7 @@ Read at minimum:
 - `docs/guides/audit-execution.md` if it exists
 - `docs/logs/index.md`
 - `docs/analysis/README.md`
-- the active requirement, owner doc, and active plan referenced from `docs/context/project-context.md` when they exist
+- the active requirement and owner doc; discover active plans under `docs/plans/` with the standalone inventory, then read the selected plan with built-in tools
 
 Also inspect enough live repo structure to verify whether the documented workflow is actually being used.
 

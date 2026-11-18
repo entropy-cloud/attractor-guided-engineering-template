@@ -84,6 +84,8 @@ bash tools/check-install-age.sh
 
 These scoped checks cover profile/engine matrices, configuration preservation, literal names, bridge/registry parity and negative controls, read-only drift, conflict preflight and installed engine startup/validation. They do not execute models, test Pi host loading or establish global engine/plugin health. The shell gate uses a unique `_tmp/` workspace with cleanup; an explicitly supplied target is retained.
 
+The source-repository aggregate is `node tools/verify-consumer.mjs`. It runs fixed installer/workflow/guard/installed-consumer suites plus CI coverage controls; required missing tools/tests, failed children and empty test coverage fail. Installed docs are the reference-check scope of this consumer gate; a separate source-wide reference scan can report legacy source-project findings. `.github/workflows/consumer-contract.yml` runs the aggregate and the full engine regression gate for packaging/shared-methodology changes. Neither the aggregate nor this source workflow is shipped to consumers. The existing manifest-delivered consumer hook calls local engine structural checkers when the add-on exists; enabling or integrating that hook remains a consumer action.
+
 ## Cross-References
 
 - Proposal: `docs/analysis/2026-07-27-0000-template-realproject-split-proposal.md` (v4, audit-passed)

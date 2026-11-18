@@ -1,285 +1,114 @@
-import { access, readdir, readFile } from 'fs/promises';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { access, readdir, readFile, stat } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const __dirname = fileURLToPath(new URL('.', import.meta.url));
-const rootDir = process.env.AGE_REPO_ROOT
-  ? path.resolve(process.env.AGE_REPO_ROOT)
-  : path.join(__dirname, '..');
+const home = fileURLToPath(new URL('../', import.meta.url));
+export const DOC_ROOTS = ['docs/architecture', 'docs/design', 'docs/references', 'docs/context', 'docs/guides', 'docs/skills', 'docs/requirements', '.agents/skills'];
+export const DOC_FILES = ['AGENTS.md', 'docs/index.md'];
+const lineRefPattern = /\b([A-Za-z0-9_./-]+\.(?:js|mjs|cjs|ts|tsx|jsx|json|md|vue|py|java|go|rs|sh|css|scss|html|yml|yaml)):(\d+)(?:-\d+)?\b/g;
 
-const activeDocRoots = (process.env.AGE_ACTIVE_DOC_ROOTS || 'docs/architecture,docs/design,docs/references')
-  .split(',')
-  .map((value) => value.trim())
-  .filter(Boolean);
-const explicitActiveDocs = (process.env.AGE_ACTIVE_DOC_FILES || 'docs/index.md')
-  .split(',')
-  .map((value) => value.trim())
-  .filter(Boolean);
-const ignoredDirectoryNames = new Set(['node_modules']);
-const ignoredPathPrefixes = [
-  'docs/analysis/',
-  'docs/archive/',
-  'docs/logs/',
-  'docs/plans/',
-];
-const ignoredFiles = (process.env.AGE_DOC_REFS_IGNORE_FILES || '')
-  .split(',')
-  .map((value) => value.trim())
-  .filter(Boolean);
-
-// mdc-1 (convergence R3): owner/architecture docs must cite code by function /
-// anchor name, NOT by `file.ext:NNN` line numbers. Line numbers rot the moment
-// any edit shifts the target, which turns into a recurring self-perpetuating
-// audit finding (the "line-number drift" P2 loop). This guard fails the check
-// on any such citation in active docs. Escape hatch: AGE_ALLOW_LINE_REFS=1.
-const allowLineRefs =
-  process.env.AGE_ALLOW_LINE_REFS === '1' ||
-  process.env.AGE_ALLOW_LINE_REFS === 'true';
-const lineRefPattern =
-  /\b([A-Za-z0-9_./-]+\.(?:js|mjs|cjs|ts|tsx|jsx|json|md|vue|py|java|go|rs|sh|css|scss|html|yml|yaml)):(\d+)(?:-\d+)?\b/g;
-
-const backtickPattern = /`((?:src|lib|docs|tools|tests|packages|apps)\/[^`\r\n]+)`/g;
-const markdownLinkPattern = /\[([^\]]*)\]\(([^)]+)\)/g;
-
-function getLineNumber(content, matchIndex) {
-  return content.slice(0, matchIndex).split(/\r?\n/).length;
+// Kept as a pure export for the engine's existing regression tests.
+export function findLineRefs(content) {
+  const seen = new Set();
+  return [...content.matchAll(lineRefPattern)].filter((m) => !seen.has(m[0]) && seen.add(m[0]))
+    .map((m) => ({ line: content.slice(0, m.index).split('\n').length, ref: m[0] }));
 }
 
-/**
- * mdc-1 (R3): find `file.ext:NNN` line-number citations in doc content.
- * Returns [{ line, ref }]. Exported so the mission-driver test suite can pin
- * that owner/architecture docs stay free of rot-prone line-number citations.
- */
-export function findLineRefs(content) {
+async function exists(file) {
+  try { await access(file); return true; }
+  catch (e) { if (e.code === 'ENOENT') return false; throw e; }
+}
+
+async function collect(root, target, optional = false) {
+  const abs = path.join(root, target);
+  let info;
+  try { info = await stat(abs); }
+  catch (e) { if (optional && e.code === 'ENOENT') return []; throw e; }
+  if (info.isFile()) return target.endsWith('.md') ? [target] : [];
   const out = [];
-  const seen = new Set();
-  const re = new RegExp(lineRefPattern.source, 'g');
-  for (const match of content.matchAll(re)) {
-    const ref = match[0];
-    if (seen.has(ref)) continue;
-    seen.add(ref);
-    out.push({ line: getLineNumber(content, match.index ?? 0), ref });
+  for (const entry of await readdir(abs, { withFileTypes: true })) {
+    if (entry.name === 'node_modules') continue;
+    out.push(...await collect(root, `${target}/${entry.name}`));
   }
   return out;
 }
 
-function looksLikeFilePath(candidate) {
-  if (!/\.[a-z0-9]+$/i.test(candidate)) {
-    return false;
-  }
-  if (candidate.includes('{') || candidate.includes('}') || candidate.includes('*')) {
-    return false;
-  }
-  if (candidate.includes('<') || candidate.includes('>')) {
-    return false;
-  }
-  if (/\b(YYYY|MM|DD|HH|mm|NNN)\b/.test(candidate)) {
-    return false;
-  }
-  if (/\d{4}-\d{2}-\d{2}-\d{4}-/.test(candidate)) {
-    return false;
-  }
-  if (/\/\d{3}-\d{4}-\d{2}-\d{2}-/.test(candidate)) {
-    return false;
-  }
-  return true;
+export function classifyReference(target) {
+  if (/^(?:https?:|mailto:|ftp:|external:)/i.test(target)) return 'external';
+  if (/^example:/.test(target) || /[{}<>*]|\b(?:YYYY|HHmm|NNN)\b/.test(target)) return 'example';
+  if (/^(?:source:|template\/)/.test(target)) return 'source';
+  if (/^(?:\$MISSION_DRIVER_HOME\/|engine:)/.test(target)) return 'engine';
+  return 'local';
 }
 
-function isExternalLink(target) {
-  return (
-    target.startsWith('http://') ||
-    target.startsWith('https://') ||
-    target.startsWith('mailto:') ||
-    target.startsWith('ftp://')
-  );
-}
-
-function stripAnchor(target) {
-  const hashIndex = target.indexOf('#');
-  return hashIndex >= 0 ? target.slice(0, hashIndex) : target;
-}
-
-async function pathExists(absolutePath) {
-  try {
-    await access(absolutePath);
-    return true;
-  } catch {
-    return false;
+export async function checkReferences(root, options = {}) {
+  root = path.resolve(root);
+  const files = new Set(options.files ?? DOC_FILES);
+  const roots = options.roots ?? DOC_ROOTS;
+  for (const target of roots) for (const file of await collect(root, target, true)) files.add(file);
+  // Source checkouts also scan the consumer overlay, in its own virtual root.
+  if (!options.files && !options.roots && await exists(path.join(root, 'template/AGENTS.md'))) {
+    files.add('template/AGENTS.md');
+    files.add('template/docs/index.md');
+    for (const target of DOC_ROOTS) for (const file of await collect(root, `template/${target}`, true)) files.add(file);
   }
-}
-
-function toPosixPath(filePath) {
-  return path.relative(rootDir, filePath).split(path.sep).join('/');
-}
-
-function shouldIgnoreDoc(relativePath) {
-  if (ignoredPathPrefixes.some((prefix) => relativePath.startsWith(prefix))) {
-    return true;
-  }
-  if (ignoredFiles.includes(relativePath)) {
-    return true;
-  }
-  return false;
-}
-
-async function collectMarkdownFiles(dir) {
-  const files = [];
-  let entries;
-
-  try {
-    entries = await readdir(dir, { withFileTypes: true });
-  } catch (error) {
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
-      return files;
-    }
-    throw error;
-  }
-
-  for (const entry of entries) {
-    if (ignoredDirectoryNames.has(entry.name)) {
-      continue;
-    }
-
-    const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...(await collectMarkdownFiles(fullPath)));
-      continue;
-    }
-
-    if (!entry.isFile() || path.extname(entry.name) !== '.md') {
-      continue;
-    }
-
-    const relativePath = toPosixPath(fullPath);
-    if (!shouldIgnoreDoc(relativePath)) {
-      files.push(relativePath);
-    }
-  }
-
-  return files;
-}
-
-async function getActiveDocPaths() {
-  const discovered = new Set(explicitActiveDocs);
-
-  for (const root of activeDocRoots) {
-    for (const file of await collectMarkdownFiles(path.join(rootDir, root))) {
-      discovered.add(file);
-    }
-  }
-
-  return [...discovered].sort((a, b) => a.localeCompare(b));
-}
-
-async function main() {
-  const failures = [];
-  const lineRefFailures = [];
-  const activeDocPaths = await getActiveDocPaths();
-
-  if (activeDocPaths.length === 0) {
-    console.log('[check-doc-references] No active docs configured or found.');
-    return;
-  }
-
-  for (const docPath of activeDocPaths) {
-    const content = await readFile(path.join(rootDir, docPath), 'utf8');
-    const seenPaths = new Set();
-    const docDir = path.dirname(docPath);
-
-    if (!allowLineRefs) {
-      for (const hit of findLineRefs(content)) {
-        lineRefFailures.push({ docPath, line: hit.line, ref: hit.ref });
-      }
-    }
-
-    for (const match of content.matchAll(backtickPattern)) {
-      const candidate = match[1];
-      if (!looksLikeFilePath(candidate) || seenPaths.has(`bt:${candidate}`)) {
+  if (!files.size) throw Error('No active docs: zero reference coverage');
+  const failures = [], classified = { local: 0, external: 0, example: 0, source: 0, engine: 0, 'optional-engine': 0, 'optional-source': 0 };
+  for (const file of [...files].sort()) {
+    const text = await readFile(path.join(root, file), 'utf8');
+    const lines = text.split(/\r?\n/);
+    let fence = null, exampleFence = false;
+    for (const [index, line] of lines.entries()) {
+      const mark = /^\s*(`{3,}|~{3,})(.*)$/.exec(line);
+      if (mark) {
+        if (!fence) { fence = mark[1]; exampleFence = /\bexample\b/.test(mark[2]); }
+        else if (mark[1][0] === fence[0] && mark[1].length >= fence.length) { fence = null; exampleFence = false; }
         continue;
       }
-
-      seenPaths.add(`bt:${candidate}`);
-      const absolutePath = path.join(rootDir, candidate);
-      if (!(await pathExists(absolutePath))) {
-        failures.push({
-          docPath,
-          line: getLineNumber(content, match.index ?? 0),
-          missingPath: candidate,
-          source: 'backtick',
-        });
-      }
-    }
-
-    for (const match of content.matchAll(markdownLinkPattern)) {
-      const raw = match[2].trim();
-      const target = stripAnchor(raw);
-
-      if (!target || isExternalLink(target)) {
-        continue;
-      }
-
-      if (seenPaths.has(`md:${target}`)) {
-        continue;
-      }
-
-      seenPaths.add(`md:${target}`);
-
-      if (target.startsWith('/')) {
-        const absolutePath = path.join(rootDir, target.slice(1));
-        if (!(await pathExists(absolutePath))) {
-          failures.push({
-            docPath,
-            line: getLineNumber(content, match.index ?? 0),
-            missingPath: target,
-            source: 'markdown',
-          });
+      const annotation = exampleFence ? 'example' : /<!-- doc-ref: (example|external) reason="[^"\r\n]+" -->/.exec(line)?.[1];
+      if (!options.allowLineRefs && !annotation) for (const hit of findLineRefs(line)) failures.push(`${file}:${index + 1} [line-ref] ${hit.ref}`);
+      const refs = [...line.matchAll(/\[[^\]]*\]\(([^)]+)\)/g)].map((m) => ({ target: m[1].trim(), link: true }));
+      for (const m of line.matchAll(/`([^`\r\n]+)`/g)) {
+        const target = m[1];
+        if (/^(?:[\w.-]+\/|\.agents\/|\.githooks\/|\.github\/|\$MISSION_DRIVER_HOME\/|engine:|external:|example:|source:)/.test(target) || target === 'AGENTS.md') {
+          if (/\.(?:md|mjs|js|ts|json|ya?ml|sh|vue|html|txt|cmd)(?:#.*)?$/i.test(target) || /[{}<>*]/.test(target)) refs.push({ target, link: false });
         }
-      } else {
-        const resolved = path.join(docDir, target);
-        const normalized = path.normalize(resolved);
-        const absolutePath = path.join(rootDir, normalized);
-        if (!(await pathExists(absolutePath))) {
-          failures.push({
-            docPath,
-            line: getLineNumber(content, match.index ?? 0),
-            missingPath: target,
-            source: 'markdown',
-          });
+      }
+      for (const ref of refs) {
+        let target = ref.target.split('#')[0];
+        if (!target) continue;
+        const kind = (!ref.link && annotation) || classifyReference(target);
+        classified[kind]++;
+        if (kind === 'external' || kind === 'example') continue;
+        if (kind === 'source') {
+          if (!await exists(path.join(root, 'install-age.manifest'))) { classified['optional-source']++; continue; }
+          target = target.replace(/^source:/, '');
+        }
+        if (kind === 'engine') target = target.replace(/^(?:\$MISSION_DRIVER_HOME\/|engine:)/, 'tools/mission-driver/');
+        if (/^(?:tools\/mission-driver(?:\/|\.sh$)|missions\/(?:base|demo|onboarding)\.json$)/.test(target) && !await exists(path.join(root, 'tools/mission-driver'))) {
+          classified['optional-engine']++; continue;
+        }
+        const rootRelative = kind === 'source' || target === 'AGENTS.md' || /^(?:docs|tools|template|src|lib|tests|packages|apps|plugin|missions|\.agents|\.github|\.githooks)\//.test(target);
+        const relative = target.startsWith('/') ? target.slice(1) : rootRelative ? target : path.join(path.dirname(file), target);
+        const candidates = [relative];
+        if (file.startsWith('template/') && rootRelative) candidates.unshift(`template/${relative}`);
+        if (!(await Promise.all(candidates.map((p) => exists(path.resolve(root, p))))).some(Boolean)) {
+          failures.push(`${file}:${index + 1} [${ref.link ? 'link' : kind}] ${ref.target}`);
         }
       }
     }
   }
-
-  if (failures.length > 0 || lineRefFailures.length > 0) {
-    if (failures.length > 0) {
-      console.error('[check-doc-references] ERROR: unresolved references found:');
-      for (const failure of failures) {
-        console.error(`  - ${failure.docPath}:${failure.line} [${failure.source}] -> ${failure.missingPath}`);
-      }
-    }
-    if (lineRefFailures.length > 0) {
-      console.error(
-        '[check-doc-references] ERROR: line-number citations found in active docs ' +
-        '(cite code by function/anchor name, not file:NNN — line numbers rot; ' +
-        'set AGE_ALLOW_LINE_REFS=1 to bypass):',
-      );
-      for (const failure of lineRefFailures) {
-        console.error(`  - ${failure.docPath}:${failure.line} [line-ref] -> ${failure.ref}`);
-      }
-    }
-    process.exit(1);
-  }
-
-  console.log(
-    `[check-doc-references] Verified references in ${activeDocPaths.length} active docs`,
-  );
+  return { files: files.size, failures, classified };
 }
 
-// CLI entry only — guard so `import`ing this module (e.g. from tests) does not
-// run the full scan / process.exit. Mirrors the pattern in src/*-check.mjs.
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main().catch((error) => {
-    console.error('[check-doc-references] Error:', error);
-    process.exit(1);
-  });
+  const split = (value) => value.split(',').map((s) => s.trim()).filter(Boolean);
+  const options = { allowLineRefs: /^(1|true)$/.test(process.env.AGE_ALLOW_LINE_REFS || '') };
+  if (process.env.AGE_ACTIVE_DOC_ROOTS) options.roots = split(process.env.AGE_ACTIVE_DOC_ROOTS);
+  if (process.env.AGE_ACTIVE_DOC_FILES) options.files = split(process.env.AGE_ACTIVE_DOC_FILES);
+  checkReferences(process.env.AGE_REPO_ROOT || home, options).then((result) => {
+    console.log(`[check-doc-references] ${result.files} active docs; classifications ${JSON.stringify(result.classified)}`);
+    for (const failure of result.failures) console.error(failure);
+    if (result.failures.length) process.exitCode = 1;
+  }).catch((e) => { console.error('[check-doc-references]', e.message); process.exitCode = 1; });
 }

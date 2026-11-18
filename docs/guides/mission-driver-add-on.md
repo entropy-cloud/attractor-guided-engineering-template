@@ -21,7 +21,7 @@ If your workflow is interactive (human + agent pairs working plan by plan), you 
 | Env example | `template/install/.env.example` | `.env` (`MISSION_DRIVER_HOME=<path>`) |
 | Mission configs | `template/install/missions/{base,demo,onboarding}.json` | `missions/` |
 | Operator guidance | in the engine itself: `tools/mission-driver/CONTEXT.md` + `docs/user-manual.{en,zh}.md` + `./tools/mission-driver.sh --help` | no separate operator skill |
-| Structural gates | `tools/mission-driver/src/{gate-check,roadmap-check,mission-check}.mjs` | available for explicit invocation/hook wiring, not automatically enabled by installation |
+| Structural gates | `tools/mission-driver/src/{gate-check,roadmap-check,mission-check}.mjs` | invoked by the installed hook's add-on sections after the consumer enables hooks |
 
 ## Installation
 
@@ -52,11 +52,11 @@ For a project with an existing plain installation, first inspect a separate clea
 2. Copy the launcher, env example and mission defaults from the separate installation without overwriting local configuration. Ensure `.env` points at the local engine.
 3. Point mission configs at your docs: `roadmapPath` → `docs/roadmaps/<slug>-roadmap.md`, `plansDir` → `docs/plans/<slug>/`, `contextDir` → `docs/context`.
 4. Fill `missions/base.json` `commands.*` with your real verification commands.
-5. Wire explicit structural gate invocations into your hook/CI if required. The installed consumer hook checks document hygiene only; the engine's invocation of gates does not install commit-time enforcement. A manually integrated engine has no installer-attested origin until a separately reviewed adoption procedure records one; do not fabricate or copy another project's metadata.
+5. Enable the supplied hook with `git config core.hooksPath .githooks`, or integrate its calls into your existing custom hook. With a local vendored engine, it checks staged-path working-tree plans, roadmaps and missions using the engine's own checkers; legacy/non-ledger documents, `missions/base.json` and its optional `base.local.json` override are outside those sections. Without the add-on it reports a structural-check skip; missing Node also remains fail-open. Missing checkers in an installed engine or checker failures deny the commit. Garbled text remains a diagnostic. A manually integrated engine has no installer-attested origin until a separately reviewed adoption procedure records one; do not fabricate or copy another project's metadata.
 
 ## What Changes When Enabled
 
-- Engine operations can machine-check ledger grammar: frontmatter fields, receipt lines, checkbox counting domains and roadmap milestone grammar. Commit/CI enforcement requires explicit wiring.
+- Engine operations and enabled add-on hook sections machine-check ledger grammar. Consumer CI remains a project choice; the source repository's consumer-contract workflow is not installed downstream.
 - Roadmap `audit-rounds` frontmatter and `## Deep Audit Record` become live (audit budgets).
 - `verify: [keys]` in plan frontmatter maps to `missions/base.json` command keys.
 - Run state lives in `_tmp/<ts>-mission-driver/` (gitignored); Reflexion memory in `tools/mission-driver/memory/`.

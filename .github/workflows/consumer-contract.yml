@@ -1,0 +1,67 @@
+name: Consumer contract
+
+on:
+  push:
+    paths:
+      - 'install-age.sh'
+      - 'install-age.cmd'
+      - 'install-age.manifest'
+      - 'AGENTS.md'
+      - 'README*.md'
+      - 'template/**'
+      - 'docs/guides/**'
+      - 'docs/skills/**'
+      - '.agents/skills/**'
+      - 'docs/context/**'
+      - 'docs/design/**'
+      - 'docs/architecture/**'
+      - 'docs/requirements/**'
+      - 'docs/index.md'
+      - 'docs/*/README.md'
+      - 'docs/logs/index.md'
+      - 'tools/*.mjs'
+      - 'tools/*.sh'
+      - 'tools/vendor/**'
+      - 'tools/package.json'
+      - 'tools/mission-driver/**'
+      - '.github/workflows/consumer-contract.yml'
+  pull_request:
+    paths:
+      - 'install-age.sh'
+      - 'install-age.cmd'
+      - 'install-age.manifest'
+      - 'AGENTS.md'
+      - 'README*.md'
+      - 'template/**'
+      - 'docs/guides/**'
+      - 'docs/skills/**'
+      - '.agents/skills/**'
+      - 'docs/context/**'
+      - 'docs/design/**'
+      - 'docs/architecture/**'
+      - 'docs/requirements/**'
+      - 'docs/index.md'
+      - 'docs/*/README.md'
+      - 'docs/logs/index.md'
+      - 'tools/*.mjs'
+      - 'tools/*.sh'
+      - 'tools/vendor/**'
+      - 'tools/package.json'
+      - 'tools/mission-driver/**'
+      - '.github/workflows/consumer-contract.yml'
+
+jobs:
+  consumer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Installed consumer contract and guard controls
+        run: node tools/verify-consumer.mjs
+      - name: Engine regression including prompt check
+        run: pnpm --prefix tools/mission-driver test

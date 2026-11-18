@@ -10,6 +10,7 @@
     "check:docs-garbled": "node ./check-docs-garbled.mjs",
     "check:timeliness": "node ./check-doc-timeliness.mjs",
     "check:install": "bash ./check-install-age.sh",
+    "check:consumer": "node ./verify-consumer.mjs",
     "check:duplicates": "node ./check-duplicates.mjs",
     "audit:suspects": "node ./audit/discover-audit-suspects.mjs",
     "stats": "node ./code-stats.mjs",

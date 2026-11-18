@@ -41,6 +41,7 @@ This file intentionally does **not** track "what is being worked on right now". 
 | Consumer installer contract (scoped) | `node --test tools/install-age.test.mjs tools/install-age.integration.test.mjs` |
 | Consumer installation closure gate (scoped) | `bash tools/check-install-age.sh` |
 | Consumer plan/workflow/delivery contract (scoped) | `node --test tools/plan-status.test.mjs tools/commit-plan.test.mjs tools/workflow-contract.test.mjs` |
+| Consumer contract aggregate (installed scaffold + negative controls + CI wiring; scoped) | `node tools/verify-consumer.mjs` |
 | Diff whitespace | `git diff --check` |
 
 Notes:

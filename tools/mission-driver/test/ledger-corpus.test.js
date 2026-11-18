@@ -1,5 +1,5 @@
 // Corpus dual-read smoke (age-autonomy M1-WI10, plan 0635-3 Phase 6): every
-// docs/plans/**/*.md and docs/backlog/*roadmap*.md must pass dual-read
+// docs/plans/**/*.md and docs/roadmaps/*roadmap*.md must pass dual-read
 // resolution with zero structural errors — a permanent regression net against
 // ledger-format drift in the live corpus (new-format files are additionally
 // validated by the 0635-2 counting-domain / block-syntax scanners).
@@ -16,12 +16,7 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "
 
 function walkMd(dir) {
   const out = [];
-  let entries;
-  try {
-    entries = readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return out;
-  }
+  const entries = readdirSync(dir, { withFileTypes: true });
   for (const e of entries) {
     const full = join(dir, e.name);
     if (e.isDirectory()) out.push(...walkMd(full));
@@ -35,10 +30,10 @@ function isFile(f) {
 }
 
 const planFiles = walkMd(join(REPO_ROOT, "docs", "plans"));
-const backlogDir = join(REPO_ROOT, "docs", "backlog");
-const roadmapFiles = readdirSync(backlogDir)
+const roadmapsDir = join(REPO_ROOT, "docs", "roadmaps");
+const roadmapFiles = readdirSync(roadmapsDir)
   .filter((f) => f.endsWith(".md") && /roadmap/.test(f))
-  .map((f) => join(backlogDir, f));
+  .map((f) => join(roadmapsDir, f));
 
 test("corpus discovery is non-empty", () => {
   assert.ok(planFiles.length > 50, `expected the historical plan corpus, got ${planFiles.length}`);

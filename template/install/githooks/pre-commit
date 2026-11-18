@@ -13,10 +13,8 @@
 # Fail-open discipline: node unavailable → skip everything with a note (the
 # hook must not be more fragile than the project's existing toolchain).
 #
-# Projects that enabled the mission-driver add-on can additionally enforce the
-# plan/roadmap ledger grammar at commit time — see docs/guides/mission-driver-add-on.md
-# for the engine-resident check scripts and how to wire them (the paths are
-# engine-relative; do not hardcode them here).
+# With the add-on, staged plans/roadmaps/missions run the consumer-local engine's
+# structural checkers. This checks working-tree files, not staged-blob identity.
 
 set -uo pipefail
 cd "$(git rev-parse --show-toplevel)" || exit 0
@@ -40,12 +38,54 @@ fi
 
 if [ -f tools/check-docs-garbled.mjs ]; then
   if out=$(node tools/check-docs-garbled.mjs 2>&1); then
-    echo "[pre-commit][garbled] ok"
+    printf '%s\n' "$out" | tail -5
   else
     echo "[pre-commit][garbled] DENY:"
     printf '%s\n' "$out" | head -20
     fail=1
   fi
+fi
+
+# ---- optional vendored engine structural sections -------------------------
+engine=tools/mission-driver
+if [ ! -d "$engine" ]; then
+  echo "[pre-commit][engine] no add-on — structural sections skipped (fail-open)"
+else
+  for checker in gate-check roadmap-check mission-check; do
+    if [ ! -f "$engine/src/$checker.mjs" ]; then
+      echo "[pre-commit][engine] missing required checker: $checker" >&2
+      fail=1
+    fi
+  done
+  while IFS= read -r -d '' f; do
+    [ -f "$f" ] || continue
+    checker=
+    case "$f" in
+      docs/plans/*.md)
+        if [ "$(head -n 1 "$f")" != "---" ]; then
+          echo "[pre-commit][plans] legacy/non-ledger file skipped: $f"
+          continue
+        fi
+        checker=gate-check ;;
+      docs/roadmaps/*-roadmap.md) checker=roadmap-check ;;
+      missions/*.json)
+        # Installer convention: these are defaults/overrides, not missions.
+        # Other JSON files must reach the real checker, even when malformed.
+        case "$f" in missions/base.json|missions/base.local.json) continue ;; esac
+        checker=mission-check ;;
+    esac
+    [ -n "$checker" ] || continue
+    [ -f "$engine/src/$checker.mjs" ] || continue
+    args=("$f")
+    [ "$checker" != "mission-check" ] || args+=(".")
+    if out=$(node "$engine/src/$checker.mjs" "${args[@]}" 2>&1); then
+      echo "[pre-commit][$checker] ok: $f"
+    else
+      echo "[pre-commit][$checker] DENY: $f"
+      printf '%s\n' "$out" | head -15
+      fail=1
+    fi
+  done < <(git diff --cached --name-only --diff-filter=ACMR -z)
 fi
 
 exit "$fail"

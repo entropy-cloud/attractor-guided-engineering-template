@@ -7,8 +7,8 @@ import { fileURLToPath } from 'url';
 const execFileAsync = promisify(execFile);
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
-const rootDir = path.join(__dirname, '..');
-const outputDir = path.join(rootDir, 'tmp', 'docs-garbled-check');
+const rootDir = process.env.AGE_REPO_ROOT ? path.resolve(process.env.AGE_REPO_ROOT) : path.join(__dirname, '..');
+const outputDir = path.join(rootDir, '_tmp', 'docs-garbled-check');
 
 const textExtensions = new Set([
   '.md',
@@ -115,6 +115,9 @@ function isAllowedCharacter(character, index) {
 }
 
 function classifyCharacter(character, index) {
+  if (suspiciousSingles.has(character) && !(index === 0 && character === '\uFEFF')) {
+    return suspiciousSingles.get(character);
+  }
   if (isAllowedCharacter(character, index)) {
     return null;
   }
@@ -281,18 +284,18 @@ function buildSummary(scannedFileCount, candidates, verdicts) {
     }
   }
 
-  lines.push('', '## Output Files', '', '- `tmp/docs-garbled-check/candidates.json`', '- `tmp/docs-garbled-check/verdicts.json`');
+  lines.push('', '## Output Files', '', '- `_tmp/docs-garbled-check/candidates.json`', '- `_tmp/docs-garbled-check/verdicts.json`');
 
   return `${lines.join('\n')}\n`;
 }
 
 async function main() {
+  if (process.argv.slice(2).some((arg) => arg !== '--blocking')) throw Error('Usage: check-docs-garbled.mjs [--blocking]');
   await mkdir(outputDir, { recursive: true });
 
   const trackedFiles = await getTrackedDocFiles();
   if (trackedFiles.length === 0) {
-    console.log('[check-docs-garbled] No tracked docs files found.');
-    return;
+    throw Error('No tracked docs files: zero diagnostic coverage');
   }
   const scans = await Promise.all(trackedFiles.map((relativePath) => scanFile(relativePath)));
   const candidates = scans
@@ -330,6 +333,8 @@ async function main() {
   console.log(`[check-docs-garbled] Candidate files: ${candidates.length}`);
   console.log(`[check-docs-garbled] Likely garbled: ${likelyCount}`);
   console.log(`[check-docs-garbled] Reports written to ${toRelativePath(outputDir)}`);
+  console.log('[check-docs-garbled] Heuristic diagnostic, not proof of clean encoding. Blocking only with --blocking.');
+  if (process.argv.includes('--blocking') && likelyCount) process.exitCode = 1;
 }
 
 main().catch((error) => {

@@ -67,7 +67,7 @@ A roadmap usually contains, in order (omit what does not apply):
 
 Canonical milestone fragment:
 
-```md
+```md example
 ### M2 — Tech Selection
 
 - [x] WI9 Time-series store selection (Owner: `docs/architecture/telemetry-storage-design.md`; deps: M1)

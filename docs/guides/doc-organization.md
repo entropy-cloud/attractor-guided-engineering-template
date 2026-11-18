@@ -24,7 +24,11 @@ These rules exist because normative docs that accumulate history stop being read
 4. **Update in place, do not version.** Never create `xxx-v2.md` next to `xxx.md`. Supersede by editing, or archive the old file (human decision only).
 5. **One fact, one surface.** A rule is stated in exactly one owner doc; other docs link to it. Restating "because it is also relevant here" is the top source of silent divergence.
 
-Enforcement: `tools/check-doc-timeliness.mjs` scans the normative roots and fails on changelog headings, dated headings, and dated bullets. It runs in `pnpm --prefix tools check` and in the pre-commit hook. A file that genuinely needs an exception carries an HTML comment `<!-- timeliness: allow -->` at the top with a one-line reason.
+Enforcement: `tools/check-doc-timeliness.mjs` checks configured syntax patterns, not semantic freshness. Descendant read/traversal errors fail; only absent optional top-level targets are skipped. A genuine exemption uses exactly `<!-- timeliness: allow reason="specific reason" -->` as the first nonblank line within the first 2KB.
+
+`tools/check-doc-references.mjs` covers current normative roots, entrypoints, registered relative skills and the source template overlay. Markdown links are local unless they use an external scheme. Backtick paths use repo-relative roots or the document's directory; bare filenames in prose are not link assertions. Placeholders and `example:` are examples; `external:` identifies another corpus; `engine:` or `$MISSION_DRIVER_HOME/` resolves in the optional local engine. `source:` and `template/` identify source-checkout-only resources. Source/add-on paths are checked when that layer exists. Mark a concrete example path with `<!-- doc-ref: example reason="filename illustration" -->`, or label its code fence `md example`; this never exempts the whole document. The guard checks existence, not anchor contents or prose accuracy.
+
+`tools/check-docs-garbled.mjs` writes heuristic reports under `_tmp/docs-garbled-check/`. Default mode is diagnostic; `--blocking` fails for likely-garbled candidates. Neither mode certifies clean encoding.
 
 ## Bookkeeping: One Fact, One Writer
 
@@ -148,7 +152,7 @@ Projects copied from the pre-v2 template (with `docs/backlog/`, `docs/process/`,
 | plan files flat in `docs/plans/` | per-roadmap dirs `docs/plans/<slug>/` |
 | `docs/process/*` + `00-*-guide.md` in each dir | consolidated under `docs/guides/` |
 | `docs/context/{conventions,source-of-truth-and-precedence}.md` | absorbed into this guide |
-| `docs/references/document-naming-and-timeliness.md` | absorbed into this guide |
+| `docs/references/document-naming-and-timeliness.md` | absorbed into this guide | <!-- doc-ref: example reason="old layout path, not a current link" -->
 | `.opencode/skills/` (or other tool dirs) | canonical home is `.agents/skills/` |
 | engine via sibling-checkout `MISSION_DRIVER_HOME` | vendor the engine copy (`docs/guides/mission-driver-add-on.md`) |
 

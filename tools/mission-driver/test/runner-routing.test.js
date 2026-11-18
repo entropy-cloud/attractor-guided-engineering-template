@@ -1,8 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { createRunner, resolveDriverExecutable } from "../src/runner.js";
 
 // OPT-3: a fake execute that records the spawn args (no real opencode process).
@@ -36,12 +36,18 @@ function isOpenCodeCommand(cmd) {
 
 describe("runner — Windows OpenCode resolution", () => {
   it("uses npm's native executable when APPDATA contains the global installation", () => {
-    const executable = resolveDriverExecutable("opencode", { APPDATA: process.env.APPDATA });
-    if (process.platform === "win32" && process.env.APPDATA) {
-      assert.ok(executable.endsWith("opencode.exe"));
-    } else {
-      assert.equal(executable, "opencode");
-    }
+    const appData = mkdtempSync(join(tmpdir(), "md-runner-appdata-"));
+    try {
+      const candidate = join(appData, "npm", "node_modules", "opencode-ai", "bin", "opencode.exe");
+      assert.equal(resolveDriverExecutable("opencode", { APPDATA: appData }), "opencode");
+      mkdirSync(dirname(candidate), { recursive: true });
+      writeFileSync(candidate, "fixture only; never executed");
+      assert.equal(resolveDriverExecutable("opencode", { APPDATA: appData }), process.platform === "win32" ? candidate : "opencode");
+      assert.equal(resolveDriverExecutable("cline", { APPDATA: appData }), "cline");
+      rmSync(candidate);
+      assert.equal(resolveDriverExecutable("opencode", { APPDATA: appData }), "opencode");
+      assert.equal(resolveDriverExecutable("opencode", {}), "opencode");
+    } finally { rmSync(appData, { recursive: true, force: true }); }
   });
 
   it("does not rewrite non-OpenCode drivers", () => {

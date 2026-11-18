@@ -598,7 +598,7 @@ describe("duplicate-append-only-anchor structural error (M2-WI22)", () => {
       const dup = r.errors.filter((e) => e.code === "duplicate-anchor");
       if (dup.length > 0) offenders.push(`${f}: ${dup.map((e) => `line ${e.line}`).join(", ")}`);
     }
-    const roadmapPath = join(repoRoot, "docs", "backlog", "age-autonomy-implementation-roadmap.md");
+    const roadmapPath = join(repoRoot, "docs", "roadmaps", "age-autonomy-implementation-roadmap.md");
     const rr = scanRoadmapLedger(readFileSync(roadmapPath, "utf8"));
     const roadDup = rr.errors.filter((e) => e.code === "duplicate-anchor");
     if (roadDup.length > 0) offenders.push(`${roadmapPath}: ${roadDup.map((e) => `line ${e.line}`).join(", ")}`);

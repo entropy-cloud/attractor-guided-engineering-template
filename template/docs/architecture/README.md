@@ -11,7 +11,7 @@ Use `docs/design/` for app-layer feature and business design. Use `docs/architec
 1. `project-vision.md`
 2. `system-baseline.md`
 3. `module-boundaries.md`
-4. `mission-driver-baseline.md` — public contracts for the `$MISSION_DRIVER_HOME/` cross-cutting engine (CLI surface, `mission.json` / `draft-state.json` / `run-state.json` schemas, marker contracts, public exports vs test seams)
+4. `docs/guides/mission-driver-add-on.md` — optional engine setup; engine contracts live with the vendored engine
 5. more specific owner docs as the project grows
 
 ## Owner-Doc Rules
@@ -33,4 +33,4 @@ Use `docs/design/` for app-layer feature and business design. Use `docs/architec
 - `project-vision.md` - product and system intent
 - `system-baseline.md` - current stack and runtime baseline
 - `module-boundaries.md` - package/module/domain ownership boundaries
-- `mission-driver-baseline.md` - public contracts for the mission-driver engine
+- Optional engine contracts: `engine:design/mission-design.md` (only when the add-on is installed)

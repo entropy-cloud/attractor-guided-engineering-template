@@ -29,4 +29,4 @@ When a feature depends on both business design and technical design, keep the tw
 
 ## Domain Design Sets
 
-- `age-autonomy/00-overview.md` — AGE 自主运行架构设计（Ledger · Law · Supervisor · Efficiency，human 批准 2026-08-24 转 supported baseline）；P0–P4 仍按 roadmap 立项落地，落地前的运行时受支持行为以 `dsh-plugin-integration.md` 与 `docs/architecture/` 基线为准。
+- Template source workspace only: `source:docs/design/age-autonomy/00-overview.md` — AGE Ledger · Law · Supervisor · Efficiency owner docs; not part of the installed consumer baseline.

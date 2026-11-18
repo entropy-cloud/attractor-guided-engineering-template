@@ -15,7 +15,7 @@ The default scaffold (docs skeleton, guides, skills, hygiene tools, pre-commit h
 | `tools/mission-driver.sh` | Do not edit. Thin shim that calls the engine via `MISSION_DRIVER_HOME`. |
 | `missions/base.json` | **Fill `commands.*`** for your stack (test/build/lint/typecheck). Other fields inherit safely. |
 | `missions/demo.json`, `missions/onboarding.json` | Do not edit unless you change which roadmap a mission points to. |
-| `.agents/skills/mission-driver/` | Do not edit. Operator skill (SKILL.md + schema/roadmap references). Sync on template upgrades. |
+| `tools/mission-driver/CONTEXT.md` | Operator guidance lives in the vendored engine; no separate operator skill is installed. |
 
 ### B — One-time Install Config · verify then leave
 
@@ -47,7 +47,7 @@ Everything under `docs/guides/`, `docs/skills/`, plus the architecture conventio
 
 ## Quick Start (in order)
 
-1. **Vendor + smoke the engine** — copy the engine to `tools/mission-driver/` (or set `MISSION_DRIVER_HOME` in `.env`), then `./tools/mission-driver.sh list`.
+1. **Inspect the vendored engine** — confirm `.env` points at the installed `tools/mission-driver/`, then run `./tools/mission-driver.sh --help` and `./tools/mission-driver.sh list`.
 2. **Configure commands** — `missions/base.json` → fill `commands.{test,build,lint,typecheck}` for your stack.
 3. **Run onboarding** — `./tools/mission-driver.sh run onboarding`. The AI reads your codebase and fills the Category C files.
 4. **Start feature work** — Category D skeletons get filled as real requirement/design work happens.
@@ -69,4 +69,4 @@ The flow routes through `docs/context/project-context.md` and the mission config
 
 ## When To Sync From Template Upgrades
 
-Re-run `./install-age.sh` with the same flags — it **skips existing files** (never overwrites your edits). To adopt a template improvement for a file you already customized, diff against the template source and merge manually. Most likely to receive improvements: Category A (engine skill/schema), C (onboarding coverage), E (guides + audit prompts).
+Reinstallation is not an updater: changed source/options or conflicting managed files are refused before writes. Inspect a separate clean installation, compare against your local files, and reconcile upgrades manually. Run `node tools/age-drift.mjs` for read-only local drift. Installation/provenance and hook behavior follow `docs/guides/mission-driver-add-on.md`.

@@ -39,12 +39,14 @@ Do not keep one-off migration scripts, repo-specific cleanup scripts, or tools t
 
 - `check-doc-references.mjs`: validate backtick paths and markdown links referenced in active docs
 - `check-oversized-code-files.mjs`: flag tracked code files that exceed line thresholds
-- `check-docs-garbled.mjs`: scan docs for suspicious Unicode and mojibake
+- `check-docs-garbled.mjs`: heuristic diagnostic with `_tmp/` reports; `--blocking` fails likely-garbled candidates
 - `check-install-age.sh`: closure-gate test for `install-age.sh` — runs the installer into a throwaway target and verifies scaffold correctness (used by the template-realproject-split plan + onboarding-mission plan)
 - `install-age.mjs`: cross-platform manifest installer; shell/Windows launchers delegate to it. Consumer contract tests: `node --test tools/install-age.test.mjs tools/install-age.integration.test.mjs` from the repository root.
 - `age-drift.mjs`: installed standalone, read-only origin inspection; run `node tools/age-drift.mjs [target]`. Exit 0 unchanged, 1 drift, 2 unknown/invalid origin or inspection error. No overwrite, upgrade, remote fetch or secret configuration storage. See `docs/architecture/template-vs-realproject-boundary.md` for installation safety and limits.
 
 These are lightweight, generic, and reasonable to keep enabled by default.
+
+Source packaging gate: `node tools/verify-consumer.mjs` (or `pnpm --prefix tools check:consumer`). Fixed suites cover installation, workflow delivery, guard negative controls, installed guide/hook smoke and CI triggers. This checks managed consumers, not all legacy source-doc references; run the reference checker separately for that broader diagnostic. The aggregate, tests and source CI are not installed downstream.
 
 ## Example Tools
 
@@ -99,7 +101,7 @@ See `mission.json.example` and `design/mission-design.md` for the full schema.
 ## Configuration
 
 - `check-doc-references.mjs`
-  Uses `AGE_REPO_ROOT`, `AGE_ACTIVE_DOC_ROOTS`, `AGE_ACTIVE_DOC_FILES`, and `AGE_DOC_REFS_IGNORE_FILES`.
+  Uses `AGE_REPO_ROOT`, `AGE_ACTIVE_DOC_ROOTS`, and `AGE_ACTIVE_DOC_FILES` for explicit scoped scans. Reference classification conventions live in `docs/guides/doc-organization.md`; there is no whole-file ignore list.
 - `check-oversized-code-files.mjs`
   Uses `AGE_OVERSIZED_WARN_LINES`, `AGE_OVERSIZED_ERROR_LINES`, and `AGE_CODE_ROOT_PREFIXES`.
 - `check-duplicates.mjs`

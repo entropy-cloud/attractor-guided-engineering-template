@@ -237,7 +237,7 @@ describe("WI42 plan-check CLI — exit codes (live-probe reverse pin)", () => {
       "docs/plans/age-autonomy/2026-08-25-0815-1-m2-law-seam-policy-schema.md",
       "docs/plans/age-autonomy/2026-08-25-0815-2-m2-three-hard-gates.md",
       "docs/plans/age-autonomy/2026-08-25-0815-3-m2-supporting-gates.md",
-      "docs/plans/00-plan-authoring-and-execution-guide.md",
+      "docs/guides/plan-authoring-and-execution.md",
     ];
     for (const f of files) {
       const r = runCli(PLAN_CHECK, join(REPO_ROOT, f), "--strict");

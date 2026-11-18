@@ -12,8 +12,7 @@
 //   3. dated bullets (- 2026-08-24: ...)
 //   4. "Last updated: <date>" metadata lines
 //
-// Escape hatch: a file whose first 2KB contains `<!-- timeliness: allow -->`
-// is skipped entirely (use only with a one-line reason next to the marker).
+// Escape hatch in the first 2KB: <!-- timeliness: allow reason="specific reason" -->
 //
 // Usage: node tools/check-doc-timeliness.mjs [root]
 //   root defaults to AGE_REPO_ROOT or the repo containing tools/.
@@ -79,7 +78,6 @@ const RULES = [
   },
 ];
 
-const toRel = (p) => path.relative(rootDir, p).split(path.sep).join("/");
 const isIgnored = (rel) =>
   IGNORED_PREFIXES.some((prefix) => rel.startsWith(prefix)) ||
   rel.split("/").includes("node_modules");
@@ -95,7 +93,7 @@ async function* walk(abs) {
   }
 }
 
-function findingsIn(content, rel) {
+export function findingsIn(content, rel) {
   const findings = [];
   const lines = content.split(/\r?\n/);
   let inFence = false;
@@ -124,23 +122,28 @@ function findingsIn(content, rel) {
   return findings;
 }
 
-async function main() {
+export async function checkTimeliness(root = rootDir, targets = NORMATIVE_TARGETS) {
   const findings = [];
-  for (const target of NORMATIVE_TARGETS) {
-    const abs = path.join(rootDir, target);
-    try {
-      for await (const file of walk(abs)) {
-        const rel = toRel(file);
-        if (isIgnored(rel)) continue;
-        const content = await readFile(file, "utf8");
-        if (content.slice(0, 2048).includes("<!-- timeliness: allow")) continue;
-        findings.push(...findingsIn(content, rel));
-      }
-    } catch {
-      // target does not exist in this repo shape — skip silently
+  let files = 0;
+  for (const target of targets) {
+    const abs = path.join(root, target);
+    try { await stat(abs); }
+    catch (e) { if (e.code === 'ENOENT') continue; throw e; }
+    for await (const file of walk(abs)) {
+      const rel = path.relative(root, file).split(path.sep).join('/');
+      if (isIgnored(rel)) continue;
+      files++;
+      const content = await readFile(file, "utf8");
+      if (/^\uFEFF?\s*<!-- timeliness: allow reason="[^"\r\n]*\S[^"\r\n]*" -->[^\S\r\n]*(?:\r?\n|$)/.test(content.slice(0, 2048))) continue;
+      findings.push(...findingsIn(content, rel));
     }
   }
+  if (!files) throw Error('No normative docs: zero timeliness coverage');
+  return { files, findings };
+}
 
+async function main() {
+  const { files, findings } = await checkTimeliness();
   if (findings.length > 0) {
     console.error(
       `check-doc-timeliness: ${findings.length} violation(s) of the normative/timeliness separation:`,
@@ -150,11 +153,13 @@ async function main() {
       "\nNormative docs state the current baseline only (docs/guides/doc-organization.md).",
     );
     console.error(
-      "Escape hatch: '<!-- timeliness: allow -->' with a reason in the file header.",
+      'Escape hatch: <!-- timeliness: allow reason="specific reason" --> in the header.',
     );
     process.exit(1);
   }
-  console.log("check-doc-timeliness: clean (normative docs carry no history)");
+  console.log(`check-doc-timeliness: ${files} docs; no configured syntax-pattern findings (not semantic freshness proof)`);
 }
 
-main();
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((e) => { console.error('check-doc-timeliness:', e.message); process.exitCode = 1; });
+}

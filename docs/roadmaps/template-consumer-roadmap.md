@@ -12,7 +12,7 @@ Source: `docs/requirements/template-consumer-workflow.md`; evidence: `docs/analy
 
 - [x] WI1 Safe installer and explicit provenance/drift (Owner: `docs/requirements/template-consumer-workflow.md`; Deliverable: installation safety, profile/bridge parity, standalone engine and non-destructive drift tests)
 - [x] WI2 Roadmap-led goal workflow and automatic accepted-plan commits (Owner: `docs/requirements/template-consumer-workflow.md`; deps: WI1; Deliverable: usage guide, coherent standalone lifecycle, scoped/idempotent commit helper and tests)
-- [ ] WI3 Consumer-contract guard audit and CI closure (Owner: `docs/requirements/template-consumer-workflow.md`; deps: WI2; Deliverable: guard negative controls, installed-scaffold contract checks, CI wiring and final evidence)
+- [x] WI3 Consumer-contract guard audit and CI closure (Owner: `docs/requirements/template-consumer-workflow.md`; deps: WI2; Deliverable: guard negative controls, installed-scaffold contract checks, CI wiring and final evidence)
 
 ## Framework / Platform Reuse
 

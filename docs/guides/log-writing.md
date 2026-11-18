@@ -35,7 +35,7 @@ docs/logs/{year}/{month}-{day}-{roadmap-slug}.md         # roadmap-scoped (paral
 
 ## Entry Format
 
-```markdown
+```markdown example
 # Development Log - YYYY-MM-DD
 
 ### YYYY-MM-DD
