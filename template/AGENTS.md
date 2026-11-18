@@ -46,7 +46,7 @@ Classify the task before acting; then read the matching guide/owner doc first:
 | synthesize requirements | `docs/guides/requirements-synthesis.md` |
 | fix a non-obvious bug | `docs/guides/bug-fix-note.md` |
 | write the daily log | `docs/guides/log-writing.md` |
-| record a requirement clarification discussion | `docs/guides/discussion-writing.md` |
+| record a requirement clarification discussion or a concluded grillme/design discussion | `docs/guides/discussion-writing.md` |
 | process raw external input into requirement candidates | `docs/guides/input-processing.md` |
 | record manual/exploratory testing | `docs/guides/testing-note.md` |
 | check which docs to update after a change lands | `docs/guides/doc-maintenance-checklist.md` |

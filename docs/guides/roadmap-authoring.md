@@ -4,7 +4,7 @@
 
 A roadmap under `docs/roadmaps/` is a milestone index and a work-item status surface. It is the planning layer between owner docs and plans: owner docs define what is true; the roadmap decides which work items remain, in what order, with which dependencies; plans execute the work items.
 
-A roadmap is recommended for substantial goal-directed work; small low-risk tasks can stay direct. The task-oriented loop and completion-update procedure live in `roadmap-goal-execution.md`.
+Use a roadmap when the work needs multiple plans (a plan is capped at 2–6 phases and one result surface — if it would exceed that, split it into roadmap work items); small low-risk tasks stay direct. The task-oriented loop and completion-update procedure live in `roadmap-goal-execution.md`.
 
 ## Terminology
 

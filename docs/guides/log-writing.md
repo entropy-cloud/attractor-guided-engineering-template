@@ -6,7 +6,7 @@ Development log entries are organized by date, with one file per day on the main
 
 The daily log is the **decision and adjustment record** — the durable memory of why the project moved the way it did. It captures exactly three kinds of content:
 
-1. **User decisions and adjustments** — any important steering from the user that is not already captured in a requirement/design/plan file: priority changes, direction corrections, tooling rulings, "do it this way instead" moments.
+1. **User decisions and adjustments** — any important steering from the user that is not already captured in a requirement/design/plan file: priority changes, direction corrections, tooling rulings, "do it this way instead" moments. When the user re-steers mid-task, write the entry at the next boundary (phase exit, plan closure, or task end) — do not wait for a separate "log" request.
 2. **Major AI autonomous decisions** — non-obvious choices AI made without a user ruling (an approach selected over alternatives, a tradeoff taken), with one-line rationale.
 3. **Repeats and oscillations** — rework, failed approaches, the same error appearing again, ping-pong between designs. These are the raw material for lessons and skill promotion.
 

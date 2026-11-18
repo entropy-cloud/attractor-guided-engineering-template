@@ -1,4 +1,4 @@
-# Audit Prevention Checklist
+# Change Handoff Checklist
 
 Historical audits across template-derived projects keep finding the same defect classes. This checklist converts those findings into pre-flight checks: run through it **before handing off any non-trivial change**, and most audit findings become impossible.
 

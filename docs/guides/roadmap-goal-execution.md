@@ -11,7 +11,7 @@ For substantial work, use **requirement → roadmap → plan → independent exe
 
 ## Working With A Host Goal
 
-Goal is a **host capability**, not a universal CLI installed by AGE. Use your host's documented goal/continuation entry point, or ask an interactive agent to coordinate the loop. The optional mission-driver has its own mission/run entry points; see `mission-driver-add-on.md`.
+Goal is a **host capability**, not a universal CLI installed by AGE. Use your host's documented goal/continuation entry point, or ask an interactive agent to coordinate the loop. Minimum host capability: dispatch a subagent that cannot see the coordinator's chat (cold start), and obtain its session id for the plan receipt grammar. If the host cannot provide independent actors, keep the plan open and report the blocker — do not self-accept (see `plan-authoring-and-execution.md`, Independent Execution). The optional mission-driver has its own mission/run entry points; see `mission-driver-add-on.md`.
 
 Copyable coordinator instruction:
 

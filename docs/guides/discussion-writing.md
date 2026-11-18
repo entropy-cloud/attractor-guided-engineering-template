@@ -6,6 +6,8 @@ Use `docs/discussions/` to capture multi-round clarification for ambiguous work.
 
 ## Good Fits
 
+Grillme outcomes belong here too: when a grillme interview (or any multi-round design/decision discussion) concludes, write the resolved decision tree, open branches and follow-up pointers to this directory — do not leave the conclusion only in chat.
+
 - PM is available only for partial confirmations
 - prototype meaning is unclear
 - several requirement interpretations remain possible

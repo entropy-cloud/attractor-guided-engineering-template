@@ -232,7 +232,7 @@ Exit Criteria:
 
 - [ ] <behavior lands — success and failure modes>
 - [ ] <relevant docs updated, or "No owner-doc update required">
-- [ ] `docs/logs/` updated
+- [ ] `docs/logs/` updated — satisfied by decision-bearing entries only; if nothing needs the log, state "No log entry required" rather than writing filler.
 
 ## Phase 2 — <name>
 
