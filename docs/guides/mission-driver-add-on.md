@@ -10,7 +10,7 @@ Enable the add-on only when you actually run long autonomous loops:
 - you want unattended/overnight runs with crash recovery, supervision, and audit budgets
 - multiple missions run concurrently against one repo
 
-If your workflow is interactive (human + agent pairs working plan by plan), you do not need the engine. The standalone workflow/helpers and independent acceptance are described in `roadmap-goal-workflow.md`.
+If your workflow is interactive (human + agent pairs working plan by plan), you do not need the engine. The standalone workflow/helpers and independent acceptance are described in `roadmap-goal-execution.md`.
 
 ## What The Add-On Consists Of
 
@@ -63,4 +63,4 @@ For a project with an existing plain installation, first inspect a separate clea
 
 ## Discipline
 
-The engine does not replace independent acceptance. The recommended single-plan coordinator procedure, current-payload delivery and actual engine/native compatibility limits are described in `roadmap-goal-workflow.md`; do not equate step names or engine terminal state with that contract.
+The engine does not replace independent acceptance. The recommended single-plan coordinator procedure, current-payload delivery and actual engine/native compatibility limits are described in `roadmap-goal-execution.md`; do not equate step names or engine terminal state with that contract.

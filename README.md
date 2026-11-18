@@ -120,7 +120,7 @@ Independent review found the template direction useful but warned about two risk
 
 ## First Use
 
-After setup, follow the task-oriented [roadmap/goal workflow](docs/guides/roadmap-goal-workflow.md): requirement → roadmap → independent execution/acceptance → one local commit per plan → next item. Goal is a host capability, not a scaffold CLI; the guide covers interactive and optional-engine use.
+After setup, follow the task-oriented [roadmap/goal workflow](docs/guides/roadmap-goal-execution.md): requirement → roadmap → independent execution/acceptance → one local commit per plan → next item. Goal is a host capability, not a scaffold CLI; the guide covers interactive and optional-engine use.
 
 ```bash
 # From a clone of this repo, into your new project root:

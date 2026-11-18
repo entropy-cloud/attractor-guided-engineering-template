@@ -27,7 +27,7 @@ test('managed consumer docs pass refs/timeliness and documented standalone comma
     for (const script of ['check-doc-references.mjs', 'check-doc-timeliness.mjs']) ok(run(dir, process.execPath, [`tools/${script}`]));
     for (const mode of ['--list', '--unfinished']) ok(run(dir, process.execPath, ['tools/plan-status.mjs', mode]));
     ok(run(dir, 'bash', ['.githooks/pre-commit']));
-    const usage = readFileSync(join(dir, 'docs/guides/roadmap-goal-workflow.md'), 'utf8');
+    const usage = readFileSync(join(dir, 'docs/guides/roadmap-goal-execution.md'), 'utf8');
     assert.ok(usage.includes('tools/commit-plan.mjs --snapshot'));
     assert.ok(readFileSync(join(dir, 'docs/requirements/README.md'), 'utf8').includes('docs/guides/requirements-synthesis.md'));
     assert.ok(!readFileSync(join(dir, 'docs/skills/common/age-practice-gap-audit-prompt.md'), 'utf8').includes('active plan referenced from'));

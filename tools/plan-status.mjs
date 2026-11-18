@@ -5,7 +5,7 @@
 // tools/vendor/js-yaml.mjs (js-yaml 4.1.1, MIT — reuse this file for any
 // tool that needs YAML; do not add npm dependencies).
 //
-// Interfaces (receipt/payload delivery semantics: roadmap-goal-workflow.md):
+// Interfaces (receipt/payload delivery semantics: roadmap-goal-execution.md):
 //
 //   node tools/plan-status.mjs <plan.md> <status> [--hold "reason"] [--force]
 //       Validate and rewrite a plan's frontmatter `status` field.

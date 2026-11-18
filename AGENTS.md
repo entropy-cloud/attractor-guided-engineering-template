@@ -37,10 +37,10 @@ Classify the task before acting; then read the matching guide/owner doc first:
 | --- | --- |
 | place or name any document | `docs/guides/doc-organization.md` |
 | plan or choose the next work | `docs/guides/roadmap-authoring.md` + the roadmap |
-| coordinate roadmap/goal execution and accepted-plan delivery | `docs/guides/roadmap-goal-workflow.md` |
+| coordinate roadmap/goal execution and accepted-plan delivery | `docs/guides/roadmap-goal-execution.md` |
 | write/execute/review/close a plan | `docs/guides/plan-authoring-and-execution.md` |
 | run any audit or review | `docs/guides/audit-execution.md` + `docs/skills/README.md` |
-| hand off a non-trivial change | `docs/guides/audit-prevention-checklist.md` |
+| hand off a non-trivial change | `docs/guides/change-handoff-checklist.md` |
 | clarify a fuzzy requirement | `.agents/skills/nop-grillme/SKILL.md` |
 | commit, rebase, search history | `.agents/skills/nop-git/SKILL.md` |
 | synthesize requirements | `docs/guides/requirements-synthesis.md` |
@@ -49,7 +49,7 @@ Classify the task before acting; then read the matching guide/owner doc first:
 | record a requirement clarification discussion | `docs/guides/discussion-writing.md` |
 | process raw external input into requirement candidates | `docs/guides/input-processing.md` |
 | record manual/exploratory testing | `docs/guides/testing-note.md` |
-| check which docs to update after a change lands | `docs/guides/maintenance-checklist.md` |
+| check which docs to update after a change lands | `docs/guides/doc-maintenance-checklist.md` |
 | look up coding conventions | `docs/guides/coding-conventions.md` |
 | follow the default development workflow | `docs/guides/application-development-workflow.md` |
 | run the engine (if enabled) | `docs/guides/mission-driver-add-on.md` — operator guidance lives in the vendored engine itself (`tools/mission-driver/CONTEXT.md`, `docs/user-manual.*.md`) |

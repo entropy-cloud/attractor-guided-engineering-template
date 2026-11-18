@@ -4,7 +4,7 @@
 
 A roadmap under `docs/roadmaps/` is a milestone index and a work-item status surface. It is the planning layer between owner docs and plans: owner docs define what is true; the roadmap decides which work items remain, in what order, with which dependencies; plans execute the work items.
 
-A roadmap is recommended for substantial goal-directed work; small low-risk tasks can stay direct. The task-oriented loop and completion-update procedure live in `roadmap-goal-workflow.md`.
+A roadmap is recommended for substantial goal-directed work; small low-risk tasks can stay direct. The task-oriented loop and completion-update procedure live in `roadmap-goal-execution.md`.
 
 ## Terminology
 
@@ -50,7 +50,7 @@ Create the subdirectory when the roadmap is created. Plans of one roadmap never 
 
 **Roadmap files carry no date prefix.** A roadmap is a living status surface, not a one-shot record: missions reference it by stable `roadmapPath`, plans carry its slug in `mission:` frontmatter, and routing tables link it by name. Its currency lives in the checkbox state; a date-stamped name would rot the references without adding information. (Plans, by contrast, are one-shot records — they get dated names.)
 
-**Single-home execution.** One roadmap has one execution home and selector at a time. This avoids duplicate dispatch, not all shared-file conflicts. Pending human/AI edits follow the built-in-tool completion-update procedure in `roadmap-goal-workflow.md`; worktree log naming follows `docs/guides/log-writing.md`.
+**Single-home execution.** One roadmap has one execution home and selector at a time. This avoids duplicate dispatch, not all shared-file conflicts. Pending human/AI edits follow the built-in-tool completion-update procedure in `roadmap-goal-execution.md`; worktree log naming follows `docs/guides/log-writing.md`.
 
 ## Roadmap Structure
 
@@ -110,7 +110,7 @@ Zero unchecked boxes = the roadmap is complete (then run the completion summary,
 ## Two Audiences
 
 - **Humans** steer: they decide which milestones and work items exist and in what order; they read checkboxes to see progress; they do not review individual implementation work.
-- **AI** coordinates eligible work in order, preserving dependencies, and delivers through independent execution/audit. Pending research/audit/decision items may be added, split or reordered with evidence inside the approved objective/autonomy; changes to business scope, protected areas or acceptance authority need their original authority. In-flight scope remains fixed. See `roadmap-goal-workflow.md` for ordinary completion updating and delivery before next selection.
+- **AI** coordinates eligible work in order, preserving dependencies, and delivers through independent execution/audit. Pending research/audit/decision items may be added, split or reordered with evidence inside the approved objective/autonomy; changes to business scope, protected areas or acceptance authority need their original authority. In-flight scope remains fixed. See `roadmap-goal-execution.md` for ordinary completion updating and delivery before next selection.
 
 ## Writing Rules
 

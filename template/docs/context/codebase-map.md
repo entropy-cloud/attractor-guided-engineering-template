@@ -38,7 +38,7 @@ List files that agents should treat carefully because they are large, central, g
 
 ## Project-Specific Search Hints
 
-- Consumer plan inventory: `node tools/plan-status.mjs --list`; unfinished query: `--unfinished`. Use built-in Read tools for actual plan content. The delivery workflow is in `docs/guides/roadmap-goal-workflow.md`.
+- Consumer plan inventory: `node tools/plan-status.mjs --list`; unfinished query: `--unfinished`. Use built-in Read tools for actual plan content. The delivery workflow is in `docs/guides/roadmap-goal-execution.md`.
 - Use file patterns: `<example glob>`
 - Use content anchors: `<important function/type/component names>`
 - Avoid editing generated files: `<paths or none>`

@@ -37,7 +37,7 @@ Added 11 net-new changes to the template (1 already existed):
 6. **Skill dual-track model** (`docs/skills/README.md`) — expanded "Relationship With Tool-Native Skills" with a Which- goes-where table clarifying when content belongs in `docs/skills/` vs. tool-native skill directories.
 7. **Module registration checklist** (`START-HERE-after-copy.md`) — pre-built checklist for adding new modules (root build file, aggregator dependency, route/menu registration, data model merge point).
 8. **Multi-roadmap pattern** (`docs/roadmaps/00-roadmap-authoring-guide.md`) — guide for creating multiple orthogonal roadmaps when a project has independent dimensions (e.g. core logic vs. frontend UI vs. integrations), with scope entirely user-defined.
-9. **Cross-reference renumbering scan** (`docs/guides/maintenance-checklist.md`) — mandatory `grep -rn "§<old-number>"` check before committing after document section renumbering.
+9. **Cross-reference renumbering scan** (`docs/guides/doc-maintenance-checklist.md`) — mandatory `grep -rn "§<old-number>"` check before committing after document section renumbering.
 10. **Scoped≠full verification gate** — added to three places: closure audit prompt (check item), plan closing guide (step 6), and plan template (Closure Gates checkbox). Partial verification must be explicitly noted as scope-limited.
 11. **Port conflict repetition note** (`docs/references/playwright-e2e-guide.md`) — guidance to record the fix in a shared reference on first encounter instead of rediscovering across plans.
 12. **Known-good baseline exercise** — already existed in `START-HERE-after-copy.md` ("Add the first known-good verification row").

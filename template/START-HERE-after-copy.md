@@ -15,9 +15,9 @@ Do this before asking AI to implement features.
 
 ## Recommended Next
 
-- Follow `docs/guides/roadmap-goal-workflow.md` for requirement → roadmap → host/agent execution → independent acceptance → one local delivery commit per plan. It also covers research/audit work and pending edits while an agent runs.
+- Follow `docs/guides/roadmap-goal-execution.md` for requirement → roadmap → host/agent execution → independent acceptance → one local delivery commit per plan. It also covers research/audit work and pending edits while an agent runs.
 - Write the first roadmap under `docs/roadmaps/` (guide: `docs/guides/roadmap-authoring.md`) and create its `docs/plans/<slug>/` directory.
-- Skim `docs/guides/audit-prevention-checklist.md` — it encodes the historical audit findings this template is designed to prevent.
+- Skim `docs/guides/change-handoff-checklist.md` — it encodes the historical audit findings this template is designed to prevent.
 - If you want unattended autonomous loops, enable the engine add-on per `docs/guides/mission-driver-add-on.md` (not installed by default).
 
 ## On-Demand Directories

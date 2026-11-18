@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines the default lightweight workflow for AI-assisted application development. For task-oriented roadmap/goal execution and accepted-plan delivery, follow `roadmap-goal-workflow.md`.
+This document defines the default lightweight workflow for AI-assisted application development. For task-oriented roadmap/goal execution and accepted-plan delivery, follow `roadmap-goal-execution.md`.
 
 It exists because app-layer projects often fail before coding quality becomes the main issue:
 

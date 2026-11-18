@@ -31,7 +31,7 @@ Keep it current enough to route common work. Do not turn it into a full architec
 | Add prompt template | `$MISSION_DRIVER_HOME/prompts/<name>.md` + register in flow | `$MISSION_DRIVER_HOME/src/flow-loader.js` | `node $MISSION_DRIVER_HOME/src/prompt-check.mjs` | 2026-07-27 | high |
 | Update frontend component | `$MISSION_DRIVER_HOME/web/src/components/...` | `$MISSION_DRIVER_HOME/CONTEXT.md` "Monitor Dashboard 前端" | `pnpm --prefix $MISSION_DRIVER_HOME/web run build && pnpm run check:dist` | 2026-07-27 | high |
 | Update template fill-in file | Edit both audiences for methodology changes; preserve project-specific context | `install-age.manifest`, `docs/architecture/template-vs-realproject-boundary.md` | Consumer installer tests + shell closure gate in project-context | 2026-11-17 | high |
-| Change consumer lifecycle/delivery | `docs/guides/roadmap-goal-workflow.md` + standalone helpers | Root/template routers and manifest | Consumer workflow contract command in project-context | 2026-11-17 | high |
+| Change consumer lifecycle/delivery | `docs/guides/roadmap-goal-execution.md` + standalone helpers | Root/template routers and manifest | Consumer workflow contract command in project-context | 2026-11-17 | high |
 
 ## Large Or Fragile Files
 

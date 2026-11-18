@@ -9,11 +9,11 @@ import { readManifest } from "./install-age.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const text = (path) => readFileSync(join(root, path), "utf8");
-const guide = "docs/guides/roadmap-goal-workflow.md";
+const guide = "docs/guides/roadmap-goal-execution.md";
 
 test("task-oriented workflow is discoverable in root and consumer entry points", () => {
   for (const path of ["AGENTS.md", "template/AGENTS.md", "docs/index.md", "template/docs/index.md", "template/START-HERE-after-copy.md", "README.md", "README.zh.md", "docs/guides/README.md"]) {
-    assert.ok(text(path).includes(path === "docs/guides/README.md" ? "roadmap-goal-workflow.md" : guide), path);
+    assert.ok(text(path).includes(path === "docs/guides/README.md" ? "roadmap-goal-execution.md" : guide), path);
   }
   const entries = readManifest(join(root, "install-age.manifest"));
   for (const path of [guide, "tools/consumer-ledger.mjs", "tools/commit-plan.mjs", "tools/plan-status.mjs", "tools/vendor/js-yaml.mjs"]) assert.ok(entries.some((e) => e.src === path), path);

@@ -32,7 +32,7 @@ Share a small read-only consumer interpretation between inventory/checking and d
 - `tools/consumer-ledger.mjs:1` — shared read-only interpretation.
 - `tools/plan-status.mjs:1` — retained receipt interface and inventory/admission corrections.
 - `tools/commit-plan.mjs:1` — explicit-path delivery and idempotent Git receipt.
-- `docs/guides/roadmap-goal-workflow.md:1` — consumer procedure, metadata boundary and actual backend limits.
+- `docs/guides/roadmap-goal-execution.md:1` — consumer procedure, metadata boundary and actual backend limits.
 
 ## Notes For Future Refactors
 

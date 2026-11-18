@@ -24,7 +24,7 @@ This `docs/` tree is the durable memory and routing surface for `mission-driver`
 | Record manual/exploratory testing | `docs/guides/testing-note.md` |
 | Look up coding conventions | `docs/guides/coding-conventions.md` |
 | Follow the default development workflow | `docs/guides/application-development-workflow.md` |
-| Run the roadmap → goal-directed → accepted-plan delivery loop | `docs/guides/roadmap-goal-workflow.md` |
+| Run the roadmap → goal-directed → accepted-plan delivery loop | `docs/guides/roadmap-goal-execution.md` |
 | Know where a document belongs / how to name it | `docs/guides/doc-organization.md` |
 | Choose the next work item | the roadmap in `docs/roadmaps/` + `docs/guides/roadmap-authoring.md` |
 | Understand the project goal and product shape | `docs/architecture/project-vision.md` → `docs/design/app-overview.md` |
@@ -38,7 +38,7 @@ This `docs/` tree is the durable memory and routing surface for `mission-driver`
 | Route a task before coding | `AGENTS.md` Task Routing → `docs/skills/README.md` + the owner doc |
 | Start or review a non-trivial implementation | `docs/guides/plan-authoring-and-execution.md` + the active plan |
 | Review audit workflows | `docs/guides/audit-execution.md` + the relevant prompt in `docs/skills/common/` |
-| Pre-flight a non-trivial change hand-off | `docs/guides/audit-prevention-checklist.md` |
+| Pre-flight a non-trivial change hand-off | `docs/guides/change-handoff-checklist.md` |
 | Clarify a fuzzy requirement | `.agents/skills/nop-grillme/SKILL.md` |
 | Read raw external inputs (on demand) | `docs/input/` |
 | Read methodology articles | `docs/articles/` |

@@ -44,7 +44,7 @@ For every plan created under this guide:
 2. **Closure audit is performed by a different independent subagent** (not the executor, not the drafter where avoidable). The auditor checks behavior, proof, and doc alignment, then appends the closure receipt.
 3. Draft review before activation is likewise independent (a subagent or human reviewer distinct from the drafter).
 
-Receipts carry actual coordinator-dispatched sessions (`to <sessionId>`); execution is recorded in `## Execution` as `- Executor: <sessionId>`. `node tools/plan-status.mjs --check <plan>` checks latest paired acceptance and declared reviewer/auditor/executor independence. The ids are portable evidence, not authentication. Current-payload Git delivery is specified once in `roadmap-goal-workflow.md`.
+Receipts carry actual coordinator-dispatched sessions (`to <sessionId>`); execution is recorded in `## Execution` as `- Executor: <sessionId>`. `node tools/plan-status.mjs --check <plan>` checks latest paired acceptance and declared reviewer/auditor/executor independence. The ids are portable evidence, not authentication. Current-payload Git delivery is specified once in `roadmap-goal-execution.md`.
 
 If an independent reviewer/executor/auditor is unavailable, keep the plan open and report the blocker. Cold replay is useful preparation, not independent acceptance.
 
@@ -52,7 +52,7 @@ If an independent reviewer/executor/auditor is unavailable, keep the plan open a
 
 The format is the **ledger format**: a YAML frontmatter block plus `## Phase <n>` body sections. Completion is **derived**, never written — there is no `completed` status text to keep consistent with the checkboxes.
 
-The standalone `tools/plan-status.mjs --check <plan>` checks receipt integrity; consumer `deliveryReady` also checks counting domains and verification. With the optional engine, `node tools/mission-driver/src/gate-check.mjs <plan>` provides engine-specific structural checks; hook/CI wiring is explicit, not implied by installation. Do not pass an unsupported `--strict` flag to gate-check. Compatibility boundaries are in `roadmap-goal-workflow.md`.
+The standalone `tools/plan-status.mjs --check <plan>` checks receipt integrity; consumer `deliveryReady` also checks counting domains and verification. With the optional engine, `node tools/mission-driver/src/gate-check.mjs <plan>` provides engine-specific structural checks; hook/CI wiring is explicit, not implied by installation. Do not pass an unsupported `--strict` flag to gate-check. Compatibility boundaries are in `roadmap-goal-execution.md`.
 
 ### Frontmatter Field Table
 
@@ -119,7 +119,7 @@ verify: [test]
 - Dispatch lines: `- dispatch (review|audit) #<id> to <sessionId>`, written before dispatch.
 - ids: `#review-<runId>-<plan>-<iter>-<nonce8>` / `#audit-<runId>-<plan>-<round>-<nonce8>`; `<plan>` is the filename stem; `<nonce8>` is 8 hex chars.
 - Pass lines: `- pass <commandKey> <runId> exit=<code>`; satisfies mechanical verification when the key is required by the plan and `exit=0`.
-- Consumer commit delivery adds a payload suffix and ownership evidence to verification/closure; see `roadmap-goal-workflow.md` for the exact command sequence and finalization metadata.
+- Consumer commit delivery adds a payload suffix and ownership evidence to verification/closure; see `roadmap-goal-execution.md` for the exact command sequence and finalization metadata.
 
 ## Minimum Rules
 

@@ -8,7 +8,7 @@ If a rule must be applied by every AI session, put it in `docs/context/` or `AGE
 
 ## Starter Files
 
-- `maintenance-checklist.md` - docs and verification sync checklist
+- `doc-maintenance-checklist.md` - docs and verification sync checklist
 - `coding-conventions.md` - coding and review conventions for day-to-day work
 - `document-naming-and-timeliness.md` - when to use stable names versus dated filenames
 - `dsh-internals-guide.md` - DSH host internals behind the mission-driver plugin plan

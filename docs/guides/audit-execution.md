@@ -64,7 +64,7 @@ Run after implementation and verification for every created plan.
 
 If normal closure checks keep passing while hidden regressions or weak proof still appear later, add `open-ended-audit-prompt.md`.
 
-Closure audit is a distinct independent pass, not executor self-review or reuse of the draft reviewer. Current-payload acceptance and one-plan delivery follow `roadmap-goal-workflow.md`; this guide owns the audit method, not Git mechanics.
+Closure audit is a distinct independent pass, not executor self-review or reuse of the draft reviewer. Current-payload acceptance and one-plan delivery follow `roadmap-goal-execution.md`; this guide owns the audit method, not Git mechanics.
 
 Check for:
 

@@ -89,7 +89,7 @@ AGE 从一个问题开始：
 
 ## 默认工作流
 
-任务向入口：[roadmap/goal 使用指南](docs/guides/roadmap-goal-workflow.md)。推荐需求 → roadmap → 独立执行与验收 → 每计划一次本地提交 → 下一项；支持调研、审计和运行中调整待办。goal 是宿主能力，不是脚手架提供的通用命令。
+任务向入口：[roadmap/goal 使用指南](docs/guides/roadmap-goal-execution.md)。推荐需求 → roadmap → 独立执行与验收 → 每计划一次本地提交 → 下一项；支持调研、审计和运行中调整待办。goal 是宿主能力，不是脚手架提供的通用命令。
 
 1. 在 `docs/input/` 中收集原材料
 2. 如有需要，在 `docs/discussions/` 中澄清歧义

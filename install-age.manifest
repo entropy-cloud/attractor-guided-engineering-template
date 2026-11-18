@@ -57,15 +57,15 @@ docs/guides/requirements-synthesis.md
 docs/guides/input-processing.md
 docs/guides/discussion-writing.md
 docs/guides/roadmap-authoring.md
-docs/guides/roadmap-goal-workflow.md
+docs/guides/roadmap-goal-execution.md
 docs/guides/plan-authoring-and-execution.md
 docs/guides/audit-execution.md
-docs/guides/audit-prevention-checklist.md
+docs/guides/change-handoff-checklist.md
 docs/guides/bug-fix-note.md
 docs/guides/log-writing.md
 docs/guides/testing-note.md
 docs/guides/coding-conventions.md
-docs/guides/maintenance-checklist.md
+docs/guides/doc-maintenance-checklist.md
 docs/guides/mission-driver-add-on.md
 
 # --- docs/roadmaps (fill-in skeletons) ---
