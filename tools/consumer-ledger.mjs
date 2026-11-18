@@ -123,6 +123,6 @@ export function interpretPlan(text) {
   const compatibility = ["Consumer deliveryReady is a read-only proof gate, not engine lifecycle parity; text actors are not authenticated."];
   if (rawStatus === "completed") compatibility.push("Historical explicit completed is not proof; do not reopen or enqueue historical records automatically.");
   if (!verifyValid) compatibility.push("Engine mission-default verification shortcuts are not consumer delivery proof.");
-  return { rawStatus, fm, receiptIntegrity: receiptReasons.length === 0, receiptReasons: [...new Set(receiptReasons)], deliveryReady: reasons.length === 0,
+  return { rawStatus, fm, structural, receiptIntegrity: receiptReasons.length === 0, receiptReasons: [...new Set(receiptReasons)], deliveryReady: reasons.length === 0,
     reasons: [...new Set(reasons)], compatibility, review, audit, executor, passes, total, checked, doc };
 }

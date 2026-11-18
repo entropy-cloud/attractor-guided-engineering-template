@@ -3,7 +3,7 @@
 //
 // Ports install-age.sh logic to Node for cross-platform support (no Git Bash
 // required on Windows). Reads install-age.manifest, copies files (skip existing),
-// applies flags (exec / fill / rel-mdh), then runs dynamic post-steps.
+// applies flags (exec / fill), then runs dynamic post-steps.
 //
 // Entry points: ./install-age.sh (Unix shim) | install-age.cmd (Windows) |
 //               node tools/install-age.mjs (universal)
@@ -35,7 +35,7 @@ const __dirname = dirname(__filename);
  * @typedef {Object} ManifestEntry
  * @property {string} src        - source path relative to template root
  * @property {string} dst        - destination path relative to target
- * @property {string[]} flags    - parsed flags: 'exec' | 'fill' | 'rel-mdh'
+ * @property {string[]} flags    - parsed flags: 'exec' | 'fill'
  */
 
 // ---------------------------------------------------------------------------
@@ -74,7 +74,7 @@ export function parseManifestLine(raw) {
     dst = src.startsWith("template/") ? src.slice("template/".length) : src;
   }
 
-  const allowed = new Set(["exec", "fill", "rel-mdh", "mdh-only", "pi-only", "profile-frontend", "profile-java"]);
+  const allowed = new Set(["exec", "fill", "pi-only", "profile-frontend", "profile-java"]);
   if (flags.some((flag) => !allowed.has(flag)) || new Set(flags).size !== flags.length) {
     throw new Error(`Invalid manifest flags: ${raw}`);
   }
@@ -105,8 +105,8 @@ export function readManifest(manifestPath) {
 /**
  * Apply a single flag to a copied file (in-place edit).
  * @param {string} filePath - the copied destination file
- * @param {string} flag     - 'exec' | 'fill' | 'rel-mdh'
- * @param {{projectName: string, relMdh: string}} ctx
+ * @param {string} flag     - 'exec' | 'fill'
+ * @param {{projectName: string}} ctx
  */
 export function applyFlag(filePath, flag, ctx) {
   switch (flag) {
@@ -124,11 +124,6 @@ export function applyFlag(filePath, flag, ctx) {
     case "fill": {
       const content = readFileSync(filePath, "utf8");
       writeFileSync(filePath, content.replace(/<project-name>/g, () => ctx.projectName));
-      break;
-    }
-    case "rel-mdh": {
-      const content = readFileSync(filePath, "utf8");
-      writeFileSync(filePath, content.replace(/__REL_MDH__/g, () => ctx.relMdh));
       break;
     }
   }
@@ -162,11 +157,10 @@ export function ensureGitignoreEntry(gitignorePath, entry) {
 
 const PROFILES = ["none", "frontend", "java", "all"];
 
-export function selectEntries(entries, { withPi = false, withMissionDriver = false, profile = "none" }) {
+export function selectEntries(entries, { withPi = false, profile = "none" }) {
   if (!PROFILES.includes(profile)) throw new Error(`Invalid profile: ${profile}`);
   return entries.filter(({ flags }) =>
     (!flags.includes("pi-only") || withPi) &&
-    (!flags.includes("mdh-only") || withMissionDriver) &&
     (!flags.some((f) => f.startsWith("profile-")) || profile === "all" || flags.includes(`profile-${profile}`)));
 }
 
@@ -182,9 +176,6 @@ export function renderRegistry(content, profile) {
 function renderEntry(entry, bytes, ctx, profile) {
   if (entry.flags.includes("fill") || (entry.src.startsWith("template/") && entry.dst.endsWith(".md"))) {
     bytes = Buffer.from(bytes.toString("utf8").replace(/<project-name>/g, () => ctx.projectName));
-  }
-  if (entry.flags.includes("rel-mdh")) {
-    bytes = Buffer.from(bytes.toString("utf8").replace(/__REL_MDH__/g, () => ctx.relMdh));
   }
   if (entry.dst === "docs/skills/README.md") bytes = Buffer.from(renderRegistry(bytes.toString("utf8"), profile));
   return bytes;
@@ -212,17 +203,17 @@ export function validateParity(files, withPi) {
 /**
  * Preflight and install the scaffold without overwriting existing files.
  * @param {{target: string, projectName: string, withPi?: boolean,
- *          withMissionDriver?: boolean, profile?: string}} opts
+ *          profile?: string}} opts
  */
 export async function installAge(opts) {
-  const { target, projectName, withPi = false, withMissionDriver = false, profile = "none" } = opts;
+  const { target, projectName, withPi = false, profile = "none" } = opts;
   const templateRoot = resolve(__dirname, "..");
   if (!existsSync(target) || !statSync(target).isDirectory()) throw new Error("Target must be an existing directory");
   if (typeof projectName !== "string" || !projectName.trim()) throw new Error("Project name must not be empty");
-  const options = { withPi, withMissionDriver, profile };
+  const options = { withPi, profile };
   const previous = readOrigin(target);
   const entries = selectEntries(readManifest(join(templateRoot, "install-age.manifest")), options);
-  const ctx = { projectName, relMdh: "tools/mission-driver" };
+  const ctx = { projectName };
   const files = new Map();
   const destinations = new Set();
   const sourceHashes = [];
@@ -258,31 +249,12 @@ export async function installAge(opts) {
     }
   }
   validateParity(files, withPi);
-  if (withMissionDriver) {
-    const engine = safePath(templateRoot, "tools/mission-driver");
-    if (!existsSync(join(engine, "src", "main.js"))) throw new Error("Required engine source missing: src/main.js");
-    for (const path of listFiles(engine)) {
-      add({ src: `tools/mission-driver/${path}`, dst: `tools/mission-driver/${path}`, flags: [] });
-    }
-  }
   // Hash source bytes and mappings, not repository path, git remote, configuration or secrets.
   const sourceHash = hash(JSON.stringify([
     hash(readFileSync(__filename)), hash(readFileSync(join(templateRoot, "install-age.manifest"))), sourceHashes,
   ]));
   if (previous && JSON.stringify(previous.options) !== JSON.stringify(options)) {
     throw new Error("Installation options differ from origin; no automatic reconfiguration (no files written)");
-  }
-  const engineTarget = safePath(target, "tools/mission-driver");
-  if (withMissionDriver && existsSync(engineTarget) && readdirSync(engineTarget).length) {
-    if (!previous?.options?.withMissionDriver || previous.sourceHash !== sourceHash) {
-      throw new Error("Engine conflict: unknown/incompatible origin; no files written");
-    }
-    const actual = listFiles(engineTarget).map((p) => `tools/mission-driver/${p}`);
-    const expected = [...files.keys()].filter((p) => p.startsWith("tools/mission-driver/"));
-    if (actual.length !== expected.length || actual.some((p) => !files.has(p)) || expected.some((p) =>
-      !existsSync(safePath(target, p)) || hash(readFileSync(safePath(target, p))) !== hash(files.get(p).bytes))) {
-      throw new Error("Engine conflict: content/inventory differs; no files written");
-    }
   }
   if (previous && previous.sourceHash !== sourceHash) {
     throw new Error("Origin source conflict; no automatic upgrade (no files written)");
@@ -307,8 +279,8 @@ export async function installAge(opts) {
     throw new Error(`Capability parity conflict (no files written): ${conflicts.join(", ")}`);
   }
   const year = new Date().getFullYear();
-  const dirs = [`docs/logs/${year}`, ...(withMissionDriver ? ["docs/plans/onboarding"] : [])];
-  for (const path of [".gitignore", ...(withMissionDriver ? [".env"] : []), ...dirs]) {
+  const dirs = [`docs/logs/${year}`];
+  for (const path of [".gitignore", ...dirs]) {
     const full = safePath(target, path);
     if (existsSync(full) && (dirs.includes(path) ? !statSync(full).isDirectory() : !statSync(full).isFile())) {
       throw new Error(`Invalid dynamic destination: ${path}`);
@@ -331,13 +303,6 @@ export async function installAge(opts) {
     }
     recorded[path] = hash(file.bytes);
   }
-  if (withMissionDriver) {
-    const envPath = safePath(target, ".env");
-    const content = existsSync(envPath) ? readFileSync(envPath, "utf8") : "";
-    if (!/^\s*(?:export\s+)?MISSION_DRIVER_HOME\s*=/m.test(content)) {
-      appendFileSync(envPath, `${content && !content.endsWith("\n") ? "\n" : ""}MISSION_DRIVER_HOME=tools/mission-driver\n`, "utf8");
-    }
-  }
   for (const path of dirs) mkdirSync(safePath(target, path), { recursive: true });
   for (const entry of [".env", "_tmp/", "tmp/"]) ensureGitignoreEntry(safePath(target, ".gitignore"), entry);
   const origin = { schema: 1, sourceHash, options, files: recorded };
@@ -349,7 +314,6 @@ export async function installAge(opts) {
   console.log("Read docs/guides/doc-organization.md; enable hooks with git config core.hooksPath .githooks.");
   console.log("Read-only drift: node tools/age-drift.mjs (exit 0 unchanged, 1 drift, 2 invalid/unknown origin).");
   if (withPi) console.log("Pi skill mirror delivered; host loading/trust has not been tested by this installer.");
-  if (withMissionDriver) console.log("Engine vendored locally. Fill missions/base.json commands before running missions.");
   return { copied, conflicts, sourceHash };
 }
 
@@ -359,7 +323,7 @@ export async function installAge(opts) {
 
 export function parseArgs(argv) {
   // Parse argv: positional (target, projectName) + flags (--pi,
-  // --with-mission-driver, --profile <shelf|all>). Flags may appear anywhere
+  // --profile <shelf|all>). Flags may appear anywhere
   // after the script name, so scan rather than index fixed positions.
   const flags = new Set();
   const positional = [];
@@ -372,7 +336,7 @@ export function parseArgs(argv) {
       i++;
     } else if (a.startsWith("--profile=")) {
       profile = a.slice("--profile=".length);
-    } else if (["--pi", "--with-mission-driver"].includes(a)) {
+    } else if (a === "--pi") {
       flags.add(a.slice(2));
     } else if (a.startsWith("-")) {
       throw new Error(`Unknown option: ${a}`);
@@ -383,12 +347,11 @@ export function parseArgs(argv) {
   if (!PROFILES.includes(profile)) throw new Error(`Invalid profile: ${profile}`);
   if (positional.length > 2) throw new Error("Expected target and optional project name only");
   const withPi = flags.has("pi");
-  const withMissionDriver = flags.has("with-mission-driver");
-  return { positional, withPi, withMissionDriver, profile };
+  return { positional, withPi, profile };
 }
 
 async function main() {
-  const { positional, withPi, withMissionDriver, profile } = parseArgs(process.argv.slice(2));
+  const { positional, withPi, profile } = parseArgs(process.argv.slice(2));
 
   let targetRaw, projectName;
 
@@ -412,7 +375,7 @@ async function main() {
     process.exit(1);
   }
 
-  await installAge({ target, projectName, withPi, withMissionDriver, profile });
+  await installAge({ target, projectName, withPi, profile });
 }
 
 // Run only when invoked directly (not when imported by tests).

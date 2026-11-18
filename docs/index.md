@@ -49,7 +49,7 @@ This `docs/` tree is the durable memory and routing surface for `mission-driver`
 | Review durable lessons | `docs/lessons/README.md` |
 | Read implementation-ready requirements | `docs/requirements/README.md` |
 | Review post-delivery gap analysis (on demand) | `docs/retrospectives/` |
-| Enable the autonomous engine in another project | `docs/guides/mission-driver-add-on.md` |
+| Run the autonomous engine (this repo only; not shipped to consumers) | `tools/mission-driver/CONTEXT.md` |
 
 ## Recommended Default Path
 

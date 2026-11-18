@@ -1,20 +1,23 @@
 #!/usr/bin/env bash
 #
-# pre-commit (consumer version) — document hygiene, fail-open.
+# pre-commit (consumer version) — document hygiene + plan/roadmap structural
+# checks, fail-open.
 #
 # Enable (one-time, per clone):  git config core.hooksPath .githooks
 #
-# Runs the two standalone hygiene guards shipped with the template (zero npm
-# deps; skipped individually when missing):
+# Runs the standalone guards shipped with the template (zero npm deps; skipped
+# individually when missing):
 #   tools/check-doc-timeliness.mjs  — normative docs must carry no history
 #                                     (docs/guides/doc-organization.md)
 #   tools/check-docs-garbled.mjs    — encoding-garbled text detection
+#   tools/plan-status.mjs --check   — staged plan ledger structure
+#                                     (docs/guides/plan-authoring-and-execution.md)
+#   tools/plan-status.mjs --roadmap — staged roadmap checkbox structure
+#                                     (docs/guides/roadmap-authoring.md)
 #
 # Fail-open discipline: node unavailable → skip everything with a note (the
 # hook must not be more fragile than the project's existing toolchain).
-#
-# With the add-on, staged plans/roadmaps/missions run the consumer-local engine's
-# structural checkers. This checks working-tree files, not staged-blob identity.
+# This checks working-tree files, not staged-blob identity.
 
 set -uo pipefail
 cd "$(git rev-parse --show-toplevel)" || exit 0
@@ -46,46 +49,32 @@ if [ -f tools/check-docs-garbled.mjs ]; then
   fi
 fi
 
-# ---- optional vendored engine structural sections -------------------------
-engine=tools/mission-driver
-if [ ! -d "$engine" ]; then
-  echo "[pre-commit][engine] no add-on — structural sections skipped (fail-open)"
-else
-  for checker in gate-check roadmap-check mission-check; do
-    if [ ! -f "$engine/src/$checker.mjs" ]; then
-      echo "[pre-commit][engine] missing required checker: $checker" >&2
-      fail=1
-    fi
-  done
-  while IFS= read -r -d '' f; do
-    [ -f "$f" ] || continue
-    checker=
-    case "$f" in
-      docs/plans/*.md)
-        if [ "$(head -n 1 "$f")" != "---" ]; then
-          echo "[pre-commit][plans] legacy/non-ledger file skipped: $f"
-          continue
+# ---- standalone structural sections ----------------------------------------
+while IFS= read -r -d '' f; do
+  [ -f "$f" ] || continue
+  case "$f" in
+    docs/plans/*.md)
+      if [ "$(head -n 1 "$f")" != "---" ]; then
+        echo "[pre-commit][plans] legacy/non-ledger file skipped: $f"
+        continue
+      fi
+      if [ -f tools/plan-status.mjs ]; then
+        if out=$(node tools/plan-status.mjs --check "$f" 2>&1); then
+          echo "[pre-commit][plan-status] ok: $f"
+        else
+          echo "[pre-commit][plan-status] DENY: $f"
+          printf '%s\n' "$out" | head -15
+          fail=1
         fi
-        checker=gate-check ;;
-      docs/roadmaps/*-roadmap.md) checker=roadmap-check ;;
-      missions/*.json)
-        # Installer convention: these are defaults/overrides, not missions.
-        # Other JSON files must reach the real checker, even when malformed.
-        case "$f" in missions/base.json|missions/base.local.json) continue ;; esac
-        checker=mission-check ;;
-    esac
-    [ -n "$checker" ] || continue
-    [ -f "$engine/src/$checker.mjs" ] || continue
-    args=("$f")
-    [ "$checker" != "mission-check" ] || args+=(".")
-    if out=$(node "$engine/src/$checker.mjs" "${args[@]}" 2>&1); then
-      echo "[pre-commit][$checker] ok: $f"
-    else
-      echo "[pre-commit][$checker] DENY: $f"
-      printf '%s\n' "$out" | head -15
-      fail=1
-    fi
-  done < <(git diff --cached --name-only --diff-filter=ACMR -z)
-fi
+      fi
+      ;;
+    docs/roadmaps/*-roadmap.md)
+      # Informational only: unchecked work items are normal roadmap state.
+      if [ -f tools/plan-status.mjs ]; then
+        node tools/plan-status.mjs --roadmap "$f" 2>&1 | head -2
+      fi
+      ;;
+  esac
+done < <(git diff --cached --name-only --diff-filter=ACMR -z)
 
 exit "$fail"

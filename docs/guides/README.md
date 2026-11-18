@@ -20,7 +20,6 @@ Before doing any of the following, read the matching guide first — `AGENTS.md`
 | record manual/exploratory testing | `testing-note.md` |
 | follow the default development workflow end to end | `application-development-workflow.md` |
 | look up coding conventions | `coding-conventions.md` |
-| enable the autonomous dev-loop engine | `mission-driver-add-on.md` |
 
 ## Adding A Guide
 

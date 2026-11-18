@@ -15,7 +15,7 @@ Each item cites the historical failure class it prevents.
 - [ ] Phases are 2–6, one result surface, work-item mapping legal (no work item spread across plans). *(Prevents: unclosable plans, stalled loops.)*
 - [ ] Every exit criterion has a proof strategy (command, test, or explicit justification). *(Prevents: dishonest closure gates.)*
 - [ ] Every in-scope item avoids `optional / maybe / if time permits`. *(Prevents: anti-slacking violations found at closure.)*
-- [ ] The draft was mechanically validated (engine mode: `gate-check.mjs <plan>` clean). *(Prevents: invisible plans — a parser-rejected frontmatter silently excludes the plan from review/execution.)*
+- [ ] The draft was mechanically validated (`node tools/plan-status.mjs --check <plan>` clean). *(Prevents: invisible plans — a parser-rejected frontmatter silently excludes the plan from review/execution.)*
 
 ## Verification Reality
 

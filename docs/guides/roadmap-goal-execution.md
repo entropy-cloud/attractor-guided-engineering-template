@@ -11,7 +11,7 @@ For substantial work, use **requirement → roadmap → plan → independent exe
 
 ## Working With A Host Goal
 
-Goal is a **host capability**, not a universal CLI installed by AGE. Use your host's documented goal/continuation entry point, or ask an interactive agent to coordinate the loop. Minimum host capability: dispatch a subagent that cannot see the coordinator's chat (cold start), and obtain its session id for the plan receipt grammar. If the host cannot provide independent actors, keep the plan open and report the blocker — do not self-accept (see `plan-authoring-and-execution.md`, Independent Execution). The optional mission-driver has its own mission/run entry points; see `mission-driver-add-on.md`.
+Goal is a **host capability**, not a universal CLI installed by AGE. Use your host's documented goal/continuation entry point, or ask an interactive agent to coordinate the loop. Minimum host capability: dispatch a subagent that cannot see the coordinator's chat (cold start), and obtain its session id for the plan receipt grammar. If the host cannot provide independent actors, keep the plan open and report the blocker — do not self-accept (see `plan-authoring-and-execution.md`, Independent Execution).
 
 Copyable coordinator instruction:
 
@@ -33,7 +33,7 @@ Task-document content access uses built-in Read/Edit/Write-class tools and their
 
 ### Backend Boundary
 
-The inspected DSH goal source is the template repository's historical goal-domain survey of master@141eb6fe, not an installed-host/model-run test. The supplied mission-driver drafts batches of 1–3 plans and evaluates a forEach list at step entry; run configuration is cached. Its execute prompt ticks early and its closure prompt permits multiple commits. The native plugin reuses a run-scoped session handle across steps, so different step names alone do not provide independent audit. These backends are **not equivalent** to this single-plan coordinator procedure without separately arranging independent actors and delivery. AGE adds no scheduler, hot reload or terminal-run watcher; new work after termination needs a new/resumed run.
+Engine-style backends (batched plan drafting, run-scoped session handles reused across steps, engine terminal state as completion) are **not equivalent** to this single-plan coordinator contract without separately arranged independent actors and delivery; engine step names alone never provide independent audit. `tools/` refers to this repository's root `tools/` directory — the standalone helpers are the only execution machinery here.
 
 ## Standalone Plans And Checks
 

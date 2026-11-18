@@ -4,7 +4,6 @@
 
 `<project-name>` uses a lightweight Attractor-Guided Engineering workflow: the repo is the source of truth, chat is a temporary working surface, and every non-trivial change flows through owner docs → roadmap → plan → independent execution → independent audit.
 
-The autonomous dev-loop engine (mission-driver) is an optional add-on — see `docs/guides/mission-driver-add-on.md`.
 
 ## Documentation Map
 
@@ -52,7 +51,6 @@ Classify the task before acting; then read the matching guide/owner doc first:
 | check which docs to update after a change lands | `docs/guides/doc-maintenance-checklist.md` |
 | look up coding conventions | `docs/guides/coding-conventions.md` |
 | follow the default development workflow | `docs/guides/application-development-workflow.md` |
-| run the engine (if enabled) | `docs/guides/mission-driver-add-on.md` |
 
 ## Hard Rules
 

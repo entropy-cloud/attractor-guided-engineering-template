@@ -52,7 +52,7 @@ If an independent reviewer/executor/auditor is unavailable, keep the plan open a
 
 The format is the **ledger format**: a YAML frontmatter block plus `## Phase <n>` body sections. Completion is **derived**, never written — there is no `completed` status text to keep consistent with the checkboxes.
 
-The standalone `tools/plan-status.mjs --check <plan>` checks receipt integrity; consumer `deliveryReady` also checks counting domains and verification. With the optional engine, `node tools/mission-driver/src/gate-check.mjs <plan>` provides engine-specific structural checks; hook/CI wiring is explicit, not implied by installation. Do not pass an unsupported `--strict` flag to gate-check. Compatibility boundaries are in `roadmap-goal-execution.md`.
+The standalone `tools/plan-status.mjs --check <plan>` is the single mechanical format gate: receipt integrity, phase/counting-domain structure, frontmatter fields, receipt grammar and verification keys; consumer `deliveryReady` also checks counting domains and verification. Compatibility boundaries are in `roadmap-goal-execution.md`.
 
 ### Frontmatter Field Table
 
@@ -136,7 +136,7 @@ verify: [test]
 11. **Completion is derived**: `status: active` ∧ all counting-domain checkboxes `[x]` ∧ every required `verify` key has a passing `## Verification` line ∧ `## Closure` has a dispatch + same-id accepted line. Nobody writes `completed`.
 12. **Independent acceptance**: activation requires paired draft-review acceptance; closure requires paired audit acceptance by a different actor from executor and draft reviewer. Check actual dispatch provenance as well as recorded ids.
 13. **Non-degradable items** (confirmed defects, contract drift, owner-doc drift, fixed CI rules) cannot be downgraded to fuzzy follow-ups.
-14. **Validate the draft before hand-off.** Engine mode: run `node tools/mission-driver/src/gate-check.mjs <plan>` until clean. Without the engine: self-check against this guide's checklist and let independent draft review confirm; use the standalone receipt check after recording its result.
+14. **Validate the draft before hand-off.** Run `node tools/plan-status.mjs --check <plan>` until clean — the script owns mechanical format checks, so independent draft review focuses on substance, not format re-review.
 
 ### Anti-Slacking Rule
 

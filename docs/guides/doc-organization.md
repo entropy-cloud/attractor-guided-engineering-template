@@ -154,7 +154,6 @@ Projects copied from the pre-v2 template (with `docs/backlog/`, `docs/process/`,
 | `docs/context/{conventions,source-of-truth-and-precedence}.md` | absorbed into this guide |
 | `docs/references/document-naming-and-timeliness.md` | absorbed into this guide | <!-- doc-ref: example reason="old layout path, not a current link" -->
 | `.opencode/skills/` (or other tool dirs) | canonical home is `.agents/skills/` |
-| engine via sibling-checkout `MISSION_DRIVER_HOME` | vendor the engine copy (`docs/guides/mission-driver-add-on.md`) |
 
 Move (don't copy) the files; keep git history. Old cross-references break silently — run the doc-reference checker after the move and fix what it reports. Status-table roadmaps convert to column-0 checkbox milestone blocks per `docs/guides/roadmap-authoring.md`.
 

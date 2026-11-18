@@ -106,16 +106,19 @@ assert "fill-in file copied (project-context.md)" "$COND"
 [ -f "$TARGET/docs/roadmaps/onboarding-roadmap.md" ] && COND=1 || COND=0
 assert "onboarding roadmap copied" "$COND"
 
-# === v2 default-shape assertions (engine add-on OFF by default) ===
+# === v2 default-shape assertions (engine/missions retired from distribution) ===
 
-[ ! -e "$TARGET/missions/onboarding.json" ] && COND=1 || COND=0
-assert "missions/ NOT installed by default (engine add-on off)" "$COND"
+[ ! -e "$TARGET/missions" ] && COND=1 || COND=0
+assert "missions/ NOT installed (retired from consumer distribution)" "$COND"
 
 [ ! -d "$TARGET/docs/plans/onboarding" ] && COND=1 || COND=0
-assert "docs/plans/onboarding/ NOT created by default" "$COND"
+assert "docs/plans/onboarding/ NOT created" "$COND"
 
 [ ! -e "$TARGET/.env" ] && COND=1 || COND=0
-assert ".env NOT created by default" "$COND"
+assert ".env NOT created" "$COND"
+
+[ ! -e "$TARGET/tools/mission-driver.sh" ] && COND=1 || COND=0
+assert "engine launcher NOT installed" "$COND"
 
 [ -f "$TARGET/.agents/skills/nop-grillme/SKILL.md" ] && COND=1 || COND=0
 assert ".agents/skills/grillme copied" "$COND"
@@ -164,56 +167,6 @@ assert "docs/index.md <project-name> replaced" "$COND" "found $INDEX_COUNT occur
 PC_COUNT=$(count_in "$TARGET/docs/context/project-context.md" '<project-name>')
 [ "$PC_COUNT" = "0" ] && COND=1 || COND=0
 assert "docs/context/project-context.md <project-name> replaced" "$COND" "found $PC_COUNT occurrence(s)"
-
-# === v2 engine add-on pass (--with-mission-driver into a fresh target) ===
-
-TARGET2="$SCRATCH/engine"
-mkdir -p "$TARGET2"
-echo ""
-echo "--- running ./install-age.sh --with-mission-driver (second target) ---"
-if ! "$REPO_ROOT/install-age.sh" "$TARGET2" "$PROJECT_NAME" --with-mission-driver > "$SCRATCH/engine.log" 2>&1; then
-  echo "FAIL: install-age.sh --with-mission-driver errored:" >&2
-  tail -20 "$SCRATCH/engine.log" >&2
-  rm -rf "$TARGET2"
-  [ "$OWNED_TEMP" = "1" ] && rm -rf "$TARGET"
-  exit 1
-fi
-
-MDH_ONBOARDING_VALID=0
-if [ -f "$TARGET2/missions/onboarding.json" ]; then
-  if node -e "
-    const cfg = JSON.parse(require('node:fs').readFileSync(process.argv[1], 'utf8'));
-    process.exit(cfg.name === 'onboarding'
-      && cfg.roadmapPath === 'docs/roadmaps/onboarding-roadmap.md'
-      && cfg.plansDir === 'docs/plans/onboarding' ? 0 : 1);
-  " "$TARGET2/missions/onboarding.json" 2>/dev/null; then
-    MDH_ONBOARDING_VALID=1
-  fi
-fi
-assert "mdh: missions/onboarding.json exists and valid" "$MDH_ONBOARDING_VALID"
-
-[ -d "$TARGET2/docs/plans/onboarding" ] && COND=1 || COND=0
-assert "mdh: docs/plans/onboarding/ directory exists" "$COND"
-
-[ -f "$TARGET2/.env.example" ] && COND=1 || COND=0
-assert "mdh: .env.example copied" "$COND"
-
-[ ! -e "$TARGET2/.agents/skills/nop-mission-driver" ] && COND=1 || COND=0
-assert "mdh: operator skill retired (guidance lives in engine docs)" "$COND"
-[ -f "$TARGET2/tools/mission-driver/CONTEXT.md" ] && COND=1 || COND=0
-assert "mdh: engine vendored with its own operator docs" "$COND"
-
-# Exercise the installed launcher and validator, not a sibling checkout.
-if (cd "$TARGET2" && unset MISSION_DRIVER_HOME && bash tools/mission-driver.sh --help > "$SCRATCH/help.log" 2>&1) && grep -q Usage "$SCRATCH/help.log"; then COND=1; else COND=0; fi
-if [ "$COND" = "0" ]; then cat "$SCRATCH/help.log" >&2; fi
-assert "mdh: installed launcher --help runs standalone" "$COND"
-if (cd "$TARGET2" && unset MISSION_DRIVER_HOME && bash tools/mission-driver.sh list > "$SCRATCH/list.log" 2>&1) && grep -q onboarding "$SCRATCH/list.log"; then COND=1; else COND=0; fi
-if [ "$COND" = "0" ]; then cat "$SCRATCH/list.log" >&2; fi
-assert "mdh: installed launcher lists consumer missions" "$COND"
-if (cd "$TARGET2" && node tools/mission-driver/src/mission-check.mjs missions/onboarding.json . > "$SCRATCH/mission.log" 2>&1); then COND=1; else COND=0; fi
-assert "mdh: vendored mission validator runs standalone" "$COND"
-
-rm -rf "$TARGET2"
 
 # === Profile pass (--profile frontend into a fresh target) ===
 

@@ -205,7 +205,7 @@ function cmdCheck(planPath) {
   console.log(ledger.deliveryReady ? "delivery-ready (Git payload check still required)" : "not delivery-ready");
   for (const reason of ledger.reasons) console.log(`  ${reason}`);
   for (const note of ledger.compatibility) console.log(`  note: ${note}`);
-  if (!ledger.receiptIntegrity) process.exitCode = 1;
+  if (!ledger.receiptIntegrity || ledger.structural.length) process.exitCode = 1;
 }
 
 function main() {

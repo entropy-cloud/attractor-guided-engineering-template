@@ -4,7 +4,7 @@
 
 `mission-driver (self-hosting AGE workspace)` uses a lightweight Attractor-Guided Engineering workflow: the repo is the source of truth, chat is a temporary working surface, and every non-trivial change flows through owner docs → roadmap → plan → independent execution → independent audit.
 
-This repo is dual-audience: a real project (the mission-driver engine's home, developed with its own workflow) and the source of the AGE template. For consumers the engine is an optional add-on — see `docs/guides/mission-driver-add-on.md`.
+This repo is dual-audience: a real project (the mission-driver engine's home, developed with its own workflow) and the source of the AGE template. The engine is NOT part of the consumer distribution — the standalone `tools/` helper chain is the only execution machinery consumers install (see `docs/guides/roadmap-goal-execution.md`).
 
 ## Documentation Map
 
@@ -52,7 +52,7 @@ Classify the task before acting; then read the matching guide/owner doc first:
 | check which docs to update after a change lands | `docs/guides/doc-maintenance-checklist.md` |
 | look up coding conventions | `docs/guides/coding-conventions.md` |
 | follow the default development workflow | `docs/guides/application-development-workflow.md` |
-| run the engine (if enabled) | `docs/guides/mission-driver-add-on.md` — operator guidance lives in the vendored engine itself (`tools/mission-driver/CONTEXT.md`, `docs/user-manual.*.md`) |
+| run the engine (template repo only, not shipped to consumers) | `tools/mission-driver/CONTEXT.md` — operator guidance lives with the engine itself |
 
 ## Hard Rules
 

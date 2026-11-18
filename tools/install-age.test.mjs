@@ -30,30 +30,24 @@ describe("parseManifestLine", () => {
   });
 
   test("src > dst override", () => {
-    const e = parseManifestLine("template/install/missions/base.json > missions/base.json");
-    assert.equal(e.src, "template/install/missions/base.json");
-    assert.equal(e.dst, "missions/base.json");
+    const e = parseManifestLine("template/install/githooks/pre-commit > .githooks/pre-commit");
+    assert.equal(e.src, "template/install/githooks/pre-commit");
+    assert.equal(e.dst, ".githooks/pre-commit");
     assert.deepEqual(e.flags, []);
   });
 
   test("src > dst :: exec flag", () => {
     const e = parseManifestLine(
-      "template/install/tools/mission-driver.sh > tools/mission-driver.sh :: exec"
+      "template/install/githooks/pre-commit > .githooks/pre-commit :: exec"
     );
-    assert.equal(e.src, "template/install/tools/mission-driver.sh");
-    assert.equal(e.dst, "tools/mission-driver.sh");
+    assert.equal(e.src, "template/install/githooks/pre-commit");
+    assert.equal(e.dst, ".githooks/pre-commit");
     assert.deepEqual(e.flags, ["exec"]);
   });
 
-  test("src > dst :: rel-mdh flag", () => {
-    const e = parseManifestLine("template/install/.env.example > .env.example :: rel-mdh");
-    assert.equal(e.dst, ".env.example");
-    assert.deepEqual(e.flags, ["rel-mdh"]);
-  });
-
   test("multiple comma-separated flags", () => {
-    const e = parseManifestLine("a > b :: exec,fill,rel-mdh");
-    assert.deepEqual(e.flags, ["exec", "fill", "rel-mdh"]);
+    const e = parseManifestLine("a > b :: exec,fill");
+    assert.deepEqual(e.flags, ["exec", "fill"]);
   });
 
   test("comment line → null", () => {
@@ -88,20 +82,8 @@ describe("applyFlag", () => {
     try {
       const f = join(dir, "test.md");
       writeFileSync(f, "Hello <project-name>!", "utf8");
-      applyFlag(f, "fill", { projectName: "MyProj", relMdh: "../engine" });
+      applyFlag(f, "fill", { projectName: "MyProj" });
       assert.equal(readFileSync(f, "utf8"), "Hello MyProj!");
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  test("rel-mdh replaces __REL_MDH__", () => {
-    const dir = mkdtempSync(join(tmpdir(), "age-test-mdh-"));
-    try {
-      const f = join(dir, ".env.example");
-      writeFileSync(f, "MISSION_DRIVER_HOME=__REL_MDH__", "utf8");
-      applyFlag(f, "rel-mdh", { projectName: "X", relMdh: "../../engine" });
-      assert.equal(readFileSync(f, "utf8"), "MISSION_DRIVER_HOME=../../engine");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -174,11 +156,12 @@ describe("CLI and manifest negative controls", () => {
     test(`rejects ${JSON.stringify(argv)}`, () => assert.throws(() => parseArgs(argv)));
   }
   test("flags can surround positionals and support both profile forms", () => {
-    assert.deepEqual(parseArgs(["--pi", "target", "Name", "--profile=java", "--with-mission-driver"]), {
-      positional: ["target", "Name"], withPi: true, withMissionDriver: true, profile: "java",
+    assert.deepEqual(parseArgs(["--pi", "target", "Name", "--profile=java"]), {
+      positional: ["target", "Name"], withPi: true, profile: "java",
     });
     assert.equal(parseArgs(["--profile", "all", "target"]).profile, "all");
   });
+  test("rejects retired engine add-on flag", () => assert.throws(() => parseArgs(["--with-mission-driver", "t", "N"])));
   for (const line of ["a :: typo", "a :: fill,fill", "../escape", "a > ../escape", "a > /absolute", "a > C:\\escape", "a > ", "a :: profile-typo", "a > b > c", "a > x/../AGENTS.md"]) {
     test(`rejects manifest ${line}`, () => assert.throws(() => parseManifestLine(line)));
   }

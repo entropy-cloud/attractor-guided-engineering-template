@@ -10,7 +10,7 @@ This file intentionally does **not** track "what is being worked on right now". 
 
 ## Companion Context Files
 
-This file is the AI entry point. The following `docs/context/` companions are read on demand — most mission-driver flow steps load this file first, then route to them:
+This file is the AI entry point. The following `docs/context/` companions are read on demand — any coordinating session loads this file first, then routes to them:
 
 | File | When to read |
 |---|---|

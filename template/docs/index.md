@@ -41,7 +41,6 @@ This `docs/` tree is the durable memory and routing surface for `<project-name>`
 | Look up a past subtle regression | `docs/bugs/` (guide: `docs/guides/bug-fix-note.md`) |
 | Review durable lessons | `docs/lessons/README.md` |
 | Read implementation-ready requirements | `docs/requirements/README.md` |
-| Enable the autonomous engine | `docs/guides/mission-driver-add-on.md` |
 
 ## Recommended Default Path
 

@@ -74,17 +74,11 @@ pnpm md:web:check:dist    # verify committed dist is fresh (CI guard, local mirr
 
 `$MISSION_DRIVER_HOME/` is a **mission-driven development loop engine** — a generic opencode-based workflow that cycles through health-check → execute plans → draft plans → review plans → deep audit.
 
-It is the template's source for the optional consumer add-on. `--with-mission-driver` vendors an independent copy into the consumer; no sibling checkout or runtime npm dependencies are required. The launcher defaults to the consumer-local path. Engine upgrades are explicit, reviewed integrations, not automatic changes inherited from a shared checkout.
+It is developed and used in this repository only. It is NOT part of the consumer distribution (retired from `install-age.manifest`): consumers get the standalone `tools/` helper chain, and engine upgrades are explicit, reviewed integrations in this repo, never inherited from a shared checkout.
 
-### Consumer Integration
+### Consumer Distribution Boundary
 
-From a template checkout, install into an existing target directory:
-
-```bash
-./install-age.sh /path/to/target "Project Name" --with-mission-driver
-```
-
-For safety, installation refuses a nonempty engine with unknown/incompatible provenance before copying anything. Reinstallation does not overwrite files or reconfigure installed options. See `docs/guides/mission-driver-add-on.md` for setup, manual integration and current gate-wiring limits.
+Consumers never receive the engine: `install-age.manifest` carries no mission-driver entries, and `--with-mission-driver` is no longer a valid installer flag. Consumers coordinate roadmaps and plans with the standalone helpers (`plan-status.mjs`, `commit-plan.mjs`, doc guards) per `docs/guides/roadmap-goal-execution.md`.
 
 ### Per-Project Setup
 

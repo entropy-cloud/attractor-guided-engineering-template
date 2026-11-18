@@ -129,11 +129,9 @@ After setup, follow the task-oriented [roadmap/goal workflow](docs/guides/roadma
 # Optional: add the skills shelf matching your project type
 ./install-age.sh /path/to/target-project "Project Name" --profile frontend   # or: java | all
 
-# Optional: enable the autonomous dev-loop engine (NOT installed by default)
-./install-age.sh /path/to/target-project "Project Name" --with-mission-driver
 ```
 
-The default install copies the docs skeleton, all guides, the `common` skills shelf, the operational skills (`.agents/skills/git`, `grillme`), the document-hygiene tools, and a fail-open pre-commit hook. The engine, missions, and demo roadmaps are only installed with `--with-mission-driver` (see `docs/guides/mission-driver-add-on.md`).
+The default install copies the docs skeleton, all guides, the `common` skills shelf, the operational skills (`.agents/skills/git`, `grillme`), the document-hygiene tools, and a fail-open pre-commit hook with standalone plan/roadmap structural checks. The mission-driver engine is NOT part of the consumer distribution.
 
 For a manual fallback flow (no Node) or the full Day-0 checklist, see `START-HERE-after-copy.md` (installed into the target project root).
 
@@ -185,7 +183,7 @@ On-demand directories (`docs/discussions/`, `docs/input/`, `docs/testing/`, `doc
 
 `$MISSION_DRIVER_HOME/` is a Flow DSL engine that automates the AGE development loop. It reads `missions/<name>.json`, drives a state machine through health-check → review → execute → draft → deep-audit, and spawns `opencode run` for each AI step.
 
-**This repository is the engine's source of truth.** Consumers do NOT get the engine by default — pass `--with-mission-driver` to `install-age.sh` to install the shim, `.env`, and mission defaults. Sibling-checkout engine references are the historically proven breakage mode; when you enable the add-on, vendoring a copy of the engine is the recommended posture (see `docs/guides/mission-driver-add-on.md`).
+**This repository is the engine's source of truth.** Consumers do NOT get the engine: it is retired from the consumer distribution (`install-age.manifest` carries no mission-driver entries). Consumers coordinate roadmaps and plans with the standalone helpers; the engine remains an in-repo project here (see `docs/design/age-autonomy/`).
 
 **Core capabilities:**
 
@@ -196,7 +194,7 @@ On-demand directories (`docs/discussions/`, `docs/input/`, `docs/testing/`, `doc
 - **Monitor Dashboard**: Vue 3 frontend with run history, log viewer, resource charts, and SSE event streaming
 - **Onboarding mission** (shipped to consumers via `install-age.sh`): AI reads the consumer's codebase and fills the copied template docs (`docs/context/*`, `docs/architecture/*`, etc.) with real content
 
-**Quick start (from a target project that has run `install-age.sh --with-mission-driver`):**
+**Quick start (from this repository):**
 
 ```bash
 # Inspect installation without invoking a model
@@ -292,8 +290,8 @@ Do not push important work through chat alone.
 ## How To Start A New Project
 
 1. Clone this repository.
-2. Run `./install-age.sh /path/to/your-new-project-root "Project Name"` — copies the curated file set listed in `install-age.manifest` (fill-in files from `template/`, shared methodology guides from root), sed-replaces `<project-name>` in fill-in docs, creates `docs/logs/{year}/`, and updates `.gitignore`. Optional: `--profile frontend|java|all` adds the matching skills shelf; `--with-mission-driver` installs the engine add-on (shim, `.env`, `missions/`, demo/onboarding roadmaps) — not installed by default.
-3. Fill `docs/context/project-context.md` with the project's real verification commands (no verification claim may be made while they are placeholders). With the engine add-on: run `./tools/mission-driver.sh run demo` (smoke test), then `run onboarding` (AI personalizes the docs by reading your codebase).
+2. Run `./install-age.sh /path/to/your-new-project-root "Project Name"` — copies the curated file set listed in `install-age.manifest` (fill-in files from `template/`, shared methodology guides from root), sed-replaces `<project-name>` in fill-in docs, creates `docs/logs/{year}/`, and updates `.gitignore`. Optional: `--profile frontend|java|all` adds the matching skills shelf. The mission-driver engine is not installable into consumers.
+3. Fill `docs/context/project-context.md` with the project's real verification commands (no verification claim may be made while they are placeholders), then let AI personalize the remaining skeleton docs by reading your codebase (see `template/docs/roadmaps/onboarding-roadmap.md`).
 4. Put PM notes, prototype links, card-set docs, article extracts, and external references into `docs/input/` (create it when the first material arrives).
 5. If the input is still ambiguous, capture clarification in `docs/discussions/` before implementation.
 6. Convert settled scope into `docs/requirements/` before asking AI to code.

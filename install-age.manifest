@@ -8,8 +8,6 @@
 # Flags:
 #   exec             chmod +x the destination
 #   fill             replace <project-name> with the project name
-#   rel-mdh          replace __REL_MDH__ with the computed engine path (relative from target)
-#   mdh-only         copied only with --with-mission-driver (engine add-on)
 #   pi-only          copied only with --pi (pi runner bridge)
 #   profile-frontend copied only with --profile frontend (or --profile all)
 #   profile-java     copied only with --profile java (or --profile all)
@@ -17,20 +15,15 @@
 # Lines starting with # are comments. The installer skips existing target files.
 #
 # v2 default excludes (by design, not omission):
-#   mission-driver engine/missions/.env (add-on: --with-mission-driver)
+#   mission-driver engine and its missions/bootstrap files (retired from the
+#     consumer distribution — the standalone tools/ helper chain is the only
+#     execution machinery; see docs/guides/roadmap-goal-execution.md)
 #   docs/discussions|input|testing|references|retrospectives|examples|archive
 #     (on-demand directories — created by the consumer when first needed,
 #      see docs/guides/doc-organization.md)
 #   docs/articles/ (methodology articles, template-repo only)
 #   engine's own roadmaps/plans/audits/logs/requirements/retrospectives
 # When adding new scaffold files to the template, add them HERE too.
-
-# --- engine bootstrap (OPTIONAL: --with-mission-driver) ---
-template/install/tools/mission-driver.sh > tools/mission-driver.sh :: exec,mdh-only
-template/install/.env.example > .env.example :: rel-mdh,mdh-only
-template/install/missions/base.json > missions/base.json :: mdh-only
-template/install/missions/onboarding.json > missions/onboarding.json :: mdh-only
-template/install/AGE-FILES-GUIDE.md > docs/references/age-files-guide.md :: mdh-only
 
 # --- pi file bridge (--pi); derived from canonical operational skills ---
 .agents/skills/nop-git/SKILL.md > .pi/skills/nop-git/SKILL.md :: pi-only
@@ -66,7 +59,6 @@ docs/guides/log-writing.md
 docs/guides/testing-note.md
 docs/guides/coding-conventions.md
 docs/guides/doc-maintenance-checklist.md
-docs/guides/mission-driver-add-on.md
 
 # --- docs/roadmaps (fill-in skeletons) ---
 template/docs/roadmaps/README.md

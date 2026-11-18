@@ -4,7 +4,7 @@
 
 A roadmap under `docs/roadmaps/` is a milestone index and a work-item status surface. It is the planning layer between owner docs and plans: owner docs define what is true; the roadmap decides which work items remain, in what order, with which dependencies; plans execute the work items.
 
-Use a roadmap when the work needs multiple plans (a plan is capped at 2–6 phases and one result surface — if it would exceed that, split it into roadmap work items); small low-risk tasks stay direct. The task-oriented loop and completion-update procedure live in `roadmap-goal-execution.md`.
+Use a roadmap when the work needs multiple plans (a plan is capped at 2–6 phases and one result surface — if it would exceed that, split it into roadmap work items); small low-risk tasks stay direct. The roadmap is optional — use it only when a project is large enough that a flat list no longer shows global progress. It is the single format authority for roadmaps; structural consistency is checked by `node tools/plan-status.mjs --roadmap <file>` plus author self-review. The task-oriented loop and completion-update procedure live in `roadmap-goal-execution.md`.
 
 ## Terminology
 
@@ -75,7 +75,8 @@ Canonical milestone fragment:
 ```
 
 - Work-item id = first token after the checkbox, convention `WI<n>`, **numbers increment file-globally** (milestones do not reset the counter; duplicates are rejected by the structural check).
-- Trailing parentheticals (`Owner:` / `Deliverable:` / `deps:` / evidence pointers) are the sanctioned metadata slots; they never replace the `WI<n> <short label>` head. `Owner:` points to an existing doc that will own the resulting truth; `Deliverable:` points to an artifact to be produced.
+- Trailing parentheticals (`Owner:` / `Deliverable:` / `deps:` / evidence pointers) are the sanctioned metadata slots; they never replace the `WI<n> <short label>` head. `Owner:` points to an existing doc that will own the resulting truth; `Deliverable:` points to an artifact to be produced — a pre-existing input document is never evidence of completion.
+- The legacy status-suffix form is retired: `- WI1 …: `done`` suffixes and status tables give way to column-0 checkboxes (old roadmaps remain readable as plain text). "Draft-reviewed and queued" is carried by the delivering plan's frontmatter `status`, not by a roadmap value.
 - Column-0 checkboxes outside milestone blocks are structural errors. Indented lines and code-fenced examples never count.
 
 ## Frontmatter And Audit Record
@@ -86,12 +87,12 @@ audit-rounds: 0
 ---
 ```
 
-- `audit-rounds` counts consumed mission-level deep-audit rounds, accumulated across runs; plan-level closure audits do not consume it. It is the only allowed roadmap frontmatter field. (Relevant when the mission-driver add-on is enabled; see `docs/guides/mission-driver-add-on.md`.)
+- `audit-rounds` counts consumed mission-level deep-audit rounds, accumulated across runs; plan-level closure audits do not consume it. It is the only allowed roadmap frontmatter field.
 
 ```md
 ## Deep Audit Record
-- dispatch audit #audit-2026-08-25-063133-mission-driver-age-roadmap-1-1a2b3c4d to ses_auditor_1
-- accepted #audit-2026-08-25-063133-mission-driver-age-roadmap-1-1a2b3c4d findings=none: conclusion (written by that auditor)
+- dispatch audit #audit-2026-08-25-063133-example-roadmap-1-1a2b3c4d to ses_auditor_1
+- accepted #audit-2026-08-25-063133-example-roadmap-1-1a2b3c4d findings=none: conclusion (written by that auditor)
 ```
 
 - The accepted line MUST carry `findings=none|items` (distinct from plan-closure accepted lines, which carry no `findings=` lexeme). `findings=items` findings land as unchecked roadmap work items **in the same edit that records the receipt** — recording findings without landing carriers is a format violation (closure gate: findings without a carrier = 0, see `docs/guides/audit-execution.md` Finding Format And Disposition). Closing them = ticking the checkbox.
@@ -138,6 +139,19 @@ When the last work item of a roadmap is ticked, close the roadmap with a complet
 1. **Summarize what needs recording.** Walk the delivered work items and decide whether they surfaced fixed non-obvious regressions, discovered-but-unfixed findings, or durable reusable lessons. Record fixed regressions per `docs/guides/bug-fix-note.md` (under `docs/bugs/`), register unfixed findings in the project's defect ledger, and record lessons under `docs/lessons/`.
 2. **Record the items that meet the bar, without duplicating existing records.** Search existing `docs/bugs/` and `docs/lessons/` entries first and write only genuinely new ones; a recurrence of an already-recorded pattern is promoted via the skill/checklist route instead of a second note.
 3. **State the outcome.** Record the summary conclusion — including "nothing new to record" when that is the honest result — in the dev-log entry for the roadmap closure.
+
+## What A Roadmap Is NOT
+
+- Not an implementation specification. No implementation steps or closure criteria (those live in plans).
+- Not a design doc. It references owner docs; it does not restate business rules.
+- Not the backlog. The roadmap is the orchestration layer; backlog items reference roadmap work items.
+- Not a second status surface: no status table, no per-item status suffixes, no ❌/✅ icons — the checkbox is the only status carrier.
+
+## Multiple Roadmaps
+
+If the project has multiple orthogonal dimensions with independent "done" definitions (e.g. core business logic vs. frontend UI vs. third-party integrations), create separate roadmap files under `docs/roadmaps/`. Name each file to reflect its dimension, for example `core-business-roadmap.md`, `frontend-ui-roadmap.md`. Each roadmap file follows the same structure.
+
+When multiple roadmaps exist, list all of them in `docs/roadmaps/README.md` with a brief description of each roadmap's scope. The template does not prescribe when to split — scope is defined entirely by the user.
 
 ## Anti-Patterns
 

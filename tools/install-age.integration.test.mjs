@@ -42,13 +42,10 @@ function sourceFixture(t) {
 }
 
 for (const profile of ["none", "frontend", "java", "all"]) {
-  for (const engine of [false, true]) {
-    test(`consumer matrix: profile=${profile}, engine=${engine}`, (t) => {
-      const target = temp(t);
-      const flags = ["--profile", profile, "--pi", ...(engine ? ["--with-mission-driver"] : [])];
+  test(`consumer matrix: profile=${profile}`, (t) => {
+    const target = temp(t);
+      const flags = ["--profile", profile, "--pi"];
       ok(install(target, flags));
-      assert.equal(existsSync(join(target, "tools/mission-driver/src/main.js")), engine);
-      assert.equal(existsSync(join(target, ".env")), engine);
       const registry = readFileSync(join(target, "docs/skills/README.md"), "utf8");
       for (const shelf of ["common", "frontend", "java"]) {
         const installed = shelf === "common" || profile === shelf || profile === "all";
@@ -62,20 +59,12 @@ for (const profile of ["none", "frontend", "java", "all"]) {
         assert.equal(readFileSync(join(target, ".pi/skills", path), "utf8"), readFileSync(join(target, ".agents/skills", path), "utf8"));
       }
       assert.equal(existsSync(join(target, ".pi/skills/mission-driver")), false);
+      assert.equal(existsSync(join(target, "missions")), false, "engine missions are not part of the consumer distribution");
       assert.deepEqual(inspectDrift(target).changes, []);
       const before = snapshot(target);
       ok(install(target, flags));
-      assert.deepEqual(snapshot(target), before, "identical reinstall must be byte-idempotent");
-      if (engine) {
-        ok(node(["tools/mission-driver/src/main.js", "--dir", target, "--missions-dir", "missions", "--help"], target));
-        const list = node(["tools/mission-driver/src/main.js", "--dir", target, "--missions-dir", "missions", "list"], target);
-        ok(list);
-        assert.match(list.stdout, /onboarding/);
-        ok(node(["tools/mission-driver/src/mission-check.mjs", "missions/onboarding.json", "."], target));
-        assert.equal(readFileSync(join(target, ".env"), "utf8"), "MISSION_DRIVER_HOME=tools/mission-driver\n");
-      }
-    });
-  }
+    assert.deepEqual(snapshot(target), before, "identical reinstall must be byte-idempotent");
+  });
 }
 
 test("literal names and opt-in pi boundary; default does not touch .pi", (t) => {
@@ -94,10 +83,10 @@ test("preserves existing scaffold, hooks, env without newline and secrets", (t) 
   put(target, ".gitignore", "custom");
   put(target, "AGENTS.md", "custom instructions");
   put(target, ".githooks/pre-commit", "custom hook");
-  const result = install(target, ["--with-mission-driver"]);
+  const result = install(target);
   ok(result);
   assert.match(result.stdout, /CONFLICT preserved/);
-  assert.equal(readFileSync(join(target, ".env"), "utf8"), "TOKEN=do-not-record-secret\nMISSION_DRIVER_HOME=tools/mission-driver\n");
+  assert.equal(readFileSync(join(target, ".env"), "utf8"), "TOKEN=do-not-record-secret");
   assert.equal(readFileSync(join(target, "AGENTS.md"), "utf8"), "custom instructions");
   assert.equal(readFileSync(join(target, ".githooks/pre-commit"), "utf8"), "custom hook");
   assert.match(readFileSync(join(target, ".gitignore"), "utf8"), /^custom\n/);
@@ -105,14 +94,6 @@ test("preserves existing scaffold, hooks, env without newline and secrets", (t) 
   assert.ok(!origin.includes("do-not-record-secret") && !origin.includes("TOKEN") && !origin.includes(target));
   assert.ok(!Object.hasOwn(JSON.parse(origin).files, ".env"));
   assert.ok(!Object.hasOwn(JSON.parse(origin).files, "AGENTS.md"));
-});
-
-test("existing MISSION_DRIVER_HOME assignment is not overwritten or duplicated", (t) => {
-  const target = temp(t);
-  const env = "TOKEN=keep\r\nexport MISSION_DRIVER_HOME=custom-engine";
-  put(target, ".env", env);
-  ok(install(target, ["--with-mission-driver"]));
-  assert.equal(readFileSync(join(target, ".env"), "utf8"), env);
 });
 
 test("pi mirror derives from consumer canonical files, not a separately edited copy", (t) => {
@@ -175,37 +156,11 @@ test("registry/bridge source parity failures fail before writing", (t) => {
   }
 });
 
-test("nonempty legacy engine is not augmented, even if its entry point matches", (t) => {
+test("retired engine add-on flag is rejected without writes", (t) => {
   const target = temp(t);
-  put(target, "tools/mission-driver/src/main.js", readFileSync(join(root, "tools/mission-driver/src/main.js")));
-  put(target, "tools/mission-driver/custom.txt", "legacy bytes");
-  const before = snapshot(target);
   const result = install(target, ["--with-mission-driver"]);
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /Engine conflict: unknown/);
-  assert.deepEqual(snapshot(target), before);
-});
-
-test("known engine content/inventory and incompatible-origin conflicts cause zero additions", (t) => {
-  const target = temp(t);
-  ok(install(target, ["--with-mission-driver"]));
-  put(target, "tools/mission-driver/local-extra.txt", "unexpected engine customization");
-  assert.ok(inspectDrift(target).changes.some((change) => change.kind === "unrecorded-engine-file"));
-  put(target, "tools/mission-driver/src/main.js", "locally customized");
-  rmSync(join(target, "tools/mission-driver/src/config.js"));
-  let before = snapshot(target);
-  let result = install(target, ["--with-mission-driver"]);
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /Engine conflict: content\/inventory/);
-  assert.deepEqual(snapshot(target), before);
-  const origin = JSON.parse(readFileSync(join(target, ORIGIN_FILE), "utf8"));
-  origin.sourceHash = "0".repeat(64);
-  put(target, ORIGIN_FILE, JSON.stringify(origin));
-  before = snapshot(target);
-  result = install(target, ["--with-mission-driver"]);
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /Engine conflict: unknown\/incompatible/);
-  assert.deepEqual(snapshot(target), before);
+  assert.deepEqual(readdirSync(target), []);
 });
 
 test("read-only drift works from installed standalone tool and never overwrites customization", (t) => {

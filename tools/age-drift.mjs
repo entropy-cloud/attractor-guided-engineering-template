@@ -39,7 +39,7 @@ export function readOrigin(target) {
   const origin = JSON.parse(readFileSync(path, "utf8"));
   if (origin.schema !== 1 || !/^[a-f0-9]{64}$/.test(origin.sourceHash) ||
       !origin.options || typeof origin.options.withPi !== "boolean" ||
-      typeof origin.options.withMissionDriver !== "boolean" ||
+      (origin.options.withMissionDriver !== undefined && typeof origin.options.withMissionDriver !== "boolean") ||
       !["none", "frontend", "java", "all"].includes(origin.options.profile) ||
       !origin.files || typeof origin.files !== "object" || Array.isArray(origin.files) || !Object.keys(origin.files).length) {
     throw new Error("Invalid AGE origin metadata");
