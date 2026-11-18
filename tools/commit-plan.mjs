@@ -41,7 +41,11 @@ export function payloadText(path, bytes, plan, ledger) {
       (section === "Closure" && /^- (?:dispatch audit |accepted |rejected )/.test(line))).map((r) => r.index));
     return Buffer.from(doc.lines.filter((line, i) => !omit.has(i) && line.trim()).join("\n"));
   }
-  if (path === `docs/roadmaps/${ledger.fm.mission}-roadmap.md`) {
+  // Roadmap file naming: the canonical template layout is `docs/roadmaps/<mission>-roadmap.md`,
+  // but consumer repos may name the per-roadmap file `<mission>.md` directly (e.g.
+  // rm1-rpg-knowledge-base.md). Accept either so the selected WI tick stays excluded
+  // from the digest (tick may land before or after snapshot).
+  if (path === `docs/roadmaps/${ledger.fm.mission}-roadmap.md` || path === `docs/roadmaps/${ledger.fm.mission}.md`) {
     const wi = String(ledger.fm["work-item"]).match(/^M\d+-(WI\d+)$/)?.[1];
     if (wi) return Buffer.from(bytes.toString("utf8").replace(new RegExp(`^(- \\[)[x ](\\] ${wi}(?:\\s|$))`, "gm"), "$1 $2"));
   }

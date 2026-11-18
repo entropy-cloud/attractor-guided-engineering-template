@@ -63,6 +63,15 @@ node tools/commit-plan.mjs --snapshot docs/plans/<slug>/<plan>.md -- docs/plans/
 
 The command emits `- payload <sha256> base=<commit> paths=["..."]`. Record it in `## Verification` with the built-in edit tool. After running verification, append `- pass <key> <runId> exit=0 payload=<sha256>`. The independent auditor inspects the actual payload/diff and whole-file ownership, records the latest same-id dispatch/acceptance in `## Closure`, and includes `payload=<sha256> ownership=whole-files` in its accepted conclusion. Review receipt grammar is in `plan-authoring-and-execution.md`.
 
+Snapshot procedure (follow it in this order; each step exists because skipping it has caused a rejected delivery):
+
+1. **Finalize the roadmap tick before the first snapshot.** The digest exemption for the roadmap checkbox is keyed on the roadmap path (`docs/roadmaps/<mission>-roadmap.md` or `<mission>.md`); a tick landing after the snapshot changes the digest and invalidates the recorded proof.
+2. Take the snapshot, record the payload line, then substitute the hash into the plan's pass/accepted lines — **but only into lines that the digest excludes** (see the receipt-line pitfalls in `plan-authoring-and-execution.md`; a hash on any wrapped continuation line breaks convergence).
+3. **Re-run `--snapshot` and confirm the digest is unchanged (a fixed point) before committing.** If it changed, some edited line is not exempt — move the hash onto an exempt line and repeat.
+4. If delivery is rejected with `paths must name exactly changed delivery files`, shared log/roadmap content has already landed with an earlier commit: re-snapshot with only the actually-changed paths and update the proof line's `paths=` accordingly.
+
+**Shared-surface discipline**: `docs/logs/` and the roadmap are append/tick surfaces shared across concurrent plans. A commit staged from the worktree sweeps in whatever other plans appended meanwhile. Either serialize shared-surface writes across in-flight deliveries, or verify the swept-in content belongs to accepted work and say so in the commit body.
+
 Only this plan's Verification pass/payload lines, Closure receipt lines, blank plan lines and the selected roadmap checkbox tick are excluded from the payload digest. Other plan prose and other pending roadmap edits remain covered. This permits final acceptance metadata without a self-referential hash/second commit. Finalize other text before verification; product/scope changes require renewed verification and acceptance. Helpers emit results but do not write plan/roadmap content.
 
 ```bash

@@ -34,6 +34,8 @@ Size a work item so that it corresponds to **one plan with 2–6 phases**. The m
 
 Signs a work item is oversized: its plan would need more than 6 phases; more than one independent closure criteria set; more than one deliverable pass to land.
 
+Signs a work item is cut too fine: several same-shaped mechanical siblings (e.g. N identical batch reviews over different inputs) minted as N separate work items — each carries a full plan/review/audit/delivery cycle for near-zero extra assurance. When the slices share one result surface and one method, mint ONE work item with the batches as internal phases; plan overhead (independent review + audit + payload delivery) is the per-item cost, so price the granularity accordingly.
+
 Signs a work item is undersized: its plan would carry a single trivial edit with no independently verifiable result — bundle it into a neighboring work item or the next plan.
 
 ## Plans Directory
@@ -159,6 +161,7 @@ When multiple roadmaps exist, list all of them in `docs/roadmaps/README.md` with
 - Restating owner-doc business rules
 - Ticking before closure audit passes; letting checkbox state go stale
 - A work item larger than one delivery pass (loop stalls: implementation finishes, nothing updates)
+- granularity finer than the per-item process cost: same-shaped mechanical siblings minted as separate work items, each riding a full plan/review/audit cycle
 - One work item spread across several plans instead of being split
 - Plans of this roadmap living outside `docs/plans/<roadmap-slug>/`
 - Any second status channel; dotted milestone headings (`M0.3`); per-milestone WI counter resets

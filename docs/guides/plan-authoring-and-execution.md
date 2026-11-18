@@ -121,6 +121,13 @@ verify: [test]
 - Pass lines: `- pass <commandKey> <runId> exit=<code>`; satisfies mechanical verification when the key is required by the plan and `exit=0`.
 - Consumer commit delivery adds a payload suffix and ownership evidence to verification/closure; see `roadmap-goal-execution.md` for the exact command sequence and finalization metadata.
 
+Receipt-line pitfalls (each of these has actually caused a rejected delivery; `plan-status --check` catches them only after the fact):
+
+1. **The receipt id must be the last token of its line, preceded by a space.** Annotations go on a separate continuation line, never after the id, and never between `共识`/`accepted` and the id without a space.
+2. **The review verdict is a single bare token** — one of `pass` / `passes draft review` / `approved` / `accepted` (lowercase, exact). `pass（附注…）` is parsed as a non-token verdict and reads as rejection. Put commentary on the next line.
+3. **A receipt line is only exempt from the payload digest if it is one physical line** starting with `- dispatch …` / `- accepted …` / `- rejected …` / `- pass …` / `- payload …`. A wrapped continuation line carrying `payload=<hash>` is ordinary prose — it re-introduces the digest's own hash and makes the snapshot never converge. Keep the accepted conclusion (including its `payload=` suffix) on one line.
+4. **Run `node tools/plan-status.mjs --check <plan>` after every receipt edit**, before attempting delivery.
+
 ## Minimum Rules
 
 1. **Start from live baseline.** Read the repo first, then write `Current Baseline`. For net-new features, inventory all existing code the feature touches or contradicts — not optional.
