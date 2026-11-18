@@ -12,7 +12,7 @@
 - [ ] WI4 填 docs/context/codebase-map.md (Owner: `docs/context/codebase-map.md`; deps: WI1)
 - [ ] WI5 填 docs/index.md + 校验项目名占位符全替换 (Owner: `docs/index.md`; deps: WI2)
 - [ ] WI6 填 docs/architecture 四件 README/module-boundaries/project-vision/system-baseline (Owner: `docs/architecture/`; deps: WI1, WI2)
-- [ ] WI7 填 docs/guides/application-development-workflow.md + docs/roadmaps/README.md (Owner: `docs/roadmaps/README.md`; deps: WI2)
+- [ ] WI7 填 docs/guides/application-development-workflow.md + docs/roadmaps/README.md (Owner: `docs/guides/application-development-workflow.md`; deps: WI2)
 - [ ] WI8 记录首个 green verification baseline 到日志 + 校验 docs/logs/{year}/ 存在 (Owner: `docs/guides/log-writing.md`; deps: WI2; reuse: run verification)
 
 ## Current Baseline

@@ -72,7 +72,7 @@ cd attractor-guided-engineering-template
 
 # 验证即可用（无需 pnpm install / build）
 ./tools/mission-driver.sh list                  # 列出 missions
-./tools/mission-driver.sh run demo --dry-run    # 跑 demo（全栈可跑，echo 命令）
+./tools/mission-driver.sh run onboarding --dry-run  # 跑 onboarding（全栈可跑，echo 命令）
 ./tools/mission-driver.sh monitor               # 打开 http://localhost:9300 → 完整 Dashboard
 npm --prefix tools/mission-driver test          # 引擎自测（556 pass + prompt-check: OK）
 ```
@@ -110,8 +110,8 @@ cd attractor-guided-engineering-template       # 进入模板仓库
 ```bash
 cd /c/Work/my-project
 
-./tools/mission-driver.sh list                 # 应显示 base + demo
-./tools/mission-driver.sh run demo --dry-run   # 全流程跑通（不消耗 AI 额度）
+./tools/mission-driver.sh list                 # 应显示 base + onboarding
+./tools/mission-driver.sh run onboarding --dry-run  # 全流程跑通（不消耗 AI 额度）
 ./tools/mission-driver.sh monitor              # 打开 :9300，多项目同时运行自动切换端口
 ```
 
@@ -229,7 +229,7 @@ echo ".env" >> .gitignore   # 若尚未忽略
 
 > **plansDir 约定**：每个 mission 的 `plansDir` 应指向 `docs/plans/<mission-name>/` 子目录
 > （如 `docs/plans/abo-bug-fixes`），而不是直接用 `docs/plans`。这样多个 mission 的 plan
-> 不会混在一起。`install-age.sh` 生成的 `demo.json` 已遵循此约定（`plansDir: "docs/plans/demo"`）。
+> 不会混在一起。`install-age.sh` 生成的 `onboarding.json` 已遵循此约定（`plansDir: "docs/plans/onboarding"`）。
 
 <a id="④-项目级定制"></a>
 
@@ -241,9 +241,9 @@ echo ".env" >> .gitignore   # 若尚未忽略
 **⑤ 验证与运行**：
 
 ```bash
-# 验证安装（install-age.sh 已自带 demo mission，可立即验证）
-./tools/mission-driver.sh list                   # 列出 missions（应有 base + demo）
-./tools/mission-driver.sh run demo --dry-run     # 全流程跑通（不消耗 AI 额度）
+# 验证安装（install-age.sh 已自带 onboarding mission，可立即验证）
+./tools/mission-driver.sh list                   # 列出 missions（应有 base + onboarding）
+./tools/mission-driver.sh run onboarding --dry-run  # 全流程跑通（不消耗 AI 额度）
 ./tools/mission-driver.sh monitor                # 打开 :9300 Dashboard
 
 # 正式运行你的 mission

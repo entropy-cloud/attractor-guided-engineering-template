@@ -44,7 +44,7 @@ template/START-HERE-after-copy.md > START-HERE-after-copy.md
 template/docs/index.md
 
 # --- docs/context (mandatory AI context) ---
-template/docs/context/project-context.md
+template/docs/context/project-context.md > docs/context/project-context.md :: fill
 template/docs/context/ai-autonomy-policy.md
 template/docs/context/codebase-map.md
 docs/context/README.md

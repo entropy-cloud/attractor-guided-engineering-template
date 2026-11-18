@@ -307,7 +307,7 @@ export async function installAge(opts) {
     throw new Error(`Capability parity conflict (no files written): ${conflicts.join(", ")}`);
   }
   const year = new Date().getFullYear();
-  const dirs = [`docs/logs/${year}`, ...(withMissionDriver ? ["docs/plans/demo", "docs/plans/onboarding"] : [])];
+  const dirs = [`docs/logs/${year}`, ...(withMissionDriver ? ["docs/plans/onboarding"] : [])];
   for (const path of [".gitignore", ...(withMissionDriver ? [".env"] : []), ...dirs]) {
     const full = safePath(target, path);
     if (existsSync(full) && (dirs.includes(path) ? !statSync(full).isDirectory() : !statSync(full).isFile())) {

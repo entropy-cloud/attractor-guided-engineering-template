@@ -21,7 +21,7 @@ When facts conflict or it is unclear which doc is authoritative, read `docs/guid
 
 ## Project Identity
 
-- Project name:
+- Project name: <project-name>
 - Product type:
 - Primary users:
 - Documentation freshness: `<fresh | partially stale | stale | unknown>`
