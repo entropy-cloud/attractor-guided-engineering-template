@@ -46,6 +46,12 @@ Classify the task before acting; then read the matching guide/owner doc first:
 | synthesize requirements | `docs/guides/requirements-synthesis.md` |
 | fix a non-obvious bug | `docs/guides/bug-fix-note.md` |
 | write the daily log | `docs/guides/log-writing.md` |
+| record a requirement clarification discussion | `docs/guides/discussion-writing.md` |
+| process raw external input into requirement candidates | `docs/guides/input-processing.md` |
+| record manual/exploratory testing | `docs/guides/testing-note.md` |
+| check which docs to update after a change lands | `docs/guides/maintenance-checklist.md` |
+| look up coding conventions | `docs/guides/coding-conventions.md` |
+| follow the default development workflow | `docs/guides/application-development-workflow.md` |
 | run the engine (if enabled) | `docs/guides/mission-driver-add-on.md` — operator guidance lives in the vendored engine itself (`tools/mission-driver/CONTEXT.md`, `docs/user-manual.*.md`) |
 
 ## Hard Rules

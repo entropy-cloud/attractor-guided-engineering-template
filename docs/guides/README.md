@@ -12,14 +12,14 @@ Before doing any of the following, read the matching guide first — `AGENTS.md`
 | write, execute, review, or close a plan | `plan-authoring-and-execution.md` |
 | run a document audit, draft review, or closure audit | `audit-execution.md` |
 | hand off a non-trivial change (pre-flight self-check) | `audit-prevention-checklist.md` |
+| after a change lands, sync repo memory | `maintenance-checklist.md` |
 | synthesize requirements from raw input | `requirements-synthesis.md` (+ `input-processing.md`) |
 | record a requirement clarification discussion | `discussion-writing.md` |
 | write a bug-fix note | `bug-fix-note.md` |
 | write the daily dev log | `log-writing.md` |
 | record manual/exploratory testing | `testing-note.md` |
 | follow the default development workflow end to end | `application-development-workflow.md` |
-| check what docs must be updated after a change | `maintenance-checklist.md` |
-| look up implementation conventions | `implementation-guide.md` |
+| look up coding conventions | `coding-conventions.md` |
 | enable the autonomous dev-loop engine | `mission-driver-add-on.md` |
 
 ## Adding A Guide

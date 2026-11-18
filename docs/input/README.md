@@ -14,4 +14,4 @@ Examples:
 
 These files are not automatically implementation-ready.
 
-Start with `00-input-processing-guide.md`.
+Start with [input-processing](../guides/input-processing.md).

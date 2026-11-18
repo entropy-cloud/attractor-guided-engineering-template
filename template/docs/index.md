@@ -19,6 +19,10 @@ This `docs/` tree is the durable memory and routing surface for `<project-name>`
 | If you need to... | Read |
 | --- | --- |
 | Understand mandatory AI context | `docs/context/README.md` → `project-context.md`, `ai-autonomy-policy.md`, `codebase-map.md` |
+| Record a requirement clarification discussion | `docs/guides/discussion-writing.md` |
+| Process raw external input | `docs/guides/input-processing.md` |
+| Record manual/exploratory testing | `docs/guides/testing-note.md` |
+| Look up coding conventions | `docs/guides/coding-conventions.md` |
 | Follow the default development workflow | `docs/guides/application-development-workflow.md` |
 | Run the roadmap → goal-directed → accepted-plan delivery loop | `docs/guides/roadmap-goal-workflow.md` |
 | Know where a document belongs / how to name it | `docs/guides/doc-organization.md` |
