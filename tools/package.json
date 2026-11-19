@@ -17,6 +17,9 @@
     "md:test": "pnpm --filter mission-driver test",
     "md:web:build": "pnpm --filter mission-driver-monitor-web build",
     "md:web:check:dist": "pnpm --filter mission-driver-monitor-web check:dist",
+    "dsh-nop-age:test": "pnpm --filter dsh-plugin-nop-age test",
+    "dsh-nop-age:build": "pnpm --filter dsh-plugin-nop-age run build",
+    "dsh-nop-route:test": "pnpm --filter dsh-plugin-nop-route test",
     "install-age:test": "node --test ./install-age.test.mjs"
   },
   "devDependencies": {

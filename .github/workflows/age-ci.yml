@@ -23,8 +23,8 @@ on:
   push:
     paths:
       - 'tools/mission-driver/**'
-      - 'plugin/nop-age/**'
-      - 'plugin/nop-route/**'
+      - 'tools/dsh-plugin-nop-age/**'
+      - 'tools/dsh-plugin-nop-route/**'
       - 'docs/plans/**'
       - 'docs/backlog/**'
       - 'missions/**'
@@ -34,8 +34,8 @@ on:
   pull_request:
     paths:
       - 'tools/mission-driver/**'
-      - 'plugin/nop-age/**'
-      - 'plugin/nop-route/**'
+      - 'tools/dsh-plugin-nop-age/**'
+      - 'tools/dsh-plugin-nop-route/**'
       - 'docs/plans/**'
       - 'docs/backlog/**'
       - 'missions/**'

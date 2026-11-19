@@ -1,3 +1,5 @@
 packages:
   - 'mission-driver'
   - 'mission-driver/web'
+  - 'dsh-plugin-nop-age'
+  - 'dsh-plugin-nop-route'

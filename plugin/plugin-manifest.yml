@@ -18,8 +18,8 @@
 # collection, plan docs/plans/multi-plugin-dsh/2026-08-28-1312-2): M3
 # declared nop-age ONLY — the pre-flight existence assertion is
 # incompatible with a manifest naming a bundle that does not exist yet.
-# With plugin/nop-route/ on disk (M4-WI9+), the nop-route entry is now
-# appended: the manifest declares every in-repo bundle of the family.
+# With tools/dsh-plugin-nop-route/ on disk (M4-WI9+), the nop-route entry
+# is now appended: the manifest declares every in-repo bundle of the family.
 # The manifest always names only bundles that exist on disk.
 #
 # The config blocks mirror the live bundle patches (service-row config in
@@ -30,16 +30,16 @@
 schema: 1
 profile: web
 plugins:
-  - name: nop-age
-    path: ./nop-age
+  - name: dsh-plugin-nop-age
+    path: ../tools/dsh-plugin-nop-age
     realm: nopAge
     config:
       assetsDir: ./assets
       supervisor:
         projectRoot: ${PROJECT_ROOT}
         continuous: false
-  - name: nop-route
-    path: ./nop-route
+  - name: dsh-plugin-nop-route
+    path: ../tools/dsh-plugin-nop-route
     realm: nopRoute
     config:
       defaultModel: zhipuai-coding-plan/glm-5.2

@@ -7,10 +7,10 @@
 # One command, three chains, all must be green to pass the gate:
 #   L1   — engine suite: `pnpm --prefix tools/mission-driver test`
 #          (zero npm dependencies; includes prompt-check.mjs)
-#   L2   — plugin suite: `npm --prefix plugin/nop-age test`
+#   L2   — plugin suite: `pnpm --filter dsh-plugin-nop-age test`
 #          (L2 backend-parity matrix + WI6/WI7 unit chain: manifest check,
 #          node --test, tsc --noEmit, bundle freshness, smoke import)
-#          + nop-route suite `npm --prefix plugin/nop-route test`
+#          + nop-route suite `pnpm --filter dsh-plugin-nop-route test`
 #          (multi-plugin-dsh M4-WI9: manifest check, node --test, tsc —
 #          no assets face, so no bundle freshness / smoke import legs)
 #          + launcher stub suite `node --test plugin/test/load-plugins.test.mjs`
@@ -19,7 +19,7 @@
 #   L2.5 — law gates (age-autonomy M2-WI23, structural subset, no actor):
 #          ① `gate-check.mjs --policy missions/autonomy.policy.yml`
 #          ② gate-check.mjs on the FULL docs/plans/age-autonomy/ corpus
-#          ③ `node --test plugin/nop-age/test/law-truth-table.test.mjs`
+#          ③ `node --test tools/dsh-plugin-nop-age/test/law-truth-table.test.mjs`
 #          (explicit standalone call — the same file also runs inside L2's
 #          plugin suite; the standalone face is the WI24 gate alignment)
 #
@@ -45,18 +45,18 @@ echo "== L1: engine suite (zero npm deps) =="
 pnpm --prefix tools/mission-driver test
 
 echo "== L2: plugin suite (backend-parity matrix + unit chain) =="
-if [ ! -d plugin/nop-age/node_modules ]; then
+if [ ! -d tools/dsh-plugin-nop-age/node_modules ]; then
   echo "(installing plugin devDependencies)"
-  npm ci --prefix plugin/nop-age --no-audit --no-fund
+  npm ci --prefix tools/dsh-plugin-nop-age --no-audit --no-fund
 fi
-npm --prefix plugin/nop-age test
+npm --prefix tools/dsh-plugin-nop-age test
 
 echo "== L2: nop-route plugin suite (manifest check + unit chain, M4-WI9) =="
-if [ ! -d plugin/nop-route/node_modules ]; then
+if [ ! -d tools/dsh-plugin-nop-route/node_modules ]; then
   echo "(installing nop-route devDependencies)"
-  npm ci --prefix plugin/nop-route --no-audit --no-fund
+  npm ci --prefix tools/dsh-plugin-nop-route --no-audit --no-fund
 fi
-npm --prefix plugin/nop-route test
+npm --prefix tools/dsh-plugin-nop-route test
 
 echo "== L2: nop-* launcher stub suite (load-plugins.sh, M3-WI7) =="
 node --test plugin/test/load-plugins.test.mjs
@@ -86,6 +86,6 @@ for f in docs/plans/age-autonomy/*.md; do
   fi
 done
 [ "$corpus_fail" -eq 0 ] || exit 1
-node --test plugin/nop-age/test/law-truth-table.test.mjs
+node --test tools/dsh-plugin-nop-age/test/law-truth-table.test.mjs
 
 echo "== L1+L2+L2.5 gate: GREEN =="

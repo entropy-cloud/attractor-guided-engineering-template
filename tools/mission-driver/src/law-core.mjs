@@ -5,7 +5,7 @@
 // docs/plans/age-autonomy/2026-08-25-0815-1 Phase 1):
 //   - engine-side zero-npm module shared to the plugin via build-bundle
 //     ALLOWED_MODULES (0635-1 shared-library ruling extended to law); the
-//     plugin-side `plugin/nop-age/src/law/` hosts only host glue (actor resolve,
+//     plugin-side `tools/dsh-plugin-nop-age/src/law/` hosts only host glue (actor resolve,
 //     policy IO, pre-execute registration, observation log).
 //   - rules are pure functions (proposedAction, currentFileState, ctx) →
 //     allow | deny(reason) | observe; determinism keeps the truth-table test

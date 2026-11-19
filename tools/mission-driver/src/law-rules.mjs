@@ -1364,7 +1364,7 @@ registerRule("roadmap-write-guard", roadmapWriteGuardRule, { structural: true })
 // rewrite the enforcer, so the ramp itself would be the vulnerability
 // window). Protected path set = the 02 §4.7 literal list, resolved against
 // ctx.projectRoot:
-//   - plugin/nop-age/src/law/**            (law host-adapter implementation)
+//   - tools/dsh-plugin-nop-age/src/law/**   (law host-adapter implementation)
 //   - missions/autonomy.policy.yml     (law data)
 //   - tools/mission-driver/src/plan-check.mjs / gate-check.mjs (enforcement CLI)
 // Exception set = the 02 §4.7 literal three legs, `engine` deliberately NOT
@@ -1388,7 +1388,7 @@ registerRule("roadmap-write-guard", roadmapWriteGuardRule, { structural: true })
 // gate-check CLI do).
 
 export const LAW_PROTECTED_FAMILIES = [
-  { prefix: "plugin/nop-age/src/law/" },
+  { prefix: "tools/dsh-plugin-nop-age/src/law/" },
   { path: "missions/autonomy.policy.yml" },
   { path: "tools/mission-driver/src/plan-check.mjs" },
   { path: "tools/mission-driver/src/gate-check.mjs" },

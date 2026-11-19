@@ -11,10 +11,10 @@
 #   1. python3 with PyYAML: probe `python3 -c 'import yaml'`; on success
 #      validate via `python3 -c 'import sys,yaml; yaml.safe_load(...)'`.
 #   2. python3 or PyYAML absent → node channel through the nop-age bundle's
-#      pinned devDep `yaml` (plugin/nop-age/node_modules/yaml, installed by
-#      the repo's L2 gate): `(cd plugin/nop-age && node -e 'require("yaml")...')`
+#      pinned devDep `yaml` (tools/dsh-plugin-nop-age/node_modules/yaml, installed by
+#      the repo's L2 gate): `(cd tools/dsh-plugin-nop-age && node -e 'require("yaml")...')`
 #      so `require` resolves inside the bundle. If that devDep is missing,
-#      run `npm ci --prefix plugin/nop-age` first.
+#      run `npm ci --prefix tools/dsh-plugin-nop-age` first.
 #   Validation only — mounting itself needs neither Python nor Node.
 #
 # Pre-flight assertions (fail-fast, before any dsh call):
@@ -137,12 +137,12 @@ validate_yaml() {
       || die "manifest is not valid YAML: $MANIFEST (python3/PyYAML channel)"
   elif command -v node >/dev/null 2>&1; then
     (
-      cd "$SCRIPT_DIR/nop-age" || exit 1
+      cd "$SCRIPT_DIR/../tools/dsh-plugin-nop-age" || exit 1
       exec node -e 'const fs = require("fs"); const yaml = require("yaml");
                     yaml.parse(fs.readFileSync(process.argv[1], "utf8"))' "$MANIFEST"
-    ) || die "manifest is not valid YAML: $MANIFEST (node channel via plugin/nop-age devDep yaml — if that devDep is missing run: npm ci --prefix plugin/nop-age)"
+    ) || die "manifest is not valid YAML: $MANIFEST (node channel via tools/dsh-plugin-nop-age devDep yaml — if that devDep is missing run: npm ci --prefix tools/dsh-plugin-nop-age)"
   else
-    die 'no YAML validator available: need python3 with PyYAML, or node with plugin/nop-age devDeps installed'
+    die 'no YAML validator available: need python3 with PyYAML, or node with tools/dsh-plugin-nop-age devDeps installed'
   fi
 }
 
