@@ -12,7 +12,7 @@ Development follows [AGENTS.md](AGENTS.md) and [docs/guides/application-developm
 
 - The repo is the source of truth. Chat is only a temporary working surface.
 - Active work-in-progress is read from unfinished plans in [docs/plans/](docs/plans/), not from a field in `project-context.md`.
-- Non-trivial work requires a plan (see Planning Rule in AGENTS.md) with independent draft review and closure audit.
+- Non-trivial work requires a plan (see Hard Rule 3 in AGENTS.md) with independent draft review and closure audit.
 
 ## Verification commands
 

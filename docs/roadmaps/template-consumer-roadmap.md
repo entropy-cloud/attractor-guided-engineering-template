@@ -13,6 +13,7 @@ Source: `docs/requirements/template-consumer-workflow.md`; evidence: `docs/analy
 - [x] WI1 Safe installer and explicit provenance/drift (Owner: `docs/requirements/template-consumer-workflow.md`; Deliverable: installation safety, profile/bridge parity, standalone engine and non-destructive drift tests)
 - [x] WI2 Roadmap-led goal workflow and automatic accepted-plan commits (Owner: `docs/requirements/template-consumer-workflow.md`; deps: WI1; Deliverable: usage guide, coherent standalone lifecycle, scoped/idempotent commit helper and tests)
 - [x] WI3 Consumer-contract guard audit and CI closure (Owner: `docs/requirements/template-consumer-workflow.md`; deps: WI2; Deliverable: guard negative controls, installed-scaffold contract checks, CI wiring and final evidence)
+- [ ] WI4 Resolve autonomy-policy/goal-workflow fallback conflict (Owner: `docs/context/ai-autonomy-policy.md`; Deliverable: fix or remove the `ai-autonomy-policy.md:33` reference to "AGENTS.md Reviewer-Availability Fallback" — the section does not exist in AGENTS.md — and reconcile the solo cold-replay allowance with `docs/guides/plan-authoring-and-execution.md` and `docs/guides/roadmap-goal-execution.md`, which state there is no solo self-acceptance fallback; found during the 2026-11-19 AGENTS.md streamlining dual review, not caused by it)
 
 ## Framework / Platform Reuse
 
@@ -24,6 +25,6 @@ The effectiveness report identifies configuration concatenation, registry/profil
 
 ## Dependency Graph
 
-WI1 → WI2 → WI3. Each work item has one delivery plan and one automatic local commit after independent acceptance. Reasons and evidence live in the delivering plan/log, not a second status table.
+WI1 → WI2 → WI3; WI4 independent (docs-only reconciliation). Each work item has one delivery plan and one automatic local commit after independent acceptance. Reasons and evidence live in the delivering plan/log, not a second status table.
 
 ## Deep Audit Record
