@@ -21,4 +21,6 @@ Notes:
 
 ## Output marker (both modes)
 
-Your output MUST end with exactly one `<AI_STEP_RESULT>pass</AI_STEP_RESULT>` or `<AI_STEP_RESULT>fail</AI_STEP_RESULT>` marker (`pass` = all phases executed and green; `fail` = execution blocked or tests red). 
+**Held-plan pre-check (do this first, before any work):** read the plan's frontmatter `status:` field. If it is exactly `status: held` (with a `hold:` reason), the plan is legally waiting on a human decision that you cannot make and no re-dispatch can change that. Do NOT execute phases, do NOT run verification commands, do NOT append notes — emit the `held` marker (below) immediately with a one-line reason quoting the `hold:` value. Only proceed with normal execution when `status:` is `active` (a human unlock flips held→active).
+
+Your output MUST end with exactly one `<AI_STEP_RESULT>pass</AI_STEP_RESULT>`, `<AI_STEP_RESULT>fail</AI_STEP_RESULT>`, or `<AI_STEP_RESULT>held</AI_STEP_RESULT>` marker (`pass` = all phases executed and green; `fail` = execution blocked or tests red; `held` = plan frontmatter is `status: held` awaiting a human decision). 

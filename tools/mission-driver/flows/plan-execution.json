@@ -18,7 +18,9 @@
     "已批准": "approved",
     "批准": "approved",
     "有问题": "issues",
-    "存在问题": "issues"
+    "存在问题": "issues",
+    "挂起": "held",
+    "暂挂": "held"
   },
 
   "steps": {
@@ -28,7 +30,8 @@
       "onUnknownMaxRetries": 2,
       "transitions": {
         "pass": { "goto": "CLOSURE_SCRIPT_CHECK" },
-        "fail": { "retry": "EXECUTE", "maxRetries": 3 }
+        "fail": { "retry": "EXECUTE", "maxRetries": 3 },
+        "held": { "done": "blocked" }
       },
       "onMaxRetries": { "goto": "CLOSURE_SCRIPT_CHECK" },
       "onError": { "retry": "EXECUTE", "maxRetries": 3 }
@@ -58,7 +61,8 @@
             "extract": "REMAINING",
             "template": "\n\n## Closure Audit Feedback\n\nThe plan `{{PLAN_FILE}}` was not properly closed. Re-execute it based on the following feedback:\n\nScript check result: {{SCRIPT_CHECK_RESULT}}\nScript check details: {{SCRIPT_CHECK_DETAILS}}\n\nAudit findings:\n${output}" }
         },
-        "fail": { "retry": "EXECUTE", "maxRetries": 3 }
+        "fail": { "retry": "EXECUTE", "maxRetries": 3 },
+        "held": { "done": "blocked" }
       },
       "onMaxRetries": { "done": "failed" },
       "onError": { "retry": "EXECUTE", "maxRetries": 3 }
