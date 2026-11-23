@@ -85,4 +85,6 @@ For a plan in the **ledger format** (YAML frontmatter with `status:`), after ALL
 
 Legacy-format plans (`> Plan Status:` line): skip this section entirely — the legacy close path applies.
 
-Your output MUST end with exactly one `<AI_STEP_RESULT>pass</AI_STEP_RESULT>` or `<AI_STEP_RESULT>fail</AI_STEP_RESULT>` marker. This is the only marker that is parsed; a missing or malformed marker triggers an additional correction run, so emit it exactly as shown.
+**Held-plan pre-check (do this first):** read the plan's frontmatter `status:` field. If it is exactly `status: held` (with a `hold:` reason), skip the entire verification battery — a held plan has no closable verification surface, and receipts for unexecuted work must never be written. Emit the `held` marker (below) immediately with a one-line reason quoting the `hold:` value.
+
+Your output MUST end with exactly one `<AI_STEP_RESULT>pass</AI_STEP_RESULT>`, `<AI_STEP_RESULT>fail</AI_STEP_RESULT>`, or `<AI_STEP_RESULT>held</AI_STEP_RESULT>` marker (`held` = plan is `status: held` awaiting a human decision; nothing was verified and nothing was recorded). This is the only marker that is parsed; a missing or malformed marker triggers an additional correction run, so emit it exactly as shown.

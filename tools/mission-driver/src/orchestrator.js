@@ -624,6 +624,15 @@ export async function orchestrateRun({ config, executor }) {
       commitFormat: g.commitFormat || "",
       multiAuditPrompt: g.prompts?.multiAudit || "",
       openAuditPrompt: g.prompts?.openAudit || "",
+      // F3 (postmortem 2026-09-01): both deep-audit prompt slots empty means
+      // DEEP_AUDIT is a silent no-op (both children skip via their `when`
+      // gates in 0 ms) while auditRound still increments — surface it loudly
+      // at run start instead of discovering it in the postmortem.
+      ...((!g.prompts?.multiAudit && !g.prompts?.openAudit)
+        ? (console.warn(
+            `[WARN] mission '${config.missionName}': prompts.multiAudit and prompts.openAudit are both empty — DEEP_AUDIT will be a silent no-op (maxAuditRounds budget consumed with zero audit work). Add project-level audit prompt paths to the mission config to enable deep audits.`
+          ), {})
+        : {}),
       sourcePaths: g.sourcePaths
         ? (Array.isArray(g.sourcePaths) ? g.sourcePaths.join("\n") : String(g.sourcePaths))
         : "",

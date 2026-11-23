@@ -1172,7 +1172,7 @@ export class FlowEngine {
       }
 
       const visit = this.visitCounts.get(stepName) || 1;
-      let completed = 0, failed = 0;
+      let completed = 0, failed = 0, blocked = 0;
       const aggregatedVars = {};
       const subflowRuns = [];
 
@@ -1198,6 +1198,12 @@ export class FlowEngine {
           this._log(`  subflow ${stepName}: forEach item ${i + 1} → ${childResult.status}`);
           if (childResult.status === "completed") {
             completed++;
+          } else if (childResult.status === "blocked") {
+            // F1 (postmortem 2026-09-01): a held plan exiting `blocked` is a
+            // legitimate wait-for-human outcome, not an error — count it
+            // separately, never trigger stopOnError, and fold it into the
+            // not-complete bucket for the aggregate marker only.
+            blocked++;
           } else {
             failed++;
             if (stepDef.onItemError && stepDef.onItemError.stopOnError) break;
@@ -1229,6 +1235,8 @@ export class FlowEngine {
           this._log(`  subflow ${stepName}: forEach item ${r.i + 1} → ${r.childResult.status}`);
           if (r.childResult.status === "completed") {
             completed++;
+          } else if (r.childResult.status === "blocked") {
+            blocked++; // F1: held-for-human outcome — see sequential branch note
           } else {
             failed++;
             if (stepDef.onItemError && stepDef.onItemError.stopOnError) stopRequested = true;
@@ -1266,10 +1274,11 @@ export class FlowEngine {
       }
 
       let marker;
-      if (failed === 0) marker = "all_complete";
+      const notComplete = failed + blocked;
+      if (notComplete === 0) marker = "all_complete";
       else if (completed === 0) marker = "all_failed";
       else marker = "some_failed";
-      this._log(`  subflow ${stepName}: forEach done (${completed} completed, ${failed} failed) → ${marker}`);
+      this._log(`  subflow ${stepName}: forEach done (${completed} completed, ${failed} failed, ${blocked} blocked) → ${marker}`);
       return { ok: true, marker, vars: aggregatedVars, text: marker, subflowRuns };
     }
 
